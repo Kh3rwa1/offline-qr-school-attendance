@@ -102,14 +102,9 @@ export default function App() {
       if (navigator.onLine) await ensureDeviceRegistered(next);
       await loadClasses(next);
     } catch (err: any) {
-      // Only network unavailability falls back to bounded cache.
-      // An explicit server 401/403 rejection purges the cache and forces sign-in.
-      const explicitAuthRejection =
-        (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
-        /^REQUEST_FAILED_(401|403)$/.test(err?.message || '') ||
-        err?.code === 'UNAUTHORIZED' ||
-        err?.code === 'INVALID_SESSION';
-      const networkUnavailable = !explicitAuthRejection;
+      // Only client-side network failure (status === 0) activates cached offline auth.
+      // Explicit server rejections (401/403) or 5xx errors force clean sign-in.
+      const networkUnavailable = err instanceof ApiError && err.status === 0 && err.code === 'NETWORK_UNAVAILABLE';
       const cached = networkUnavailable && localStorage.getItem('attendance.loggedOut') !== 'true' ? localStorage.getItem('attendance.auth') : null;
       if (cached) {
         let next: AuthState | null = null;
@@ -166,6 +161,14 @@ export default function App() {
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
       if (event.key === 'Enter') {
         const token = wedgeBuffer.current.trim();
         wedgeBuffer.current = '';

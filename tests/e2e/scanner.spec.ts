@@ -14,7 +14,10 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   const schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.activeMembership.schoolId;
   const classesResponse = await request.get(`${baseUrl}/api/v1/schools/${schoolId}/attendance/classes`);
   const classSectionId = (await classesResponse.json()).data[0].classSectionId;
-  const rosterResponse = await request.get(`${baseUrl}/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`);
+  const deviceIdentifier = `e2e-${Date.now()}`;
+  const deviceRegistration = await request.post(`${baseUrl}/api/v1/schools/${schoolId}/devices/register`, { data: { deviceIdentifier } });
+  expect(deviceRegistration.ok()).toBeTruthy();
+  const rosterResponse = await request.get(`${baseUrl}/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`, { headers: { 'x-device-identifier': deviceIdentifier } });
   const students = (await rosterResponse.json()).data.students.slice(0, 2);
   const tokens = [] as string[];
   for (const student of students) {

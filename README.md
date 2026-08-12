@@ -24,7 +24,7 @@ Set `NODE_ENV=production`, `DATABASE_URL`, `SESSION_SECRET` (a high-entropy valu
 2. Run `node dist/migrate.cjs` once against the target database and fail the release if it exits non-zero.
 3. Start `node dist/server.cjs` and the separate `node dist/sms-worker.cjs` process.
 
-Run migrations with the schema-owner role, but run the web and worker processes with a separate non-owner PostgreSQL role. The versioned RLS migration installs tenant `USING` and `WITH CHECK` policies; tenant-sensitive multi-query operations use the transaction-scoped `withTenantContext` helper.
+Run migrations with the schema-owner role, but run the web and worker processes with a separate non-owner PostgreSQL role. The versioned RLS migration installs tenant `USING` and `WITH CHECK` policies; every tenant route holds a request-scoped `withTenantContext` transaction, and service queries are routed to that transaction. Docker Compose bootstraps the restricted role without committing passwords or session secrets.
 
 `docker compose up --build` demonstrates the same order with a one-shot `migrate` service and a continuously running SMS worker. The worker claims jobs atomically, recovers stale claims, respects retry timing, segment limits, and configured SMS segment balance.
 
@@ -33,6 +33,10 @@ Run migrations with the schema-owner role, but run the web and worker processes 
 Roster data, session snapshots, and scan events are stored in Dexie/IndexedDB. Every offline session gets a client UUID. Sync sends session metadata separately from events; PostgreSQL stores that UUID in `attendance_sessions.client_session_id`, transactionally creates or locates the server session, and maps all events to the server UUID. Repeated transmission is safe through `client_event_id` idempotency.
 
 The browser must be online for initial authentication and roster download. Once the roster is cached, attendance collection continues offline. Finalization requires successful synchronization so the server can apply the authoritative review/finalization state and queue absence notifications.
+
+Each browser creates a stable device identifier and registers it with the school before downloading a roster or synchronizing. Logout warns about unsynchronized events, stops camera capture, clears the selected school/class and school-scoped IndexedDB records, and blocks cached-auth restoration until the teacher signs in again. Cached authentication expires after eight hours and is revalidated when connectivity returns.
+
+Before finalization, the review screen requires explicit confirmation and allows the teacher to set ABSENT, LATE, LEAVE, or EXCUSED. It shows the expected absence-SMS count. Outbox synchronization uses 75-event batches, caps retryable failures at five attempts, preserves conflicts separately, and removes raw QR secrets from IndexedDB immediately after accepted synchronization.
 
 ## Backups and restore
 
@@ -55,3 +59,5 @@ npm run build
 ```
 
 The Playwright workflow covers login, roster download, offline session creation, two scans, browser close/reopen persistence, reconnect, synchronization, and server-side session/record reconciliation.
+
+For a real PostgreSQL RLS check, provide `PG_RLS_MIGRATION_DATABASE_URL`, `PG_RLS_APPLICATION_DATABASE_URL`, and run `npm run test:postgres`. The integration test creates two tenants with the migration role, then proves the restricted application role cannot read the other tenant or write a row for it.

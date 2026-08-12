@@ -3,11 +3,13 @@ import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
 import { sql } from 'drizzle-orm';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as schema from './schema';
 import { env } from '../env';
 
 let client: PGlite | pg.Pool;
 let dbInstance: any;
+const tenantTransaction = new AsyncLocalStorage<any>();
 
 export function getDb() {
   if (dbInstance) return dbInstance;
@@ -24,29 +26,21 @@ export function getDb() {
   return dbInstance;
 }
 
-export const db = getDb();
+const rawDb = getDb();
 
-/**
- * Configure policies after migrations have created the schema. Table DDL is
- * intentionally not performed here; deployment owns schema changes.
- */
-export async function setupRlsPolicies() {
-  const tables = [
-    'academic_years', 'school_memberships', 'teacher_profiles', 'devices',
-    'class_sections', 'teacher_assignments', 'students', 'guardians',
-    'enrollments', 'qr_credentials', 'attendance_sessions',
-    'attendance_session_roster', 'attendance_events', 'attendance_records',
-    'attendance_corrections', 'school_sms_settings', 'notification_jobs',
-    'import_jobs', 'audit_logs',
-  ];
-  for (const table of tables) {
-    await executeSql(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`);
-    await executeSql(`DROP POLICY IF EXISTS tenant_isolation_policy ON ${table};`);
-    await executeSql(`CREATE POLICY tenant_isolation_policy ON ${table}
-      USING (school_id = NULLIF(current_setting('app.current_school_id', true), '')::uuid)
-      WITH CHECK (school_id = NULLIF(current_setting('app.current_school_id', true), '')::uuid);`);
-  }
-}
+// Services can continue using the shared `db` import while request middleware
+// transparently routes their queries to the request's tenant transaction.
+export const db = new Proxy(rawDb, {
+  get(target, property, receiver) {
+    const active = tenantTransaction.getStore();
+    if (property === 'transaction' && active) {
+      return async (callback: (tx: any) => Promise<unknown>) => callback(active);
+    }
+    const source = active && property in active ? active : target;
+    const value = Reflect.get(source, property, receiver);
+    return typeof value === 'function' ? value.bind(source) : value;
+  },
+});
 
 export async function executeSql(sqlQuery: string) {
   if (client && 'query' in client) return (client as any).query(sqlQuery);
@@ -56,7 +50,8 @@ export async function executeSql(sqlQuery: string) {
 
 export async function setTenantContext(schoolId: string) {
   if (!isUuid(schoolId)) throw new Error('INVALID_SCHOOL_ID');
-  await executeSql(`SELECT set_config('app.current_school_id', '${schoolId}', false);`);
+  // Kept for explicit scripts/tests; request handling uses withTenantContext.
+  await rawDb.execute(sql`SELECT set_config('app.current_school_id', ${schoolId}, false)`);
 }
 
 export async function resetTenantContext() {
@@ -70,8 +65,8 @@ function isUuid(value: string) {
 /** Execute all tenant-sensitive work on one transaction/connection. */
 export async function withTenantContext<T>(schoolId: string, fn: (tx: any) => Promise<T>): Promise<T> {
   if (!isUuid(schoolId)) throw new Error('INVALID_SCHOOL_ID');
-  return getDb().transaction(async (tx: any) => {
+  return rawDb.transaction(async (tx: any) => {
     await tx.execute(sql`SELECT set_config('app.current_school_id', ${schoolId}, true)`);
-    return fn(tx);
+    return tenantTransaction.run(tx, () => fn(tx));
   });
 }

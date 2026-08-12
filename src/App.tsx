@@ -3,6 +3,7 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { Camera, CheckCircle2, CloudOff, Download, LogIn, LogOut, RefreshCw, ShieldAlert, Usb, Wifi } from 'lucide-react';
 import {
   createOfflineSession,
+  clearSchoolScopedOfflineData,
   downloadAndStoreRosterPackage,
   getOutboxStatus,
   processOfflineQRCode,
@@ -12,9 +13,10 @@ import { offlineDb, OfflineRosterItem, OfflineSessionItem, OfflineSessionRosterI
 
 type User = { id: string; fullName: string; phoneNumber: string };
 type Membership = { schoolId: string; schoolName: string; role: string; status: string };
-type AuthState = { user: User; memberships: Membership[]; schoolId: string };
+type AuthState = { user: User; memberships: Membership[]; schoolId: string; cachedAt: number; expiresAt: number };
 type AssignedClass = { classSectionId: string; className: string; sectionName: string; academicYearId: string };
 type Feedback = { kind: 'success' | 'warning' | 'error'; text: string };
+const AUTH_CACHE_TTL_MS = 8 * 60 * 60 * 1000;
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
@@ -45,13 +47,30 @@ export default function App() {
   const [sessionRoster, setSessionRoster] = useState<OfflineSessionRosterItem[]>([]);
   const [outboxCount, setOutboxCount] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [activeView, setActiveView] = useState<'scanner' | 'roster' | 'reports' | 'admin'>('scanner');
+  const [activeView, setActiveView] = useState<'scanner' | 'roster' | 'review' | 'reports' | 'admin'>('scanner');
   const [scanInput, setScanInput] = useState('');
   const [report, setReport] = useState<any>(null);
-  const restoredOfflineAuth = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerControls = useRef<{ stop: () => void } | null>(null);
   const wedgeBuffer = useRef('');
+
+  function getDeviceIdentifier() {
+    const existing = localStorage.getItem('attendance.deviceIdentifier');
+    if (existing) return existing;
+    const created = `browser-${globalThis.crypto.randomUUID()}`;
+    localStorage.setItem('attendance.deviceIdentifier', created);
+    return created;
+  }
+
+  async function ensureDeviceRegistered(state: AuthState) {
+    if (!navigator.onLine) throw new Error('DEVICE_REGISTRATION_REQUIRES_NETWORK');
+    const deviceIdentifier = getDeviceIdentifier();
+    await api(`/api/v1/schools/${state.schoolId}/devices/register`, {
+      method: 'POST',
+      body: JSON.stringify({ deviceIdentifier, deviceModel: navigator.userAgent.slice(0, 100) }),
+    });
+    return deviceIdentifier;
+  }
 
   const showFeedback = useCallback((next: Feedback) => {
     setFeedback(next);
@@ -83,19 +102,28 @@ export default function App() {
       const response = await api<{ user: User; sessionContext: { schoolId?: string; memberships: Membership[]; activeMembership?: Membership } }>('/api/v1/auth/me');
       const schoolId = response.sessionContext.schoolId || response.sessionContext.activeMembership?.schoolId || response.sessionContext.memberships?.[0]?.schoolId;
       if (!schoolId) throw new Error('NO_ACTIVE_SCHOOL');
-      const next = { user: response.user, memberships: response.sessionContext.memberships || [], schoolId };
+      if (localStorage.getItem('attendance.loggedOut') === 'true') throw new Error('LOGGED_OUT');
+      const now = Date.now();
+      const next = { user: response.user, memberships: response.sessionContext.memberships || [], schoolId, cachedAt: now, expiresAt: now + AUTH_CACHE_TTL_MS };
       setAuth(next);
       localStorage.setItem('attendance.auth', JSON.stringify(next));
+      if (navigator.onLine) await ensureDeviceRegistered(next);
       await loadClasses(next);
     } catch {
-      const cached = !navigator.onLine ? localStorage.getItem('attendance.auth') : null;
+      const cached = !navigator.onLine && localStorage.getItem('attendance.loggedOut') !== 'true' ? localStorage.getItem('attendance.auth') : null;
       if (cached) {
-        const next = JSON.parse(cached) as AuthState;
-        restoredOfflineAuth.current = true;
-        setAuth(next);
-        const cachedClassId = localStorage.getItem('attendance.classSectionId') || '';
-        setSelectedClassId(cachedClassId);
-        setClasses(cachedClassId ? [{ classSectionId: cachedClassId, className: 'Cached class', sectionName: '', academicYearId: '' }] : []);
+        let next: AuthState | null = null;
+        try { next = JSON.parse(cached) as AuthState; } catch { localStorage.removeItem('attendance.auth'); }
+        if (!next || !next.expiresAt || next.expiresAt <= Date.now()) {
+          localStorage.removeItem('attendance.auth');
+          setAuth(null);
+          setError('Cached sign-in expired. Connect to the network and sign in again.');
+        } else {
+          setAuth(next);
+          const cachedClassId = localStorage.getItem('attendance.classSectionId') || '';
+          setSelectedClassId(cachedClassId);
+          setClasses(cachedClassId ? [{ classSectionId: cachedClassId, className: 'Cached class', sectionName: '', academicYearId: '' }] : []);
+        }
       } else setAuth(null);
     } finally {
       setBusy(false);
@@ -148,7 +176,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (!session || activeView !== 'scanner' || !videoRef.current || !online) return;
+    if (!session || activeView !== 'scanner' || !videoRef.current) return;
     const reader = new BrowserMultiFormatReader();
     let stopped = false;
     reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
@@ -171,13 +199,25 @@ export default function App() {
     setLoginBusy(true); setError('');
     try {
       await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(loginForm) });
+      localStorage.removeItem('attendance.loggedOut');
       await restoreSession();
     } catch (err: any) { setError(err.message); }
     finally { setLoginBusy(false); }
   }
 
   async function handleLogout() {
+    if (!auth) return;
+    const schoolEvents = await offlineDb.syncOutbox.where('schoolId').equals(auth.schoolId).toArray();
+    if (schoolEvents.some((event) => event.syncStatus !== 'SYNCED') && !window.confirm('Unsynchronized attendance events will be deleted from this device. Sign out anyway?')) return;
+    scannerControls.current?.stop();
+    const stream = videoRef.current?.srcObject as MediaStream | null;
+    stream?.getTracks().forEach((track) => track.stop());
     await api('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined);
+    await clearSchoolScopedOfflineData(auth.schoolId);
+    localStorage.removeItem('attendance.auth');
+    localStorage.removeItem('attendance.classSectionId');
+    localStorage.removeItem('attendance.deviceIdentifier');
+    localStorage.setItem('attendance.loggedOut', 'true');
     setAuth(null); setSession(null); setSessionRoster([]); setRoster([]);
   }
 
@@ -185,7 +225,8 @@ export default function App() {
     if (!auth || !selectedClassId || !online) return showFeedback({ kind: 'warning', text: 'Connect to the network to download the latest roster.' });
     setBusy(true);
     try {
-      await downloadAndStoreRosterPackage(auth.schoolId, selectedClassId);
+      const deviceIdentifier = await ensureDeviceRegistered(auth);
+      await downloadAndStoreRosterPackage(auth.schoolId, selectedClassId, deviceIdentifier);
       setRoster(await offlineDb.rosters.where('[schoolId+classSectionId]').equals([auth.schoolId, selectedClassId]).toArray());
       showFeedback({ kind: 'success', text: 'Roster and active QR digests are stored on this device.' });
     } catch (err: any) { showFeedback({ kind: 'error', text: err.message }); }
@@ -217,7 +258,8 @@ export default function App() {
   async function handleSync() {
     if (!auth || !online) return showFeedback({ kind: 'warning', text: 'Offline: scans remain safely queued on this device.' });
     try {
-      const result: any = await syncOutboxEvents({ schoolId: auth.schoolId });
+      const deviceIdentifier = await ensureDeviceRegistered(auth);
+      const result: any = await syncOutboxEvents({ schoolId: auth.schoolId, deviceIdentifier });
       for (const mapping of result.sessionMappings || []) {
         await offlineDb.sessions.update(mapping.clientSessionId, { serverSessionId: mapping.serverSessionId });
       }
@@ -226,12 +268,33 @@ export default function App() {
     } catch (err: any) { showFeedback({ kind: 'error', text: `Synchronization failed: ${err.message}` }); }
   }
 
+  async function handleManualStatus(studentId: string, status: 'ABSENT' | 'LATE' | 'LEAVE' | 'EXCUSED') {
+    if (!auth || !session?.serverSessionId || !online) return showFeedback({ kind: 'warning', text: 'Synchronize the session before making review changes.' });
+    try {
+      await api(`/api/v1/schools/${auth.schoolId}/attendance/sessions/${session.serverSessionId}/manual`, {
+        method: 'POST',
+        body: JSON.stringify({ studentId, newStatus: status, reason: 'Teacher attendance review' }),
+      });
+      const item = sessionRoster.find((entry) => entry.studentId === studentId);
+      if (item?.id) await offlineDb.sessionRosters.update(item.id, { status });
+      await refreshLocalState(session.id);
+    } catch (err: any) { showFeedback({ kind: 'error', text: err.message }); }
+  }
+
+  function openReview() {
+    if (!session?.serverSessionId || !online) return showFeedback({ kind: 'warning', text: 'Synchronize this session before reviewing it.' });
+    setActiveView('review');
+  }
+
   async function handleFinalize() {
     if (!auth || !session?.serverSessionId || !online) return showFeedback({ kind: 'warning', text: 'Synchronize this session before finalizing it.' });
+    const expectedSmsCount = sessionRoster.filter((item) => item.status === 'ABSENT' || item.status === 'UNMARKED').length;
+    if (!window.confirm(`Finalize attendance? ${expectedSmsCount} absence SMS job(s) will be queued.`)) return;
     try {
       await api(`/api/v1/schools/${auth.schoolId}/attendance/sessions/${session.serverSessionId}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'FINALIZED', autoMarkAbsentForUnmarked: true }) });
       await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
       await refreshLocalState(session.id);
+      setActiveView('scanner');
       showFeedback({ kind: 'success', text: 'Attendance finalized. Unmarked students were recorded absent and notification jobs were queued.' });
     } catch (err: any) { showFeedback({ kind: 'error', text: err.message }); }
   }
@@ -288,9 +351,11 @@ export default function App() {
         </section>
 
         {activeView === 'scanner' && <section className="grid lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 bg-slate-900 rounded-3xl p-5 text-white space-y-4"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Live scanner</h2><span className="text-sm text-slate-300">{session ? `${present}/${sessionRoster.length} present` : 'No session'}</span></div><video ref={videoRef} className="w-full aspect-video rounded-2xl bg-slate-800 object-cover" muted playsInline /><div className="flex gap-2 items-center text-sm text-slate-300"><Camera className="w-4" />Camera decoding is active when online and a session is open.</div><form onSubmit={(e) => { e.preventDefault(); const value = scanInput.trim(); setScanInput(''); if (value) void handleScan(value, 'USB'); }} className="flex gap-2"><Usb className="w-5 mt-3" /><input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="USB scanner token (press Enter)" className="flex-1 rounded-xl bg-slate-800 border border-slate-700 p-3 text-white" /><button className="px-4 rounded-xl bg-blue-600 font-bold">Scan</button></form></div>
-          <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4"><div className="grid grid-cols-3 gap-2 text-center"><div className="bg-slate-50 rounded-xl p-3"><b className="block text-2xl">{sessionRoster.length}</b><span className="text-xs text-slate-500">Roster</span></div><div className="bg-emerald-50 rounded-xl p-3"><b className="block text-2xl text-emerald-700">{present}</b><span className="text-xs text-slate-500">Present</span></div><div className="bg-amber-50 rounded-xl p-3"><b className="block text-2xl text-amber-700">{outboxCount}</b><span className="text-xs text-slate-500">Queued</span></div></div><button onClick={handleSync} disabled={!online || outboxCount === 0} className="w-full rounded-xl bg-slate-800 text-white p-3 font-bold"><RefreshCw className="inline w-4 mr-1" />Synchronize now</button><button onClick={handleFinalize} disabled={!session?.serverSessionId || !online} className="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">Review & finalize</button><p className="text-xs text-slate-500">Offline scans are written to IndexedDB before any network call. Rejected events and conflicts stay visible in the outbox state.</p></div>
+          <div className="lg:col-span-2 bg-slate-900 rounded-3xl p-5 text-white space-y-4"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Live scanner</h2><span className="text-sm text-slate-300">{session ? `${present}/${sessionRoster.length} present` : 'No session'}</span></div><video ref={videoRef} className="w-full aspect-video rounded-2xl bg-slate-800 object-cover" muted playsInline /><div className="flex gap-2 items-center text-sm text-slate-300"><Camera className="w-4" />Camera decoding remains active offline.</div><form onSubmit={(e) => { e.preventDefault(); const value = scanInput.trim(); setScanInput(''); if (value) void handleScan(value, 'USB'); }} className="flex gap-2"><Usb className="w-5 mt-3" /><input value={scanInput} onChange={(e) => setScanInput(e.target.value)} placeholder="USB scanner token (press Enter)" className="flex-1 rounded-xl bg-slate-800 border border-slate-700 p-3 text-white" /><button className="px-4 rounded-xl bg-blue-600 font-bold">Scan</button></form></div>
+          <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4"><div className="grid grid-cols-3 gap-2 text-center"><div className="bg-slate-50 rounded-xl p-3"><b className="block text-2xl">{sessionRoster.length}</b><span className="text-xs text-slate-500">Roster</span></div><div className="bg-emerald-50 rounded-xl p-3"><b className="block text-2xl text-emerald-700">{present}</b><span className="text-xs text-slate-500">Present</span></div><div className="bg-amber-50 rounded-xl p-3"><b className="block text-2xl text-amber-700">{outboxCount}</b><span className="text-xs text-slate-500">Queued</span></div></div><button onClick={handleSync} disabled={!online || outboxCount === 0} className="w-full rounded-xl bg-slate-800 text-white p-3 font-bold"><RefreshCw className="inline w-4 mr-1" />Synchronize now</button><button onClick={openReview} disabled={!session?.serverSessionId || !online} className="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">Review attendance</button><p className="text-xs text-slate-500">Offline scans are written to IndexedDB before any network call. Rejected events and conflicts stay visible in the outbox state.</p></div>
         </section>}
+
+        {activeView === 'review' && <section className="bg-white rounded-3xl p-5 shadow-sm space-y-4"><div className="flex justify-between items-center"><div><h2 className="text-xl font-black">Review attendance</h2><p className="text-sm text-slate-500">Choose a final status for every student before submitting.</p></div><span className="rounded-xl bg-amber-50 text-amber-800 px-3 py-2 text-sm font-bold">Expected SMS: {sessionRoster.filter((item) => item.status === 'ABSENT' || item.status === 'UNMARKED').length}</span></div><div className="overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Roll</th><th className="p-2">Student</th><th className="p-2">Current status</th><th className="p-2">Change</th></tr></thead><tbody>{sessionRoster.map((item) => <tr key={item.studentId} className="border-b"><td className="p-2">{item.rollNumber}</td><td className="p-2 font-bold">{item.studentName}</td><td className="p-2">{item.status}</td><td className="p-2 flex flex-wrap gap-1">{(['ABSENT', 'LATE', 'LEAVE', 'EXCUSED'] as const).map((status) => <button key={status} onClick={() => void handleManualStatus(item.studentId, status)} className={`px-2 py-1 rounded-lg text-xs font-bold ${item.status === status ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>{status}</button>)}</td></tr>)}</tbody></table></div><div className="flex justify-end gap-2"><button onClick={() => setActiveView('scanner')} className="px-4 py-2 rounded-xl bg-slate-100 font-bold">Back</button><button onClick={() => void handleFinalize()} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold">Confirm & finalize</button></div></section>}
 
         {activeView === 'roster' && <section className="bg-white rounded-3xl p-5 shadow-sm"><h2 className="text-xl font-black mb-4">Cached roster</h2><div className="overflow-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="p-2">Roll</th><th className="p-2">Student</th><th className="p-2">Status</th></tr></thead><tbody>{sessionRoster.map((item) => <tr key={item.studentId} className="border-b"><td className="p-2">{item.rollNumber}</td><td className="p-2 font-bold">{item.studentName}<div className="text-xs text-slate-500">{item.studentNameBn}</div></td><td className="p-2">{item.status}</td></tr>)}</tbody></table></div></section>}
 

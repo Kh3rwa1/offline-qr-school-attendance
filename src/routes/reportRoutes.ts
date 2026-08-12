@@ -15,10 +15,38 @@ import { createAuditLog } from '../services/auditLogService';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
 import { db } from '../db';
-import { teacherAssignments } from '../db/schema';
+import { enrollments, teacherAssignments } from '../db/schema';
 import { and, eq } from 'drizzle-orm';
 
 const reportRouter = Router({ mergeParams: true });
+
+async function teacherHasClassAccess(req: AuthenticatedRequest, schoolId: string, classSectionId?: string) {
+  if (req.userRole !== 'TEACHER') return true;
+  if (!classSectionId) return false;
+  const [assignment] = await db.select({ id: teacherAssignments.id }).from(teacherAssignments).where(and(
+    eq(teacherAssignments.schoolId, schoolId),
+    eq(teacherAssignments.teacherId, req.user!.id),
+    eq(teacherAssignments.classSectionId, classSectionId)
+  ));
+  return Boolean(assignment);
+}
+
+async function teacherHasStudentAccess(req: AuthenticatedRequest, schoolId: string, studentId: string) {
+  if (req.userRole !== 'TEACHER') return true;
+  const [assignment] = await db.select({ id: teacherAssignments.id })
+    .from(enrollments)
+    .innerJoin(teacherAssignments, and(
+      eq(teacherAssignments.schoolId, enrollments.schoolId),
+      eq(teacherAssignments.classSectionId, enrollments.classSectionId),
+    ))
+    .where(and(
+      eq(enrollments.schoolId, schoolId),
+      eq(enrollments.studentId, studentId),
+      eq(enrollments.status, 'ACTIVE'),
+      eq(teacherAssignments.teacherId, req.user!.id),
+    ));
+  return Boolean(assignment);
+}
 
 // 1. Daily School Summary (Admin only)
 reportRouter.get(
@@ -56,19 +84,9 @@ reportRouter.get(
         return;
       }
 
-      if (req.userRole === 'TEACHER') {
-        const [assignment] = await db
-          .select({ id: teacherAssignments.id })
-          .from(teacherAssignments)
-          .where(and(
-            eq(teacherAssignments.schoolId, schoolId),
-            eq(teacherAssignments.teacherId, req.user!.id),
-            eq(teacherAssignments.classSectionId, classSectionId)
-          ));
-        if (!assignment) {
-          res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
-          return;
-        }
+      if (!await teacherHasClassAccess(req, schoolId, classSectionId)) {
+        res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+        return;
       }
 
       const report = await getDailyClassReport(schoolId, classSectionId, dateStr);
@@ -94,6 +112,10 @@ reportRouter.get(
 
       if (!classSectionId) {
         res.status(400).json({ error: 'MISSING_CLASS_SECTION_ID' });
+        return;
+      }
+      if (!await teacherHasClassAccess(req, schoolId, classSectionId)) {
+        res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
         return;
       }
 
@@ -123,6 +145,11 @@ reportRouter.get(
         return;
       }
 
+      if (!await teacherHasStudentAccess(req, schoolId, studentId)) {
+        res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+        return;
+      }
+
       const report = await getStudentAttendanceHistory(schoolId, studentId, startDate, endDate);
       res.json(report);
     } catch (error: any) {
@@ -144,6 +171,11 @@ reportRouter.get(
       const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
       const endDate = req.query.endDate as string;
       const reqGuardianPhone = req.query.includeGuardianPhone === 'true';
+
+      if (req.userRole === 'TEACHER' && !await teacherHasClassAccess(req, schoolId, classSectionId)) {
+        res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+        return;
+      }
 
       // Guardian phone number authorization check: only admins or super_admins
       const userRole = req.userRole!;
@@ -243,6 +275,10 @@ reportRouter.get(
         const classSectionId = req.query.classSectionId as string;
         const year = parseInt(req.query.year as string) || new Date().getFullYear();
         const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
+        if (!classSectionId || !await teacherHasClassAccess(req, schoolId, classSectionId)) {
+          res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+          return;
+        }
         const data = await getMonthlyClassRegister(schoolId, classSectionId, year, month);
 
         headers = ['Roll', 'Student Code', 'Name', 'Name (Bengali)'];
@@ -277,6 +313,10 @@ reportRouter.get(
         const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
         const endDate = req.query.endDate as string;
         const reqGuardianPhone = req.query.includeGuardianPhone === 'true';
+        if (!await teacherHasClassAccess(req, schoolId, classSectionId)) {
+          res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+          return;
+        }
         const includeGuardianPhone = reqGuardianPhone && (userRole === 'SCHOOL_ADMIN' || userRole === 'SUPER_ADMIN');
 
         const data = await getAbsentStudentReport(schoolId, {

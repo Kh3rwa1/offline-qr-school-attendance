@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware';
 import { translate } from '../i18n';
+import { withTenantContext } from '../db';
 
 export async function requireTenant(
   req: AuthenticatedRequest,
@@ -53,8 +54,23 @@ export async function requireTenant(
   req.activeSchoolId = targetSchoolId;
   req.userRole = targetMembership?.role || (isSuperAdmin ? 'SUPER_ADMIN' : 'TEACHER');
 
-  // RLS context is set only inside `withTenantContext` transactions. A
-  // middleware-level SET LOCAL would be connection-pool unsafe and could not
-  // protect the query that follows it.
-  next();
+  // Keep the same transaction/connection alive for the complete request. The
+  // db proxy routes service queries to this transaction and the RLS setting is
+  // therefore never applied to an unrelated pooled connection.
+  return withTenantContext(targetSchoolId, async () => new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    res.once('finish', finish);
+    res.once('close', finish);
+    try {
+      next();
+    } catch (err) {
+      settled = true;
+      reject(err);
+    }
+  })).catch((error) => next(error));
 }

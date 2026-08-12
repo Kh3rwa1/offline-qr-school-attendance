@@ -4,7 +4,7 @@ import { getOutboxStatus, syncOutboxEvents } from '../services/offlineSyncServic
 
 interface NetworkSyncBarProps {
   schoolId?: string;
-  deviceIdentifier?: string;
+  deviceIdentifier: string;
   onSyncComplete?: () => void;
 }
 

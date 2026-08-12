@@ -56,8 +56,9 @@ export interface OutboxEventItem {
   rawToken?: string;
   clientTimestamp: string;
   source: 'CAMERA' | 'USB' | 'MANUAL';
-  syncStatus: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED';
+  syncStatus: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED' | 'PERMANENT_FAILURE' | 'CONFLICT';
   syncError?: string;
+  failureClass?: 'RETRYABLE' | 'PERMANENT' | 'CONFLICT';
   retryCount: number;
   createdAt: string;
 }
@@ -74,16 +75,22 @@ export class AttendanceOfflineDatabase extends Dexie {
       rosters: 'studentId, [schoolId+classSectionId], sha256TokenHash, schoolId, classSectionId',
       sessions: 'id, [schoolId+classSectionId], sessionDate, status',
       sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
-      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp',
+      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp, failureClass',
     });
     this.version(2).stores({
       rosters: 'studentId, [schoolId+classSectionId], sha256TokenHash, schoolId, classSectionId',
       sessions: 'id, clientSessionId, [schoolId+classSectionId], sessionDate, status',
       sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
-      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp',
+      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp, failureClass',
     }).upgrade((tx) => tx.table('sessions').toCollection().modify((session: OfflineSessionItem) => {
       session.clientSessionId = session.clientSessionId || session.id;
     }));
+    this.version(3).stores({
+      rosters: 'studentId, [schoolId+classSectionId], sha256TokenHash, schoolId, classSectionId',
+      sessions: 'id, clientSessionId, [schoolId+classSectionId], sessionDate, status',
+      sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
+      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp, failureClass',
+    });
   }
 }
 

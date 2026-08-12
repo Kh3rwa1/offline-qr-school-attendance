@@ -46,7 +46,7 @@ export interface SyncBatchResultItem {
   duplicateScan?: boolean;
 }
 
-export async function getOfflineRosterPackage(schoolId: string, classSectionId: string) {
+export async function getOfflineRosterPackage(schoolId: string, classSectionId: string, actorId?: string, userRole?: string) {
   // 1. Get Class Section info
   const [section] = await db
     .select()
@@ -55,6 +55,15 @@ export async function getOfflineRosterPackage(schoolId: string, classSectionId: 
 
   if (!section) {
     throw new Error('CLASS_SECTION_NOT_FOUND');
+  }
+
+  if (actorId && userRole && !['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
+    const [assignment] = await db.select({ id: teacherAssignments.id }).from(teacherAssignments).where(and(
+      eq(teacherAssignments.schoolId, schoolId),
+      eq(teacherAssignments.teacherId, actorId),
+      eq(teacherAssignments.classSectionId, classSectionId)
+    ));
+    if (!assignment) throw new Error('UNAUTHORIZED_TEACHER_NOT_ASSIGNED');
   }
 
   // 2. Get active enrollments with student data
@@ -91,7 +100,7 @@ export async function getOfflineRosterPackage(schoolId: string, classSectionId: 
         status: qrCredentials.status,
       })
       .from(qrCredentials)
-      .where(and(eq(qrCredentials.schoolId, schoolId), inArray(qrCredentials.studentId, studentIds)));
+      .where(and(eq(qrCredentials.schoolId, schoolId), eq(qrCredentials.status, 'ACTIVE'), inArray(qrCredentials.studentId, studentIds)));
 
     for (const cred of credentials) {
       qrMap[cred.studentId] = {
@@ -120,12 +129,13 @@ export async function getOfflineRosterPackage(schoolId: string, classSectionId: 
 export async function syncAttendanceEvents(params: {
   schoolId: string;
   actorId: string;
-  deviceIdentifier?: string;
+  deviceIdentifier: string;
   userRole?: string;
   events: SyncEventPayload[];
   sessions?: SyncSessionPayload[];
 }): Promise<{ processedCount: number; results: SyncBatchResultItem[]; sessionMappings: { clientSessionId: string; serverSessionId: string }[] }> {
   const { schoolId, actorId, deviceIdentifier, userRole = 'TEACHER', events, sessions = [] } = params;
+  if (!deviceIdentifier) throw new Error('DEVICE_IDENTIFIER_REQUIRED');
 
   // 1. Check user status and membership status
   const [userRec] = await db.select().from(users).where(eq(users.id, actorId));
@@ -142,15 +152,12 @@ export async function syncAttendanceEvents(params: {
     throw new Error('USER_SUSPENDED');
   }
 
-  // 2. Check device revocation status if deviceIdentifier is provided
-  let deviceId: string | undefined;
-  if (deviceIdentifier) {
-    const devValidation = await validateDeviceStatus(schoolId, deviceIdentifier);
-    if (!devValidation.valid) {
-      throw new Error('DEVICE_REVOKED');
-    }
-    deviceId = devValidation.device?.id;
+  // 2. Device authorization is mandatory for synchronization.
+  const devValidation = await validateDeviceStatus(schoolId, deviceIdentifier);
+  if (!devValidation.valid) {
+    throw new Error(devValidation.reason === 'DEVICE_NOT_FOUND' ? 'DEVICE_IDENTIFIER_REQUIRED' : 'DEVICE_REVOKED');
   }
+  const deviceId = devValidation.device?.id;
 
   const results: SyncBatchResultItem[] = [];
   const serverSessionIds = new Map<string, string>();

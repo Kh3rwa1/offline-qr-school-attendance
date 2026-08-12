@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import crypto from 'node:crypto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from '../src/db';
 import { seedDatabase } from '../src/db/seed';
@@ -416,6 +417,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     const result = await syncAttendanceEvents({
       schoolId: seeded.schoolA.id,
       actorId: seeded.teacherUser.id,
+      deviceIdentifier: testDevice.deviceIdentifier,
       sessions: [queued[0].sessionMetadata],
       events: queued.map((event) => ({
         clientEventId: event.clientEventId,
@@ -435,6 +437,57 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     expect(serverSession).toBeDefined();
     const serverRecords = await db.select().from(attendanceRecords).where(eq(attendanceRecords.attendanceSessionId, serverSession.id));
     expect(serverRecords.filter((record) => record.status === 'PRESENT')).toHaveLength(2);
+  });
+
+  it('syncs in batches of 75 and removes raw QR secrets after acceptance', async () => {
+    const session = await createOfflineSession({
+      schoolId: seeded.schoolA.id,
+      classSectionId: seeded.schoolAClass5A.id,
+      teacherId: seeded.teacherUser.id,
+      sessionDate: '2026-08-13',
+    });
+    const events = Array.from({ length: 151 }, (_, index) => ({
+      clientEventId: crypto.randomUUID(),
+      schoolId: seeded.schoolA.id,
+      sessionId: session.id,
+      sessionMetadata: {
+        clientSessionId: session.clientSessionId,
+        classSectionId: session.classSectionId,
+        sessionDate: session.sessionDate,
+        sessionType: session.sessionType,
+      },
+      studentId: studentA1.id,
+      eventType: 'QR_SCANNED',
+      statusValue: 'PRESENT' as const,
+      rawToken: `secret-${index}`,
+      clientTimestamp: new Date().toISOString(),
+      source: 'USB' as const,
+      syncStatus: 'PENDING' as const,
+      retryCount: 0,
+      createdAt: new Date().toISOString(),
+    }));
+    await offlineDb.syncOutbox.bulkPut(events);
+    const batchSizes: number[] = [];
+    const result = await syncOutboxEvents({
+      schoolId: seeded.schoolA.id,
+      deviceIdentifier: testDevice.deviceIdentifier,
+      customFetch: (async (_input, init) => {
+        const body = JSON.parse(String(init?.body));
+        batchSizes.push(body.events.length);
+        return new Response(JSON.stringify({
+          success: true,
+          data: {
+            results: body.events.map((event: any) => ({ clientEventId: event.clientEventId, status: 'ACCEPTED' })),
+            sessionMappings: [],
+          },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }) as typeof fetch,
+    });
+
+    expect(batchSizes).toEqual([75, 75, 1]);
+    expect(result.syncedCount).toBe(151);
+    const stored = await offlineDb.syncOutbox.toArray();
+    expect(stored.filter((event) => event.rawToken !== undefined)).toHaveLength(0);
   });
 
   it('rejects batch sync when device is revoked (DEVICE_REVOKED / HTTP 403)', async () => {
@@ -492,6 +545,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     const syncRes = await syncAttendanceEvents({
       schoolId: seeded.schoolA.id,
       actorId: seeded.teacherUser.id,
+      deviceIdentifier: testDevice.deviceIdentifier,
       events: [
         {
           clientEventId: `evt-conflict-${Math.random()}`,

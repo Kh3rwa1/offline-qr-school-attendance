@@ -31,8 +31,12 @@ export async function computeSHA256(text: string): Promise<string> {
 }
 
 // 1. Download & Store Offline Roster Package
-export async function downloadAndStoreRosterPackage(schoolId: string, classSectionId: string) {
-  const response = await fetch(`/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`);
+export async function downloadAndStoreRosterPackage(schoolId: string, classSectionId: string, deviceIdentifier: string) {
+  if (!deviceIdentifier) throw new Error('DEVICE_IDENTIFIER_REQUIRED');
+  const response = await fetch(`/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`, {
+    headers: { 'x-device-identifier': deviceIdentifier },
+    credentials: 'include',
+  });
   const json = await response.json();
 
   if (!json.success || !json.data) {
@@ -240,18 +244,59 @@ export async function processOfflineQRCode(params: {
   };
 }
 
-// 4. Flush Outbox Events to Server Batch Sync Endpoint
+export async function clearSchoolScopedOfflineData(schoolId: string) {
+  const sessions = await offlineDb.sessions.where('schoolId').equals(schoolId).toArray();
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  await offlineDb.transaction('rw', [offlineDb.rosters, offlineDb.sessions, offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+    await offlineDb.rosters.where('schoolId').equals(schoolId).delete();
+    await offlineDb.sessions.where('schoolId').equals(schoolId).delete();
+    await offlineDb.syncOutbox.where('schoolId').equals(schoolId).delete();
+    const localRoster = await offlineDb.sessionRosters.toArray();
+    await offlineDb.sessionRosters.bulkDelete(localRoster.filter((item) => sessionIds.has(item.sessionId)).map((item) => item.id!).filter(Boolean));
+  });
+}
+
+const MAX_SYNC_RETRIES = 5;
+const SYNC_BATCH_SIZE = 75;
+
+function classifySyncFailure(error: string): 'RETRYABLE' | 'PERMANENT' | 'CONFLICT' {
+  if (error === 'FINALIZED_SESSION_LOCKED' || error.includes('CONFLICT')) return 'CONFLICT';
+  if (['INVALID_QR_TOKEN', 'REVOKED_QR_TOKEN', 'WRONG_SCHOOL_QR', 'STUDENT_NOT_IN_ROSTER', 'SESSION_NOT_FOUND', 'DEVICE_REVOKED', 'DEVICE_IDENTIFIER_REQUIRED', 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED'].includes(error)) return 'PERMANENT';
+  return 'RETRYABLE';
+}
+
+async function markSyncFailure(event: OutboxEventItem, error: string, failureClass: 'RETRYABLE' | 'PERMANENT' | 'CONFLICT') {
+  const retryCount = event.retryCount + 1;
+  const exhausted = failureClass === 'RETRYABLE' && retryCount >= MAX_SYNC_RETRIES;
+  await offlineDb.syncOutbox.update(event.clientEventId, {
+    syncStatus: failureClass === 'CONFLICT' ? 'CONFLICT' : (failureClass === 'PERMANENT' || exhausted ? 'PERMANENT_FAILURE' : 'FAILED'),
+    failureClass: exhausted ? 'PERMANENT' : failureClass,
+    syncError: error,
+    retryCount,
+  });
+}
+
+// 4. Flush the outbox to the server in bounded batches.
 export async function syncOutboxEvents(params: {
   schoolId: string;
-  deviceIdentifier?: string;
+  deviceIdentifier: string;
   customFetch?: typeof fetch;
 }) {
   const { schoolId, deviceIdentifier, customFetch } = params;
+  if (!deviceIdentifier) throw new Error('DEVICE_IDENTIFIER_REQUIRED');
   const fetchImpl = customFetch || (typeof fetch !== 'undefined' ? fetch : undefined);
 
   if (!fetchImpl) {
     throw new Error('FETCH_UNAVAILABLE');
   }
+
+  // A browser crash or tab close can leave a batch marked SYNCING. Requeue it
+  // before selecting work so those events cannot become permanently invisible.
+  await offlineDb.syncOutbox.where('syncStatus').equals('SYNCING').modify({
+    syncStatus: 'FAILED',
+    failureClass: 'RETRYABLE',
+    syncError: 'SYNC_INTERRUPTED',
+  });
 
   // Fetch pending or failed outbox events
   const pendingEvents = await offlineDb.syncOutbox
@@ -264,103 +309,75 @@ export async function syncOutboxEvents(params: {
     .equals('FAILED')
     .toArray();
 
-  const eventsToSync = [...pendingEvents, ...failedEvents];
+  const eventsToSync = [...pendingEvents, ...failedEvents].filter((event) => event.retryCount < MAX_SYNC_RETRIES && event.failureClass !== 'PERMANENT' && event.failureClass !== 'CONFLICT');
 
   if (eventsToSync.length === 0) {
-    return { processedCount: 0, syncedCount: 0, failedCount: 0, results: [] };
+    return { processedCount: 0, syncedCount: 0, failedCount: 0, results: [], sessionMappings: [] };
   }
 
-  // Mark status as SYNCING
-  for (const ev of eventsToSync) {
-    await offlineDb.syncOutbox.update(ev.clientEventId, { syncStatus: 'SYNCING' });
-  }
+  const allResults: any[] = [];
+  const allMappings: any[] = [];
+  let syncedCount = 0;
+  let failedCount = 0;
+  let lastError: Error | null = null;
 
-  const payload = {
-    deviceIdentifier,
-    sessions: Array.from(new Map(eventsToSync.map((event) => [
-      event.sessionMetadata.clientSessionId,
-      event.sessionMetadata,
-    ])).values()),
-    events: eventsToSync.map((e) => ({
-      clientEventId: e.clientEventId,
-      sessionId: e.sessionId,
-      clientSessionId: e.sessionMetadata.clientSessionId,
-      studentId: e.studentId,
-      rawToken: e.rawToken,
-      eventType: e.eventType,
-      statusValue: e.statusValue,
-      clientTimestamp: e.clientTimestamp,
-      source: e.source,
-      metadata: e.sessionMetadata,
-    })),
-  };
-
-  try {
-    const response = await fetchImpl(`/api/v1/schools/${schoolId}/sync/attendance-events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (response.status === 403) {
-      const errJson = await response.json().catch(() => ({}));
-      // Mark as FAILED due to device/user revocation
-      for (const ev of eventsToSync) {
-        await offlineDb.syncOutbox.update(ev.clientEventId, {
-          syncStatus: 'FAILED',
-          syncError: errJson.error || 'DEVICE_REVOKED',
-        });
-      }
-      throw new Error(errJson.error || 'DEVICE_REVOKED');
-    }
-
-    const json = await response.json();
-
-    if (!json.success || !json.data) {
-      throw new Error(json.error || 'SYNC_FAILED');
-    }
-
-    let syncedCount = 0;
-    let failedCount = 0;
-
-    for (const resItem of json.data.results) {
-      if (resItem.status === 'ACCEPTED' || resItem.status === 'ALREADY_PROCESSED') {
-        await offlineDb.syncOutbox.update(resItem.clientEventId, {
-          syncStatus: 'SYNCED',
-        });
-        syncedCount++;
-      } else {
-        await offlineDb.syncOutbox.update(resItem.clientEventId, {
-          syncStatus: 'FAILED',
-          syncError: resItem.error || 'SERVER_REJECTED',
-          retryCount: (eventsToSync.find((e) => e.clientEventId === resItem.clientEventId)?.retryCount || 0) + 1,
-        });
-        failedCount++;
-      }
-    }
-
-    for (const mapping of json.data.sessionMappings || []) {
-      await offlineDb.sessions.update(mapping.clientSessionId, { serverSessionId: mapping.serverSessionId });
-    }
-
-    return {
-      processedCount: eventsToSync.length,
-      syncedCount,
-      failedCount,
-      results: json.data.results,
-      sessionMappings: json.data.sessionMappings || [],
+  for (let offset = 0; offset < eventsToSync.length; offset += SYNC_BATCH_SIZE) {
+    const batch = eventsToSync.slice(offset, offset + SYNC_BATCH_SIZE);
+    await Promise.all(batch.map((event) => offlineDb.syncOutbox.update(event.clientEventId, { syncStatus: 'SYNCING' })));
+    const payload = {
+      deviceIdentifier,
+      sessions: Array.from(new Map(batch.map((event) => [event.sessionMetadata.clientSessionId, event.sessionMetadata])).values()),
+      events: batch.map((event) => ({
+        clientEventId: event.clientEventId,
+        sessionId: event.sessionId,
+        clientSessionId: event.sessionMetadata.clientSessionId,
+        studentId: event.studentId,
+        rawToken: event.rawToken,
+        eventType: event.eventType,
+        statusValue: event.statusValue,
+        clientTimestamp: event.clientTimestamp,
+        source: event.source,
+        metadata: event.sessionMetadata,
+      })),
     };
-  } catch (err: any) {
-    // Revert status to FAILED for retry
-    for (const ev of eventsToSync) {
-      await offlineDb.syncOutbox.update(ev.clientEventId, {
-        syncStatus: 'FAILED',
-        syncError: err.message || 'NETWORK_ERROR',
-        retryCount: ev.retryCount + 1,
+
+    try {
+      const response = await fetchImpl(`/api/v1/schools/${schoolId}/sync/attendance-events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json.success || !json.data) throw new Error(json.error || 'SYNC_FAILED');
+
+      for (const result of json.data.results || []) {
+        const event = batch.find((candidate) => candidate.clientEventId === result.clientEventId);
+        if (!event) continue;
+        if (result.status === 'ACCEPTED' || result.status === 'ALREADY_PROCESSED') {
+          const cleaned = { ...event, syncStatus: 'SYNCED' as const, syncError: undefined, failureClass: undefined };
+          delete cleaned.rawToken;
+          await offlineDb.syncOutbox.put(cleaned);
+          syncedCount++;
+        } else {
+          const error = result.error || 'SERVER_REJECTED';
+          await markSyncFailure(event, error, classifySyncFailure(error));
+          failedCount++;
+        }
+      }
+      for (const mapping of json.data.sessionMappings || []) {
+        await offlineDb.sessions.update(mapping.clientSessionId, { serverSessionId: mapping.serverSessionId });
+        allMappings.push(mapping);
+      }
+      allResults.push(...(json.data.results || []));
+    } catch (err: any) {
+      lastError = new Error(err.message || 'NETWORK_ERROR');
+      await Promise.all(batch.map((event) => markSyncFailure(event, lastError!.message, 'RETRYABLE')));
+      failedCount += batch.length;
     }
-    throw err;
   }
+
+  if (lastError && syncedCount === 0 && allResults.length === 0) throw lastError;
+  return { processedCount: eventsToSync.length, syncedCount, failedCount, results: allResults, sessionMappings: allMappings };
 }
 
 // 5. Get Pending Outbox Count
@@ -369,12 +386,16 @@ export async function getOutboxStatus() {
   const failedCount = await offlineDb.syncOutbox.where('syncStatus').equals('FAILED').count();
   const syncingCount = await offlineDb.syncOutbox.where('syncStatus').equals('SYNCING').count();
   const syncedCount = await offlineDb.syncOutbox.where('syncStatus').equals('SYNCED').count();
+  const permanentFailureCount = await offlineDb.syncOutbox.where('syncStatus').equals('PERMANENT_FAILURE').count();
+  const conflictCount = await offlineDb.syncOutbox.where('syncStatus').equals('CONFLICT').count();
 
   return {
     pendingCount,
     failedCount,
     syncingCount,
     syncedCount,
-    unsyncedTotal: pendingCount + failedCount + syncingCount,
+    permanentFailureCount,
+    conflictCount,
+    unsyncedTotal: pendingCount + failedCount + syncingCount + permanentFailureCount + conflictCount,
   };
 }

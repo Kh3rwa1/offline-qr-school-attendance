@@ -6,15 +6,15 @@ services:
     container_name: school_attendance_db
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: school_attendance
+      POSTGRES_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
+      POSTGRES_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     ports:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ['CMD-SHELL', 'pg_isready -U ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -30,13 +30,32 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgres://postgres:postgrespassword@db:5432/school_attendance
-      SESSION_SECRET: production-super-secret-session-key-32-chars-long
+      DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
     depends_on:
       db:
         condition: service_healthy
+      bootstrap-db:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
+
+  bootstrap-db:
+    image: postgres:16-alpine
+    container_name: school_attendance_bootstrap
+    environment:
+      DB_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      MIGRATION_DB_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+    volumes:
+      - ./docker/bootstrap-db.sh:/bootstrap-db.sh:ro
+    entrypoint: ['/bin/sh', '/bootstrap-db.sh']
+    depends_on:
+      db:
+        condition: service_healthy
 
   migrate:
     build:
@@ -45,11 +64,13 @@ services:
     container_name: school_attendance_migrate
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://postgres:postgrespassword@db:5432/school_attendance
+      DATABASE_URL: postgres://${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}:${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
     command: ['node', 'dist/migrate.cjs']
     depends_on:
       db:
         condition: service_healthy
+      bootstrap-db:
+        condition: service_completed_successfully
 
   sms-worker:
     build:
@@ -59,7 +80,7 @@ services:
     restart: always
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://postgres:postgrespassword@db:5432/school_attendance
+      DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SMS_PROVIDER: fake
     command: ['node', 'dist/sms-worker.cjs']
     depends_on:

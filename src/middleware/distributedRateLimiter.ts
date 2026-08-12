@@ -16,22 +16,33 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
       ? keyGenerator(req)
       : (req.ip || req.socket.remoteAddress || 'unknown');
 
-    const result = await checkRateLimit(prefix, identifier, maxRequests, windowMs);
+    try {
+      const result = await checkRateLimit(prefix, identifier, maxRequests, windowMs);
 
-    res.setHeader('X-RateLimit-Limit', maxRequests);
-    res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - result.currentCount));
+      res.setHeader('X-RateLimit-Limit', maxRequests);
+      res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - result.currentCount));
 
-    if (!result.allowed) {
-      res.setHeader('Retry-After', result.resetMs);
-      return res.status(429).json({
+      if (!result.allowed) {
+        res.setHeader('Retry-After', result.resetMs);
+        return res.status(429).json({
+          success: false,
+          error: 'TOO_MANY_REQUESTS',
+          message: `Rate limit exceeded for policy '${prefix}'. Please try again in ${result.resetMs} seconds.`,
+          retryAfterSeconds: result.resetMs,
+        });
+      }
+
+      next();
+    } catch (err: any) {
+      console.error(`[DistributedRateLimiter] Error evaluating policy '${prefix}':`, err.message);
+      res.setHeader('Retry-After', 10);
+      return res.status(503).json({
         success: false,
-        error: 'TOO_MANY_REQUESTS',
-        message: `Rate limit exceeded for policy '${prefix}'. Please try again in ${result.resetMs} seconds.`,
-        retryAfterSeconds: result.resetMs,
+        error: 'RATE_LIMITER_UNAVAILABLE',
+        message: 'Rate limiting service temporarily unavailable. Please retry shortly.',
+        retryAfterSeconds: 10,
       });
     }
-
-    next();
   };
 }
 

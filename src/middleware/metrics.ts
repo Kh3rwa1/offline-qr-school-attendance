@@ -44,13 +44,19 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
 
 /**
  * Authenticated Prometheus metrics endpoint renderer.
+ * Strictly requires Authorization: Bearer <METRICS_AUTH_TOKEN> header in production mode.
  */
 export function renderPrometheusMetrics(req?: Request): { authorized: boolean; content: string } {
   const requiredToken = process.env.METRICS_AUTH_TOKEN;
-  if (process.env.NODE_ENV === 'production' && requiredToken) {
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!requiredToken) {
+      return { authorized: false, content: 'METRICS_AUTH_TOKEN_REQUIRED_IN_PRODUCTION' };
+    }
     const authHeader = req?.headers.authorization;
-    const providedToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req?.query?.token as string);
-    if (providedToken !== requiredToken) {
+    const providedToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
+
+    if (!providedToken || providedToken !== requiredToken) {
       return { authorized: false, content: 'UNAUTHORIZED_METRICS_ACCESS' };
     }
   }

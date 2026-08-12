@@ -9,21 +9,25 @@ mkdir -p "${BACKUP_DIR}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="${BACKUP_DIR}/school_attendance_${TIMESTAMP}.sql.gz.enc"
 RESTORE_FILE="${BACKUP_DIR}/restored_${TIMESTAMP}.sql"
-PASSPHRASE="${BACKUP_PASSPHRASE:-SchAtt2026SecureBackupKey}"
 
 if [ -z "${DATABASE_URL}" ]; then
-  echo "Error: DATABASE_URL is not set."
+  echo "Error: DATABASE_URL environment variable is required."
+  exit 1
+fi
+
+if [ -z "${BACKUP_PASSPHRASE}" ]; then
+  echo "Error: BACKUP_PASSPHRASE environment variable is required for encryption. Refusing to use a hard-coded default password."
   exit 1
 fi
 
 START_TIME=$(date +%s)
 
 echo "1. Creating AES-256 encrypted PostgreSQL backup to ${BACKUP_FILE}..."
-pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${PASSPHRASE}" -out "${BACKUP_FILE}"
+pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -out "${BACKUP_FILE}"
 echo "Backup created and encrypted successfully. Size: $(du -sh "${BACKUP_FILE}" | cut -f1)"
 
 echo "2. Decrypting and verifying backup archive integrity..."
-openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${PASSPHRASE}" -in "${BACKUP_FILE}" | gunzip -c > "${RESTORE_FILE}"
+openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -in "${BACKUP_FILE}" | gunzip -c > "${RESTORE_FILE}"
 echo "Decryption successful. Uncompressed dump size: $(du -sh "${RESTORE_FILE}" | cut -f1)"
 
 if [ -n "${TARGET_DATABASE_URL}" ]; then

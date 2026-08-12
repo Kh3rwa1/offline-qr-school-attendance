@@ -20,6 +20,10 @@ import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/met
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
 
 export async function createApp() {
+  if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
+    throw new Error('FATAL: METRICS_AUTH_TOKEN environment variable must be set in production mode.');
+  }
+
   const app = express();
   app.set('trust proxy', 1);
 

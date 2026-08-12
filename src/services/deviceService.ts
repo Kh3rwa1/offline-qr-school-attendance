@@ -1,4 +1,5 @@
-import { eq, and } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { devices } from '../db/schema';
 import { createAuditLog } from './auditLogService';
@@ -30,11 +31,15 @@ export async function registerDevice(params: {
   const [newDevice] = await db
     .insert(devices)
     .values({
+      id: crypto.randomUUID(),
       schoolId: params.schoolId,
       userId: params.userId,
       deviceIdentifier: params.deviceIdentifier,
       deviceModel: params.deviceModel || 'Android PWA Device',
       status: 'AUTHORIZED',
+      lastSyncedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
     .returning();
 

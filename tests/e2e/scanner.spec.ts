@@ -16,7 +16,7 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
     });
     expect(adminLogin.ok()).toBeTruthy();
     const adminMe = await (await adminApi.get('/api/v1/auth/me')).json();
-    schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.activeMembership.schoolId;
+    schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.memberships[0].schoolId;
     const classesResponse = await adminApi.get(`/api/v1/schools/${schoolId}/attendance/classes`);
     classSectionId = (await classesResponse.json()).data[0].classSectionId;
     const deviceIdentifier = `e2e-${Date.now()}`;

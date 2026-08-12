@@ -18,7 +18,8 @@ type ContextStore = { tx: any; mode: ContextMode; schoolId?: string };
 const tenantTransaction = new AsyncLocalStorage<ContextStore>();
 
 // PostgreSQL Connection Pool Budget Configuration
-const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX || '20', 10);
+const PG_POOL_MAX_APP = parseInt(process.env.PG_POOL_MAX_APP || process.env.PG_POOL_MAX || '15', 10);
+const PG_POOL_MAX_SYS = parseInt(process.env.PG_POOL_MAX_SYS || '5', 10);
 const PG_POOL_MIN = parseInt(process.env.PG_POOL_MIN || '2', 10);
 const PG_IDLE_TIMEOUT_MS = parseInt(process.env.PG_IDLE_TIMEOUT_MS || '30000', 10);
 const PG_CONNECTION_TIMEOUT_MS = parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '5000', 10);
@@ -30,16 +31,17 @@ const SMS_WORKER_REPLICA_COUNT = parseInt(process.env.SMS_WORKER_REPLICA_COUNT |
 const MAX_ALLOWED_DB_CONNECTIONS = parseInt(process.env.MAX_ALLOWED_DB_CONNECTIONS || '100', 10);
 
 /**
- * Validates connection pool budget on startup.
+ * Validates connection pool budget on startup accounting for app and system pools per replica.
  */
 export function validateDatabaseConnectionBudget(): { totalBudget: number; maxAllowed: number; valid: boolean } {
-  const totalBudget = (WEB_REPLICA_COUNT * PG_POOL_MAX) + (SMS_WORKER_REPLICA_COUNT * PG_POOL_MAX);
+  const processBudget = PG_POOL_MAX_APP + PG_POOL_MAX_SYS;
+  const totalBudget = (WEB_REPLICA_COUNT * processBudget) + (SMS_WORKER_REPLICA_COUNT * processBudget);
   const valid = totalBudget <= MAX_ALLOWED_DB_CONNECTIONS;
 
   if (!valid && process.env.NODE_ENV === 'production') {
     throw new Error(
       `DB_CONNECTION_BUDGET_EXCEEDED: Configured pool budget (${totalBudget}) exceeds max allowed database connections (${MAX_ALLOWED_DB_CONNECTIONS}). ` +
-      `Web replicas (${WEB_REPLICA_COUNT} x ${PG_POOL_MAX}) + Worker replicas (${SMS_WORKER_REPLICA_COUNT} x ${PG_POOL_MAX}).`
+      `Web replicas (${WEB_REPLICA_COUNT} x ${processBudget}) + Worker replicas (${SMS_WORKER_REPLICA_COUNT} x ${processBudget}).`
     );
   }
 
@@ -52,16 +54,16 @@ export function getDbPoolMetrics() {
       totalCount: appPoolInstance.totalCount,
       idleCount: appPoolInstance.idleCount,
       waitingCount: appPoolInstance.waitingCount,
-      maxAllowed: PG_POOL_MAX,
+      maxAllowed: PG_POOL_MAX_APP,
     };
   }
-  return { totalCount: 0, idleCount: 0, waitingCount: 0, maxAllowed: PG_POOL_MAX };
+  return { totalCount: 0, idleCount: 0, waitingCount: 0, maxAllowed: PG_POOL_MAX_APP };
 }
 
 export function isDbPoolOverloaded(): boolean {
   if (!appPoolInstance) return false;
   const activeCount = appPoolInstance.totalCount - appPoolInstance.idleCount;
-  return activeCount >= Math.floor(PG_POOL_MAX * 0.9);
+  return activeCount >= Math.floor(PG_POOL_MAX_APP * 0.9);
 }
 
 export function getDb() {
@@ -71,7 +73,7 @@ export function getDb() {
     validateDatabaseConnectionBudget();
     const pool = new pg.Pool({
       connectionString: env.DATABASE_URL,
-      max: PG_POOL_MAX,
+      max: PG_POOL_MAX_APP,
       min: PG_POOL_MIN,
       idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
       connectionTimeoutMillis: PG_CONNECTION_TIMEOUT_MS,
@@ -100,7 +102,7 @@ function getSystemDb() {
   }
   systemPoolInstance = new pg.Pool({
     connectionString: env.SYSTEM_DATABASE_URL,
-    max: PG_POOL_MAX,
+    max: PG_POOL_MAX_SYS,
     min: PG_POOL_MIN,
     idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
     connectionTimeoutMillis: PG_CONNECTION_TIMEOUT_MS,
@@ -151,8 +153,9 @@ export async function withTenantContext<T>(schoolId: string, fn: (tx: any) => Pr
     if (active.schoolId !== schoolId) throw new Error('TENANT_CONTEXT_SWITCH_FORBIDDEN');
     return fn(active.tx);
   }
+  const isLocal = Boolean(env.DATABASE_URL);
   return rawDb.transaction(async (tx: any) => {
-    await tx.execute(sql`SELECT set_config('app.is_system', 'false', true), set_config('app.current_school_id', ${schoolId}, true)`);
+    await tx.execute(sql`SELECT set_config('app.is_system', 'false', ${isLocal}), set_config('app.current_school_id', ${schoolId}, ${isLocal})`);
     return tenantTransaction.run({ tx, mode: 'TENANT', schoolId }, () => fn(tx));
   });
 }
@@ -163,8 +166,9 @@ export async function withSystemContext<T>(fn: (tx: any) => Promise<T>): Promise
     if (active.mode !== 'SYSTEM') throw new Error('SYSTEM_CONTEXT_INSIDE_TENANT_CONTEXT_FORBIDDEN');
     return fn(active.tx);
   }
+  const isLocal = Boolean(env.DATABASE_URL);
   return getSystemDb().transaction(async (tx: any) => {
-    await tx.execute(sql`SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)`);
+    await tx.execute(sql`SELECT set_config('app.is_system', 'true', ${isLocal}), set_config('app.current_school_id', '', ${isLocal})`);
     return tenantTransaction.run({ tx, mode: 'SYSTEM' }, () => fn(tx));
   });
 }

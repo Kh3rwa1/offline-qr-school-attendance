@@ -49,11 +49,15 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
           RETURNING notification_jobs.*;
         `);
 
-        if (claimedRows?.rows && Array.isArray(claimedRows.rows) && claimedRows.rows.length > 0) {
+        if (claimedRows?.rows && Array.isArray(claimedRows.rows)) {
           return claimedRows.rows as ClaimedJob[];
         }
-      } catch {
-        // Fallback for in-memory test environment
+      } catch (err: any) {
+        if (process.env.NODE_ENV === 'production') {
+          console.error('[NotificationWorker] Atomic queue claim failed in production:', err.message);
+          throw new Error(`ATOMIC_QUEUE_CLAIM_FAILED: ${err.message}`);
+        }
+        // Fallback permitted only in development / PGlite test environments
       }
     }
 

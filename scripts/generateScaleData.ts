@@ -1,12 +1,14 @@
 import { db, withSystemContext } from '../src/db/index';
-import { schools, users, academicYears, classSections, students, enrollments } from '../src/db/schema';
+import { schools, academicYears, classSections, students, enrollments } from '../src/db/schema';
 import crypto from 'node:crypto';
 
 /**
- * Scale Data Generator for 100 Schools, 500,000 Students load testing profile.
+ * Scale Data Generator for 100 Schools, 500,000 Students profile.
+ * Generates 100 schools, 5,000 students per school (500,000 total students) using high-performance chunked batch operations.
  */
-export async function generateScaleDataProfile(targetSchools = 100, studentsPerSchool = 5000) {
-  console.log(`Starting Scale Data Generation for ${targetSchools} schools, ${studentsPerSchool} students/school...`);
+export async function generateScaleDataProfile(targetSchools = 100, studentsPerSchool = 5000, batchSize = 1000) {
+  console.log(`Starting Scale Data Generation for ${targetSchools} schools, ${studentsPerSchool} students/school (Total: ${targetSchools * studentsPerSchool} students)...`);
+  const startTime = Date.now();
 
   await withSystemContext(async () => {
     for (let s = 1; s <= targetSchools; s++) {
@@ -37,34 +39,50 @@ export async function generateScaleDataProfile(targetSchools = 100, studentsPerS
         sectionName: 'A',
       });
 
-      if (s <= 2) {
-        // Generate actual records for first 2 schools for local smoke testing
-        for (let i = 1; i <= 50; i++) {
-          const studentId = crypto.randomUUID();
-          await db.insert(students).values({
-            id: studentId,
-            schoolId,
-            studentCode: `STU-SCALE-${s}-${i}`,
-            name: `Scale Student ${i}`,
-            status: 'ACTIVE',
-          });
-          await db.insert(enrollments).values({
-            schoolId,
-            studentId,
-            classSectionId,
-            academicYearId,
-            rollNumber: i,
-            startDate: '2026-01-01',
-            status: 'ACTIVE',
-          });
+      // Insert students and enrollments in batches of 1,000
+      let studentBatch: any[] = [];
+      let enrollmentBatch: any[] = [];
+
+      for (let i = 1; i <= studentsPerSchool; i++) {
+        const studentId = crypto.randomUUID();
+        studentBatch.push({
+          id: studentId,
+          schoolId,
+          studentCode: `STU-${s}-${i}`,
+          name: `Student ${i}`,
+          status: 'ACTIVE',
+        });
+        enrollmentBatch.push({
+          schoolId,
+          studentId,
+          classSectionId,
+          academicYearId,
+          rollNumber: i,
+          startDate: '2026-01-01',
+          status: 'ACTIVE',
+        });
+
+        if (studentBatch.length >= batchSize || i === studentsPerSchool) {
+          await db.insert(students).values(studentBatch);
+          await db.insert(enrollments).values(enrollmentBatch);
+          studentBatch = [];
+          enrollmentBatch = [];
         }
+      }
+
+      if (s % 10 === 0) {
+        console.log(`Generated ${s}/${targetSchools} schools (${s * studentsPerSchool} total students)...`);
       }
     }
   });
 
-  console.log('Scale Data Profile Generation complete.');
+  const durationSec = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`Scale Data Profile Generation complete in ${durationSec}s.`);
 }
 
 if (process.argv[1]?.includes('generateScaleData')) {
-  generateScaleDataProfile(10, 50).catch(console.error);
+  const isBenchmark = process.env.FULL_500K_BENCHMARK === '1';
+  const targetSchools = isBenchmark ? 100 : 5;
+  const studentsPerSchool = isBenchmark ? 5000 : 100;
+  generateScaleDataProfile(targetSchools, studentsPerSchool).catch(console.error);
 }

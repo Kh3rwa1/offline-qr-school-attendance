@@ -12,6 +12,8 @@ CREATE INDEX IF NOT EXISTS idx_attendance_events_session_time ON attendance_even
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_status_next ON notification_jobs(school_id, status, next_attempt_at, queued_at);
 --> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_notification_jobs_global_claim ON notification_jobs(status, next_attempt_at, queued_at);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_notification_attempts_job ON notification_attempts(job_id, attempted_at);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);

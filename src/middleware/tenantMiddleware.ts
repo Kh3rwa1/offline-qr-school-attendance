@@ -1,11 +1,10 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware';
 import { translate } from '../i18n';
-import { withTenantContext } from '../db';
+import { setTenantContext } from '../db';
 
 /**
- * Backward compatibility tenant middleware wrapper.
- * Opens database tenant context safely without response monkey-patching.
+ * Tenant middleware: verifies tenant membership and sets active school context GUC.
  */
 export async function requireTenant(
   req: AuthenticatedRequest,
@@ -16,8 +15,10 @@ export async function requireTenant(
     return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   }
 
+  const urlMatch = req.originalUrl?.match(/\/schools\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
   const targetSchoolId =
     req.params.schoolId ||
+    urlMatch?.[1] ||
     (req.headers['x-school-id'] as string) ||
     req.body?.schoolId ||
     req.query?.schoolId;
@@ -55,12 +56,11 @@ export async function requireTenant(
   req.userRole = targetMembership?.role || (isSuperAdmin ? 'SUPER_ADMIN' : undefined);
 
   try {
-    await withTenantContext(String(targetSchoolId), async () => {
-      next();
-    });
+    await setTenantContext(String(targetSchoolId));
+    next();
   } catch (error: any) {
     if (!res.headersSent) {
-      res.status(500).json({ success: false, error: 'TENANT_TRANSACTION_FAILED' });
+      res.status(500).json({ success: false, error: 'TENANT_CONTEXT_FAILED' });
     }
   }
 }

@@ -21,6 +21,31 @@ import crypto from 'crypto';
 export type SessionStatus = 'DRAFT' | 'OPEN' | 'REVIEW' | 'FINALIZED' | 'REOPENED';
 export type AttendanceStatus = 'UNMARKED' | 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED' | 'LEAVE';
 
+export async function verifyTeacherAssignment(params: {
+  schoolId: string;
+  classSectionId: string;
+  actorId: string;
+  userRole: string;
+}) {
+  const { schoolId, classSectionId, actorId, userRole } = params;
+  if (['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) return;
+
+  const [assignment] = await db
+    .select({ id: teacherAssignments.id })
+    .from(teacherAssignments)
+    .where(
+      and(
+        eq(teacherAssignments.schoolId, schoolId),
+        eq(teacherAssignments.teacherId, actorId),
+        eq(teacherAssignments.classSectionId, classSectionId)
+      )
+    );
+
+  if (!assignment) {
+    throw new Error('UNAUTHORIZED_TEACHER_NOT_ASSIGNED');
+  }
+}
+
 export async function getTeacherAssignedClasses(params: {
   schoolId: string;
   teacherId: string;
@@ -73,22 +98,7 @@ export async function createAttendanceSession(params: {
   const { schoolId, classSectionId, teacherId, sessionDate, sessionType = 'DAILY', actorId, userRole } = params;
 
   // Enforce teacher assignment permission check unless Admin
-  if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
-    const [assignment] = await db
-      .select()
-      .from(teacherAssignments)
-      .where(
-        and(
-          eq(teacherAssignments.schoolId, schoolId),
-          eq(teacherAssignments.teacherId, actorId),
-          eq(teacherAssignments.classSectionId, classSectionId)
-        )
-      );
-
-    if (!assignment) {
-      throw new Error('UNAUTHORIZED_TEACHER_NOT_ASSIGNED');
-    }
-  }
+  await verifyTeacherAssignment({ schoolId, classSectionId, actorId, userRole });
 
   // Check if session already exists for date + classSectionId + sessionType
   const [existingSession] = await db
@@ -105,7 +115,7 @@ export async function createAttendanceSession(params: {
 
   if (existingSession) {
     // Return existing session with its current roster and records
-    const sessionDetails = await getAttendanceSessionDetails(schoolId, existingSession.id);
+    const sessionDetails = await getAttendanceSessionDetails(schoolId, existingSession.id, actorId, userRole);
     return { session: existingSession, ...sessionDetails, isNew: false };
   }
 
@@ -212,6 +222,8 @@ export async function updateSessionStatus(params: {
   if (!session) {
     throw new Error('SESSION_NOT_FOUND');
   }
+
+  await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
 
   const currentStatus = session.status as SessionStatus;
 
@@ -371,7 +383,7 @@ export async function processQRCode(params: {
     };
   }
 
-  // 2. Validate Attendance Session
+  // 2. Validate Attendance Session & Authorization
   const [session] = await db
     .select()
     .from(attendanceSessions)
@@ -383,6 +395,11 @@ export async function processQRCode(params: {
 
   if (session.status === 'FINALIZED') {
     throw new Error('FINALIZED_SESSION_LOCKED');
+  }
+
+  // Enforce QR Proof requirement for scanner sources
+  if (!rawToken && source !== 'MANUAL') {
+    throw new Error('MISSING_QR_PROOF');
   }
 
   // 3. Resolve Target Student ID & QR Credential Validation
@@ -582,6 +599,8 @@ export async function manualStatusUpdate(params: {
     throw new Error('SESSION_NOT_FOUND');
   }
 
+  await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
+
   if (session.status === 'FINALIZED') {
     if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
       throw new Error('FINALIZED_SESSION_LOCKED');
@@ -591,13 +610,19 @@ export async function manualStatusUpdate(params: {
     }
   }
 
-  // Resolve record
+  // Resolve record (strictly scoped to sessionId)
   let record: any;
   if (recordId) {
     const [rec] = await db
       .select()
       .from(attendanceRecords)
-      .where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.id, recordId)));
+      .where(
+        and(
+          eq(attendanceRecords.schoolId, schoolId),
+          eq(attendanceRecords.attendanceSessionId, sessionId),
+          eq(attendanceRecords.id, recordId)
+        )
+      );
     record = rec;
   } else if (studentId) {
     const [rec] = await db
@@ -704,7 +729,7 @@ export async function manualStatusUpdate(params: {
   return record;
 }
 
-export async function getAttendanceSessionDetails(schoolId: string, sessionId: string) {
+export async function getAttendanceSessionDetails(schoolId: string, sessionId: string, actorId?: string, userRole?: string) {
   const [session] = await db
     .select({
       id: attendanceSessions.id,
@@ -725,6 +750,10 @@ export async function getAttendanceSessionDetails(schoolId: string, sessionId: s
 
   if (!session) {
     return null;
+  }
+
+  if (actorId && userRole) {
+    await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
   }
 
   // Fetch roster snapshot with current attendance records

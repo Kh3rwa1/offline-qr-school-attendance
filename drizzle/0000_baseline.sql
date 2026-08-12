@@ -152,6 +152,7 @@ CREATE TABLE "import_jobs" (
 	"successful_rows" integer DEFAULT 0 NOT NULL,
 	"failed_rows" integer DEFAULT 0 NOT NULL,
 	"error_summary" jsonb,
+	"staged_data" jsonb,
 	"created_by" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );

@@ -84,7 +84,7 @@ describe('Online Daily Attendance Engine & Invariants', () => {
       teacherId: seeded.teacherUser.id,
       userRole: 'TEACHER',
     });
-    expect(teacherClasses.some((c) => c.classSectionId === seeded.schoolAClass5A.id)).toBe(true);
+    expect(teacherClasses.some((c: any) => c.classSectionId === seeded.schoolAClass5A.id)).toBe(true);
   });
 
   it('guarantees session uniqueness per school, class section, date and session type', async () => {
@@ -126,7 +126,7 @@ describe('Online Daily Attendance Engine & Invariants', () => {
 
     // Check roster snapshot contains studentA1 with rollNumber 1 and student name "Pritam Chakrabarty"
     const detailsBefore = await getAttendanceSessionDetails(seeded.schoolA.id, sessionRes.session.id);
-    const itemBefore = detailsBefore?.roster.find((r) => r.studentId === studentA1.student.id);
+    const itemBefore = detailsBefore?.roster.find((r: any) => r.studentId === studentA1.student.id);
     expect(itemBefore?.studentName).toBe('Pritam Chakrabarty');
     expect(itemBefore?.rollNumber).toBe(1);
 
@@ -138,7 +138,7 @@ describe('Online Daily Attendance Engine & Invariants', () => {
 
     // Roster snapshot in existing attendance session MUST NOT change
     const detailsAfter = await getAttendanceSessionDetails(seeded.schoolA.id, sessionRes.session.id);
-    const itemAfter = detailsAfter?.roster.find((r) => r.studentId === studentA1.student.id);
+    const itemAfter = detailsAfter?.roster.find((r: any) => r.studentId === studentA1.student.id);
     expect(itemAfter?.studentName).toBe('Pritam Chakrabarty');
   });
 

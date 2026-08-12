@@ -460,6 +460,7 @@ export const importJobs = pgTable('import_jobs', {
   successfulRows: integer('successful_rows').notNull().default(0),
   failedRows: integer('failed_rows').notNull().default(0),
   errorSummary: jsonb('error_summary'),
+  stagedData: jsonb('staged_data'),
   createdBy: uuid('created_by').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

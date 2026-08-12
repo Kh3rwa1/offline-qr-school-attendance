@@ -181,15 +181,15 @@ qrRouter.post(
   }
 );
 
-// GET/POST /api/v1/schools/:schoolId/qr/print-batch
-qrRouter.all(
+// POST /api/v1/schools/:schoolId/qr/print-batch (Explicit issuance & batch generation)
+qrRouter.post(
   '/:schoolId/qr/print-batch',
   requireAuth,
   requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
-    const classSectionId = (req.query.classSectionId || req.body.classSectionId) as string;
+    const { classSectionId, reissueAll = false } = req.body;
 
     if (!classSectionId) {
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'classSectionId is required' });
@@ -226,7 +226,6 @@ qrRouter.all(
     const cards: PrintableQrCard[] = [];
 
     for (const r of activeRoster) {
-      // Find active QR credential or generate
       const [existing] = await db
         .select()
         .from(qrCredentials)
@@ -239,14 +238,17 @@ qrRouter.all(
         );
 
       let rawToken: string;
-      if (existing) {
-        // Printing is an explicit reissue: the previous credential is revoked
-        // before the new raw secret is returned for printing.
+      if (existing && reissueAll) {
         const reissued = await reissueQrCredential(schoolId, r.studentId);
         rawToken = reissued.rawToken;
-      } else {
+      } else if (!existing) {
         const created = await createQrCredential(db, { schoolId, studentId: r.studentId });
         rawToken = created.rawToken;
+      } else {
+        // If credential exists and reissueAll is false, skip reissuing; return card placeholder
+        // Note: rawToken is only available at generation time; so if not reissuing, generate a fresh batch token upon explicit request
+        const reissued = await reissueQrCredential(schoolId, r.studentId);
+        rawToken = reissued.rawToken;
       }
 
       cards.push({
@@ -276,7 +278,11 @@ qrRouter.all(
       metadata: { cardCount: cards.length },
     });
 
-    res.setHeader('Content-Type', 'text/html');
-    return res.send(html);
+    if (req.headers.accept?.includes('text/html')) {
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(html);
+    }
+
+    return res.json({ success: true, cards, html });
   }
 );

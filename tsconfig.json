@@ -25,5 +25,15 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*",
+    "server.ts",
+    "sms-worker.ts",
+    "scripts/**/*",
+    "tests/**/*",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "drizzle.config.ts"
+  ]
 }

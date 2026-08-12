@@ -14,7 +14,7 @@ import {
 } from '../services/attendanceService';
 import { db } from '../db';
 import { attendanceSessions, classSections } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 
 const router = Router({ mergeParams: true });
 
@@ -90,6 +90,8 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const schoolId = req.activeSchoolId!;
+      const user = req.user!;
+      const userRole = req.userRole!;
       const { classSectionId, sessionDate } = req.query;
 
       const conditions: any[] = [eq(attendanceSessions.schoolId, schoolId)];
@@ -98,6 +100,22 @@ router.get(
       }
       if (sessionDate) {
         conditions.push(eq(attendanceSessions.sessionDate, sessionDate as string));
+      }
+
+      if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
+        const assigned = await getTeacherAssignedClasses({ schoolId, teacherId: user.id, userRole });
+        const assignedIds = assigned.map((c: { classSectionId: string }) => c.classSectionId);
+        if (classSectionId && !assignedIds.includes(classSectionId as string)) {
+          res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+          return;
+        }
+        if (!classSectionId) {
+          if (assignedIds.length === 0) {
+            res.json({ success: true, data: [] });
+            return;
+          }
+          conditions.push(inArray(attendanceSessions.classSectionId, assignedIds));
+        }
       }
 
       const sessions = await db
@@ -133,9 +151,11 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const schoolId = req.activeSchoolId!;
+      const user = req.user!;
+      const userRole = req.userRole!;
       const { sessionId } = req.params;
 
-      const details = await getAttendanceSessionDetails(schoolId, sessionId);
+      const details = await getAttendanceSessionDetails(schoolId, sessionId, user.id, userRole);
       if (!details) {
         res.status(404).json({ success: false, error: 'SESSION_NOT_FOUND' });
         return;
@@ -144,6 +164,10 @@ router.get(
       res.json({ success: true, data: details });
     } catch (error: any) {
       console.error('Error fetching session details:', error);
+      if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
+        res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+        return;
+      }
       res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_SESSION' });
     }
   }

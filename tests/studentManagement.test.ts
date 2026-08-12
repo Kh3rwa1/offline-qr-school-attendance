@@ -87,7 +87,7 @@ describe('Student Management & Enrollment History Tests', () => {
 
     // Listing School B students should not include School A student
     const schoolBStudents = await listStudents({ schoolId: seeded.schoolB.id, status: 'ALL' });
-    const match = schoolBStudents.find((s) => s.id === createdA.student.id);
+    const match = schoolBStudents.find((s: any) => s.id === createdA.student.id);
     expect(match).toBeUndefined();
   });
 

@@ -21,7 +21,7 @@ import {
   sanitizeSpreadsheetValue,
 } from '../src/services/reportService';
 import { db } from '../src/db';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 describe('Milestone 5: Corrections, Reports & Exports', () => {
   let seeded: any;
@@ -96,6 +96,7 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
       actorId: seeded.teacherUser.id,
       clientEventId: `evt-rep-1-${Date.now()}`,
       rawToken: qrA1.rawToken,
+      clientTimestamp: new Date(),
     });
 
     await updateSessionStatus({
@@ -111,8 +112,8 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
     const reg = await getMonthlyClassRegister(seeded.schoolA.id, seeded.schoolAClass5A.id, 2026, 8);
 
     expect(reg.students.length).toBeGreaterThanOrEqual(2);
-    const s1Row = reg.students.find((s) => s.studentId === studentA1.id);
-    const s2Row = reg.students.find((s) => s.studentId === studentA2.id);
+    const s1Row = reg.students.find((s: any) => s.studentId === studentA1.id);
+    const s2Row = reg.students.find((s: any) => s.studentId === studentA2.id);
 
     expect(s1Row?.attendanceGrid[1]).toBe('PRESENT');
     expect(s2Row?.attendanceGrid[1]).toBe('ABSENT');
@@ -133,7 +134,7 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
     // Fetch daily report for this session
     const report = await getDailyClassReport(seeded.schoolA.id, seeded.schoolAClass5A.id, '2026-08-02');
     expect(report.roster.length).toBeGreaterThanOrEqual(2);
-    expect(report.roster.some((r) => r.studentId === studentA1.id)).toBe(true);
+    expect(report.roster.some((r: any) => r.studentId === studentA1.id)).toBe(true);
   });
 
   it('handles Late, Leave, Excused statuses and authorized corrections', async () => {
@@ -169,8 +170,8 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
     });
 
     const report = await getDailyClassReport(seeded.schoolA.id, seeded.schoolAClass5A.id, '2026-08-03');
-    const s1 = report.roster.find((r) => r.studentId === studentA1.id);
-    const s2 = report.roster.find((r) => r.studentId === studentA2.id);
+    const s1 = report.roster.find((r: any) => r.studentId === studentA1.id);
+    const s2 = report.roster.find((r: any) => r.studentId === studentA2.id);
 
     expect(s1?.status).toBe('LATE');
     expect(s1?.correctionReason).toBe('Traffic delay authorized');
@@ -210,7 +211,7 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
     });
 
     const sessionReport = await getTeacherSessionReport(seeded.schoolA.id, '2026-08-04', '2026-08-04');
-    const sessItem = sessionReport.sessions.find((s) => s.sessionId === session.id);
+    const sessItem = sessionReport.sessions.find((s: any) => s.sessionId === session.id);
 
     expect(sessItem).toBeDefined();
     expect(sessItem?.status).toBe('REOPENED');
@@ -221,7 +222,7 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
     // School B admin requesting School A report must fail / return School B empty
     const reportB = await getDailySchoolReport(seeded.schoolB.id, '2026-08-01');
     expect(reportB.schoolId).toBe(seeded.schoolB.id);
-    expect(reportB.sections.every((s) => s.classSectionId !== seeded.schoolAClass5A.id)).toBe(true);
+    expect(reportB.sections.every((s: any) => s.classSectionId !== seeded.schoolAClass5A.id)).toBe(true);
   });
 
   it('protects against spreadsheet formula injection (=, +, -, @)', () => {
@@ -232,23 +233,24 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
     expect(sanitizeSpreadsheetValue('Normal Text')).toBe('Normal Text');
   });
 
-  it('handles Bengali names correctly in XLSX and CSV export generation', () => {
+  it('handles Bengali names correctly in XLSX and CSV export generation', async () => {
     const headers = ['Name', 'Name (Bengali)', 'Formula Test'];
     const rows = [
       ['Anirban Das', 'অনির্‌বান দাস', '=10+10'],
       ['Mousumi Chatterjee', 'মৌসুমি চট্টোপাধ্যায়', '@dangerous'],
     ];
 
-    const xlsxBuf = generateXLSXExport('TestSheet', headers, rows);
+    const xlsxBuf = await generateXLSXExport('TestSheet', headers, rows);
     expect(xlsxBuf).toBeInstanceOf(Buffer);
     expect(xlsxBuf.length).toBeGreaterThan(0);
 
-    const workbook = XLSX.read(xlsxBuf, { type: 'buffer' });
-    const sheet = workbook.Sheets['TestSheet'];
-    const parsed = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxBuf);
+    const sheet = workbook.worksheets[0];
+    const cellValue = String(sheet.getRow(2).getCell(2).value);
 
-    expect(parsed[1][1]).toBe('অনির্‌বান দাস');
-    expect(parsed[1][2]).toBe("'=10+10"); // Formula prepended with single quote
+    expect(cellValue).toBe('অনির্‌বান দাস');
+    expect(String(sheet.getRow(2).getCell(3).value)).toBe("'=10+10"); // Formula prepended with single quote
 
     const csvBuf = generateCSVExport(headers, rows);
     const csvString = csvBuf.toString('utf-8');

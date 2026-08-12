@@ -100,7 +100,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     expect(pkg.classSectionId).toBe(seeded.schoolAClass5A.id);
     expect(pkg.students.length).toBeGreaterThanOrEqual(2);
 
-    const s1Pkg = pkg.students.find((s) => s.studentId === studentA1.id);
+    const s1Pkg = pkg.students.find((s: any) => s.studentId === studentA1.id);
     expect(s1Pkg).toBeDefined();
     expect(s1Pkg?.name).toBe('Anirban Das');
     expect(s1Pkg?.sha256TokenHash).toBe(qrA1.credential.tokenDigest);
@@ -116,7 +116,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     // Populate Dexie rosters table first
     const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
     await offlineDb.rosters.bulkPut(
-      pkg.students.map((s) => ({
+      pkg.students.map((s: any) => ({
         studentId: s.studentId,
         schoolId: seeded.schoolA.id,
         classSectionId: seeded.schoolAClass5A.id,
@@ -154,7 +154,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     // Populate Dexie rosters
     const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
     await offlineDb.rosters.bulkPut(
-      pkg.students.map((s) => ({
+      pkg.students.map((s: any) => ({
         studentId: s.studentId,
         schoolId: seeded.schoolA.id,
         classSectionId: seeded.schoolAClass5A.id,
@@ -184,7 +184,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
 
     expect(scanRes.success).toBe(true);
     expect(scanRes.duplicateScan).toBe(false);
-    expect(scanRes.student.name).toBe('Anirban Das');
+    expect(scanRes.student?.name).toBe('Anirban Das');
 
     // Verify item saved in Dexie syncOutbox
     const outboxItems = await offlineDb.syncOutbox.toArray();
@@ -200,7 +200,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
   it('suppresses duplicate scan and returns warning alert locally', async () => {
     const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
     await offlineDb.rosters.bulkPut(
-      pkg.students.map((s) => ({
+      pkg.students.map((s: any) => ({
         studentId: s.studentId,
         schoolId: seeded.schoolA.id,
         classSectionId: seeded.schoolAClass5A.id,
@@ -247,7 +247,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
   it('rejects wrong-school QR code scan locally', async () => {
     const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
     await offlineDb.rosters.bulkPut(
-      pkg.students.map((s) => ({
+      pkg.students.map((s: any) => ({
         studentId: s.studentId,
         schoolId: seeded.schoolA.id,
         classSectionId: seeded.schoolAClass5A.id,
@@ -292,7 +292,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
 
   it('rejects revoked QR code scan locally', async () => {
     const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
-    const s1Pkg = pkg.students.find((s) => s.studentId === studentA1.id);
+    const s1Pkg = pkg.students.find((s: any) => s.studentId === studentA1.id);
 
     await offlineDb.rosters.put({
       studentId: studentA1.id,
@@ -367,7 +367,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     const res1 = await syncAttendanceEvents(batchPayload);
 
     expect(res1.processedCount).toBe(2);
-    expect(res1.results.every((r) => r.status === 'ACCEPTED')).toBe(true);
+    expect(res1.results.every((r: any) => r.status === 'ACCEPTED')).toBe(true);
 
     // Verify 2 records created in database
     const dbRecords = await db
@@ -380,7 +380,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     const res2 = await syncAttendanceEvents(batchPayload);
 
     expect(res2.processedCount).toBe(2);
-    expect(res2.results.every((r) => r.status === 'ALREADY_PROCESSED')).toBe(true);
+    expect(res2.results.every((r: any) => r.status === 'ALREADY_PROCESSED')).toBe(true);
 
     // Verify database still contains exactly 2 records (zero duplicate insertions)
     const dbRecordsPostSync2 = await db
@@ -392,7 +392,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
 
   it('reconciles a session created entirely offline and persists two scans', async () => {
     const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
-    await offlineDb.rosters.bulkPut(pkg.students.map((student) => ({
+    await offlineDb.rosters.bulkPut(pkg.students.map((student: any) => ({
       studentId: student.studentId,
       schoolId: seeded.schoolA.id,
       classSectionId: seeded.schoolAClass5A.id,
@@ -436,7 +436,7 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
     const [serverSession] = await db.select().from(attendanceSessions).where(eq(attendanceSessions.clientSessionId, offlineSession.clientSessionId));
     expect(serverSession).toBeDefined();
     const serverRecords = await db.select().from(attendanceRecords).where(eq(attendanceRecords.attendanceSessionId, serverSession.id));
-    expect(serverRecords.filter((record) => record.status === 'PRESENT')).toHaveLength(2);
+    expect(serverRecords.filter((record: any) => record.status === 'PRESENT')).toHaveLength(2);
   });
 
   it('syncs in batches of 75 and removes raw QR secrets after acceptance', async () => {

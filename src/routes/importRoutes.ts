@@ -19,7 +19,7 @@ importRouter.get(
   requireAuth,
   requireTenant,
   async (req: AuthenticatedRequest, res: Response) => {
-    const buffer = generateXlsxTemplate();
+    const buffer = await generateXlsxTemplate();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="Student_Import_Template.xlsx"');
     return res.send(buffer);
@@ -77,12 +77,12 @@ importRouter.post(
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
-    const { importJobId, validRows, academicYearId } = req.body;
+    const { importJobId, validRows } = req.body;
 
-    if (!importJobId || !validRows || !academicYearId) {
+    if (!importJobId) {
       return res.status(400).json({
         error: 'INVALID_INPUT',
-        message: 'importJobId, validRows, and academicYearId are required',
+        message: 'importJobId is required',
       });
     }
 
@@ -91,7 +91,6 @@ importRouter.post(
         schoolId,
         importJobId,
         validRows,
-        academicYearId,
         createdBy: req.user!.id,
       });
 

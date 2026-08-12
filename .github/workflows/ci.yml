@@ -45,12 +45,12 @@ jobs:
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           SMS_PROVIDER: fake
         run: |
-          npm start > /tmp/attendance-app.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/v1/health && break || sleep 1; done
+          npm run e2e:server > /tmp/attendance-app.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3100/api/v1/health && break || sleep 1; done
 
       - name: Run Playwright E2E
         env:
-          BASE_URL: http://127.0.0.1:3000
+          BASE_URL: http://127.0.0.1:3100
         run: npm run test:e2e
 
       - name: Upload E2E report & logs on failure
@@ -59,6 +59,7 @@ jobs:
         with:
           name: playwright-artifacts
           path: |
+            output/playwright/
             playwright-report/
             test-results/
             /tmp/attendance-app.log

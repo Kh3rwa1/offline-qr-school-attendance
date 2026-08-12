@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, sql } from 'drizzle-orm';
 import { db, withSystemContext } from '../db';
 import { authSessions, users, schoolMemberships, schools } from '../db/schema';
 
@@ -28,18 +28,23 @@ export interface SessionContext {
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 export async function createSession(
   userId: string,
   schoolId?: string
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = crypto.randomBytes(32).toString('hex');
+  const hashedToken = hashToken(token);
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
   await withSystemContext(async () => {
     await db.insert(authSessions).values({
       userId,
       schoolId: schoolId || null,
-      sessionToken: token,
+      sessionToken: hashedToken,
       expiresAt,
     });
   });
@@ -52,12 +57,16 @@ export async function getSession(token: string): Promise<SessionContext | null> 
 
   return withSystemContext(async () => {
     const now = new Date();
+    const hashedToken = hashToken(token);
 
-    // Find active non-expired session
+    // Find active non-expired session by token hash or legacy plaintext token
     const [sessionRecord] = await db
       .select()
       .from(authSessions)
-      .where(and(eq(authSessions.sessionToken, token), gt(authSessions.expiresAt, now)));
+      .where(and(
+        sql`(${authSessions.sessionToken} = ${hashedToken} OR ${authSessions.sessionToken} = ${token})`,
+        gt(authSessions.expiresAt, now)
+      ));
 
     if (!sessionRecord) return null;
 
@@ -125,7 +134,10 @@ export async function getSession(token: string): Promise<SessionContext | null> 
 
 export async function invalidateSession(token: string): Promise<void> {
   if (!token) return;
+  const hashedToken = hashToken(token);
   await withSystemContext(async () => {
-    await db.delete(authSessions).where(eq(authSessions.sessionToken, token));
+    await db.delete(authSessions).where(
+      sql`(${authSessions.sessionToken} = ${hashedToken} OR ${authSessions.sessionToken} = ${token})`
+    );
   });
 }

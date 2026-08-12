@@ -368,7 +368,7 @@ reportRouter.get(
         res.setHeader('Content-Disposition', `attachment; filename="${safeName}.csv"`);
         res.send(csvBuf);
       } else {
-        const xlsxBuf = generateXLSXExport(type, headers, rows);
+        const xlsxBuf = await generateXLSXExport(type, headers, rows);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
         res.send(xlsxBuf);

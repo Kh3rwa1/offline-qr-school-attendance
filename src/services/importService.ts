@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import {
@@ -34,7 +34,10 @@ export interface ParsedStudentRow {
   guardianRelationship: string;
 }
 
-export function generateXlsxTemplate(): Buffer {
+export async function generateXlsxTemplate(): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Student Import Template');
+
   const headers = [
     'Student Code',
     'Student Name (English)',
@@ -50,42 +53,38 @@ export function generateXlsxTemplate(): Buffer {
     'Guardian Relationship',
   ];
 
-  const sampleData = [
-    [
-      'STU-1001',
-      'Anirban Das',
-      'অনির্বাণ দাস',
-      'WB191001001',
-      'Class 8',
-      'A',
-      1,
-      'MALE',
-      '2012-05-15',
-      'Subhash Das',
-      '+919876543210',
-      'FATHER',
-    ],
-    [
-      'STU-1002',
-      'Priya Banerjee',
-      'প্রিয়া ব্যানার্জী',
-      'WB191001002',
-      'Class 8',
-      'A',
-      2,
-      'FEMALE',
-      '2012-08-22',
-      'Sujit Banerjee',
-      '+919876543211',
-      'FATHER',
-    ],
-  ];
+  worksheet.addRow(headers);
+  worksheet.addRow([
+    'STU-1001',
+    'Anirban Das',
+    'অনির্বাণ দাস',
+    'WB191001001',
+    'Class 8',
+    'A',
+    1,
+    'MALE',
+    '2012-05-15',
+    'Subhash Das',
+    '+919876543210',
+    'FATHER',
+  ]);
+  worksheet.addRow([
+    'STU-1002',
+    'Priya Banerjee',
+    'প্রিয়া ব্যানার্জী',
+    'WB191001002',
+    'Class 8',
+    'A',
+    2,
+    'FEMALE',
+    '2012-08-22',
+    'Sujit Banerjee',
+    '+919876543211',
+    'FATHER',
+  ]);
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Student Import Template');
-
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }
 
 export async function parseAndValidateXlsx(params: {
@@ -94,14 +93,51 @@ export async function parseAndValidateXlsx(params: {
   fileName: string;
   createdBy: string;
 }) {
-  const wb = XLSX.read(params.fileBuffer, { type: 'buffer' });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) {
+  // Safety checks to prevent ReDoS / zip-bomb expansion
+  if (params.fileBuffer.length > 5 * 1024 * 1024) {
+    throw new Error('FILE_SIZE_LIMIT_EXCEEDED');
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(params.fileBuffer);
+
+  if (workbook.worksheets.length === 0) {
     throw new Error('EMPTY_WORKBOOK');
   }
 
-  const ws = wb.Sheets[sheetName];
-  const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  if (workbook.worksheets.length > 5) {
+    throw new Error('MAX_WORKSHEETS_EXCEEDED');
+  }
+
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet || worksheet.rowCount <= 1) {
+    throw new Error('EMPTY_SHEET');
+  }
+
+  if (worksheet.rowCount > 5001) {
+    throw new Error('MAX_ROWS_EXCEEDED');
+  }
+
+  const headers: string[] = [];
+  const headerRow = worksheet.getRow(1);
+  headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    headers[colNumber] = String(cell.value || '').trim();
+  });
+
+  const rawRows: Record<string, any>[] = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const rowData: Record<string, any> = {};
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const h = headers[colNumber];
+      if (h) {
+        rowData[h] = cell.value != null ? String(cell.value).trim() : '';
+      }
+    });
+    if (Object.values(rowData).some((val) => val !== '')) {
+      rawRows.push(rowData);
+    }
+  });
 
   if (rawRows.length === 0) {
     throw new Error('EMPTY_SHEET');
@@ -154,7 +190,7 @@ export async function parseAndValidateXlsx(params: {
   const seenFileRolls = new Set<string>();
 
   rawRows.forEach((row, idx) => {
-    const rowNum = idx + 2; // header is row 1
+    const rowNum = idx + 2;
     const studentCode = String(row['Student Code'] || '').trim();
     const name = String(row['Student Name (English)'] || '').trim();
     const nameBn = String(row['Bengali Name'] || '').trim();
@@ -200,7 +236,6 @@ export async function parseAndValidateXlsx(params: {
       rowHasError = true;
     }
 
-    // Duplicate check within file
     if (studentCode) {
       if (seenFileCodes.has(studentCode)) {
         errors.push({ row: rowNum, column: 'Student Code', error: `Duplicate Student Code '${studentCode}' in file` });
@@ -224,7 +259,6 @@ export async function parseAndValidateXlsx(params: {
       }
     }
 
-    // Duplicate check against DB
     if (studentCode && existingStudentCodes.has(studentCode)) {
       errors.push({ row: rowNum, column: 'Student Code', error: `Student Code '${studentCode}' already exists in school` });
       rowHasError = true;
@@ -265,7 +299,7 @@ export async function parseAndValidateXlsx(params: {
     }
   });
 
-  // Save import job record
+  // Save import job record WITH server-staged data
   const [job] = await db
     .insert(importJobs)
     .values({
@@ -276,6 +310,7 @@ export async function parseAndValidateXlsx(params: {
       successfulRows: 0,
       failedRows: errors.length,
       errorSummary: { errors, validRowsCount: validRows.length },
+      stagedData: validRows,
       createdBy: params.createdBy,
     })
     .returning();
@@ -296,37 +331,73 @@ export async function parseAndValidateXlsx(params: {
 export async function executeTransactionalImport(params: {
   schoolId: string;
   importJobId: string;
-  validRows: ParsedStudentRow[];
-  academicYearId: string;
   createdBy: string;
+  validRows?: ParsedStudentRow[];
 }) {
-  if (!params.validRows || params.validRows.length === 0) {
+  const [job] = await db
+    .select()
+    .from(importJobs)
+    .where(and(eq(importJobs.schoolId, params.schoolId), eq(importJobs.id, params.importJobId)));
+
+  if (!job) {
+    throw new Error('IMPORT_JOB_NOT_FOUND');
+  }
+
+  if (job.status !== 'VALIDATED') {
+    throw new Error('INVALID_JOB_STATUS');
+  }
+
+  const stagedRows = (job.stagedData as ParsedStudentRow[]) || params.validRows || [];
+  if (!stagedRows || stagedRows.length === 0) {
     throw new Error('NO_VALID_ROWS_TO_IMPORT');
   }
 
+  const [currentYear] = await db
+    .select()
+    .from(academicYears)
+    .where(and(eq(academicYears.schoolId, params.schoolId), eq(academicYears.isCurrent, true)));
+
+  if (!currentYear) {
+    throw new Error('NO_CURRENT_ACADEMIC_YEAR');
+  }
+  const academicYearId = currentYear.id;
+
   try {
     const result = await db.transaction(async (tx: any) => {
+      // Re-check uniqueness inside transaction to prevent race conditions
+      const existingStudents = await tx
+        .select({ studentCode: students.studentCode })
+        .from(students)
+        .where(eq(students.schoolId, params.schoolId));
+      const existingCodes = new Set(existingStudents.map((s: { studentCode: string }) => s.studentCode));
+
+      for (const r of stagedRows) {
+        if (existingCodes.has(r.studentCode)) {
+          throw new Error(`STUDENT_CODE_COLLISION: ${r.studentCode}`);
+        }
+      }
+
       // 1. Fetch or create all required class sections
       const existingSections = await tx
         .select()
         .from(classSections)
         .where(
-          and(eq(classSections.schoolId, params.schoolId), eq(classSections.academicYearId, params.academicYearId))
+          and(eq(classSections.schoolId, params.schoolId), eq(classSections.academicYearId, academicYearId))
         );
 
-      const classSectionMap = new Map<string, string>(); // 'ClassName:SectionName' -> ID
+      const classSectionMap = new Map<string, string>();
       for (const cs of existingSections) {
         classSectionMap.set(`${cs.className.toUpperCase()}:${cs.sectionName.toUpperCase()}`, cs.id);
       }
 
-      for (const row of params.validRows) {
+      for (const row of stagedRows) {
         const key = `${row.className.toUpperCase()}:${row.sectionName.toUpperCase()}`;
         if (!classSectionMap.has(key)) {
           const [newCs] = await tx
             .insert(classSections)
             .values({
               schoolId: params.schoolId,
-              academicYearId: params.academicYearId,
+              academicYearId,
               className: row.className,
               sectionName: row.sectionName,
             })
@@ -338,8 +409,7 @@ export async function executeTransactionalImport(params: {
       const createdStudents: any[] = [];
       const issuedQrs: any[] = [];
 
-      // 2. Insert students, guardians, enrollments, and QR credentials sequentially
-      for (const row of params.validRows) {
+      for (const row of stagedRows) {
         const classSectionId = classSectionMap.get(`${row.className.toUpperCase()}:${row.sectionName.toUpperCase()}`)!;
 
         const [student] = await tx
@@ -362,7 +432,7 @@ export async function executeTransactionalImport(params: {
             schoolId: params.schoolId,
             studentId: student.id,
             classSectionId,
-            academicYearId: params.academicYearId,
+            academicYearId,
             rollNumber: row.rollNumber,
             startDate: new Date().toISOString().split('T')[0],
             status: 'ACTIVE',
@@ -385,7 +455,6 @@ export async function executeTransactionalImport(params: {
           isPrimary: true,
         });
 
-        // Generate QR credential inside transaction
         const qr = await createQrCredential(tx, {
           schoolId: params.schoolId,
           studentId: student.id,
@@ -405,8 +474,9 @@ export async function executeTransactionalImport(params: {
         .update(importJobs)
         .set({
           status: 'COMPLETED',
-          successfulRows: params.validRows.length,
+          successfulRows: stagedRows.length,
           failedRows: 0,
+          stagedData: null,
         })
         .where(eq(importJobs.id, params.importJobId));
 
@@ -419,12 +489,11 @@ export async function executeTransactionalImport(params: {
 
     return result;
   } catch (err: any) {
-    // On error, mark import job as FAILED
     await db
       .update(importJobs)
       .set({
         status: 'FAILED',
-        failedRows: params.validRows.length,
+        failedRows: stagedRows.length,
         errorSummary: { error: err.message },
       })
       .where(eq(importJobs.id, params.importJobId));

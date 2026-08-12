@@ -8,7 +8,6 @@ export default defineConfig({
     // opt-in via npm run test:postgres.
     fileParallelism: false,
     maxWorkers: 1,
-    minWorkers: 1,
     hookTimeout: 30_000,
     testTimeout: 30_000,
     exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],

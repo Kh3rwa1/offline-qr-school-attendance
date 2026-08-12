@@ -16,7 +16,7 @@ import {
   auditLogs,
 } from '../db/schema';
 import { createAuditLog } from './auditLogService';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // Utility for formula injection prevention
 export function sanitizeSpreadsheetValue(val: any): any {
@@ -586,18 +586,21 @@ export async function getTeacherSessionReport(schoolId: string, startDate?: stri
 }
 
 // 8. Generate XLSX Buffer from JSON data
-export function generateXLSXExport(sheetName: string, headers: string[], rows: (string | number | boolean | null)[][]): Buffer {
-  const sanitizedRows = rows.map((row) =>
-    row.map((cell) => sanitizeSpreadsheetValue(cell))
-  );
+export async function generateXLSXExport(
+  sheetName: string,
+  headers: string[],
+  rows: (string | number | boolean | null)[][]
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
 
-  const worksheetData = [headers, ...sanitizedRows];
-  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  worksheet.addRow(headers.map((h) => sanitizeSpreadsheetValue(h)));
+  rows.forEach((row) => {
+    worksheet.addRow(row.map((cell) => sanitizeSpreadsheetValue(cell)));
+  });
 
-  const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-  return buf;
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }
 
 // 9. Generate CSV Buffer from JSON data

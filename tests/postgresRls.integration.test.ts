@@ -151,19 +151,24 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
         await customClient.end().catch(() => undefined);
       }
 
+    const systemPool = new pg.Pool({ connectionString: systemUrl });
+    try {
       // Verify system role WITHOUT app.is_system='true' sees 0 rows
-      await migrationPool.query('BEGIN');
-      await migrationPool.query("SELECT set_config('app.is_system', 'false', true), set_config('app.current_school_id', '', true)");
-      const systemWithoutFlag = await migrationPool.query('SELECT school_id FROM students');
+      await systemPool.query('BEGIN');
+      await systemPool.query("SELECT set_config('app.is_system', 'false', true), set_config('app.current_school_id', '', true)");
+      const systemWithoutFlag = await systemPool.query('SELECT school_id FROM students');
       expect(systemWithoutFlag.rows).toHaveLength(0);
-      await migrationPool.query('ROLLBACK');
+      await systemPool.query('ROLLBACK');
 
       // Verify system role WITH app.is_system='true' succeeds
-      await migrationPool.query('BEGIN');
-      await migrationPool.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
-      const systemWithFlag = await migrationPool.query('SELECT school_id FROM students');
+      await systemPool.query('BEGIN');
+      await systemPool.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
+      const systemWithFlag = await systemPool.query('SELECT school_id FROM students');
       expect(systemWithFlag.rows.length).toBeGreaterThan(0);
-      await migrationPool.query('ROLLBACK');
+      await systemPool.query('ROLLBACK');
+    } finally {
+      await systemPool.end();
+    }
     } finally {
       appClient.release();
     }

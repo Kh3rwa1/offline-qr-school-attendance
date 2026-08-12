@@ -36,8 +36,11 @@ export async function createApp() {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     // Referrer Policy
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // Permissions Policy
-    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+    // Cache-Control: no-store for all sensitive API endpoints
+    if (req.path.startsWith('/api/')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.setHeader('Pragma', 'no-cache');
+    }
     next();
   });
 
@@ -153,7 +156,7 @@ export async function createApp() {
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
-  // Development: Vite Middleware
+  // Development: Vite Middleware / Production Static Assets
   if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -161,13 +164,28 @@ export async function createApp() {
     });
     app.use(vite.middlewares);
   } else {
-    // Production: Serve static assets from dist
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Global Production Error Handler (Sanitizes stack traces & internal database errors)
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('Unhandled server error:', err);
+    const status = err.status || err.statusCode || 500;
+    const message =
+      process.env.NODE_ENV === 'production' && status === 500
+        ? 'An unexpected error occurred. Please try again later.'
+        : err.message || 'INTERNAL_SERVER_ERROR';
+
+    res.status(status).json({
+      success: false,
+      error: 'SERVER_ERROR',
+      message,
+    });
+  });
 
   return app;
 }

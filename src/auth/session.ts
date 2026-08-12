@@ -59,12 +59,12 @@ export async function getSession(token: string): Promise<SessionContext | null> 
     const now = new Date();
     const hashedToken = hashToken(token);
 
-    // Find active non-expired session by token hash or legacy plaintext token
+    // Find active non-expired session by SHA-256 token hash
     const [sessionRecord] = await db
       .select()
       .from(authSessions)
       .where(and(
-        sql`(${authSessions.sessionToken} = ${hashedToken} OR ${authSessions.sessionToken} = ${token})`,
+        eq(authSessions.sessionToken, hashedToken),
         gt(authSessions.expiresAt, now)
       ));
 
@@ -136,8 +136,6 @@ export async function invalidateSession(token: string): Promise<void> {
   if (!token) return;
   const hashedToken = hashToken(token);
   await withSystemContext(async () => {
-    await db.delete(authSessions).where(
-      sql`(${authSessions.sessionToken} = ${hashedToken} OR ${authSessions.sessionToken} = ${token})`
-    );
+    await db.delete(authSessions).where(eq(authSessions.sessionToken, hashedToken));
   });
 }

@@ -285,33 +285,20 @@ export async function syncAttendanceEvents(params: {
   }
 
   for (const event of events) {
+    let resolvedSessionId: string | undefined;
     try {
-      // 3. Idempotency Check: Check if clientEventId already processed
-      const [existingEvent] = await db
-        .select()
-        .from(attendanceEvents)
-        .where(eq(attendanceEvents.clientEventId, event.clientEventId));
-
-      if (existingEvent) {
-        results.push({
-          clientEventId: event.clientEventId,
-          status: 'ALREADY_PROCESSED',
-          eventId: existingEvent.id,
-        });
-        continue;
-      }
-
       const clientSessionId = event.clientSessionId || event.metadata?.clientSessionId;
-      const resolvedSessionId = clientSessionId
+      resolvedSessionId = clientSessionId
         ? serverSessionIds.get(clientSessionId)
         : event.sessionId;
       if (!resolvedSessionId || !isUuid(resolvedSessionId)) throw new Error('SESSION_NOT_FOUND');
 
-      // 5. Process event
+      // 5. Process event (processQRCode handles teacher assignment authorization & session-scoped idempotency)
       const processRes = await processQRCode({
         schoolId,
         sessionId: resolvedSessionId,
         actorId,
+        userRole,
         clientEventId: event.clientEventId,
         rawToken: event.rawToken,
         studentId: event.studentId,
@@ -322,37 +309,42 @@ export async function syncAttendanceEvents(params: {
         metadata: event.metadata,
       });
 
-      results.push({
-        clientEventId: event.clientEventId,
-        status: 'ACCEPTED',
-        eventId: processRes.event?.id || processRes.record?.id,
-        duplicateScan: processRes.duplicateScan || false,
-      });
+      if (processRes.idempotentDuplicate) {
+        results.push({
+          clientEventId: event.clientEventId,
+          status: 'ALREADY_PROCESSED',
+          eventId: processRes.event?.id || processRes.record?.id,
+        });
+      } else {
+        results.push({
+          clientEventId: event.clientEventId,
+          status: 'ACCEPTED',
+          eventId: processRes.event?.id || processRes.record?.id,
+          duplicateScan: processRes.duplicateScan || false,
+        });
+      }
     } catch (error: any) {
       // Check for concurrent conflict or specific error reasons
       const errMessage = error.message || 'SYNC_ERROR';
 
       // Handle conflict preservation scenario (Scenario 14):
-      if (errMessage === 'FINALIZED_SESSION_LOCKED') {
-        // Log the event with a conflict flag if studentId is present
-        if (event.studentId) {
-          const [rec] = await db
-            .select()
-            .from(attendanceRecords)
-            .where(
-              and(
-                eq(attendanceRecords.schoolId, schoolId),
-                eq(attendanceRecords.attendanceSessionId, event.sessionId),
-                eq(attendanceRecords.studentId, event.studentId)
-              )
-            );
+      if (errMessage === 'FINALIZED_SESSION_LOCKED' && resolvedSessionId && event.studentId) {
+        const [rec] = await db
+          .select()
+          .from(attendanceRecords)
+          .where(
+            and(
+              eq(attendanceRecords.schoolId, schoolId),
+              eq(attendanceRecords.attendanceSessionId, resolvedSessionId),
+              eq(attendanceRecords.studentId, event.studentId)
+            )
+          );
 
-          if (rec) {
-            await db
-              .update(attendanceRecords)
-              .set({ hasConflict: true })
-              .where(eq(attendanceRecords.id, rec.id));
-          }
+        if (rec) {
+          await db
+            .update(attendanceRecords)
+            .set({ hasConflict: true })
+            .where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.id, rec.id)));
         }
       }
 

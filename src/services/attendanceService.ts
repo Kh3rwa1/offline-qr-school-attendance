@@ -326,7 +326,7 @@ export async function processQRCode(params: {
   schoolId: string;
   sessionId: string;
   actorId: string;
-  userRole?: string;
+  userRole: string;
   clientEventId: string;
   rawToken?: string;
   studentId?: string;
@@ -351,11 +351,33 @@ export async function processQRCode(params: {
     metadata = {},
   } = params;
 
-  // 1. Idempotency Check: Client event ID processed only once
+  if (!userRole || !actorId) {
+    throw new Error('UNAUTHORIZED_ACTOR_CONTEXT');
+  }
+
+  // 1. Validate Attendance Session & Authorization FIRST
+  const [session] = await db
+    .select()
+    .from(attendanceSessions)
+    .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)));
+
+  if (!session) {
+    throw new Error('SESSION_NOT_FOUND');
+  }
+
+  await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
+
+  // 2. Idempotency Check: Client event ID processed only once within this specific session & school
   const [existingEvent] = await db
     .select()
     .from(attendanceEvents)
-    .where(eq(attendanceEvents.clientEventId, clientEventId));
+    .where(
+      and(
+        eq(attendanceEvents.schoolId, schoolId),
+        eq(attendanceEvents.attendanceSessionId, sessionId),
+        eq(attendanceEvents.clientEventId, clientEventId)
+      )
+    );
 
   if (existingEvent) {
     // Event was already processed — fetch student and record to return idempotent response
@@ -383,20 +405,6 @@ export async function processQRCode(params: {
       record: existingRecord,
       student,
     };
-  }
-
-  // 2. Validate Attendance Session & Authorization
-  const [session] = await db
-    .select()
-    .from(attendanceSessions)
-    .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)));
-
-  if (!session) {
-    throw new Error('SESSION_NOT_FOUND');
-  }
-
-  if (userRole) {
-    await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
   }
 
   if (session.status === 'FINALIZED') {

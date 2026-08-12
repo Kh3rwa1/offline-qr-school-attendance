@@ -94,6 +94,7 @@ describe('Milestone 5: Corrections, Reports & Exports', () => {
       schoolId: seeded.schoolA.id,
       sessionId: sess1.id,
       actorId: seeded.teacherUser.id,
+      userRole: 'TEACHER',
       clientEventId: `evt-rep-1-${Date.now()}`,
       rawToken: qrA1.rawToken,
       clientTimestamp: new Date(),

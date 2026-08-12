@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
+import { validateRequest, commonSchemas } from '../middleware/validate';
 import {
   getTeacherAssignedClasses,
   createAttendanceSession,
@@ -17,6 +19,31 @@ import { attendanceSessions, classSections } from '../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 
 const router = Router({ mergeParams: true });
+
+const createSessionSchema = z.object({
+  classSectionId: commonSchemas.uuid,
+  sessionDate: commonSchemas.isoDate,
+  sessionType: commonSchemas.sessionType.optional().default('DAILY'),
+  teacherId: commonSchemas.uuid.optional(),
+});
+
+const updateStatusSchema = z.object({
+  newStatus: commonSchemas.sessionStatus.optional(),
+  status: commonSchemas.sessionStatus.optional(),
+  reason: z.string().optional(),
+  autoMarkAbsentForUnmarked: z.boolean().optional(),
+});
+
+const scanSchema = z.object({
+  clientEventId: z.string().min(1, 'MISSING_CLIENT_EVENT_ID'),
+  rawToken: z.string().optional(),
+  studentId: commonSchemas.uuid.optional(),
+  statusValue: commonSchemas.attendanceStatus.optional().default('PRESENT'),
+  clientTimestamp: commonSchemas.isoTimestamp.optional(),
+  deviceId: commonSchemas.uuid.optional(),
+  source: commonSchemas.scanSource.optional().default('CAMERA'),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
 
 // 1. Get Assigned Classes for Teacher / Admin
 router.get(
@@ -178,15 +205,23 @@ router.patch(
   '/sessions/:sessionId/status',
   requireAuth,
   requireTenant,
+  validateRequest({
+    params: z.object({
+      schoolId: commonSchemas.uuid,
+      sessionId: commonSchemas.uuid,
+    }),
+    body: updateStatusSchema,
+  }),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const schoolId = req.activeSchoolId!;
       const { sessionId } = req.params;
       const user = req.user!;
       const userRole = req.userRole!;
-      const { status, reason, autoMarkAbsentForUnmarked } = req.body;
+      const { newStatus, status, reason, autoMarkAbsentForUnmarked } = req.body;
+      const targetStatus = newStatus || status;
 
-      if (!status) {
+      if (!targetStatus) {
         res.status(400).json({ success: false, error: 'MISSING_STATUS_PARAMETER' });
         return;
       }
@@ -196,7 +231,7 @@ router.patch(
         sessionId,
         actorId: user.id,
         userRole,
-        newStatus: status as SessionStatus,
+        newStatus: targetStatus as SessionStatus,
         reason,
         autoMarkAbsentForUnmarked: !!autoMarkAbsentForUnmarked,
       });
@@ -224,6 +259,13 @@ router.post(
   '/sessions/:sessionId/scan',
   requireAuth,
   requireTenant,
+  validateRequest({
+    params: z.object({
+      schoolId: commonSchemas.uuid,
+      sessionId: commonSchemas.uuid,
+    }),
+    body: scanSchema,
+  }) as any,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -239,11 +281,6 @@ router.post(
         source,
         metadata,
       } = req.body;
-
-      if (!clientEventId) {
-        res.status(400).json({ success: false, error: 'MISSING_CLIENT_EVENT_ID' });
-        return;
-      }
 
       const result = await processQRCode({
         schoolId,

@@ -323,7 +323,6 @@ export async function parseAndValidateXlsx(params: {
     invalidRowsCount: errors.length,
     errors,
     validRowsPreview: validRows.slice(0, 50),
-    validRows,
     academicYear: currentYear,
   };
 }
@@ -493,6 +492,7 @@ export async function executeTransactionalImport(params: {
       .set({
         status: 'FAILED',
         failedRows: stagedRows.length,
+        stagedData: null,
         errorSummary: { error: err.message },
       })
       .where(eq(importJobs.id, params.importJobId));

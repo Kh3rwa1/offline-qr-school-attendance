@@ -224,6 +224,9 @@ qrRouter.post(
       );
 
     const cards: PrintableQrCard[] = [];
+    let issuedCount = 0;
+    let skippedExistingCount = 0;
+    let reissuedCount = 0;
 
     for (const r of activeRoster) {
       const [existing] = await db
@@ -239,14 +242,16 @@ qrRouter.post(
 
       let rawToken: string;
       if (existing && !reissueAll) {
-        // Skip reissuing for students who already have an active QR credential when reissueAll is false
+        skippedExistingCount++;
         continue;
       } else if (existing && reissueAll) {
         const reissued = await reissueQrCredential(schoolId, r.studentId);
         rawToken = reissued.rawToken;
+        reissuedCount++;
       } else {
         const created = await createQrCredential(db, { schoolId, studentId: r.studentId });
         rawToken = created.rawToken;
+        issuedCount++;
       }
 
       cards.push({
@@ -273,7 +278,7 @@ qrRouter.post(
       action: 'PRINT_QR_BATCH',
       resourceType: 'CLASS_SECTION',
       resourceId: classSectionId,
-      metadata: { cardCount: cards.length },
+      metadata: { cardCount: cards.length, issuedCount, skippedExistingCount, reissuedCount },
     });
 
     if (req.headers.accept?.includes('text/html')) {
@@ -281,6 +286,14 @@ qrRouter.post(
       return res.send(html);
     }
 
-    return res.json({ success: true, cards, html });
+    return res.json({
+      success: true,
+      issuedCount,
+      skippedExistingCount,
+      reissuedCount,
+      cardCount: cards.length,
+      cards,
+      html,
+    });
   }
 );

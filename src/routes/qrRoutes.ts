@@ -238,17 +238,15 @@ qrRouter.post(
         );
 
       let rawToken: string;
-      if (existing && reissueAll) {
+      if (existing && !reissueAll) {
+        // Skip reissuing for students who already have an active QR credential when reissueAll is false
+        continue;
+      } else if (existing && reissueAll) {
         const reissued = await reissueQrCredential(schoolId, r.studentId);
         rawToken = reissued.rawToken;
-      } else if (!existing) {
+      } else {
         const created = await createQrCredential(db, { schoolId, studentId: r.studentId });
         rawToken = created.rawToken;
-      } else {
-        // If credential exists and reissueAll is false, skip reissuing; return card placeholder
-        // Note: rawToken is only available at generation time; so if not reissuing, generate a fresh batch token upon explicit request
-        const reissued = await reissueQrCredential(schoolId, r.studentId);
-        rawToken = reissued.rawToken;
       }
 
       cards.push({

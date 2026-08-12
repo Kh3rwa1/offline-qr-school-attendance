@@ -137,6 +137,10 @@ export async function syncAttendanceEvents(params: {
   const { schoolId, actorId, deviceIdentifier, userRole = 'TEACHER', events, sessions = [] } = params;
   if (!deviceIdentifier) throw new Error('DEVICE_IDENTIFIER_REQUIRED');
 
+  if (events.length > 75) {
+    throw new Error('SYNC_BATCH_SIZE_EXCEEDED');
+  }
+
   // 1. Check user status and membership status
   const [userRec] = await db.select().from(users).where(eq(users.id, actorId));
   if (!userRec || userRec.status === 'SUSPENDED') {

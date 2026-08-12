@@ -332,7 +332,6 @@ export async function executeTransactionalImport(params: {
   schoolId: string;
   importJobId: string;
   createdBy: string;
-  validRows?: ParsedStudentRow[];
 }) {
   const [job] = await db
     .select()
@@ -347,9 +346,9 @@ export async function executeTransactionalImport(params: {
     throw new Error('INVALID_JOB_STATUS');
   }
 
-  const stagedRows = (job.stagedData as ParsedStudentRow[]) || params.validRows || [];
-  if (!stagedRows || stagedRows.length === 0) {
-    throw new Error('NO_VALID_ROWS_TO_IMPORT');
+  const stagedRows = job.stagedData as ParsedStudentRow[];
+  if (!stagedRows || !Array.isArray(stagedRows) || stagedRows.length === 0) {
+    throw new Error('STAGED_DATA_EXPIRED_OR_NOT_FOUND');
   }
 
   const [currentYear] = await db

@@ -19,6 +19,7 @@ import { executeSql } from './src/db/index';
 
 export async function createApp() {
   const app = express();
+  app.set('trust proxy', 1);
 
   // 1. Security Headers & CSP Middleware
   app.use((req, res, next) => {
@@ -42,8 +43,10 @@ export async function createApp() {
 
   // 2. Memory-Based API Rate Limiting Middleware with Active Pruning
   const ipRequests = new Map<string, { count: number; resetAt: number }>();
+  const loginRequests = new Map<string, { count: number; resetAt: number }>();
   const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 mins
-  const RATE_LIMIT_MAX_REQUESTS = 500; // generous but safe threshold for mobile sync
+  const RATE_LIMIT_MAX_REQUESTS = 500; // generous threshold for API & mobile sync
+  const LOGIN_LIMIT_MAX_REQUESTS = 5; // strict threshold for authentication attempts
 
   // Periodic pruning every 5 minutes to prevent memory accumulation
   const cleanupTimer = setInterval(() => {
@@ -51,8 +54,33 @@ export async function createApp() {
     for (const [ip, data] of ipRequests.entries()) {
       if (now > data.resetAt) ipRequests.delete(ip);
     }
+    for (const [key, data] of loginRequests.entries()) {
+      if (now > data.resetAt) loginRequests.delete(key);
+    }
   }, 5 * 60 * 1000);
   if (cleanupTimer.unref) cleanupTimer.unref();
+
+  // Strict Login Rate Limiter Middleware
+  app.use('/api/v1/auth/login', (req, res, next) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const phone = req.body?.phoneNumber || '';
+    const key = `${ip}:${phone}`;
+    const now = Date.now();
+    const loginData = loginRequests.get(key);
+
+    if (!loginData || now > loginData.resetAt) {
+      loginRequests.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      next();
+    } else if (loginData.count >= LOGIN_LIMIT_MAX_REQUESTS) {
+      res.status(429).json({
+        error: 'TOO_MANY_LOGIN_ATTEMPTS',
+        message: 'Too many login attempts. Please try again after 15 minutes.',
+      });
+    } else {
+      loginData.count++;
+      next();
+    }
+  });
 
   app.use('/api/v1', (req, res, next) => {
     const rawForwarded = req.headers['x-forwarded-for'];

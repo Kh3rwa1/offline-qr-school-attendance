@@ -326,6 +326,7 @@ export async function processQRCode(params: {
   schoolId: string;
   sessionId: string;
   actorId: string;
+  userRole?: string;
   clientEventId: string;
   rawToken?: string;
   studentId?: string;
@@ -339,6 +340,7 @@ export async function processQRCode(params: {
     schoolId,
     sessionId,
     actorId,
+    userRole,
     clientEventId,
     rawToken,
     studentId,
@@ -391,6 +393,10 @@ export async function processQRCode(params: {
 
   if (!session) {
     throw new Error('SESSION_NOT_FOUND');
+  }
+
+  if (userRole) {
+    await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
   }
 
   if (session.status === 'FINALIZED') {
@@ -640,6 +646,20 @@ export async function manualStatusUpdate(params: {
 
   if (!record) {
     if (studentId) {
+      const [rosterEntry] = await db
+        .select()
+        .from(attendanceSessionRoster)
+        .where(
+          and(
+            eq(attendanceSessionRoster.attendanceSessionId, sessionId),
+            eq(attendanceSessionRoster.studentId, studentId)
+          )
+        );
+
+      if (!rosterEntry) {
+        throw new Error('STUDENT_NOT_IN_SESSION_ROSTER');
+      }
+
       const [newRec] = await db
         .insert(attendanceRecords)
         .values({

@@ -249,6 +249,7 @@ router.post(
         schoolId,
         sessionId,
         actorId: user.id,
+        userRole: req.userRole!,
         clientEventId,
         rawToken,
         studentId,

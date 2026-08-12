@@ -77,7 +77,7 @@ importRouter.post(
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
-    const { importJobId, validRows } = req.body;
+    const { importJobId } = req.body;
 
     if (!importJobId) {
       return res.status(400).json({
@@ -90,7 +90,6 @@ importRouter.post(
       const result = await executeTransactionalImport({
         schoolId,
         importJobId,
-        validRows,
         createdBy: req.user!.id,
       });
 

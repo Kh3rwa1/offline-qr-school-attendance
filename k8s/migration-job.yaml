@@ -1,19 +1,26 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: school-attendance-migration-job
+  name: school-attendance-migration
 spec:
+  backoffLimit: 3
   template:
+    metadata:
+      name: school-attendance-migration
     spec:
-      serviceAccountName: school-attendance-web-sa
+      serviceAccountName: school-attendance-migration-sa
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: migrate
-          image: offline-qr-school-attendance@sha256:7f8e3d4c5b6a7890123456789abcdef0123456789abcdef0123456789abcdef0
+          image: offline-qr-school-attendance:v1.0.0
+          imagePullPolicy: IfNotPresent
           command: ["node", "dist/migrate.cjs"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -32,4 +39,3 @@ spec:
       volumes:
         - name: tmp-volume
           emptyDir: {}
-  backoffLimit: 2

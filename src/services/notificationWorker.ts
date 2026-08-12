@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq, and, inArray, lt, lte, or, desc, isNull, sql } from 'drizzle-orm';
+import { eq, and, inArray, lt, lte, or, isNull, sql } from 'drizzle-orm';
 import { db, withSystemContext, withTenantContext } from '../db';
 import {
   notificationJobs,
@@ -20,12 +20,36 @@ export interface WorkerProcessOptions {
 
 type ClaimedJob = typeof notificationJobs.$inferSelect;
 
+function mapRowToJob(row: any): ClaimedJob {
+  return {
+    id: row.id,
+    schoolId: row.school_id || row.schoolId,
+    attendanceSessionId: row.attendance_session_id || row.attendanceSessionId || null,
+    studentId: row.student_id || row.studentId || null,
+    recipientPhone: row.recipient_phone || row.recipientPhone,
+    language: row.language || 'en',
+    messageBody: row.message_body || row.messageBody,
+    status: row.status,
+    notificationType: row.notification_type || row.notificationType,
+    attemptCount: Number(row.attempt_count ?? row.attemptCount ?? 0),
+    failureReason: row.failure_reason || row.failureReason || null,
+    providerMessageId: row.provider_message_id || row.providerMessageId || null,
+    claimedAt: row.claimed_at ? new Date(row.claimed_at) : (row.claimedAt || null),
+    claimedBy: row.claimed_by || row.claimedBy || null,
+    nextAttemptAt: row.next_attempt_at ? new Date(row.next_attempt_at) : (row.nextAttemptAt || null),
+    queuedAt: row.queued_at ? new Date(row.queued_at) : (row.queuedAt || new Date()),
+    sentAt: row.sent_at ? new Date(row.sent_at) : (row.sentAt || null),
+    deliveredAt: row.delivered_at ? new Date(row.delivered_at) : (row.deliveredAt || null),
+    finalizedAttendanceVersion: row.finalized_attendance_version || row.finalizedAttendanceVersion || null,
+  };
+}
+
 async function claimEligibleJobs(limit: number, maxRetries: number, workerId: string): Promise<ClaimedJob[]> {
   return withSystemContext(async (tx: any) => {
     const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
 
-    // Clean up stale claims (older than 10 minutes)
-    await db.update(notificationJobs)
+    // Clean up stale claims (older than 10 minutes) inside system context transaction
+    await tx.update(notificationJobs)
       .set({ status: 'QUEUED', claimedAt: null, claimedBy: null })
       .where(and(eq(notificationJobs.status, 'SENDING'), lt(notificationJobs.claimedAt, staleBefore)));
 
@@ -49,19 +73,19 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
           RETURNING notification_jobs.*;
         `);
 
-        if (claimedRows?.rows && Array.isArray(claimedRows.rows)) {
-          return claimedRows.rows as ClaimedJob[];
+        const rawRows = Array.isArray(claimedRows) ? claimedRows : (claimedRows?.rows || []);
+        if (rawRows.length > 0) {
+          return rawRows.map(mapRowToJob);
         }
       } catch (err: any) {
         if (process.env.NODE_ENV === 'production') {
           console.error('[NotificationWorker] Atomic queue claim failed in production:', err.message);
           throw new Error(`ATOMIC_QUEUE_CLAIM_FAILED: ${err.message}`);
         }
-        // Fallback permitted only in development / PGlite test environments
       }
     }
 
-    const candidates = await db
+    const candidates = await tx
       .select()
       .from(notificationJobs)
       .where(and(
@@ -74,7 +98,7 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
 
     const claimed: ClaimedJob[] = [];
     for (const job of candidates) {
-      const [updated] = await db.update(notificationJobs)
+      const [updated] = await tx.update(notificationJobs)
         .set({ status: 'SENDING', claimedAt: new Date(), claimedBy: workerId })
         .where(and(
           eq(notificationJobs.id, job.id),

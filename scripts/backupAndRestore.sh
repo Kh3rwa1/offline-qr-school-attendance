@@ -31,21 +31,29 @@ openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -in "${BAC
 echo "Decryption successful. Uncompressed dump size: $(du -sh "${RESTORE_FILE}" | cut -f1)"
 
 if [ -n "${TARGET_DATABASE_URL}" ]; then
-  echo "3. Restoring dump into target test database ${TARGET_DATABASE_URL}..."
-  psql "${TARGET_DATABASE_URL}" < "${RESTORE_FILE}"
+  echo "3. Restoring dump into target test database ${TARGET_DATABASE_URL} with ON_ERROR_STOP=1..."
+  psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" < "${RESTORE_FILE}"
   
   echo "4. Running post-restore database integrity & RLS checks..."
   
-  # Check 1: Tenant RLS isolation check
-  ZERO_ROWS=$(psql "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'false', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM students;" | xargs)
+  # Check 1: Tenant RLS isolation check (zero rows returned without school context)
+  ZERO_ROWS=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'false', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM students;" | xargs)
   if [ "${ZERO_ROWS}" -ne 0 ]; then
     echo "ERROR: Tenant RLS isolation check failed! Restored database returned ${ZERO_ROWS} rows without school context."
     exit 1
   fi
   echo "✅ RLS isolation check passed (0 rows returned without school context)."
   
-  # Check 2: Queue safety check
-  SENDING_JOBS=$(psql "${TARGET_DATABASE_URL}" -t -c "SELECT COUNT(*) FROM notification_jobs WHERE status = 'SENDING';" | xargs)
+  # Check 2: System role data preservation check
+  SCHOOL_COUNT=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'true', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM schools;" | xargs)
+  if [ "${SCHOOL_COUNT}" -eq 0 ]; then
+    echo "ERROR: Database restore integrity check failed! Restored database contains 0 schools."
+    exit 1
+  fi
+  echo "✅ Schema integrity check passed (${SCHOOL_COUNT} schools restored)."
+
+  # Check 3: Queue safety check
+  SENDING_JOBS=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'true', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM notification_jobs WHERE status = 'SENDING';" | xargs)
   echo "✅ Queue safety check passed (${SENDING_JOBS} jobs in SENDING state)."
 fi
 

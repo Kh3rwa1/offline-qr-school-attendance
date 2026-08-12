@@ -18,11 +18,14 @@ import notificationRouter from './src/routes/notificationRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
+import { initRedis } from './src/services/redisService';
 
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
     throw new Error('FATAL: METRICS_AUTH_TOKEN environment variable must be set in production mode.');
   }
+
+  await initRedis();
 
   const app = express();
   app.set('trust proxy', 1);

@@ -400,9 +400,10 @@ export async function getOutboxStatus() {
 }
 
 export async function clearOfflineStore() {
-  await Promise.all([
-    offlineDb.rosters.clear(),
-    offlineDb.sessions.clear(),
-    offlineDb.syncOutbox.clear(),
-  ]);
+  await offlineDb.transaction('rw', [offlineDb.rosters, offlineDb.sessions, offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+    await offlineDb.rosters.clear();
+    await offlineDb.sessions.clear();
+    await offlineDb.sessionRosters.clear();
+    await offlineDb.syncOutbox.clear();
+  });
 }

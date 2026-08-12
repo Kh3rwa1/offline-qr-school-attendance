@@ -161,21 +161,57 @@ jobs:
           ALLOW_FAKE_SMS_IN_PRODUCTION: 'true'
         run: npm run test:postgres
 
+  backup-restore-test:
+    name: Encrypted Backup & Restore Verification Drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: backup_test_user
+          POSTGRES_PASSWORD: backup_test_password
+          POSTGRES_DB: school_attendance_backup
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U backup_test_user -d school_attendance_backup"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Run Backup & Restore Verification Script
+        env:
+          DATABASE_URL: postgres://backup_test_user:backup_test_password@127.0.0.1:5433/school_attendance_backup
+          TARGET_DATABASE_URL: postgres://backup_test_user:backup_test_password@127.0.0.1:5433/school_attendance_backup
+          BACKUP_PASSPHRASE: ci-backup-passphrase-01234567890123456789
+        run: |
+          npm run migrate
+          chmod +x scripts/backupAndRestore.sh
+          ./scripts/backupAndRestore.sh
+
   k8s-validation:
-    name: Kubernetes Manifest Validation
+    name: Kubernetes Schema & Security Manifest Validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validate YAML Syntax & Secrets
+      - name: Install Kubeconform
         run: |
-          python3 -c "
-          import glob, yaml
-          for path in glob.glob('k8s/*.yaml'):
-              with open(path) as f:
-                  list(yaml.safe_load_all(f))
-          print('All k8s YAML manifests are syntactically valid!')
-          "
+          wget -q https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
+          tar -xzf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+      - name: Validate Kubernetes Manifest Schemas
+        run: |
+          kubeconform -summary -strict -kubernetes-version 1.28.0 k8s/
           if [ -f k8s/secret.yaml ]; then
             echo "ERROR: k8s/secret.yaml must not be committed to git!"
             exit 1

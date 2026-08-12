@@ -50,12 +50,12 @@ spec:
               memory: "512Mi"
           livenessProbe:
             exec:
-              command: ["node", "-e", "process.exit(0)"]
+              command: ["node", "-e", "const fs=require('fs'); const m=fs.statSync('/tmp/worker-heartbeat').mtimeMs; if (Date.now()-m > 60000) process.exit(1);"]
             initialDelaySeconds: 15
             periodSeconds: 15
           readinessProbe:
             exec:
-              command: ["node", "-e", "process.exit(0)"]
+              command: ["node", "-e", "const fs=require('fs'); const m=fs.statSync('/tmp/worker-heartbeat').mtimeMs; if (Date.now()-m > 30000) process.exit(1);"]
             initialDelaySeconds: 10
             periodSeconds: 10
       volumes:

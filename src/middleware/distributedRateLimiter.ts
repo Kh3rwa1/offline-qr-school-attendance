@@ -19,6 +19,16 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
     try {
       const result = await checkRateLimit(prefix, identifier, maxRequests, windowMs);
 
+      if (result.isRedisError) {
+        res.setHeader('Retry-After', 10);
+        return res.status(503).json({
+          success: false,
+          error: 'RATE_LIMITER_UNAVAILABLE',
+          message: 'Rate limiting infrastructure temporarily unavailable. Please retry shortly.',
+          retryAfterSeconds: 10,
+        });
+      }
+
       res.setHeader('X-RateLimit-Limit', maxRequests);
       res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - result.currentCount));
 

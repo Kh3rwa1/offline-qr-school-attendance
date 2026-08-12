@@ -3,8 +3,6 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { env } from './src/env';
-import { runMigrations } from './src/db/migrate';
-import { seedDatabase } from './src/db/seed';
 import { authRouter } from './src/routes/authRoutes';
 import { schoolRouter } from './src/routes/schoolRoutes';
 import { deviceRouter } from './src/routes/deviceRoutes';
@@ -72,13 +70,9 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
-  // Initialize DB tables and seeds
-  try {
-    await runMigrations();
-    await seedDatabase();
-  } catch (err) {
-    console.error('Database setup failed on startup:', err);
-  }
+  // Database migrations and seed data are deployment concerns. Run
+  // `npm run migrate` and, only for an explicit development environment,
+  // `npm run seed` before starting the web process.
 
   // 3. Health check and Readiness check endpoint
   app.get('/api/v1/health', async (req, res) => {

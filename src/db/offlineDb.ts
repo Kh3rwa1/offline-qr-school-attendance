@@ -16,6 +16,8 @@ export interface OfflineRosterItem {
 
 export interface OfflineSessionItem {
   id: string;
+  clientSessionId: string;
+  serverSessionId?: string;
   schoolId: string;
   classSectionId: string;
   sessionDate: string;
@@ -42,6 +44,12 @@ export interface OutboxEventItem {
   clientEventId: string;
   schoolId: string;
   sessionId: string;
+  sessionMetadata: {
+    clientSessionId: string;
+    classSectionId: string;
+    sessionDate: string;
+    sessionType: string;
+  };
   studentId?: string;
   eventType: string;
   statusValue: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED' | 'LEAVE';
@@ -68,6 +76,14 @@ export class AttendanceOfflineDatabase extends Dexie {
       sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
       syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp',
     });
+    this.version(2).stores({
+      rosters: 'studentId, [schoolId+classSectionId], sha256TokenHash, schoolId, classSectionId',
+      sessions: 'id, clientSessionId, [schoolId+classSectionId], sessionDate, status',
+      sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
+      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp',
+    }).upgrade((tx) => tx.table('sessions').toCollection().modify((session: OfflineSessionItem) => {
+      session.clientSessionId = session.clientSessionId || session.id;
+    }));
   }
 }
 

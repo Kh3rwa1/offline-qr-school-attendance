@@ -1,6 +1,5 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware';
-import { executeSql } from '../db';
 import { translate } from '../i18n';
 
 export async function requireTenant(
@@ -21,6 +20,10 @@ export async function requireTenant(
 
   if (!targetSchoolId) {
     return res.status(400).json({ error: 'MISSING_SCHOOL_ID', message: 'Target schoolId is required' });
+  }
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(targetSchoolId))) {
+    return res.status(400).json({ error: 'INVALID_SCHOOL_ID' });
   }
 
   const { memberships, user } = req.sessionContext;
@@ -50,12 +53,8 @@ export async function requireTenant(
   req.activeSchoolId = targetSchoolId;
   req.userRole = targetMembership?.role || (isSuperAdmin ? 'SUPER_ADMIN' : 'TEACHER');
 
-  // Set database RLS session setting
-  try {
-    await executeSql(`SET LOCAL app.current_school_id = '${targetSchoolId}';`);
-  } catch (err) {
-    // Session setting handled gracefully if not supported by driver
-  }
-
+  // RLS context is set only inside `withTenantContext` transactions. A
+  // middleware-level SET LOCAL would be connection-pool unsafe and could not
+  // protect the query that follows it.
   next();
 }

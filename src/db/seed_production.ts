@@ -1,5 +1,5 @@
 import { hashPassword } from '../auth/password';
-import { getDb, setupRlsPolicies } from './index';
+import { getDb } from './index';
 import {
   schools,
   academicYears,
@@ -57,8 +57,6 @@ function generateName(index: number) {
 
 export async function seedProductionDatabase() {
   const db = getDb();
-  await setupRlsPolicies();
-
   console.log('--- STARTING PRODUCTION SCALE DATASET SEED ---');
 
   // Clean up any pre-existing records for these 2 schools to guarantee idempotency
@@ -409,7 +407,7 @@ export async function seedProductionDatabase() {
   }
 
   // Create attendance records and attendance events
-  console.log('Marking attendance results (simulate offline batch + history)...');
+  console.log('Generating attendance history fixtures...');
   const recordsBatch: any[] = [];
   const eventsBatch: any[] = [];
   const notificationsBatch: any[] = [];

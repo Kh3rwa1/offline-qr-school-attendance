@@ -1,5 +1,10 @@
 import { offlineDb, OfflineRosterItem, OutboxEventItem, OfflineSessionItem, OfflineSessionRosterItem } from '../db/offlineDb';
 
+function createClientUuid(): string {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  throw new Error('SECURE_UUID_UNAVAILABLE');
+}
+
 // Utility to calculate SHA-256 hash consistently across Node and Browser environments
 export async function computeSHA256(text: string): Promise<string> {
   if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
@@ -63,10 +68,11 @@ export async function createOfflineSession(params: {
   sessionType?: string;
   customSessionId?: string;
 }): Promise<OfflineSessionItem> {
-  const sessionId = params.customSessionId || `session_off_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const sessionId = params.customSessionId || createClientUuid();
 
   const session: OfflineSessionItem = {
     id: sessionId,
+    clientSessionId: sessionId,
     schoolId: params.schoolId,
     classSectionId: params.classSectionId,
     sessionDate: params.sessionDate,
@@ -112,6 +118,15 @@ export async function processOfflineQRCode(params: {
   source?: 'CAMERA' | 'USB';
 }) {
   const { schoolId, sessionId, rawToken, actorId, clientTimestamp, source = 'CAMERA' } = params;
+
+  const session = await offlineDb.sessions.get(sessionId);
+  if (!session || session.schoolId !== schoolId) {
+    return {
+      success: false,
+      error: 'SESSION_NOT_FOUND_OFFLINE',
+      message: 'This attendance session is not available on this device',
+    };
+  }
 
   // Compute SHA-256 digest of raw token
   const tokenHash = await computeSHA256(rawToken);
@@ -176,7 +191,7 @@ export async function processOfflineQRCode(params: {
   }
 
   const timestamp = clientTimestamp || new Date().toISOString();
-  const clientEventId = `evt_off_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const clientEventId = createClientUuid();
 
   // Update session roster status locally in Dexie
   if (sessionRosterItem.id) {
@@ -191,6 +206,12 @@ export async function processOfflineQRCode(params: {
     clientEventId,
     schoolId,
     sessionId,
+    sessionMetadata: {
+      clientSessionId: session.clientSessionId,
+      classSectionId: session.classSectionId,
+      sessionDate: session.sessionDate,
+      sessionType: session.sessionType,
+    },
     studentId: student.studentId,
     eventType: 'QR_SCANNED',
     statusValue: 'PRESENT',
@@ -256,15 +277,21 @@ export async function syncOutboxEvents(params: {
 
   const payload = {
     deviceIdentifier,
+    sessions: Array.from(new Map(eventsToSync.map((event) => [
+      event.sessionMetadata.clientSessionId,
+      event.sessionMetadata,
+    ])).values()),
     events: eventsToSync.map((e) => ({
       clientEventId: e.clientEventId,
       sessionId: e.sessionId,
+      clientSessionId: e.sessionMetadata.clientSessionId,
       studentId: e.studentId,
       rawToken: e.rawToken,
       eventType: e.eventType,
       statusValue: e.statusValue,
       clientTimestamp: e.clientTimestamp,
       source: e.source,
+      metadata: e.sessionMetadata,
     })),
   };
 
@@ -312,11 +339,16 @@ export async function syncOutboxEvents(params: {
       }
     }
 
+    for (const mapping of json.data.sessionMappings || []) {
+      await offlineDb.sessions.update(mapping.clientSessionId, { serverSessionId: mapping.serverSessionId });
+    }
+
     return {
       processedCount: eventsToSync.length,
       syncedCount,
       failedCount,
       results: json.data.results,
+      sessionMappings: json.data.sessionMappings || [],
     };
   } catch (err: any) {
     // Revert status to FAILED for retry

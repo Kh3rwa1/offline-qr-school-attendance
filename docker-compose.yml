@@ -35,6 +35,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: school_attendance_migrate
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgrespassword@db:5432/school_attendance
+    command: ['node', 'dist/migrate.cjs']
+    depends_on:
+      db:
+        condition: service_healthy
+
+  sms-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: school_attendance_sms_worker
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgrespassword@db:5432/school_attendance
+      SMS_PROVIDER: fake
+    command: ['node', 'dist/sms-worker.cjs']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

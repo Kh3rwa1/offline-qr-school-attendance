@@ -14,6 +14,9 @@ import {
 import { createAuditLog } from '../services/auditLogService';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
+import { db } from '../db';
+import { teacherAssignments } from '../db/schema';
+import { and, eq } from 'drizzle-orm';
 
 const reportRouter = Router({ mergeParams: true });
 
@@ -51,6 +54,21 @@ reportRouter.get(
       if (!classSectionId) {
         res.status(400).json({ error: 'MISSING_CLASS_SECTION_ID' });
         return;
+      }
+
+      if (req.userRole === 'TEACHER') {
+        const [assignment] = await db
+          .select({ id: teacherAssignments.id })
+          .from(teacherAssignments)
+          .where(and(
+            eq(teacherAssignments.schoolId, schoolId),
+            eq(teacherAssignments.teacherId, req.user!.id),
+            eq(teacherAssignments.classSectionId, classSectionId)
+          ));
+        if (!assignment) {
+          res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+          return;
+        }
       }
 
       const report = await getDailyClassReport(schoolId, classSectionId, dateStr);

@@ -33,7 +33,7 @@ router.post(
     try {
       const schoolId = req.params.schoolId;
       const user = (req as any).user;
-      const { events, deviceIdentifier } = req.body;
+      const { events, sessions, deviceIdentifier } = req.body;
 
       if (!Array.isArray(events)) {
         res.status(400).json({ success: false, error: 'EVENTS_MUST_BE_ARRAY' });
@@ -43,8 +43,10 @@ router.post(
       const syncResult = await syncAttendanceEvents({
         schoolId,
         actorId: user.id,
+        userRole: (req as any).userRole,
         deviceIdentifier,
         events,
+        sessions,
       });
 
       res.json({ success: true, data: syncResult });
@@ -54,7 +56,7 @@ router.post(
         res.status(403).json({ success: false, error: 'DEVICE_REVOKED' });
         return;
       }
-      if (error.message === 'USER_SUSPENDED') {
+      if (error.message === 'USER_SUSPENDED' || error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
         res.status(403).json({ success: false, error: 'USER_SUSPENDED' });
         return;
       }

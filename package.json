@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
@@ -13,7 +13,8 @@
     "test": "vitest run",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
-    "seed:prod": "tsx src/db/seed_production.ts"
+    "seed:prod": "tsx src/db/seed_production.ts",
+    "worker:sms": "tsx sms-worker.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

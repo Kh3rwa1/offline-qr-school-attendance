@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student, ClassSession, Language, NetworkStatus } from '../types';
-import { Camera, Usb, Check, AlertCircle, RefreshCw, UserCheck, ShieldCheck, Play, UserX } from 'lucide-react';
+import { Camera, Usb, Check, AlertCircle, RefreshCw, UserCheck, ShieldCheck, UserX } from 'lucide-react';
 
 interface BentoScannerGridProps {
   session: ClassSession;
@@ -52,24 +52,8 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
     if (found) {
       onScanStudent(found.id, 'USB');
     } else {
-      // Pick next unmarked student as a convenience demo
-      const unmarked = students.find((s) => s.status === 'UNMARKED');
-      if (unmarked) {
-        onScanStudent(unmarked.id, 'USB');
-      }
     }
     setUsbInput('');
-  };
-
-  // Simulate instant camera scan click
-  const simulateRandomScan = () => {
-    const unmarked = students.find((s) => s.status === 'UNMARKED');
-    if (unmarked) {
-      onScanStudent(unmarked.id, 'CAMERA');
-    } else if (students.length > 0) {
-      // Scan first student again to trigger duplicate warning
-      onScanStudent(students[0].id, 'CAMERA');
-    }
   };
 
   return (
@@ -154,13 +138,6 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
             <span>USB Scanner: Ready</span>
           </div>
 
-          <button
-            onClick={simulateRandomScan}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg transition-transform active:scale-95 cursor-pointer flex items-center gap-1.5"
-          >
-            <Play className="w-3 h-3 fill-current" />
-            <span>{language === 'bn' ? 'স্ক্যান করুন (ডেমো)' : 'Scan QR Card'}</span>
-          </button>
         </div>
 
         {/* Quick USB Wedge Input Form */}

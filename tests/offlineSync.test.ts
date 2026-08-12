@@ -16,7 +16,7 @@ import {
   getOutboxStatus,
 } from '../src/services/offlineSyncService';
 import { offlineDb } from '../src/db/offlineDb';
-import { attendanceRecords, attendanceEvents, devices } from '../src/db/schema';
+import { attendanceRecords, attendanceEvents, attendanceSessions, devices } from '../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
@@ -387,6 +387,54 @@ describe('Milestone 4: Offline PWA & Idempotent Synchronization Engine', () => {
       .from(attendanceRecords)
       .where(eq(attendanceRecords.attendanceSessionId, serverSession.session.id));
     expect(dbRecordsPostSync2.length).toBe(2);
+  });
+
+  it('reconciles a session created entirely offline and persists two scans', async () => {
+    const pkg = await getOfflineRosterPackage(seeded.schoolA.id, seeded.schoolAClass5A.id);
+    await offlineDb.rosters.bulkPut(pkg.students.map((student) => ({
+      studentId: student.studentId,
+      schoolId: seeded.schoolA.id,
+      classSectionId: seeded.schoolAClass5A.id,
+      studentCode: student.studentCode,
+      name: student.name,
+      nameBn: student.nameBn,
+      rollNumber: student.rollNumber,
+      sha256TokenHash: student.sha256TokenHash,
+      isRevoked: student.isRevoked,
+    })));
+
+    const offlineSession = await createOfflineSession({
+      schoolId: seeded.schoolA.id,
+      classSectionId: seeded.schoolAClass5A.id,
+      teacherId: seeded.teacherUser.id,
+      sessionDate: '2026-08-12',
+    });
+    await processOfflineQRCode({ schoolId: seeded.schoolA.id, sessionId: offlineSession.id, rawToken: qrA1.rawToken, actorId: seeded.teacherUser.id });
+    await processOfflineQRCode({ schoolId: seeded.schoolA.id, sessionId: offlineSession.id, rawToken: qrA2.rawToken, actorId: seeded.teacherUser.id });
+
+    const queued = await offlineDb.syncOutbox.toArray();
+    const result = await syncAttendanceEvents({
+      schoolId: seeded.schoolA.id,
+      actorId: seeded.teacherUser.id,
+      sessions: [queued[0].sessionMetadata],
+      events: queued.map((event) => ({
+        clientEventId: event.clientEventId,
+        sessionId: event.sessionId,
+        clientSessionId: event.sessionMetadata.clientSessionId,
+        studentId: event.studentId,
+        rawToken: event.rawToken,
+        statusValue: event.statusValue,
+        clientTimestamp: event.clientTimestamp,
+        source: event.source,
+        metadata: event.sessionMetadata,
+      })),
+    });
+
+    expect(result.results.every((item) => item.status === 'ACCEPTED')).toBe(true);
+    const [serverSession] = await db.select().from(attendanceSessions).where(eq(attendanceSessions.clientSessionId, offlineSession.clientSessionId));
+    expect(serverSession).toBeDefined();
+    const serverRecords = await db.select().from(attendanceRecords).where(eq(attendanceRecords.attendanceSessionId, serverSession.id));
+    expect(serverRecords.filter((record) => record.status === 'PRESENT')).toHaveLength(2);
   });
 
   it('rejects batch sync when device is revoked (DEVICE_REVOKED / HTTP 403)', async () => {

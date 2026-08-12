@@ -248,6 +248,9 @@ export const qrCredentials = pgTable(
   },
   (table) => ({
     digestUnique: uniqueIndex('qr_credentials_digest_unique_idx').on(table.schoolId, table.tokenDigest),
+    activeStudentUnique: uniqueIndex('qr_credentials_active_student_unique_idx')
+      .on(table.schoolId, table.studentId)
+      .where(sql`${table.status} = 'ACTIVE'`),
   })
 );
 
@@ -259,6 +262,7 @@ export const attendanceSessions = pgTable(
     schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
     classSectionId: uuid('class_section_id').notNull().references(() => classSections.id, { onDelete: 'cascade' }),
     teacherId: uuid('teacher_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    clientSessionId: uuid('client_session_id'),
     sessionDate: date('session_date').notNull(),
     sessionType: varchar('session_type', { length: 20 }).notNull().default('DAILY'),
     status: varchar('status', { length: 20 }).notNull().default('DRAFT'), // 'DRAFT' | 'OPEN' | 'REVIEW' | 'FINALIZED' | 'REOPENED'
@@ -273,6 +277,10 @@ export const attendanceSessions = pgTable(
       table.classSectionId,
       table.sessionDate,
       table.sessionType
+    ),
+    clientSessionUnique: uniqueIndex('attendance_sessions_client_session_unique_idx').on(
+      table.schoolId,
+      table.clientSessionId
     ),
   })
 );
@@ -374,6 +382,8 @@ export const schoolSmsSettings = pgTable('school_sms_settings', {
   dltHeader: varchar('dlt_header', { length: 20 }),
   allowlistEnabled: boolean('allowlist_enabled').notNull().default(false),
   allowlist: jsonb('allowlist').$type<string[]>().default([]),
+  segmentBalance: integer('segment_balance'),
+  maxSegmentsPerMessage: integer('max_segments_per_message').notNull().default(4),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -394,6 +404,9 @@ export const notificationJobs = pgTable(
     status: varchar('status', { length: 20 }).notNull().default('QUEUED'), // 'QUEUED' | 'SENDING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'PERMANENT_FAILURE' | 'CANCELLED'
     notificationType: varchar('notification_type', { length: 50 }).notNull().default('ABSENCE'),
     finalizedAttendanceVersion: varchar('finalized_attendance_version', { length: 100 }).notNull().default('v1'),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    claimedBy: varchar('claimed_by', { length: 255 }),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
     providerMessageId: varchar('provider_message_id', { length: 255 }),
     attemptCount: integer('attempt_count').notNull().default(0),
     failureReason: text('failure_reason'),

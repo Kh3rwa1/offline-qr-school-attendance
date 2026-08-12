@@ -1,21 +1,26 @@
-import { getDb, setupRlsPolicies } from './index';
-import { seedDatabase } from './seed';
+import path from 'node:path';
+import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
+import { migrate as migratePostgres } from 'drizzle-orm/node-postgres/migrator';
+import { getDb } from './index';
+import { env } from '../env';
 
 export async function runMigrations() {
-  console.log('Running database setup and schema initialization...');
+  console.log('Running versioned Drizzle migrations...');
   const db = getDb();
 
-  // Ensure RLS policies and table structures are configured
-  await setupRlsPolicies();
-
-  console.log('Database initialization completed.');
+  const migrationsFolder = path.join(process.cwd(), 'drizzle');
+  if (env.DATABASE_URL && env.NODE_ENV !== 'test') {
+    await migratePostgres(db, { migrationsFolder });
+  } else {
+    await migratePglite(db, { migrationsFolder });
+  }
+  console.log('Database migrations completed.');
 }
 
 if (process.argv[1]?.includes('migrate')) {
   runMigrations()
-    .then(() => seedDatabase())
     .then(() => {
-      console.log('Migration & Seed finished successfully.');
+      console.log('Migration finished successfully.');
       process.exit(0);
     })
     .catch((err) => {

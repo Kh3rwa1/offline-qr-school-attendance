@@ -186,6 +186,7 @@ qrRouter.all(
   '/:schoolId/qr/print-batch',
   requireAuth,
   requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
     const classSectionId = (req.query.classSectionId || req.body.classSectionId) as string;
@@ -239,9 +240,9 @@ qrRouter.all(
 
       let rawToken: string;
       if (existing) {
-        // Generate printable token session reference or reissue for print batch if required
-        // Note: Raw secret tokens are not stored in plaintext in DB. Reissuing or using token reference ensures print sheet gets fresh valid secret.
-        const reissued = await createQrCredential(db, { schoolId, studentId: r.studentId });
+        // Printing is an explicit reissue: the previous credential is revoked
+        // before the new raw secret is returned for printing.
+        const reissued = await reissueQrCredential(schoolId, r.studentId);
         rawToken = reissued.rawToken;
       } else {
         const created = await createQrCredential(db, { schoolId, studentId: r.studentId });

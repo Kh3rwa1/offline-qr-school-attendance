@@ -1,7 +1,9 @@
-import { eq, and, inArray, lt, or, desc } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { eq, and, inArray, lt, lte, or, desc, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { notificationJobs, notificationAttempts, schoolSmsSettings } from '../db/schema';
 import { getSmsProvider } from './sms/smsProvider';
+import { estimateSmsSegments } from './sms/smsUtils';
 
 export interface WorkerProcessOptions {
   limit?: number;
@@ -19,6 +21,12 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
   const maxRetries = options.maxRetries || 3;
   const backoffBaseMs = options.backoffBaseMs || 1000;
   const provider = getSmsProvider(options.providerName);
+  const workerId = `sms-worker-${process.pid}-${crypto.randomUUID()}`;
+
+  // Recover claims left behind by a crashed worker. Claims are deliberately
+  // time-bounded because the provider call is outside the database transaction.
+  await db.update(notificationJobs).set({ status: 'QUEUED', claimedAt: null, claimedBy: null })
+    .where(and(eq(notificationJobs.status, 'SENDING'), lt(notificationJobs.claimedAt, new Date(Date.now() - 10 * 60 * 1000))));
 
   // Fetch pending jobs
   const candidateJobs = await db
@@ -27,7 +35,8 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
     .where(
       and(
         inArray(notificationJobs.status, ['QUEUED', 'FAILED']),
-        lt(notificationJobs.attemptCount, maxRetries)
+        lt(notificationJobs.attemptCount, maxRetries),
+        or(isNull(notificationJobs.nextAttemptAt), lte(notificationJobs.nextAttemptAt, new Date()))
       )
     )
     .limit(limit);
@@ -71,7 +80,7 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
     // Atomic job claim: set status to SENDING only if still QUEUED or FAILED
     const [claimedJob] = await db
       .update(notificationJobs)
-      .set({ status: 'SENDING' })
+      .set({ status: 'SENDING', claimedAt: new Date(), claimedBy: workerId })
       .where(
         and(
           eq(notificationJobs.id, job.id),
@@ -92,8 +101,23 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
       .where(eq(schoolSmsSettings.schoolId, job.schoolId));
 
     const nextAttemptNumber = job.attemptCount + 1;
+    const segmentCount = estimateSmsSegments(job.messageBody).segmentCount;
+    let balanceReserved = false;
 
     try {
+      if (settings?.maxSegmentsPerMessage && segmentCount > settings.maxSegmentsPerMessage) {
+        throw new Error('SMS_SEGMENT_LIMIT_EXCEEDED');
+      }
+
+      if (settings?.segmentBalance !== null && settings?.segmentBalance !== undefined) {
+        const [reserved] = await db.update(schoolSmsSettings)
+          .set({ segmentBalance: sql`segment_balance - ${segmentCount}` })
+          .where(and(eq(schoolSmsSettings.schoolId, job.schoolId), sql`segment_balance >= ${segmentCount}`))
+          .returning();
+        if (!reserved) throw new Error('SMS_BALANCE_EXCEEDED');
+        balanceReserved = true;
+      }
+
       const sendResult = await provider.sendSms({
         to: job.recipientPhone,
         message: job.messageBody,
@@ -112,6 +136,9 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
             attemptCount: nextAttemptNumber,
             sentAt: new Date(),
             failureReason: null,
+            claimedAt: null,
+            claimedBy: null,
+            nextAttemptAt: null,
           })
           .where(eq(notificationJobs.id, job.id));
 
@@ -125,6 +152,11 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
         sent++;
       } else {
         // Failed send
+        if (balanceReserved) {
+          await db.update(schoolSmsSettings)
+            .set({ segmentBalance: sql`segment_balance + ${segmentCount}` })
+            .where(eq(schoolSmsSettings.schoolId, job.schoolId));
+        }
         const isPermanent = sendResult.isPermanentFailure || nextAttemptNumber >= maxRetries;
         const finalStatus = isPermanent ? 'PERMANENT_FAILURE' : 'FAILED';
 
@@ -134,6 +166,9 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
             status: finalStatus,
             attemptCount: nextAttemptNumber,
             failureReason: sendResult.error || 'PROVIDER_SEND_ERROR',
+            claimedAt: null,
+            claimedBy: null,
+            nextAttemptAt: isPermanent ? null : new Date(Date.now() + Math.pow(2, nextAttemptNumber) * backoffBaseMs),
           })
           .where(eq(notificationJobs.id, job.id));
 
@@ -151,6 +186,11 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
         }
       }
     } catch (err: any) {
+      if (balanceReserved) {
+        await db.update(schoolSmsSettings)
+          .set({ segmentBalance: sql`segment_balance + ${segmentCount}` })
+          .where(eq(schoolSmsSettings.schoolId, job.schoolId));
+      }
       const errorMsg = err?.message || 'UNKNOWN_WORKER_ERROR';
       const isPermanent = nextAttemptNumber >= maxRetries;
       const finalStatus = isPermanent ? 'PERMANENT_FAILURE' : 'FAILED';
@@ -161,6 +201,9 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
           status: finalStatus,
           attemptCount: nextAttemptNumber,
           failureReason: errorMsg,
+          claimedAt: null,
+          claimedBy: null,
+          nextAttemptAt: isPermanent ? null : new Date(Date.now() + Math.pow(2, nextAttemptNumber) * backoffBaseMs),
         })
         .where(eq(notificationJobs.id, job.id));
 

@@ -1,5 +1,6 @@
 import { hashPassword } from '../auth/password';
-import { getDb, setupRlsPolicies } from './index';
+import { getDb, executeSql } from './index';
+import { runMigrations } from './migrate';
 import {
   schools,
   academicYears,
@@ -14,8 +15,21 @@ import { eq, and } from 'drizzle-orm';
 export async function seedDatabase() {
   const db = getDb();
 
-  // Ensure RLS policies are created
-  await setupRlsPolicies();
+  // Tests and explicit development seeding run the versioned migrations first.
+  await runMigrations();
+  if (process.env.NODE_ENV === 'test') {
+    // Each test that asks for the fixture expects a clean tenant graph. This
+    // reset is test-only; production never calls seedDatabase automatically.
+    for (const table of [
+      'audit_logs', 'notification_attempts', 'notification_jobs', 'attendance_corrections',
+      'attendance_events', 'attendance_records', 'attendance_session_roster', 'attendance_sessions',
+      'qr_credentials', 'student_guardians', 'guardians', 'enrollments', 'students',
+      'teacher_assignments', 'teacher_profiles', 'devices', 'teacher_profiles', 'class_sections',
+      'school_memberships', 'auth_sessions', 'academic_years', 'school_sms_settings', 'schools', 'users',
+    ]) {
+      await executeSql(`DELETE FROM ${table};`);
+    }
+  }
 
   console.log('Seeding initial database state for Milestone 1...');
 
@@ -99,7 +113,7 @@ export async function seedDatabase() {
     .onConflictDoNothing();
 
   // 4. Create Academic Years
-  const [academicYearA] = await db
+  let [academicYearA] = await db
     .insert(academicYears)
     .values({
       schoolId: schoolA.id,
@@ -110,8 +124,11 @@ export async function seedDatabase() {
     })
     .onConflictDoNothing()
     .returning();
+  if (!academicYearA) {
+    [academicYearA] = await db.select().from(academicYears).where(and(eq(academicYears.schoolId, schoolA.id), eq(academicYears.name, '2026')));
+  }
 
-  const [academicYearB] = await db
+  let [academicYearB] = await db
     .insert(academicYears)
     .values({
       schoolId: schoolB.id,
@@ -122,6 +139,9 @@ export async function seedDatabase() {
     })
     .onConflictDoNothing()
     .returning();
+  if (!academicYearB) {
+    [academicYearB] = await db.select().from(academicYears).where(and(eq(academicYears.schoolId, schoolB.id), eq(academicYears.name, '2026')));
+  }
 
   // Standard passwords for seed
   const adminPassHash = await hashPassword('SchoolAdminPassword123!');

@@ -104,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={toggleNetworkStatus}
           className="flex items-center bg-white border border-slate-200 px-3.5 py-2 rounded-xl shadow-sm hover:bg-slate-50 transition-colors cursor-pointer"
-          title="Click to toggle simulated online/offline status"
+          title="Current network status"
         >
           {networkStatus === 'OFFLINE' ? (
             <>

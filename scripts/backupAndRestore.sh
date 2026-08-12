@@ -36,8 +36,20 @@ if [ -n "${TARGET_DATABASE_URL}" ]; then
   
   echo "4. Running post-restore database integrity & RLS checks..."
   
-  # Check 1: Tenant RLS isolation check (zero rows returned without school context)
-  ZERO_ROWS=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'false', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM students;" | xargs)
+  # Check 1: Strict single-query RLS isolation count extraction
+  ZERO_ROWS=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "
+    SELECT s.count FROM (
+      SELECT set_config('app.is_system', 'false', false), set_config('app.current_school_id', '', false)
+    ) g, LATERAL (
+      SELECT COUNT(*)::text AS count FROM students
+    ) s;
+  " | tr -d '[:space:]')
+
+  if ! [[ "${ZERO_ROWS}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Invalid numeric result returned from RLS query: '${ZERO_ROWS}'"
+    exit 1
+  fi
+
   if [ "${ZERO_ROWS}" -ne 0 ]; then
     echo "ERROR: Tenant RLS isolation check failed! Restored database returned ${ZERO_ROWS} rows without school context."
     exit 1
@@ -45,7 +57,19 @@ if [ -n "${TARGET_DATABASE_URL}" ]; then
   echo "✅ RLS isolation check passed (0 rows returned without school context)."
   
   # Check 2: System role data preservation check
-  SCHOOL_COUNT=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'true', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM schools;" | xargs)
+  SCHOOL_COUNT=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "
+    SELECT s.count FROM (
+      SELECT set_config('app.is_system', 'true', false), set_config('app.current_school_id', '', false)
+    ) g, LATERAL (
+      SELECT COUNT(*)::text AS count FROM schools
+    ) s;
+  " | tr -d '[:space:]')
+
+  if ! [[ "${SCHOOL_COUNT}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Invalid numeric result returned from school count query: '${SCHOOL_COUNT}'"
+    exit 1
+  fi
+
   if [ "${SCHOOL_COUNT}" -eq 0 ]; then
     echo "ERROR: Database restore integrity check failed! Restored database contains 0 schools."
     exit 1
@@ -53,7 +77,13 @@ if [ -n "${TARGET_DATABASE_URL}" ]; then
   echo "✅ Schema integrity check passed (${SCHOOL_COUNT} schools restored)."
 
   # Check 3: Queue safety check
-  SENDING_JOBS=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "SELECT set_config('app.is_system', 'true', false), set_config('app.current_school_id', '', false); SELECT COUNT(*) FROM notification_jobs WHERE status = 'SENDING';" | xargs)
+  SENDING_JOBS=$(psql -v ON_ERROR_STOP=1 "${TARGET_DATABASE_URL}" -t -c "
+    SELECT s.count FROM (
+      SELECT set_config('app.is_system', 'true', false), set_config('app.current_school_id', '', false)
+    ) g, LATERAL (
+      SELECT COUNT(*)::text AS count FROM notification_jobs WHERE status = 'SENDING'
+    ) s;
+  " | tr -d '[:space:]')
   echo "✅ Queue safety check passed (${SENDING_JOBS} jobs in SENDING state)."
 fi
 

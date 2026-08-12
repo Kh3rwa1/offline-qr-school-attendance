@@ -214,7 +214,7 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
       - name: Validate Kubernetes Manifest Schemas
         run: |
-          kubeconform -summary -strict -ignore-missing-schemas -kubernetes-version 1.28.0 k8s/
+          kubeconform -summary -strict -skip ServiceMonitor -kubernetes-version 1.28.0 k8s/
           if [ -f k8s/secret.yaml ]; then
             echo "ERROR: k8s/secret.yaml must not be committed to git!"
             exit 1
@@ -232,13 +232,19 @@ jobs:
         run: docker compose up -d --build
       - name: Verify Service Health
         run: |
+          HEALTHY=false
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3000/api/v1/health; then
               echo "App health verified!"
+              HEALTHY=true
               break
             fi
             sleep 2
           done
+          if [ "$HEALTHY" != "true" ]; then
+            echo "ERROR: Docker container failed to become healthy after 60 seconds."
+            exit 1
+          fi
       - name: Teardown Compose
         if: always()
         run: docker compose down -v

@@ -1,0 +1,66 @@
+import { Router, Request, Response } from 'express';
+import { requireAuth } from '../middleware/authMiddleware';
+import { requireTenant } from '../middleware/tenantMiddleware';
+import { getOfflineRosterPackage, syncAttendanceEvents } from '../services/syncService';
+
+const router = Router({ mergeParams: true });
+
+// 1. Download Offline Roster Package
+router.get(
+  '/classes/:classSectionId/offline-roster',
+  requireAuth,
+  requireTenant,
+  async (req: Request, res: Response) => {
+    try {
+      const { schoolId, classSectionId } = req.params;
+
+      const rosterPackage = await getOfflineRosterPackage(schoolId, classSectionId);
+
+      res.json({ success: true, data: rosterPackage });
+    } catch (error: any) {
+      console.error('Error fetching offline roster package:', error);
+      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_ROSTER' });
+    }
+  }
+);
+
+// 2. Batch Sync Attendance Events Endpoint
+router.post(
+  '/attendance-events',
+  requireAuth,
+  requireTenant,
+  async (req: Request, res: Response) => {
+    try {
+      const schoolId = req.params.schoolId;
+      const user = (req as any).user;
+      const { events, deviceIdentifier } = req.body;
+
+      if (!Array.isArray(events)) {
+        res.status(400).json({ success: false, error: 'EVENTS_MUST_BE_ARRAY' });
+        return;
+      }
+
+      const syncResult = await syncAttendanceEvents({
+        schoolId,
+        actorId: user.id,
+        deviceIdentifier,
+        events,
+      });
+
+      res.json({ success: true, data: syncResult });
+    } catch (error: any) {
+      console.error('Error processing batch attendance sync:', error);
+      if (error.message === 'DEVICE_REVOKED') {
+        res.status(403).json({ success: false, error: 'DEVICE_REVOKED' });
+        return;
+      }
+      if (error.message === 'USER_SUSPENDED') {
+        res.status(403).json({ success: false, error: 'USER_SUSPENDED' });
+        return;
+      }
+      res.status(500).json({ success: false, error: error.message || 'SYNC_FAILED' });
+    }
+  }
+);
+
+export default router;

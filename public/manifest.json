@@ -1,0 +1,16 @@
+{
+  "short_name": "Attendance",
+  "name": "Smart Primary School QR Attendance System",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#f8fafc",
+  "description": "Offline-First Daily QR Attendance Management System for Primary Schools"
+}

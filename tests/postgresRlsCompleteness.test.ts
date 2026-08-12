@@ -3,7 +3,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 const migrationUrl = process.env.PG_RLS_MIGRATION_DATABASE_URL;
 const appUrl = process.env.PG_RLS_APPLICATION_DATABASE_URL;
-const systemUrl = process.env.PG_RLS_SYSTEM_DATABASE_URL || appUrl;
 const requested = process.env.PRODUCTION_PG_TEST === '1';
 
 if (requested && (!migrationUrl || !appUrl)) {
@@ -28,11 +27,18 @@ describe.skipIf(!enabled)('Phase 7 — Programmatic PostgreSQL RLS & Schema Comp
 
   it('proves rowsecurity and forcerowsecurity are ENABLED for all application tables', async () => {
     const res = await migrationPool.query(`
-      SELECT tablename, rowsecurity, forcerowsecurity
-      FROM pg_tables t
-      JOIN pg_class c ON c.relname = t.tablename
-      WHERE schemaname = 'public'
-        AND tablename NOT IN ('drizzle.__drizzle_migrations')
+      SELECT
+        t.tablename,
+        c.relrowsecurity AS rowsecurity,
+        c.relforcerowsecurity AS forcerowsecurity
+      FROM pg_catalog.pg_tables AS t
+      JOIN pg_catalog.pg_namespace AS n
+        ON n.nspname = t.schemaname
+      JOIN pg_catalog.pg_class AS c
+        ON c.relnamespace = n.oid
+       AND c.relname = t.tablename
+      WHERE t.schemaname = 'public'
+        AND c.relkind = 'r';
     `);
 
     expect(res.rows.length).toBeGreaterThan(0);

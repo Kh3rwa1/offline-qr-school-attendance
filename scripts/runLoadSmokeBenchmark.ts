@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { closeRedisConnection } from '../src/services/redisService';
+import { closeDatabasePools } from '../src/db';
 
 export interface LoadTestMetrics {
   totalRequests: number;
@@ -17,7 +19,9 @@ export interface LoadTestMetrics {
 export async function runLoadSmokeBenchmark(): Promise<LoadTestMetrics> {
   console.log('=== Starting Pull-Request Load Smoke Benchmark ===');
   process.env.NODE_ENV = 'development';
+  process.env.TEST_SERVER_STATIC = 'true';
   process.env.RUN_SERVER = 'false';
+  process.env.PORT = '0';
   process.env.SESSION_SECRET = 'load-smoke-session-secret-01234567890123456789';
 
   const { createApp } = await import('../server');
@@ -34,28 +38,38 @@ export async function runLoadSmokeBenchmark(): Promise<LoadTestMetrics> {
   let successful = 0;
   let failed = 0;
 
-  const targetRequests = 200;
+  const totalRequests = 200;
+  const concurrency = 10;
+  const batchCount = totalRequests / concurrency;
 
   try {
-    for (let i = 0; i < targetRequests; i++) {
-      const reqStart = Date.now();
-      try {
-        const endpoint = i % 2 === 0 ? '/livez' : '/readyz';
-        const res = await fetch(`${baseUrl}${endpoint}`);
-        const duration = Date.now() - reqStart;
-        latenciesMs.push(duration);
-        if (res.ok) {
-          successful++;
-        } else {
+    for (let b = 0; b < batchCount; b++) {
+      const batchPromises = Array.from({ length: concurrency }, async (_, idx) => {
+        const reqIndex = b * concurrency + idx;
+        const reqStart = Date.now();
+        try {
+          const endpoint = reqIndex % 2 === 0 ? '/livez' : '/readyz';
+          const res = await fetch(`${baseUrl}${endpoint}`, {
+            signal: AbortSignal.timeout(2000),
+          });
+          const duration = Date.now() - reqStart;
+          latenciesMs.push(duration);
+          if (res.ok) {
+            successful++;
+          } else {
+            failed++;
+          }
+        } catch {
           failed++;
+          latenciesMs.push(Date.now() - reqStart);
         }
-      } catch {
-        failed++;
-        latenciesMs.push(Date.now() - reqStart);
-      }
+      });
+      await Promise.all(batchPromises);
     }
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await closeRedisConnection();
+    await closeDatabasePools();
   }
 
   const durationSeconds = (Date.now() - startTime) / 1000;
@@ -68,11 +82,11 @@ export async function runLoadSmokeBenchmark(): Promise<LoadTestMetrics> {
   };
 
   const metrics: LoadTestMetrics = {
-    totalRequests: targetRequests,
+    totalRequests,
     successfulRequests: successful,
     failedRequests: failed,
-    errorRatePercent: Number(((failed / targetRequests) * 100).toFixed(2)),
-    requestsPerSecond: Number((targetRequests / durationSeconds).toFixed(2)),
+    errorRatePercent: Number(((failed / totalRequests) * 100).toFixed(2)),
+    requestsPerSecond: Number((totalRequests / durationSeconds).toFixed(2)),
     p50Ms: getPercentile(50),
     p90Ms: getPercentile(90),
     p95Ms: getPercentile(95),
@@ -101,8 +115,12 @@ export async function runLoadSmokeBenchmark(): Promise<LoadTestMetrics> {
 }
 
 if (process.argv[1]?.includes('runLoadSmokeBenchmark')) {
-  runLoadSmokeBenchmark().catch((err) => {
-    console.error('Load smoke benchmark failed:', err);
-    process.exit(1);
-  });
+  runLoadSmokeBenchmark()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Load smoke benchmark failed:', err);
+      process.exit(1);
+    });
 }

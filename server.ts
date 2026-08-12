@@ -40,13 +40,24 @@ export async function createApp() {
     next();
   });
 
-  // 2. Memory-Based API Rate Limiting Middleware
+  // 2. Memory-Based API Rate Limiting Middleware with Active Pruning
   const ipRequests = new Map<string, { count: number; resetAt: number }>();
   const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 mins
   const RATE_LIMIT_MAX_REQUESTS = 500; // generous but safe threshold for mobile sync
 
+  // Periodic pruning every 5 minutes to prevent memory accumulation
+  const cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of ipRequests.entries()) {
+      if (now > data.resetAt) ipRequests.delete(ip);
+    }
+  }, 5 * 60 * 1000);
+  if (cleanupTimer.unref) cleanupTimer.unref();
+
   app.use('/api/v1', (req, res, next) => {
-    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
+    const rawForwarded = req.headers['x-forwarded-for'];
+    const forwardedIp = typeof rawForwarded === 'string' ? rawForwarded.split(',')[0].trim() : Array.isArray(rawForwarded) ? rawForwarded[0] : null;
+    const ip = (req.headers['cf-connecting-ip'] as string) || (req.headers['x-real-ip'] as string) || forwardedIp || req.socket.remoteAddress || 'unknown';
     const now = Date.now();
     const rateData = ipRequests.get(ip);
 

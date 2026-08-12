@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   uniqueIndex,
+  index,
   primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -282,6 +283,7 @@ export const attendanceSessions = pgTable(
       table.schoolId,
       table.clientSessionId
     ),
+    schoolDateIdx: index('attendance_sessions_school_date_idx').on(table.schoolId, table.sessionDate),
   })
 );
 
@@ -307,22 +309,28 @@ export const attendanceSessionRoster = pgTable(
 );
 
 // 17. Attendance Events (Append-Only Log)
-export const attendanceEvents = pgTable('attendance_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  clientEventId: varchar('client_event_id', { length: 255 }).notNull().unique(),
-  attendanceSessionId: uuid('attendance_session_id')
-    .notNull()
-    .references(() => attendanceSessions.id, { onDelete: 'cascade' }),
-  studentId: uuid('student_id').notNull().references(() => students.id, { onDelete: 'cascade' }),
-  eventType: varchar('event_type', { length: 30 }).notNull(),
-  statusValue: varchar('status_value', { length: 20 }).notNull(),
-  clientTimestamp: timestamp('client_timestamp', { withTimezone: true }).notNull(),
-  serverReceivedAt: timestamp('server_received_at', { withTimezone: true }).notNull().defaultNow(),
-  deviceId: uuid('device_id').references(() => devices.id),
-  actorId: uuid('actor_id').notNull().references(() => users.id),
-  metadata: jsonb('metadata'),
-});
+export const attendanceEvents = pgTable(
+  'attendance_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    clientEventId: varchar('client_event_id', { length: 255 }).notNull().unique(),
+    attendanceSessionId: uuid('attendance_session_id')
+      .notNull()
+      .references(() => attendanceSessions.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id').notNull().references(() => students.id, { onDelete: 'cascade' }),
+    eventType: varchar('event_type', { length: 30 }).notNull(),
+    statusValue: varchar('status_value', { length: 20 }).notNull(),
+    clientTimestamp: timestamp('client_timestamp', { withTimezone: true }).notNull(),
+    serverReceivedAt: timestamp('server_received_at', { withTimezone: true }).notNull().defaultNow(),
+    deviceId: uuid('device_id').references(() => devices.id),
+    actorId: uuid('actor_id').notNull().references(() => users.id),
+    metadata: jsonb('metadata'),
+  },
+  (table) => ({
+    schoolSessionIdx: index('attendance_events_school_session_idx').on(table.schoolId, table.attendanceSessionId),
+  })
+);
 
 // 18. Attendance Records (Projected State for Reporting)
 export const attendanceRecords = pgTable(
@@ -345,6 +353,7 @@ export const attendanceRecords = pgTable(
       table.attendanceSessionId,
       table.studentId
     ),
+    schoolStatusIdx: index('attendance_records_school_status_idx').on(table.schoolId, table.status),
   })
 );
 
@@ -422,6 +431,11 @@ export const notificationJobs = pgTable(
       table.notificationType,
       table.finalizedAttendanceVersion
     ),
+    workerClaimIdx: index('notification_jobs_worker_claim_idx').on(
+      table.status,
+      table.attemptCount,
+      table.nextAttemptAt
+    ),
   })
 );
 
@@ -451,15 +465,21 @@ export const importJobs = pgTable('import_jobs', {
 });
 
 // 24. Audit Logs
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  schoolId: uuid('school_id').references(() => schools.id, { onDelete: 'cascade' }),
-  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
-  action: varchar('action', { length: 100 }).notNull(),
-  resourceType: varchar('resource_type', { length: 100 }).notNull(),
-  resourceId: varchar('resource_id', { length: 255 }),
-  ipAddress: varchar('ip_address', { length: 45 }),
-  userAgent: text('user_agent'),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').references(() => schools.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    action: varchar('action', { length: 100 }).notNull(),
+    resourceType: varchar('resource_type', { length: 100 }).notNull(),
+    resourceId: varchar('resource_id', { length: 255 }),
+    ipAddress: varchar('ip_address', { length: 45 }),
+    userAgent: text('user_agent'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    schoolCreatedIdx: index('audit_logs_school_created_idx').on(table.schoolId, table.createdAt),
+  })
+);

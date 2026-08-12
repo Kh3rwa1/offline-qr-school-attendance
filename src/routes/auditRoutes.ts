@@ -1,50 +1,21 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { db } from '../db';
-import { auditLogs, users, schoolMemberships } from '../db/schema';
-import { eq, and, gte, lte, desc } from 'drizzle-orm';
+import { auditLogs, users } from '../db/schema';
+import { eq, and, desc } from 'drizzle-orm';
+import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { requireTenant } from '../middleware/tenantMiddleware';
 
 const auditRouter = Router({ mergeParams: true });
 
-async function getUserAndRole(schoolId: string, actorId?: string) {
-  if (!actorId) return null;
-  const [userRec] = await db.select().from(users).where(eq(users.id, actorId));
-  if (!userRec || userRec.status === 'SUSPENDED') return null;
-
-  if (userRec.globalRole === 'SUPER_ADMIN') {
-    return { user: userRec, role: 'SUPER_ADMIN' };
-  }
-
-  const [membership] = await db
-    .select()
-    .from(schoolMemberships)
-    .where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.userId, actorId)));
-
-  if (!membership || membership.status === 'SUSPENDED') return null;
-
-  return { user: userRec, role: membership.role };
-}
-
 // GET /api/v1/schools/:schoolId/audit-logs
-auditRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+auditRouter.get('/', requireAuth, requireTenant, requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { schoolId } = req.params;
-    const actorId = (req.headers['x-actor-id'] as string) || (req.query.actorId as string);
+    const schoolId = req.activeSchoolId!;
     const actionFilter = req.query.action as string;
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
-
-    const auth = await getUserAndRole(schoolId, actorId);
-    if (!auth) {
-      res.status(401).json({ error: 'UNAUTHORIZED' });
-      return;
-    }
-
-    if (auth.role === 'TEACHER') {
-      res.status(403).json({ error: 'FORBIDDEN' });
-      return;
-    }
 
     let conditions = [eq(auditLogs.schoolId, schoolId)];
 

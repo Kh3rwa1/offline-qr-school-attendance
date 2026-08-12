@@ -16,24 +16,9 @@ import reportRouter from './src/routes/reportRoutes';
 import auditRouter from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { executeSql } from './src/db/index';
-import { runMigrations } from './src/db/migrate';
-import { seedDatabase } from './src/db/seed';
 
-async function startServer() {
+export async function createApp() {
   const app = express();
-  const PORT = parseInt(env.PORT || '3000', 10);
-
-  // Initialize in-memory database when DATABASE_URL is omitted (development mode)
-  if (!env.DATABASE_URL) {
-    try {
-      console.log('Running in-memory database migrations and seed...');
-      await runMigrations();
-      await seedDatabase();
-      console.log('In-memory database initialized successfully!');
-    } catch (err) {
-      console.error('Failed to initialize in-memory database:', err);
-    }
-  }
 
   // 1. Security Headers & CSP Middleware
   app.use((req, res, next) => {
@@ -122,7 +107,7 @@ async function startServer() {
   app.use('/api/v1/notifications', notificationRouter);
 
   // Development: Vite Middleware
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -137,6 +122,12 @@ async function startServer() {
     });
   }
 
+  return app;
+}
+
+export async function startServer() {
+  const app = await createApp();
+  const PORT = parseInt(env.PORT || '3000', 10);
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
@@ -161,4 +152,9 @@ async function startServer() {
   process.on('SIGINT', shutdown);
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'test' && process.env.RUN_SERVER !== 'false') {
+  void startServer().catch((error) => {
+    console.error('Server startup failed:', error);
+    process.exitCode = 1;
+  });
+}

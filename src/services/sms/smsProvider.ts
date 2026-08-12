@@ -215,7 +215,12 @@ providerRegistry.set('fake', fakeProvider);
 providerRegistry.set('console', consoleProvider);
 
 export function getSmsProvider(providerName?: string): SmsProvider {
-  const name = (providerName || process.env.SMS_PROVIDER || 'fake').toLowerCase();
+  const configured = providerName || process.env.SMS_PROVIDER || (process.env.NODE_ENV === 'production' ? undefined : 'fake');
+  if (!configured) throw new Error('SMS_PROVIDER_REQUIRED');
+  const name = configured.toLowerCase();
+  if (process.env.NODE_ENV === 'production' && (name === 'fake' || name === 'console') && process.env.ALLOW_FAKE_SMS_IN_PRODUCTION !== 'true') {
+    throw new Error('PRODUCTION_SMS_PROVIDER_FORBIDDEN');
+  }
   const provider = providerRegistry.get(name);
   if (!provider) {
     throw new Error(`UNKNOWN_SMS_PROVIDER: ${name}`);

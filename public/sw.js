@@ -1,4 +1,4 @@
-const CACHE_NAME = 'attendance-pwa-v1';
+const CACHE_NAME = 'attendance-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -45,11 +45,15 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
 
-      return fetch(event.request).catch(() => {
-        // Fallback for HTML pages when offline
-        if (event.request.headers.get('accept')?.includes('text/html')) {
-          return caches.match('/index.html');
+      return fetch(event.request).then((networkResponse) => {
+        if (networkResponse.status === 200 && new URL(event.request.url).origin === self.location.origin) {
+          const copy = networkResponse.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         }
+        return networkResponse;
+      }).catch(() => {
+        if (event.request.headers.get('accept')?.includes('text/html')) return caches.match('/index.html');
+        return new Response('', { status: 503, statusText: 'Offline' });
       });
     })
   );

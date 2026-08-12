@@ -81,16 +81,31 @@ export async function getSession(token: string): Promise<SessionContext | null> 
       })
       .from(schoolMemberships)
       .innerJoin(schools, eq(schoolMemberships.schoolId, schools.id))
-      .where(eq(schoolMemberships.userId, userRecord.id));
+      .where(and(
+        eq(schoolMemberships.userId, userRecord.id),
+        eq(schoolMemberships.status, 'ACTIVE'),
+        eq(schools.status, 'ACTIVE'),
+      ));
 
-    let activeMembership;
+    let activeMembership: SessionContext['activeMembership'];
     if (sessionRecord.schoolId) {
       activeMembership = memberships.find(
         (m: { schoolId: string; schoolName: string; role: string; status: string }) => m.schoolId === sessionRecord.schoolId
       );
+      if (!activeMembership && memberships.some((membership: SessionContext['memberships'][number]) => membership.role === 'SUPER_ADMIN')) {
+        const [targetSchool] = await db
+          .select({ id: schools.id })
+          .from(schools)
+          .where(and(eq(schools.id, sessionRecord.schoolId), eq(schools.status, 'ACTIVE')));
+        if (targetSchool) {
+          activeMembership = { schoolId: targetSchool.id, role: 'SUPER_ADMIN', status: 'ACTIVE' };
+        }
+      }
     } else if (memberships.length > 0) {
       activeMembership = memberships[0];
     }
+
+    if (!activeMembership) return null;
 
     return {
       sessionId: sessionRecord.id,
@@ -110,5 +125,7 @@ export async function getSession(token: string): Promise<SessionContext | null> 
 
 export async function invalidateSession(token: string): Promise<void> {
   if (!token) return;
-  await db.delete(authSessions).where(eq(authSessions.sessionToken, token));
+  await withSystemContext(async () => {
+    await db.delete(authSessions).where(eq(authSessions.sessionToken, token));
+  });
 }

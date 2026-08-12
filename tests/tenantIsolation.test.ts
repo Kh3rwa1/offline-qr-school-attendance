@@ -51,10 +51,9 @@ describe('Multi-Tenant Isolation & RLS Security', () => {
     const { token } = await createSession(teacherUserA.id, seededData.schoolA.id);
     const session = await getSession(token);
 
-    const activeMem = session?.memberships.find(
-      (m) => m.schoolId === seededData.schoolA.id
-    );
-    expect(activeMem?.status).toBe('SUSPENDED');
+    // Suspended memberships are excluded during restoration, so a session
+    // cannot be used to regain access to a suspended school.
+    expect(session).toBeNull();
   });
 
   it('proves PostgreSQL RLS restricts direct tenant-scoped queries', async () => {

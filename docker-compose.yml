@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -27,9 +25,18 @@ services:
       - '3000:3000'
     environment:
       NODE_ENV: production
+      COMPONENT: web
       PORT: 3000
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
+      ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 6
     depends_on:
       db:
         condition: service_healthy
@@ -48,6 +55,8 @@ services:
       MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
       APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      SYSTEM_DB_USER: ${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}
+      SYSTEM_DB_PASSWORD: ${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}
     volumes:
       - ./docker/bootstrap-db.sh:/bootstrap-db.sh:ro
     entrypoint: ['/bin/sh', '/bootstrap-db.sh']
@@ -62,7 +71,9 @@ services:
     container_name: school_attendance_migrate
     environment:
       NODE_ENV: production
+      COMPONENT: migrate
       DATABASE_URL: postgres://${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}:${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
     command: ['node', 'dist/migrate.cjs']
     depends_on:
       db:
@@ -78,9 +89,17 @@ services:
     restart: always
     environment:
       NODE_ENV: production
+      COMPONENT: worker
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      SMS_PROVIDER: fake
+      SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
+      ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
     command: ['node', 'dist/sms-worker.cjs']
+    healthcheck:
+      test: ['CMD-SHELL', 'kill -0 1']
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { eq, and, desc } from 'drizzle-orm';
-import { db } from '../db';
+import { db, withSystemContext, withTenantContext } from '../db';
 import { notificationJobs, notificationAttempts } from '../db/schema';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
@@ -50,10 +50,10 @@ router.post('/callback', async (req: Request, res: Response) => {
 
   const { providerMessageId, status, failureReason, deliveredAt } = parsedPayload;
 
-  const [job] = await db
+  const [job] = await withSystemContext(async () => db
     .select()
     .from(notificationJobs)
-    .where(eq(notificationJobs.providerMessageId, providerMessageId));
+    .where(eq(notificationJobs.providerMessageId, providerMessageId)));
 
   if (!job) {
     return res.status(404).json({
@@ -71,39 +71,16 @@ router.post('/callback', async (req: Request, res: Response) => {
     });
   }
 
-  if (status === 'DELIVERED') {
-    const deliveryTimestamp = deliveredAt || new Date();
-    await db
-      .update(notificationJobs)
-      .set({
-        status: 'DELIVERED',
-        deliveredAt: deliveryTimestamp,
-      })
-      .where(eq(notificationJobs.id, job.id));
-
-    await db.insert(notificationAttempts).values({
-      jobId: job.id,
-      attemptNumber: job.attemptCount,
-      status: 'DELIVERED',
-      responsePayload: { providerMessageId, status: 'DELIVERED', callbackPayload: req.body },
-    });
-  } else if (status === 'FAILED') {
-    await db
-      .update(notificationJobs)
-      .set({
-        status: 'PERMANENT_FAILURE',
-        failureReason: failureReason || 'CALLBACK_DELIVERY_FAILED',
-      })
-      .where(eq(notificationJobs.id, job.id));
-
-    await db.insert(notificationAttempts).values({
-      jobId: job.id,
-      attemptNumber: job.attemptCount,
-      status: 'PERMANENT_FAILURE',
-      errorMessage: failureReason || 'CALLBACK_DELIVERY_FAILED',
-      responsePayload: { callbackPayload: req.body },
-    });
-  }
+  await withTenantContext(job.schoolId, async () => {
+    if (status === 'DELIVERED') {
+      const deliveryTimestamp = deliveredAt || new Date();
+      await db.update(notificationJobs).set({ status: 'DELIVERED', deliveredAt: deliveryTimestamp }).where(and(eq(notificationJobs.id, job.id), eq(notificationJobs.schoolId, job.schoolId)));
+      await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount, status: 'DELIVERED', responsePayload: { providerMessageId, status: 'DELIVERED', callbackPayload: req.body } });
+    } else if (status === 'FAILED') {
+      await db.update(notificationJobs).set({ status: 'PERMANENT_FAILURE', failureReason: failureReason || 'CALLBACK_DELIVERY_FAILED' }).where(and(eq(notificationJobs.id, job.id), eq(notificationJobs.schoolId, job.schoolId)));
+      await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount, status: 'PERMANENT_FAILURE', errorMessage: failureReason || 'CALLBACK_DELIVERY_FAILED', responsePayload: { callbackPayload: req.body } });
+    }
+  });
 
   return res.status(200).json({
     status: 'PROCESSED',
@@ -231,7 +208,6 @@ router.get(
 router.post(
   '/process-queue',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {

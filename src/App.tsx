@@ -10,6 +10,7 @@ import {
   syncOutboxEvents,
 } from './services/offlineSyncService';
 import { offlineDb, OfflineRosterItem, OfflineSessionItem, OfflineSessionRosterItem } from './db/offlineDb';
+import { estimateSmsSegments } from './services/sms/smsUtils';
 
 type User = { id: string; fullName: string; phoneNumber: string };
 type Membership = { schoolId: string; schoolName: string; role: string; status: string };
@@ -19,11 +20,16 @@ type Feedback = { kind: 'success' | 'warning' | 'error'; text: string };
 const AUTH_CACHE_TTL_MS = 8 * 60 * 60 * 1000;
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
-    credentials: 'include',
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      credentials: 'include',
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+    });
+  } catch {
+    throw new Error('NETWORK_UNAVAILABLE');
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || body.message || `REQUEST_FAILED_${response.status}`);
   return body;
@@ -50,6 +56,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<'scanner' | 'roster' | 'review' | 'reports' | 'admin'>('scanner');
   const [scanInput, setScanInput] = useState('');
   const [report, setReport] = useState<any>(null);
+  const [finalizing, setFinalizing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerControls = useRef<{ stop: () => void } | null>(null);
   const wedgeBuffer = useRef('');
@@ -109,8 +116,14 @@ export default function App() {
       localStorage.setItem('attendance.auth', JSON.stringify(next));
       if (navigator.onLine) await ensureDeviceRegistered(next);
       await loadClasses(next);
-    } catch {
-      const cached = !navigator.onLine && localStorage.getItem('attendance.loggedOut') !== 'true' ? localStorage.getItem('attendance.auth') : null;
+    } catch (err: any) {
+      // navigator.onLine is only a hint; captive portals and browser network
+      // emulation can report true while fetch is unavailable. Only a network
+      // failure may fall back to the bounded cache. A server 401/403 always
+      // clears the in-memory session and requires a fresh login.
+      const explicitAuthRejection = /^REQUEST_FAILED_(401|403)$/.test(err?.message || '');
+      const networkUnavailable = !explicitAuthRejection;
+      const cached = networkUnavailable && localStorage.getItem('attendance.loggedOut') !== 'true' ? localStorage.getItem('attendance.auth') : null;
       if (cached) {
         let next: AuthState | null = null;
         try { next = JSON.parse(cached) as AuthState; } catch { localStorage.removeItem('attendance.auth'); }
@@ -268,7 +281,7 @@ export default function App() {
     } catch (err: any) { showFeedback({ kind: 'error', text: `Synchronization failed: ${err.message}` }); }
   }
 
-  async function handleManualStatus(studentId: string, status: 'ABSENT' | 'LATE' | 'LEAVE' | 'EXCUSED') {
+  async function handleManualStatus(studentId: string, status: 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE' | 'EXCUSED') {
     if (!auth || !session?.serverSessionId || !online) return showFeedback({ kind: 'warning', text: 'Synchronize the session before making review changes.' });
     try {
       await api(`/api/v1/schools/${auth.schoolId}/attendance/sessions/${session.serverSessionId}/manual`, {
@@ -287,9 +300,11 @@ export default function App() {
   }
 
   async function handleFinalize() {
+    if (finalizing) return;
     if (!auth || !session?.serverSessionId || !online) return showFeedback({ kind: 'warning', text: 'Synchronize this session before finalizing it.' });
     const expectedSmsCount = sessionRoster.filter((item) => item.status === 'ABSENT' || item.status === 'UNMARKED').length;
     if (!window.confirm(`Finalize attendance? ${expectedSmsCount} absence SMS job(s) will be queued.`)) return;
+    setFinalizing(true);
     try {
       await api(`/api/v1/schools/${auth.schoolId}/attendance/sessions/${session.serverSessionId}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'FINALIZED', autoMarkAbsentForUnmarked: true }) });
       await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
@@ -297,6 +312,7 @@ export default function App() {
       setActiveView('scanner');
       showFeedback({ kind: 'success', text: 'Attendance finalized. Unmarked students were recorded absent and notification jobs were queued.' });
     } catch (err: any) { showFeedback({ kind: 'error', text: err.message }); }
+    finally { setFinalizing(false); }
   }
 
   async function loadReport() {
@@ -329,7 +345,12 @@ export default function App() {
   );
 
   const selectedClass = classes.find((item) => item.classSectionId === selectedClassId);
-  const present = sessionRoster.filter((item) => item.status === 'PRESENT' || item.status === 'LATE').length;
+  const present = sessionRoster.filter((item) => item.status === 'PRESENT').length;
+  const late = sessionRoster.filter((item) => item.status === 'LATE').length;
+  const absent = sessionRoster.filter((item) => item.status === 'ABSENT').length;
+  const leaveExcused = sessionRoster.filter((item) => item.status === 'LEAVE' || item.status === 'EXCUSED').length;
+  const expectedSmsSegments = sessionRoster.filter((item) => item.status === 'ABSENT' || item.status === 'UNMARKED')
+    .reduce((total) => total + estimateSmsSegments('absence').segmentCount, 0);
   const admin = auth.memberships.find((m) => m.schoolId === auth.schoolId)?.role === 'SCHOOL_ADMIN' || auth.memberships.find((m) => m.schoolId === auth.schoolId)?.role === 'SUPER_ADMIN';
 
   return (
@@ -355,7 +376,7 @@ export default function App() {
           <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4"><div className="grid grid-cols-3 gap-2 text-center"><div className="bg-slate-50 rounded-xl p-3"><b className="block text-2xl">{sessionRoster.length}</b><span className="text-xs text-slate-500">Roster</span></div><div className="bg-emerald-50 rounded-xl p-3"><b className="block text-2xl text-emerald-700">{present}</b><span className="text-xs text-slate-500">Present</span></div><div className="bg-amber-50 rounded-xl p-3"><b className="block text-2xl text-amber-700">{outboxCount}</b><span className="text-xs text-slate-500">Queued</span></div></div><button onClick={handleSync} disabled={!online || outboxCount === 0} className="w-full rounded-xl bg-slate-800 text-white p-3 font-bold"><RefreshCw className="inline w-4 mr-1" />Synchronize now</button><button onClick={openReview} disabled={!session?.serverSessionId || !online} className="w-full rounded-xl bg-emerald-600 text-white p-3 font-bold">Review attendance</button><p className="text-xs text-slate-500">Offline scans are written to IndexedDB before any network call. Rejected events and conflicts stay visible in the outbox state.</p></div>
         </section>}
 
-        {activeView === 'review' && <section className="bg-white rounded-3xl p-5 shadow-sm space-y-4"><div className="flex justify-between items-center"><div><h2 className="text-xl font-black">Review attendance</h2><p className="text-sm text-slate-500">Choose a final status for every student before submitting.</p></div><span className="rounded-xl bg-amber-50 text-amber-800 px-3 py-2 text-sm font-bold">Expected SMS: {sessionRoster.filter((item) => item.status === 'ABSENT' || item.status === 'UNMARKED').length}</span></div><div className="overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Roll</th><th className="p-2">Student</th><th className="p-2">Current status</th><th className="p-2">Change</th></tr></thead><tbody>{sessionRoster.map((item) => <tr key={item.studentId} className="border-b"><td className="p-2">{item.rollNumber}</td><td className="p-2 font-bold">{item.studentName}</td><td className="p-2">{item.status}</td><td className="p-2 flex flex-wrap gap-1">{(['ABSENT', 'LATE', 'LEAVE', 'EXCUSED'] as const).map((status) => <button key={status} onClick={() => void handleManualStatus(item.studentId, status)} className={`px-2 py-1 rounded-lg text-xs font-bold ${item.status === status ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>{status}</button>)}</td></tr>)}</tbody></table></div><div className="flex justify-end gap-2"><button onClick={() => setActiveView('scanner')} className="px-4 py-2 rounded-xl bg-slate-100 font-bold">Back</button><button onClick={() => void handleFinalize()} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold">Confirm & finalize</button></div></section>}
+        {activeView === 'review' && <section className="bg-white rounded-3xl p-5 shadow-sm space-y-4"><div className="flex justify-between items-center"><div><h2 className="text-xl font-black">Review attendance</h2><p className="text-sm text-slate-500">Choose a final status for every student before submitting.</p></div><span className="rounded-xl bg-amber-50 text-amber-800 px-3 py-2 text-sm font-bold">Expected SMS segments: {expectedSmsSegments}</span></div><div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center"><div className="bg-emerald-50 rounded-xl p-2"><b className="block text-lg text-emerald-700">{present}</b><span className="text-xs">Present</span></div><div className="bg-rose-50 rounded-xl p-2"><b className="block text-lg text-rose-700">{absent}</b><span className="text-xs">Absent</span></div><div className="bg-amber-50 rounded-xl p-2"><b className="block text-lg text-amber-700">{late}</b><span className="text-xs">Late</span></div><div className="bg-indigo-50 rounded-xl p-2"><b className="block text-lg text-indigo-700">{leaveExcused}</b><span className="text-xs">Leave/Excused</span></div><div className="bg-slate-50 rounded-xl p-2"><b className="block text-lg">{sessionRoster.length - present - absent - late - leaveExcused}</b><span className="text-xs">Unmarked</span></div></div><div className="overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Roll</th><th className="p-2">Student</th><th className="p-2">Current status</th><th className="p-2">Change</th></tr></thead><tbody>{sessionRoster.map((item) => <tr key={item.studentId} className="border-b"><td className="p-2">{item.rollNumber}</td><td className="p-2 font-bold">{item.studentName}</td><td className="p-2">{item.status}</td><td className="p-2 flex flex-wrap gap-1">{(['PRESENT', 'ABSENT', 'LATE', 'LEAVE', 'EXCUSED'] as const).map((status) => <button key={status} onClick={() => void handleManualStatus(item.studentId, status)} className={`px-2 py-1 rounded-lg text-xs font-bold ${item.status === status ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>{status}</button>)}</td></tr>)}</tbody></table></div><div className="flex justify-end gap-2"><button onClick={() => setActiveView('scanner')} disabled={finalizing} className="px-4 py-2 rounded-xl bg-slate-100 font-bold">Back</button><button onClick={() => void handleFinalize()} disabled={finalizing} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold">{finalizing ? 'Finalizing…' : 'Confirm & finalize'}</button></div></section>}
 
         {activeView === 'roster' && <section className="bg-white rounded-3xl p-5 shadow-sm"><h2 className="text-xl font-black mb-4">Cached roster</h2><div className="overflow-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="p-2">Roll</th><th className="p-2">Student</th><th className="p-2">Status</th></tr></thead><tbody>{sessionRoster.map((item) => <tr key={item.studentId} className="border-b"><td className="p-2">{item.rollNumber}</td><td className="p-2 font-bold">{item.studentName}<div className="text-xs text-slate-500">{item.studentNameBn}</div></td><td className="p-2">{item.status}</td></tr>)}</tbody></table></div></section>}
 

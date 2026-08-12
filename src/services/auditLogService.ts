@@ -33,24 +33,20 @@ export function sanitizeMetadata(data?: Record<string, any>): Record<string, any
 }
 
 export async function createAuditLog(params: AuditLogParams) {
-  try {
-    const [inserted] = await db
-      .insert(auditLogs)
-      .values({
-        schoolId: params.schoolId || null,
-        actorId: params.actorId || null,
-        action: params.action,
-        resourceType: params.resourceType,
-        resourceId: params.resourceId || null,
-        ipAddress: params.ipAddress || null,
-        userAgent: params.userAgent || null,
-        metadata: sanitizeMetadata(params.metadata),
-      })
-      .returning();
+  const [inserted] = await db
+    .insert(auditLogs)
+    .values({
+      schoolId: params.schoolId || null,
+      actorId: params.actorId || null,
+      action: params.action,
+      resourceType: params.resourceType,
+      resourceId: params.resourceId || null,
+      ipAddress: params.ipAddress || null,
+      userAgent: params.userAgent || null,
+      metadata: sanitizeMetadata(params.metadata),
+    })
+    .returning();
 
-    return inserted;
-  } catch (err) {
-    console.error('Failed to write audit log:', err);
-    return null;
-  }
+  if (!inserted) throw new Error('AUDIT_LOG_WRITE_FAILED');
+  return inserted;
 }

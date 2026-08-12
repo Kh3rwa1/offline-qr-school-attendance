@@ -297,15 +297,14 @@ export async function updateSessionStatus(params: {
   });
 
   if (newStatus === 'FINALIZED') {
-    try {
-      await createAbsenceNotificationJobs({
-        schoolId,
-        attendanceSessionId: sessionId,
-        actorId,
-      });
-    } catch (err) {
-      console.error('Failed to create absence notification jobs:', err);
-    }
+    // This runs inside the request tenant transaction. If queue creation
+    // fails, the finalization and its audit entry must roll back together so
+    // the API cannot report a finalized session with missing notifications.
+    await createAbsenceNotificationJobs({
+      schoolId,
+      attendanceSessionId: sessionId,
+      actorId,
+    });
   }
 
   return updatedSession;

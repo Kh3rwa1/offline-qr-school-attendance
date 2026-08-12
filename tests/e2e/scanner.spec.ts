@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3000';
+const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
 test('teacher can collect attendance offline, reopen, reconnect, and reconcile two scans', async ({ page, request, context }) => {
   // Prepare two real credentials through the admin API. Raw QR secrets are
@@ -27,6 +27,7 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   }
 
   await page.goto(baseUrl);
+  await page.evaluate(() => navigator.serviceWorker?.ready);
   await page.getByLabel('Phone number').fill('+919100000002');
   await page.getByLabel('Password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -35,6 +36,14 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   await page.getByRole('button', { name: 'Download roster' }).click();
   await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
   await page.getByRole('button', { name: 'Start offline session' }).click();
+  await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+
+  // The first service-worker install cannot control the page that installed
+  // it. Reload once while online so the app shell and its module assets are
+  // cached before the browser is taken offline.
+  await page.reload();
+  await page.evaluate(() => navigator.serviceWorker?.ready);
+  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
   await context.setOffline(true);
   const scanner = page.getByPlaceholder('USB scanner token (press Enter)');
@@ -49,6 +58,9 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   await reopened.goto(baseUrl);
   await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
   await context.setOffline(false);
+  // Reconnect before revalidating the cached session; this also exercises the
+  // browser's normal online restoration path after the offline reopen.
+  await reopened.reload();
   await expect(reopened.getByText('Online')).toBeVisible();
   await reopened.getByRole('button', { name: 'Synchronize now' }).click();
   await expect(reopened.getByText(/synchronized/)).toBeVisible();
@@ -60,5 +72,5 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   const detailsResponse = await reopened.request.get(`${baseUrl}/api/v1/schools/${schoolId}/attendance/sessions/${sessions[0].id}`);
   expect(detailsResponse.ok()).toBeTruthy();
   const details = (await detailsResponse.json()).data;
-  expect(details.records.filter((record: { status: string }) => record.status === 'PRESENT')).toHaveLength(2);
+  expect(details.roster.filter((record: { status: string }) => record.status === 'PRESENT')).toHaveLength(2);
 });

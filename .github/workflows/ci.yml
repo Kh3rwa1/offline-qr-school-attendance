@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: attendance_migration
+          POSTGRES_PASSWORD: migration-ci-password
+          POSTGRES_DB: school_attendance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U attendance_migration -d school_attendance"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      MIGRATION_DB_USER: attendance_migration
+      MIGRATION_DB_PASSWORD: migration-ci-password
+      APP_DB_USER: attendance_app
+      APP_DB_PASSWORD: application-ci-password
+      SYSTEM_DB_USER: attendance_system
+      SYSTEM_DB_PASSWORD: system-ci-password
+      POSTGRES_DB: school_attendance
+      SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create restricted application role
+        env:
+          PGPASSWORD: migration-ci-password
+        run: |
+          psql -h 127.0.0.1 -U attendance_migration -d school_attendance <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
+              CREATE ROLE attendance_app LOGIN PASSWORD 'application-ci-password';
+            END IF;
+          END $$;
+          ALTER ROLE attendance_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
+              CREATE ROLE attendance_system LOGIN PASSWORD 'system-ci-password';
+            END IF;
+          END $$;
+          ALTER ROLE attendance_system NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          GRANT CONNECT ON DATABASE school_attendance TO attendance_app;
+          GRANT CONNECT ON DATABASE school_attendance TO attendance_system;
+          GRANT USAGE ON SCHEMA public TO attendance_app;
+          GRANT USAGE ON SCHEMA public TO attendance_system;
+          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_system;
+          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO attendance_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO attendance_system;
+          SQL
+
+      - name: Run migrations with migration role
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+        run: npm run migrate
+
+      - name: Seed CI fixtures
+        env:
+          NODE_ENV: development
+          DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+        run: npm run seed
+
+      - name: Start application for E2E
+        env:
+          NODE_ENV: development
+          PORT: 3000
+          DATABASE_URL: postgres://attendance_app:application-ci-password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_system:system-ci-password@127.0.0.1:5432/school_attendance
+          SMS_PROVIDER: fake
+          ALLOW_FAKE_SMS_IN_PRODUCTION: 'true'
+        run: |
+          npm start > /tmp/attendance-app.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/v1/health && break || sleep 1; done
+
+      - name: Run browser E2E
+        env:
+          BASE_URL: http://127.0.0.1:3000
+        run: npm run test:e2e
+
+      - name: Run restricted-role PostgreSQL integration
+        env:
+          NODE_ENV: production
+          PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:application-ci-password@127.0.0.1:5432/school_attendance
+          PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:system-ci-password@127.0.0.1:5432/school_attendance
+          SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+          SMS_PROVIDER: fake
+          ALLOW_FAKE_SMS_IN_PRODUCTION: 'true'
+        run: npm run test:postgres
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: output/playwright
+          if-no-files-found: warn

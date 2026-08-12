@@ -1,4 +1,5 @@
 import { processNotificationQueue } from './src/services/notificationWorker';
+import { getSmsProvider } from './src/services/sms/smsProvider';
 
 const intervalMs = Number(process.env.SMS_WORKER_INTERVAL_MS || 5000);
 let running = false;
@@ -17,6 +18,12 @@ async function tick() {
 }
 
 console.log(`SMS worker started; polling every ${intervalMs}ms`);
+try {
+  getSmsProvider();
+} catch (error) {
+  console.error('SMS worker cannot start with the configured provider:', error);
+  process.exit(1);
+}
 void tick();
 const timer = setInterval(() => void tick(), intervalMs);
 

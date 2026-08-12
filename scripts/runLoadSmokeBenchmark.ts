@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createApp } from '../server';
 
 export interface LoadTestMetrics {
   totalRequests: number;
@@ -18,8 +17,10 @@ export interface LoadTestMetrics {
 export async function runLoadSmokeBenchmark(): Promise<LoadTestMetrics> {
   console.log('=== Starting Pull-Request Load Smoke Benchmark ===');
   process.env.NODE_ENV = 'development';
+  process.env.RUN_SERVER = 'false';
   process.env.SESSION_SECRET = 'load-smoke-session-secret-01234567890123456789';
 
+  const { createApp } = await import('../server');
   const app = await createApp();
   const server = await new Promise<any>((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));

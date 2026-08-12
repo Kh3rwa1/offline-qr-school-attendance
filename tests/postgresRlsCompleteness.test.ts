@@ -5,7 +5,12 @@ const migrationUrl = process.env.PG_RLS_MIGRATION_DATABASE_URL;
 const appUrl = process.env.PG_RLS_APPLICATION_DATABASE_URL;
 const systemUrl = process.env.PG_RLS_SYSTEM_DATABASE_URL || appUrl;
 const requested = process.env.PRODUCTION_PG_TEST === '1';
-const enabled = Boolean(migrationUrl && appUrl && requested);
+
+if (requested && (!migrationUrl || !appUrl)) {
+  throw new Error('FATAL: PRODUCTION_PG_TEST=1 requested but PG_RLS_MIGRATION_DATABASE_URL or PG_RLS_APPLICATION_DATABASE_URL environment variable is missing.');
+}
+
+const enabled = Boolean(migrationUrl && appUrl);
 
 describe.skipIf(!enabled)('Phase 7 — Programmatic PostgreSQL RLS & Schema Completeness Audit', () => {
   let migrationPool: pg.Pool;

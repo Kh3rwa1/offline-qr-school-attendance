@@ -1,4 +1,3 @@
-import 'fake-indexeddb/auto';
 import Dexie, { Table } from 'dexie';
 
 export interface OfflineRosterItem {

@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole } from '../middleware/authMiddleware';
+import { Router, Response } from 'express';
+import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
 import {
   getTeacherAssignedClasses,
@@ -23,15 +23,16 @@ router.get(
   '/classes',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const schoolId = req.params.schoolId;
-      const user = (req as any).user;
+      const schoolId = req.activeSchoolId!;
+      const user = req.user!;
+      const userRole = req.userRole!;
 
       const assignedClasses = await getTeacherAssignedClasses({
         schoolId,
         teacherId: user.id,
-        userRole: user.role,
+        userRole,
       });
 
       res.json({ success: true, data: assignedClasses });
@@ -47,10 +48,11 @@ router.post(
   '/sessions',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const schoolId = req.params.schoolId;
-      const user = (req as any).user;
+      const schoolId = req.activeSchoolId!;
+      const user = req.user!;
+      const userRole = req.userRole!;
       const { classSectionId, sessionDate, sessionType } = req.body;
 
       if (!classSectionId || !sessionDate) {
@@ -65,7 +67,7 @@ router.post(
         sessionDate,
         sessionType: sessionType || 'DAILY',
         actorId: user.id,
-        userRole: user.role,
+        userRole,
       });
 
       res.status(201).json({ success: true, data: sessionResult });
@@ -85,9 +87,9 @@ router.get(
   '/sessions',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const schoolId = req.params.schoolId;
+      const schoolId = req.activeSchoolId!;
       const { classSectionId, sessionDate } = req.query;
 
       const conditions: any[] = [eq(attendanceSessions.schoolId, schoolId)];
@@ -128,9 +130,10 @@ router.get(
   '/sessions/:sessionId',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { schoolId, sessionId } = req.params;
+      const schoolId = req.activeSchoolId!;
+      const { sessionId } = req.params;
 
       const details = await getAttendanceSessionDetails(schoolId, sessionId);
       if (!details) {
@@ -151,10 +154,12 @@ router.patch(
   '/sessions/:sessionId/status',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { schoolId, sessionId } = req.params;
-      const user = (req as any).user;
+      const schoolId = req.activeSchoolId!;
+      const { sessionId } = req.params;
+      const user = req.user!;
+      const userRole = req.userRole!;
       const { status, reason, autoMarkAbsentForUnmarked } = req.body;
 
       if (!status) {
@@ -166,7 +171,7 @@ router.patch(
         schoolId,
         sessionId,
         actorId: user.id,
-        userRole: user.role,
+        userRole,
         newStatus: status as SessionStatus,
         reason,
         autoMarkAbsentForUnmarked: !!autoMarkAbsentForUnmarked,
@@ -195,10 +200,11 @@ router.post(
   '/sessions/:sessionId/scan',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { schoolId, sessionId } = req.params;
-      const user = (req as any).user;
+      const schoolId = req.activeSchoolId!;
+      const { sessionId } = req.params;
+      const user = req.user!;
       const {
         clientEventId,
         rawToken,
@@ -254,10 +260,12 @@ router.post(
   '/sessions/:sessionId/manual',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { schoolId, sessionId } = req.params;
-      const user = (req as any).user;
+      const schoolId = req.activeSchoolId!;
+      const { sessionId } = req.params;
+      const user = req.user!;
+      const userRole = req.userRole!;
       const { recordId, studentId, newStatus, reason, clientEventId } = req.body;
 
       if (!newStatus || (!recordId && !studentId)) {
@@ -273,7 +281,7 @@ router.post(
         newStatus: newStatus as AttendanceStatus,
         reason,
         actorId: user.id,
-        userRole: user.role,
+        userRole,
         clientEventId,
       });
 
@@ -300,9 +308,9 @@ router.get(
   '/reports/daily',
   requireAuth,
   requireTenant,
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const schoolId = req.params.schoolId;
+      const schoolId = req.activeSchoolId!;
       const { classSectionId, sessionDate } = req.query;
 
       if (!classSectionId || !sessionDate) {

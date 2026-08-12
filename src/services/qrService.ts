@@ -159,10 +159,21 @@ export interface PrintableQrCard {
   rawToken: string;
 }
 
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export async function generateA4PrintSheetHtml(params: {
   schoolName: string;
   cards: PrintableQrCard[];
 }): Promise<string> {
+  const safeSchoolName = escapeHtml(params.schoolName);
   const cardsHtml = await Promise.all(
     params.cards.map(async (card) => {
       const qrDataUrl = await QRCode.toDataURL(card.rawToken, {
@@ -174,22 +185,22 @@ export async function generateA4PrintSheetHtml(params: {
       return `
         <div class="qr-card">
           <div class="card-header">
-            <div class="school-title">${params.schoolName}</div>
+            <div class="school-title">${safeSchoolName}</div>
             <div class="card-badge">STUDENT IDENTITY CARD</div>
           </div>
           <div class="card-body">
             <div class="photo-box">
               ${
                 card.photoUrl
-                  ? `<img src="${card.photoUrl}" alt="Student Photo" class="student-photo" />`
+                  ? `<img src="${escapeHtml(card.photoUrl)}" alt="Student Photo" class="student-photo" />`
                   : `<div class="photo-placeholder">PHOTO</div>`
               }
             </div>
             <div class="student-details">
-              <div class="student-name">${card.name}</div>
-              ${card.nameBn ? `<div class="student-name-bn">${card.nameBn}</div>` : ''}
-              <div class="meta-row"><strong>Code:</strong> ${card.studentCode}</div>
-              <div class="meta-row"><strong>Class:</strong> ${card.className} - ${card.sectionName}</div>
+              <div class="student-name">${escapeHtml(card.name)}</div>
+              ${card.nameBn ? `<div class="student-name-bn">${escapeHtml(card.nameBn)}</div>` : ''}
+              <div class="meta-row"><strong>Code:</strong> ${escapeHtml(card.studentCode)}</div>
+              <div class="meta-row"><strong>Class:</strong> ${escapeHtml(card.className)} - ${escapeHtml(card.sectionName)}</div>
               <div class="meta-row"><strong>Roll No:</strong> ${card.rollNumber}</div>
             </div>
             <div class="qr-box">

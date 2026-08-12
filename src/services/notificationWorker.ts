@@ -1,4 +1,4 @@
-import { eq, and, inArray, lt, or } from 'drizzle-orm';
+import { eq, and, inArray, lt, or, desc } from 'drizzle-orm';
 import { db } from '../db';
 import { notificationJobs, notificationAttempts, schoolSmsSettings } from '../db/schema';
 import { getSmsProvider } from './sms/smsProvider';
@@ -50,12 +50,12 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
   for (const job of candidateJobs) {
     // Exponential backoff check for FAILED retry attempts
     if (job.status === 'FAILED') {
-      // Find the last attempt timestamp from attempts table
+      // Find the latest attempt timestamp from attempts table
       const [lastAttempt] = await db
         .select()
         .from(notificationAttempts)
         .where(eq(notificationAttempts.jobId, job.id))
-        .orderBy(notificationAttempts.attemptedAt)
+        .orderBy(desc(notificationAttempts.attemptedAt))
         .limit(1);
 
       if (lastAttempt) {
@@ -68,11 +68,22 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
       }
     }
 
-    // Mark job status as SENDING
-    await db
+    // Atomic job claim: set status to SENDING only if still QUEUED or FAILED
+    const [claimedJob] = await db
       .update(notificationJobs)
       .set({ status: 'SENDING' })
-      .where(eq(notificationJobs.id, job.id));
+      .where(
+        and(
+          eq(notificationJobs.id, job.id),
+          inArray(notificationJobs.status, ['QUEUED', 'FAILED'])
+        )
+      )
+      .returning();
+
+    if (!claimedJob) {
+      // Job claimed by another concurrent worker
+      continue;
+    }
 
     // Fetch school SMS settings for DLT entity ID and header
     const [settings] = await db

@@ -623,9 +623,6 @@ export async function manualStatusUpdate(params: {
           attendanceSessionId: sessionId,
           studentId,
           status: newStatus,
-          correctionReason: reason || null,
-          correctedAt: reason ? new Date() : null,
-          correctedByUserId: reason ? actorId : null,
           firstScannedAt: new Date(),
           lastUpdatedAt: new Date(),
         })
@@ -697,9 +694,6 @@ export async function manualStatusUpdate(params: {
       .update(attendanceRecords)
       .set({
         status: newStatus,
-        correctionReason: reason || record.correctionReason || null,
-        correctedAt: reason ? new Date() : record.correctedAt || null,
-        correctedByUserId: reason ? actorId : record.correctedByUserId || null,
         lastUpdatedAt: new Date(),
       })
       .where(eq(attendanceRecords.id, record.id))

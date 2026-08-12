@@ -159,7 +159,34 @@ export async function syncAttendanceEvents(params: {
         continue;
       }
 
-      // 4. Process event
+      // 4. Session Reconciliation: Ensure offline session ID exists on server
+      const [existingSession] = await db
+        .select()
+        .from(attendanceSessions)
+        .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, event.sessionId)));
+
+      if (!existingSession) {
+        const classSectionId = event.metadata?.classSectionId;
+        const sessionDate = event.metadata?.sessionDate || new Date().toISOString().split('T')[0];
+
+        if (classSectionId) {
+          try {
+            await db.insert(attendanceSessions).values({
+              id: event.sessionId,
+              schoolId,
+              classSectionId,
+              teacherId: actorId,
+              sessionDate,
+              sessionType: 'DAILY',
+              status: 'OPEN',
+            });
+          } catch (err) {
+            // Ignore if created concurrently
+          }
+        }
+      }
+
+      // 5. Process event
       const processRes = await processQRCode({
         schoolId,
         sessionId: event.sessionId,

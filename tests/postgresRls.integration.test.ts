@@ -126,6 +126,13 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       const malformed = await appClient.query('SELECT school_id FROM students');
       expect(malformed.rows).toHaveLength(0);
       await appClient.query('ROLLBACK');
+
+      // Verify restricted application role attendance_app cannot bypass tenant isolation by executing SET app.is_system = 'true'
+      await appClient.query('BEGIN');
+      await appClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
+      const appRoleSystemAttempt = await appClient.query('SELECT school_id FROM students');
+      expect(appRoleSystemAttempt.rows).toHaveLength(0);
+      await appClient.query('ROLLBACK');
     } finally {
       appClient.release();
     }

@@ -11,6 +11,7 @@ import {
 } from './services/offlineSyncService';
 import { offlineDb, OfflineRosterItem, OfflineSessionItem, OfflineSessionRosterItem } from './db/offlineDb';
 import { estimateSmsSegments } from './services/sms/smsUtils';
+import { api, ApiError } from './services/api';
 
 type User = { id: string; fullName: string; phoneNumber: string };
 type Membership = { schoolId: string; schoolName: string; role: string; status: string };
@@ -18,22 +19,6 @@ type AuthState = { user: User; memberships: Membership[]; schoolId: string; cach
 type AssignedClass = { classSectionId: string; className: string; sectionName: string; academicYearId: string };
 type Feedback = { kind: 'success' | 'warning' | 'error'; text: string };
 const AUTH_CACHE_TTL_MS = 8 * 60 * 60 * 1000;
-
-async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(path, {
-      credentials: 'include',
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
-    });
-  } catch {
-    throw new Error('NETWORK_UNAVAILABLE');
-  }
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || body.message || `REQUEST_FAILED_${response.status}`);
-  return body;
-}
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -117,11 +102,13 @@ export default function App() {
       if (navigator.onLine) await ensureDeviceRegistered(next);
       await loadClasses(next);
     } catch (err: any) {
-      // navigator.onLine is only a hint; captive portals and browser network
-      // emulation can report true while fetch is unavailable. Only a network
-      // failure may fall back to the bounded cache. A server 401/403 always
-      // clears the in-memory session and requires a fresh login.
-      const explicitAuthRejection = /^REQUEST_FAILED_(401|403)$/.test(err?.message || '');
+      // Only network unavailability falls back to bounded cache.
+      // An explicit server 401/403 rejection purges the cache and forces sign-in.
+      const explicitAuthRejection =
+        (err instanceof ApiError && (err.status === 401 || err.status === 403)) ||
+        /^REQUEST_FAILED_(401|403)$/.test(err?.message || '') ||
+        err?.code === 'UNAUTHORIZED' ||
+        err?.code === 'INVALID_SESSION';
       const networkUnavailable = !explicitAuthRejection;
       const cached = networkUnavailable && localStorage.getItem('attendance.loggedOut') !== 'true' ? localStorage.getItem('attendance.auth') : null;
       if (cached) {
@@ -137,7 +124,10 @@ export default function App() {
           setSelectedClassId(cachedClassId);
           setClasses(cachedClassId ? [{ classSectionId: cachedClassId, className: 'Cached class', sectionName: '', academicYearId: '' }] : []);
         }
-      } else setAuth(null);
+      } else {
+        localStorage.removeItem('attendance.auth');
+        setAuth(null);
+      }
     } finally {
       setBusy(false);
     }

@@ -388,7 +388,6 @@ export async function getOutboxStatus() {
   const syncedCount = await offlineDb.syncOutbox.where('syncStatus').equals('SYNCED').count();
   const permanentFailureCount = await offlineDb.syncOutbox.where('syncStatus').equals('PERMANENT_FAILURE').count();
   const conflictCount = await offlineDb.syncOutbox.where('syncStatus').equals('CONFLICT').count();
-
   return {
     pendingCount,
     failedCount,
@@ -398,4 +397,12 @@ export async function getOutboxStatus() {
     conflictCount,
     unsyncedTotal: pendingCount + failedCount + syncingCount + permanentFailureCount + conflictCount,
   };
+}
+
+export async function clearOfflineStore() {
+  await Promise.all([
+    offlineDb.rosters.clear(),
+    offlineDb.sessions.clear(),
+    offlineDb.syncOutbox.clear(),
+  ]);
 }

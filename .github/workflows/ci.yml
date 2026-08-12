@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -66,7 +70,7 @@ jobs:
           if-no-files-found: warn
 
   postgres-integration:
-    name: Restricted PostgreSQL RLS Integration
+    name: Restricted PostgreSQL RLS & Redis Integration
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -83,6 +87,15 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -129,6 +142,9 @@ jobs:
           NODE_ENV: production
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+          REDIS_URL: redis://127.0.0.1:6379
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-token-012345678901234567890123456789
         run: npm run migrate
 
       - name: Run PostgreSQL RLS tests
@@ -138,9 +154,32 @@ jobs:
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:application-ci-password@127.0.0.1:5432/school_attendance
           PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:system-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+          REDIS_URL: redis://127.0.0.1:6379
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-token-012345678901234567890123456789
           SMS_PROVIDER: fake
           ALLOW_FAKE_SMS_IN_PRODUCTION: 'true'
         run: npm run test:postgres
+
+  k8s-validation:
+    name: Kubernetes Manifest Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate YAML Syntax & Secrets
+        run: |
+          python3 -c "
+          import glob, yaml
+          for path in glob.glob('k8s/*.yaml'):
+              with open(path) as f:
+                  list(yaml.safe_load_all(f))
+          print('All k8s YAML manifests are syntactically valid!')
+          "
+          if [ -f k8s/secret.yaml ]; then
+            echo "ERROR: k8s/secret.yaml must not be committed to git!"
+            exit 1
+          fi
 
   docker-smoke:
     name: Production Docker Smoke Test

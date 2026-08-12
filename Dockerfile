@@ -24,6 +24,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/drizzle ./drizzle
 
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
 CMD ["node", "dist/server.cjs"]

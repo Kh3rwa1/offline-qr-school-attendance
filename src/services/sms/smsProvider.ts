@@ -202,6 +202,8 @@ export class ConsoleSmsProvider implements SmsProvider {
   }
 }
 
+import { DltSmsProvider } from './dltSmsProvider';
+
 // ==========================================
 // 3. Provider Registry & Factory
 // ==========================================
@@ -210,9 +212,11 @@ const providerRegistry = new Map<string, SmsProvider>();
 // Register default providers
 const fakeProvider = new FakeSmsProvider();
 const consoleProvider = new ConsoleSmsProvider();
+const dltProvider = new DltSmsProvider();
 
 providerRegistry.set('fake', fakeProvider);
 providerRegistry.set('console', consoleProvider);
+providerRegistry.set('dlt', dltProvider);
 
 export function getSmsProvider(providerName?: string): SmsProvider {
   const configured = providerName || process.env.SMS_PROVIDER || (process.env.NODE_ENV === 'production' ? undefined : 'fake');

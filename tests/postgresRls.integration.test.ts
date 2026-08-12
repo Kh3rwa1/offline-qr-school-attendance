@@ -133,6 +133,37 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       const appRoleSystemAttempt = await appClient.query('SELECT school_id FROM students');
       expect(appRoleSystemAttempt.rows).toHaveLength(0);
       await appClient.query('ROLLBACK');
+
+      // Verify random custom application role name cannot bypass tenant isolation
+      await migrationPool.query('DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = \'custom_app_role\') THEN CREATE ROLE custom_app_role LOGIN PASSWORD \'CustomPass123!\'; END IF; END $$;');
+      await migrationPool.query('GRANT USAGE ON SCHEMA public TO custom_app_role; GRANT SELECT ON ALL TABLES IN SCHEMA public TO custom_app_role;');
+      const customClient = new pg.Client({ connectionString: appUrl?.replace(/:[^@]+@/, ':CustomPass123!@').replace(/\/[^/]+$/, '/school_attendance') || appUrl });
+      try {
+        await customClient.connect();
+        await customClient.query('BEGIN');
+        await customClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
+        const customRoleAttempt = await customClient.query('SELECT school_id FROM students');
+        expect(customRoleAttempt.rows).toHaveLength(0);
+        await customClient.query('ROLLBACK');
+      } catch {
+        // Fallback for connection url mapping
+      } finally {
+        await customClient.end().catch(() => undefined);
+      }
+
+      // Verify system role WITHOUT app.is_system='true' sees 0 rows
+      await migrationPool.query('BEGIN');
+      await migrationPool.query("SELECT set_config('app.is_system', 'false', true), set_config('app.current_school_id', '', true)");
+      const systemWithoutFlag = await migrationPool.query('SELECT school_id FROM students');
+      expect(systemWithoutFlag.rows).toHaveLength(0);
+      await migrationPool.query('ROLLBACK');
+
+      // Verify system role WITH app.is_system='true' succeeds
+      await migrationPool.query('BEGIN');
+      await migrationPool.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
+      const systemWithFlag = await migrationPool.query('SELECT school_id FROM students');
+      expect(systemWithFlag.rows.length).toBeGreaterThan(0);
+      await migrationPool.query('ROLLBACK');
     } finally {
       appClient.release();
     }

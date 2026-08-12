@@ -73,22 +73,30 @@ export async function createApp() {
   // `npm run migrate` and, only for an explicit development environment,
   // `npm run seed` before starting the web process.
 
-  // 3. Health check and Readiness check endpoint
-  app.get('/api/v1/health', async (req, res) => {
-    let dbStatus = 'healthy';
+  // 3. Liveness and Readiness Probes
+  app.get(['/livez', '/api/v1/livez'], (_req, res) => {
+    res.status(200).json({ status: 'ok', service: 'school-attendance-backend', timestamp: new Date().toISOString() });
+  });
+
+  app.get(['/readyz', '/api/v1/readyz', '/api/v1/health'], async (_req, res) => {
     try {
       await executeSql('SELECT 1;');
+      res.status(200).json({
+        status: 'ok',
+        service: 'school-attendance-backend',
+        timestamp: new Date().toISOString(),
+        database: 'healthy',
+        env: env.NODE_ENV,
+      });
     } catch (err) {
-      dbStatus = 'unhealthy';
+      res.status(503).json({
+        status: 'error',
+        service: 'school-attendance-backend',
+        timestamp: new Date().toISOString(),
+        database: 'unhealthy',
+        env: env.NODE_ENV,
+      });
     }
-
-    res.json({
-      status: dbStatus === 'healthy' ? 'ok' : 'error',
-      service: 'school-attendance-backend',
-      timestamp: new Date().toISOString(),
-      database: dbStatus,
-      env: env.NODE_ENV,
-    });
   });
 
   // API Router registration

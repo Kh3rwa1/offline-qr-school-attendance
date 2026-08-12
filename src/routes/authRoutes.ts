@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { db } from '../db';
+import { db, withSystemContext } from '../db';
 import { users, schoolMemberships, schools } from '../db/schema';
 import { verifyPassword } from '../auth/password';
 import { createSession, invalidateSession } from '../auth/session';
@@ -24,11 +24,14 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
   const { phoneNumber, password, schoolId } = parsed.data;
 
-  // Lookup user by phone number
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.phoneNumber, phoneNumber));
+  // Lookup user by phone number using system context
+  const user = await withSystemContext(async () => {
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.phoneNumber, phoneNumber));
+    return u;
+  });
 
   if (!user) {
     return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid phone number or password' });
@@ -44,39 +47,33 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid phone number or password' });
   }
 
-  // Fetch memberships
-  const memberships = await db
-    .select({
-      schoolId: schoolMemberships.schoolId,
-      schoolName: schools.name,
-      role: schoolMemberships.role,
-      status: schoolMemberships.status,
-    })
-    .from(schoolMemberships)
-    .innerJoin(schools, eq(schoolMemberships.schoolId, schools.id))
-    .where(eq(schoolMemberships.userId, user.id));
+  // Fetch memberships and log audit using system context
+  const { memberships, token, expiresAt } = await withSystemContext(async () => {
+    const mems = await db
+      .select({
+        schoolId: schoolMemberships.schoolId,
+        schoolName: schools.name,
+        role: schoolMemberships.role,
+        status: schoolMemberships.status,
+      })
+      .from(schoolMemberships)
+      .innerJoin(schools, eq(schoolMemberships.schoolId, schools.id))
+      .where(eq(schoolMemberships.userId, user.id));
 
-  // Create session
-  const targetSchoolId = schoolId || memberships[0]?.schoolId;
-  const { token, expiresAt } = await createSession(user.id, targetSchoolId);
+    const targetSchoolId = schoolId || mems[0]?.schoolId;
+    const sessionRes = await createSession(user.id, targetSchoolId);
 
-  // Set HTTP-only session cookie
-  res.cookie('session', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    expires: expiresAt,
-    path: '/',
-  });
+    await createAuditLog({
+      schoolId: targetSchoolId,
+      actorId: user.id,
+      action: 'USER_LOGIN',
+      resourceType: 'USER',
+      resourceId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
 
-  await createAuditLog({
-    schoolId: targetSchoolId,
-    actorId: user.id,
-    action: 'USER_LOGIN',
-    resourceType: 'USER',
-    resourceId: user.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'],
+    return { memberships: mems, ...sessionRes };
   });
 
   return res.json({

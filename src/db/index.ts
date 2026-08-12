@@ -70,3 +70,11 @@ export async function withTenantContext<T>(schoolId: string, fn: (tx: any) => Pr
     return tenantTransaction.run(tx, () => fn(tx));
   });
 }
+
+/** Execute system, authentication or background worker tasks with SYSTEM context. */
+export async function withSystemContext<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+  return rawDb.transaction(async (tx: any) => {
+    await tx.execute(sql`SELECT set_config('app.current_school_id', 'SYSTEM', true)`);
+    return tenantTransaction.run(tx, () => fn(tx));
+  });
+}

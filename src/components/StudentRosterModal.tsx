@@ -105,6 +105,17 @@ export const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
                       <UserCheck className="w-3.5 h-3.5" />
                     </button>
                     <button
+                      onClick={() => onUpdateStatus(student.id, 'LATE')}
+                      className={`p-1.5 rounded-lg border transition-all ${
+                        student.status === 'LATE'
+                          ? 'bg-amber-600 text-white border-amber-600'
+                          : 'bg-white text-slate-600 hover:bg-amber-50 border-slate-200'
+                      }`}
+                      title="Mark Late"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => onUpdateStatus(student.id, 'ABSENT')}
                       className={`p-1.5 rounded-lg border transition-all ${
                         student.status === 'ABSENT'

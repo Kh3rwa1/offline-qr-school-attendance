@@ -16,6 +16,7 @@ import reportRouter from './src/routes/reportRoutes';
 import auditRouter from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { executeSql } from './src/db/index';
+import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 
 export async function createApp() {
   const app = express();
@@ -145,6 +146,14 @@ export async function createApp() {
   // Database migrations and seed data are deployment concerns. Run
   // `npm run migrate` and, only for an explicit development environment,
   // `npm run seed` before starting the web process.
+
+  // Metrics middleware & endpoint
+  app.use(metricsMiddleware);
+
+  app.get('/metrics', (_req, res) => {
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send(renderPrometheusMetrics());
+  });
 
   // 3. Liveness and Readiness Probes
   app.get(['/livez', '/api/v1/livez'], (_req, res) => {

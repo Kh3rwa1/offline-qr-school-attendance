@@ -10,16 +10,76 @@ import { env } from '../env';
 let client: PGlite | pg.Pool;
 let dbInstance: any;
 let systemDbInstance: any;
-let systemClient: pg.Pool | undefined;
+let appPoolInstance: pg.Pool | undefined;
+let systemPoolInstance: pg.Pool | undefined;
+
 type ContextMode = 'TENANT' | 'SYSTEM';
 type ContextStore = { tx: any; mode: ContextMode; schoolId?: string };
 const tenantTransaction = new AsyncLocalStorage<ContextStore>();
+
+// PostgreSQL Connection Pool Budget Configuration
+const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX || '20', 10);
+const PG_POOL_MIN = parseInt(process.env.PG_POOL_MIN || '2', 10);
+const PG_IDLE_TIMEOUT_MS = parseInt(process.env.PG_IDLE_TIMEOUT_MS || '30000', 10);
+const PG_CONNECTION_TIMEOUT_MS = parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '5000', 10);
+const PG_STATEMENT_TIMEOUT_MS = parseInt(process.env.PG_STATEMENT_TIMEOUT_MS || '10000', 10);
+const PG_IDLE_IN_TRANSACTION_TIMEOUT_MS = parseInt(process.env.PG_IDLE_IN_TRANSACTION_TIMEOUT_MS || '5000', 10);
+
+const WEB_REPLICA_COUNT = parseInt(process.env.WEB_REPLICA_COUNT || '2', 10);
+const SMS_WORKER_REPLICA_COUNT = parseInt(process.env.SMS_WORKER_REPLICA_COUNT || '2', 10);
+const MAX_ALLOWED_DB_CONNECTIONS = parseInt(process.env.MAX_ALLOWED_DB_CONNECTIONS || '100', 10);
+
+/**
+ * Validates connection pool budget on startup.
+ */
+export function validateDatabaseConnectionBudget(): { totalBudget: number; maxAllowed: number; valid: boolean } {
+  const totalBudget = (WEB_REPLICA_COUNT * PG_POOL_MAX) + (SMS_WORKER_REPLICA_COUNT * PG_POOL_MAX);
+  const valid = totalBudget <= MAX_ALLOWED_DB_CONNECTIONS;
+
+  if (!valid && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `DB_CONNECTION_BUDGET_EXCEEDED: Configured pool budget (${totalBudget}) exceeds max allowed database connections (${MAX_ALLOWED_DB_CONNECTIONS}). ` +
+      `Web replicas (${WEB_REPLICA_COUNT} x ${PG_POOL_MAX}) + Worker replicas (${SMS_WORKER_REPLICA_COUNT} x ${PG_POOL_MAX}).`
+    );
+  }
+
+  return { totalBudget, maxAllowed: MAX_ALLOWED_DB_CONNECTIONS, valid };
+}
+
+export function getDbPoolMetrics() {
+  if (appPoolInstance) {
+    return {
+      totalCount: appPoolInstance.totalCount,
+      idleCount: appPoolInstance.idleCount,
+      waitingCount: appPoolInstance.waitingCount,
+      maxAllowed: PG_POOL_MAX,
+    };
+  }
+  return { totalCount: 0, idleCount: 0, waitingCount: 0, maxAllowed: PG_POOL_MAX };
+}
+
+export function isDbPoolOverloaded(): boolean {
+  if (!appPoolInstance) return false;
+  const activeCount = appPoolInstance.totalCount - appPoolInstance.idleCount;
+  return activeCount >= Math.floor(PG_POOL_MAX * 0.9);
+}
 
 export function getDb() {
   if (dbInstance) return dbInstance;
 
   if (env.DATABASE_URL) {
-    const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
+    validateDatabaseConnectionBudget();
+    const pool = new pg.Pool({
+      connectionString: env.DATABASE_URL,
+      max: PG_POOL_MAX,
+      min: PG_POOL_MIN,
+      idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
+      connectionTimeoutMillis: PG_CONNECTION_TIMEOUT_MS,
+      statement_timeout: PG_STATEMENT_TIMEOUT_MS,
+      idle_in_transaction_session_timeout: PG_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+      application_name: process.env.PG_APPLICATION_NAME || 'school_attendance_web',
+    });
+    appPoolInstance = pool;
     client = pool;
     dbInstance = drizzlePg(pool, { schema });
   } else {
@@ -38,13 +98,20 @@ function getSystemDb() {
     systemDbInstance = rawDb;
     return systemDbInstance;
   }
-  systemClient = new pg.Pool({ connectionString: env.SYSTEM_DATABASE_URL });
-  systemDbInstance = drizzlePg(systemClient, { schema });
+  systemPoolInstance = new pg.Pool({
+    connectionString: env.SYSTEM_DATABASE_URL,
+    max: PG_POOL_MAX,
+    min: PG_POOL_MIN,
+    idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: PG_CONNECTION_TIMEOUT_MS,
+    statement_timeout: PG_STATEMENT_TIMEOUT_MS,
+    idle_in_transaction_session_timeout: PG_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+    application_name: 'school_attendance_system',
+  });
+  systemDbInstance = drizzlePg(systemPoolInstance, { schema });
   return systemDbInstance;
 }
 
-// Services can continue using the shared `db` import while request middleware
-// transparently routes their queries to the request's tenant transaction.
 export const db = new Proxy(rawDb, {
   get(target, property, receiver) {
     const active = tenantTransaction.getStore();
@@ -65,7 +132,6 @@ export async function executeSql(sqlQuery: string) {
 
 export async function setTenantContext(schoolId: string) {
   if (!isUuid(schoolId)) throw new Error('INVALID_SCHOOL_ID');
-  // Kept for explicit scripts/tests; request handling uses withTenantContext.
   await rawDb.execute(sql`SELECT set_config('app.is_system', 'false', false), set_config('app.current_school_id', ${schoolId}, false)`);
 }
 
@@ -77,7 +143,6 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-/** Execute all tenant-sensitive work on one transaction/connection. */
 export async function withTenantContext<T>(schoolId: string, fn: (tx: any) => Promise<T>): Promise<T> {
   if (!isUuid(schoolId)) throw new Error('INVALID_SCHOOL_ID');
   const active = tenantTransaction.getStore();
@@ -92,11 +157,6 @@ export async function withTenantContext<T>(schoolId: string, fn: (tx: any) => Pr
   });
 }
 
-/**
- * Execute narrowly scoped authentication or background-worker work without
- * putting a non-UUID sentinel into app.current_school_id. Nested system work
- * reuses the active transaction rather than opening a second connection.
- */
 export async function withSystemContext<T>(fn: (tx: any) => Promise<T>): Promise<T> {
   const active = tenantTransaction.getStore();
   if (active) {
@@ -104,8 +164,16 @@ export async function withSystemContext<T>(fn: (tx: any) => Promise<T>): Promise
     return fn(active.tx);
   }
   return getSystemDb().transaction(async (tx: any) => {
-    // Never use values such as SYSTEM here: RLS policies must remain UUID-safe.
     await tx.execute(sql`SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)`);
     return tenantTransaction.run({ tx, mode: 'SYSTEM' }, () => fn(tx));
   });
+}
+
+export async function closeDatabasePools(): Promise<void> {
+  if (appPoolInstance) {
+    await appPoolInstance.end().catch(() => {});
+  }
+  if (systemPoolInstance) {
+    await systemPoolInstance.end().catch(() => {});
+  }
 }

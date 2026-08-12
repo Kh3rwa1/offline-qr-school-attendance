@@ -3,14 +3,9 @@ import { AuthenticatedRequest } from './authMiddleware';
 import { translate } from '../i18n';
 import { withTenantContext } from '../db';
 
-type CapturedResponse = {
-  method: 'json' | 'send' | 'end';
-  args: any[];
-};
-
 /**
- * Ensures tenant context is established inside the database session for RLS.
- * Intercepts response completion safely with fallback cleanup listeners on client disconnect or unhandled error.
+ * Backward compatibility tenant middleware wrapper.
+ * Opens database tenant context safely without response monkey-patching.
  */
 export async function requireTenant(
   req: AuthenticatedRequest,
@@ -18,7 +13,7 @@ export async function requireTenant(
   next: NextFunction,
 ) {
   if (!req.sessionContext) {
-    return res.status(401).json({ error: 'UNAUTHORIZED' });
+    return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   }
 
   const targetSchoolId =
@@ -28,11 +23,11 @@ export async function requireTenant(
     req.query?.schoolId;
 
   if (!targetSchoolId) {
-    return res.status(400).json({ error: 'MISSING_SCHOOL_ID', message: 'Target schoolId is required' });
+    return res.status(400).json({ success: false, error: 'MISSING_SCHOOL_ID', message: 'Target schoolId is required' });
   }
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(targetSchoolId))) {
-    return res.status(400).json({ error: 'INVALID_SCHOOL_ID' });
+    return res.status(400).json({ success: false, error: 'INVALID_SCHOOL_ID' });
   }
 
   const { memberships } = req.sessionContext;
@@ -42,12 +37,14 @@ export async function requireTenant(
   if (!isSuperAdmin) {
     if (!targetMembership) {
       return res.status(403).json({
+        success: false,
         error: 'CROSS_TENANT_DENIED',
         message: translate('crossTenantDenied', 'en'),
       });
     }
     if (targetMembership.status === 'SUSPENDED') {
       return res.status(403).json({
+        success: false,
         error: 'MEMBERSHIP_SUSPENDED',
         message: translate('suspendedAccount', 'en'),
       });
@@ -57,74 +54,13 @@ export async function requireTenant(
   req.activeSchoolId = String(targetSchoolId);
   req.userRole = targetMembership?.role || (isSuperAdmin ? 'SUPER_ADMIN' : undefined);
 
-  const originalJson = res.json.bind(res);
-  const originalSend = res.send.bind(res);
-  const originalEnd = res.end.bind(res);
-
-  let captured: CapturedResponse | null = null;
-  let resolveResponse!: (value: CapturedResponse) => void;
-  const responsePromise = new Promise<CapturedResponse>((resolve) => {
-    resolveResponse = resolve;
-  });
-
-  const restoreMethods = () => {
-    (res as any).json = originalJson;
-    (res as any).send = originalSend;
-    (res as any).end = originalEnd;
-  };
-
-  // Client disconnect listener
-  const onClose = () => {
-    if (!captured) {
-      captured = { method: 'end', args: [] };
-      resolveResponse(captured);
-    }
-  };
-  res.once('close', onClose);
-
-  (res as any).json = (...args: any[]) => {
-    if (!captured) {
-      captured = { method: 'json', args };
-      resolveResponse(captured);
-    }
-    return res;
-  };
-  (res as any).send = (...args: any[]) => {
-    if (!captured) {
-      captured = { method: 'send', args };
-      resolveResponse(captured);
-    }
-    return res;
-  };
-  (res as any).end = (...args: any[]) => {
-    if (!captured) {
-      captured = { method: 'end', args };
-      resolveResponse(captured);
-    }
-    return res;
-  };
-
   try {
-    const response = await withTenantContext(String(targetSchoolId), async () => {
+    await withTenantContext(String(targetSchoolId), async () => {
       next();
-      return responsePromise;
     });
-
-    restoreMethods();
-    res.removeListener('close', onClose);
-
-    if (response) {
-      if (response.method === 'json') originalJson(...response.args);
-      else if (response.method === 'send') originalSend(...response.args);
-      else originalEnd(...response.args);
-    }
-  } catch (error) {
-    restoreMethods();
-    res.removeListener('close', onClose);
-    console.error('Tenant transaction failed before response:', error);
+  } catch (error: any) {
     if (!res.headersSent) {
-      res.status(500);
-      originalJson({ error: 'TENANT_TRANSACTION_FAILED' });
+      res.status(500).json({ success: false, error: 'TENANT_TRANSACTION_FAILED' });
     }
   }
 }

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: school-attendance-worker
+  labels:
+    app: school-attendance-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: school-attendance-worker
+  template:
+    metadata:
+      labels:
+        app: school-attendance-worker
+    spec:
+      serviceAccountName: school-attendance-worker-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sms-worker
+          image: offline-qr-school-attendance:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/sms-worker.cjs"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - secretRef:
+                name: school-attendance-secrets
+            - configMapRef:
+                name: school-attendance-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: school-attendance-worker-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: school-attendance-worker

@@ -19,6 +19,17 @@ describe('Phase 3 — Database, RLS, & Migration Upgrade Integration Tests', () 
     expect(colCheck.rows[0].column_name).toBe('staged_data');
   });
 
+  it('verifies high-throughput scale indexes created by migration 0008 exist', async () => {
+    const idxCheck = await db.execute(sql`
+      SELECT indexname 
+      FROM pg_indexes 
+      WHERE schemaname = 'public' 
+        AND indexname IN ('idx_school_memberships_user_status', 'idx_guardians_school_phone', 'idx_attendance_events_session_time', 'idx_notification_jobs_status_next');
+    `);
+
+    expect(idxCheck.rows.length).toBe(4);
+  });
+
   it('verifies FORCE ROW LEVEL SECURITY is enabled on all protected tables', async () => {
     const rlsCheck = await db.execute(sql`
       SELECT relname AS tablename, relrowsecurity AS rowsecurity, relforcerowsecurity AS force_rowsecurity
@@ -45,9 +56,9 @@ describe('Phase 3 — Database, RLS, & Migration Upgrade Integration Tests', () 
     expect((count.rows[0] as any).cnt).toBe(0);
   });
 
-  it('verifies migration 0007 can be executed safely multiple times idempotently', async () => {
+  it('verifies migration 0008 can be executed safely multiple times idempotently', async () => {
     await expect(
-      db.execute(sql`ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS staged_data jsonb;`)
+      db.execute(sql`CREATE INDEX IF NOT EXISTS idx_school_memberships_user_status ON school_memberships(user_id, status, school_id);`)
     ).resolves.not.toThrow();
   });
 });

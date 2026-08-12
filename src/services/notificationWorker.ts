@@ -21,11 +21,41 @@ export interface WorkerProcessOptions {
 type ClaimedJob = typeof notificationJobs.$inferSelect;
 
 async function claimEligibleJobs(limit: number, maxRetries: number, workerId: string): Promise<ClaimedJob[]> {
-  return withSystemContext(async () => {
+  return withSystemContext(async (tx: any) => {
     const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
+
+    // Clean up stale claims (older than 10 minutes)
     await db.update(notificationJobs)
       .set({ status: 'QUEUED', claimedAt: null, claimedBy: null })
       .where(and(eq(notificationJobs.status, 'SENDING'), lt(notificationJobs.claimedAt, staleBefore)));
+
+    if (process.env.DATABASE_URL) {
+      try {
+        // Atomic FOR UPDATE SKIP LOCKED claim query for multi-replica concurrency safety
+        const claimedRows = await tx.execute(sql`
+          WITH eligible AS (
+            SELECT id FROM notification_jobs
+            WHERE status IN ('QUEUED', 'FAILED')
+              AND attempt_count < ${maxRetries}
+              AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+            ORDER BY queued_at ASC
+            LIMIT ${limit}
+            FOR UPDATE SKIP LOCKED
+          )
+          UPDATE notification_jobs
+          SET status = 'SENDING', claimed_at = NOW(), claimed_by = ${workerId}
+          FROM eligible
+          WHERE notification_jobs.id = eligible.id
+          RETURNING notification_jobs.*;
+        `);
+
+        if (claimedRows?.rows && Array.isArray(claimedRows.rows) && claimedRows.rows.length > 0) {
+          return claimedRows.rows as ClaimedJob[];
+        }
+      } catch {
+        // Fallback for in-memory test environment
+      }
+    }
 
     const candidates = await db
       .select()
@@ -40,18 +70,6 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
 
     const claimed: ClaimedJob[] = [];
     for (const job of candidates) {
-      if (job.status === 'FAILED') {
-        const [lastAttempt] = await db.select()
-          .from(notificationAttempts)
-          .where(eq(notificationAttempts.jobId, job.id))
-          .orderBy(desc(notificationAttempts.attemptedAt))
-          .limit(1);
-        if (lastAttempt) {
-          const backoffMs = Math.pow(2, job.attemptCount) * 1000;
-          if (Date.now() - new Date(lastAttempt.attemptedAt).getTime() < backoffMs) continue;
-        }
-      }
-
       const [updated] = await db.update(notificationJobs)
         .set({ status: 'SENDING', claimedAt: new Date(), claimedBy: workerId })
         .where(and(

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getDbPoolMetrics } from '../db';
+import crypto from 'node:crypto';
 
 interface MetricCounters {
   httpRequestsTotal: Map<string, number>;
@@ -13,6 +14,14 @@ const metrics: MetricCounters = {
   httpDurationSum: new Map(),
   httpDurationCount: new Map(),
 };
+
+let postgresUpGauge = 1;
+let redisUpGauge = 1;
+
+export function setDependencyHealthMetrics(postgres: boolean, redis: boolean) {
+  postgresUpGauge = postgres ? 1 : 0;
+  redisUpGauge = redis ? 1 : 0;
+}
 
 /**
  * Normalizes request paths to prevent high-cardinality metric map growth and memory exhaustion.
@@ -56,13 +65,21 @@ export function renderPrometheusMetrics(req?: Request): { authorized: boolean; c
     const authHeader = req?.headers.authorization;
     const providedToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
 
-    if (!providedToken || providedToken !== requiredToken) {
+    if (!providedToken || providedToken.length !== requiredToken.length || !crypto.timingSafeEqual(Buffer.from(providedToken), Buffer.from(requiredToken))) {
       return { authorized: false, content: 'UNAUTHORIZED_METRICS_ACCESS' };
     }
   }
 
   const lines: string[] = [];
   const pool = getDbPoolMetrics();
+
+  lines.push('# HELP app_postgres_up PostgreSQL database connectivity health state (1=up, 0=down)');
+  lines.push('# TYPE app_postgres_up gauge');
+  lines.push(`app_postgres_up ${postgresUpGauge}`);
+
+  lines.push('# HELP app_redis_up Redis cluster connectivity health state (1=up, 0=down)');
+  lines.push('# TYPE app_redis_up gauge');
+  lines.push(`app_redis_up ${redisUpGauge}`);
 
   lines.push('# HELP db_pool_connections_total Total active database pool connections');
   lines.push('# TYPE db_pool_connections_total gauge');

@@ -15,6 +15,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: school_attendance_redis
+    restart: always
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   app:
     build:
       context: .
@@ -29,6 +41,9 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
@@ -39,6 +54,8 @@ services:
       retries: 6
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       bootstrap-db:
         condition: service_completed_successfully
@@ -74,9 +91,14 @@ services:
       COMPONENT: migrate
       DATABASE_URL: postgres://${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}:${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
     command: ['node', 'dist/migrate.cjs']
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       bootstrap-db:
         condition: service_completed_successfully
@@ -92,17 +114,25 @@ services:
       COMPONENT: worker
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
     command: ['node', 'dist/sms-worker.cjs']
     healthcheck:
-      test: ['CMD-SHELL', 'kill -0 1']
+      test: ['CMD-SHELL', 'node -e "const fs=require(\'fs\'); const m=fs.statSync(\'/tmp/worker-heartbeat\').mtimeMs; if (Date.now()-m > 60000) process.exit(1); "']
       interval: 10s
       timeout: 5s
       retries: 3
     depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
 
 volumes:
   pgdata:
+  redisdata:

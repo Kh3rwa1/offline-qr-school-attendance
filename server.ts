@@ -16,10 +16,24 @@ import reportRouter from './src/routes/reportRoutes';
 import auditRouter from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { executeSql } from './src/db/index';
+import { runMigrations } from './src/db/migrate';
+import { seedDatabase } from './src/db/seed';
 
 async function startServer() {
   const app = express();
   const PORT = parseInt(env.PORT || '3000', 10);
+
+  // Initialize in-memory database when DATABASE_URL is omitted (development mode)
+  if (!env.DATABASE_URL) {
+    try {
+      console.log('Running in-memory database migrations and seed...');
+      await runMigrations();
+      await seedDatabase();
+      console.log('In-memory database initialized successfully!');
+    } catch (err) {
+      console.error('Failed to initialize in-memory database:', err);
+    }
+  }
 
   // 1. Security Headers & CSP Middleware
   app.use((req, res, next) => {

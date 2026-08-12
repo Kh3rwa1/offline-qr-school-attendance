@@ -4,14 +4,6 @@ import { redactPhoneNumber } from './smsUtils';
 
 /**
  * Production Indian DLT-compliant SMS Gateway Provider Adapter (e.g. Jio DLT / MSG91 / Textlocal DLT format)
- * Supports:
- * - Principal Entity ID (`dltPrincipalEntityId`)
- * - Approved Sender ID (`dltHeader`)
- * - Template ID (`dltTemplateId`)
- * - Template variable validation
- * - Vendor Idempotency Keys (`jobId` / `idempotencyKey`)
- * - Callback signature validation (HMAC-SHA256)
- * - Monotonic status transitions & payload sanitization
  */
 export class DltSmsProvider implements SmsProvider {
   readonly name = 'dlt';
@@ -23,6 +15,16 @@ export class DltSmsProvider implements SmsProvider {
   ) {}
 
   async sendSms(params: SmsSendParams): Promise<SmsSendResult> {
+    // Fail closed in production mode if credentials are defaults
+    if (process.env.NODE_ENV === 'production' && (this.apiKey === 'dlt-key' || this.webhookSecret === 'dlt-webhook-secret')) {
+      console.error('[DltSmsProvider] Unconfigured placeholder credentials in production mode!');
+      return {
+        success: false,
+        error: 'DLT_CREDENTIALS_NOT_CONFIGURED',
+        isPermanentFailure: true,
+      };
+    }
+
     if (!params.to || !params.message) {
       return {
         success: false,
@@ -52,30 +54,71 @@ export class DltSmsProvider implements SmsProvider {
     }
 
     const idempotencyKey = params.jobId || Math.random().toString(36).substring(2, 10);
-    const providerMessageId = `dlt-${idempotencyKey}-${Date.now()}`;
-
-    // Log redacted payload
     console.log(`[DltSmsProvider] Submitting SMS to ${redactPhoneNumber(cleanPhone)} | Header: ${dltHeader} | EntityID: ${dltPrincipalEntityId} | IdempotencyKey: ${idempotencyKey}`);
 
-    return {
-      success: true,
-      providerMessageId,
-    };
+    const gatewayUrl = process.env.DLT_SMS_GATEWAY_URL || 'https://api.dlt-sms-gateway.com/v1/send';
+
+    try {
+      const resp = await fetch(gatewayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'X-DLT-Header': dltHeader,
+          'X-DLT-Entity-ID': dltPrincipalEntityId,
+        },
+        body: JSON.stringify({
+          to: cleanPhone,
+          message: params.message,
+          dltTemplateId: params.dltTemplateId,
+          idempotencyKey,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        return {
+          success: false,
+          error: `GATEWAY_HTTP_${resp.status}: ${errText.slice(0, 100)}`,
+          isPermanentFailure: resp.status >= 400 && resp.status < 500,
+        };
+      }
+
+      const resData = (await resp.json().catch(() => ({}))) as any;
+      const providerMessageId = resData.providerMessageId || `dlt-${idempotencyKey}-${Date.now()}`;
+
+      return {
+        success: true,
+        providerMessageId,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: `GATEWAY_NETWORK_ERROR: ${err.message}`,
+        isPermanentFailure: false,
+      };
+    }
   }
 
-  async verifyCallback(headers: Record<string, any>, body: any): Promise<CallbackVerificationResult> {
+  async verifyCallback(headers: Record<string, any>, body: any, rawBody?: string | Buffer): Promise<CallbackVerificationResult> {
     const signature = headers['x-dlt-signature'] || headers['X-Dlt-Signature'];
     if (!signature) {
       return { valid: false, error: 'MISSING_SIGNATURE_HEADER' };
     }
 
-    const rawBody = typeof body === 'string' ? body : JSON.stringify(body);
+    const payloadToSign = rawBody
+      ? (typeof rawBody === 'string' ? rawBody : rawBody.toString('utf-8'))
+      : (typeof body === 'string' ? body : JSON.stringify(body));
+
     const expectedSignature = crypto
       .createHmac('sha256', this.webhookSecret)
-      .update(rawBody)
+      .update(payloadToSign)
       .digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+    const sigBuf = Buffer.from(String(signature));
+    const expBuf = Buffer.from(expectedSignature);
+
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       return { valid: false, error: 'INVALID_CALLBACK_SIGNATURE' };
     }
 

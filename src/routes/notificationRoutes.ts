@@ -30,7 +30,8 @@ router.post('/callback', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'UNKNOWN_PROVIDER', message: `Unknown SMS provider: ${providerName}` });
   }
 
-  const verification = await provider.verifyCallback(req.headers, req.body);
+  const rawBody = (req as any).rawBody || req.body;
+  const verification = await provider.verifyCallback(req.headers, req.body, rawBody);
   if (!verification.valid) {
     return res.status(401).json({
       error: 'INVALID_CALLBACK_AUTH',
@@ -62,7 +63,8 @@ router.post('/callback', async (req: Request, res: Response) => {
     });
   }
 
-  if (job.status === 'DELIVERED' && status === 'DELIVERED') {
+  // Monotonic State Transition Protection: DELIVERED is terminal. Late FAILED callback must not overwrite DELIVERED.
+  if (job.status === 'DELIVERED') {
     return res.status(200).json({
       status: 'ALREADY_DELIVERED',
       jobId: job.id,
@@ -71,14 +73,20 @@ router.post('/callback', async (req: Request, res: Response) => {
     });
   }
 
+  const sanitizedBody = {
+    ...req.body,
+    to: req.body?.to ? redactPhoneNumber(req.body.to) : undefined,
+    phoneNumber: req.body?.phoneNumber ? redactPhoneNumber(req.body.phoneNumber) : undefined,
+  };
+
   await withTenantContext(job.schoolId, async () => {
     if (status === 'DELIVERED') {
       const deliveryTimestamp = deliveredAt || new Date();
       await db.update(notificationJobs).set({ status: 'DELIVERED', deliveredAt: deliveryTimestamp }).where(and(eq(notificationJobs.id, job.id), eq(notificationJobs.schoolId, job.schoolId)));
-      await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount, status: 'DELIVERED', responsePayload: { providerMessageId, status: 'DELIVERED', callbackPayload: req.body } });
+      await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount, status: 'DELIVERED', responsePayload: { providerMessageId, status: 'DELIVERED', callbackPayload: sanitizedBody } });
     } else if (status === 'FAILED') {
       await db.update(notificationJobs).set({ status: 'PERMANENT_FAILURE', failureReason: failureReason || 'CALLBACK_DELIVERY_FAILED' }).where(and(eq(notificationJobs.id, job.id), eq(notificationJobs.schoolId, job.schoolId)));
-      await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount, status: 'PERMANENT_FAILURE', errorMessage: failureReason || 'CALLBACK_DELIVERY_FAILED', responsePayload: { callbackPayload: req.body } });
+      await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount, status: 'PERMANENT_FAILURE', errorMessage: failureReason || 'CALLBACK_DELIVERY_FAILED', responsePayload: { callbackPayload: sanitizedBody } });
     }
   });
 

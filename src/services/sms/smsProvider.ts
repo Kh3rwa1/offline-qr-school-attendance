@@ -56,7 +56,7 @@ export interface SmsProvider {
   /**
    * Verifies authenticity/signature of incoming delivery callback.
    */
-  verifyCallback(headers: Record<string, any>, body: any): Promise<CallbackVerificationResult>;
+  verifyCallback(headers: Record<string, any>, body: any, rawBody?: string | Buffer): Promise<CallbackVerificationResult>;
 
   /**
    * Parses callback payload into normalized delivery status payload.
@@ -134,7 +134,7 @@ export class FakeSmsProvider implements SmsProvider {
     };
   }
 
-  async verifyCallback(headers: Record<string, any>, body: any): Promise<CallbackVerificationResult> {
+  async verifyCallback(headers: Record<string, any>, body: any, _rawBody?: string | Buffer): Promise<CallbackVerificationResult> {
     const authHeader = headers['x-callback-auth-token'] || headers['X-Callback-Auth-Token'] || body?.authToken;
     if (authHeader !== this.callbackSecretToken) {
       return { valid: false, error: 'INVALID_CALLBACK_AUTH' };
@@ -181,7 +181,7 @@ export class ConsoleSmsProvider implements SmsProvider {
     };
   }
 
-  async verifyCallback(headers: Record<string, any>, body: any): Promise<CallbackVerificationResult> {
+  async verifyCallback(headers: Record<string, any>, body: any, _rawBody?: string | Buffer): Promise<CallbackVerificationResult> {
     const authHeader = headers['x-callback-auth-token'] || body?.authToken;
     if (authHeader !== this.secretToken) {
       return { valid: false, error: 'INVALID_CALLBACK_AUTH' };

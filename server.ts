@@ -21,13 +21,25 @@ export async function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
+  // Body and cookie parsing middleware with rawBody preservation
+  app.use(
+    express.json({
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
+  app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
+
   // 1. Security Headers & CSP Middleware
   app.use((req, res, next) => {
-    // Content Security Policy
-    res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data:; frame-ancestors 'self';"
-    );
+    const cspScriptSrc =
+      process.env.NODE_ENV === 'production'
+        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data:; frame-ancestors 'self';"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data:; frame-ancestors 'self';";
+
+    res.setHeader('Content-Security-Policy', cspScriptSrc);
     // HSTS (Strict-Transport-Security) - 1 year
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     // Anti-Clickjacking
@@ -40,6 +52,32 @@ export async function createApp() {
     if (req.path.startsWith('/api/')) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.setHeader('Pragma', 'no-cache');
+    }
+    next();
+  });
+
+  // CSRF Protection for state-changing requests authenticated via cookies
+  app.use((req, res, next) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.cookies?.session) {
+      const origin = req.headers.origin || req.headers.referer;
+      const host = req.headers.host;
+
+      if (origin && host) {
+        try {
+          const originHost = new URL(origin).host;
+          if (originHost !== host) {
+            return res.status(403).json({
+              error: 'CSRF_ORIGIN_MISMATCH',
+              message: 'Cross-site request forgery protection block',
+            });
+          }
+        } catch {
+          return res.status(403).json({
+            error: 'INVALID_ORIGIN_HEADER',
+            message: 'Invalid origin header on mutating request',
+          });
+        }
+      }
     }
     next();
   });
@@ -63,7 +101,7 @@ export async function createApp() {
   }, 5 * 60 * 1000);
   if (cleanupTimer.unref) cleanupTimer.unref();
 
-  // Strict Login Rate Limiter Middleware
+  // Strict Login Rate Limiter Middleware (Runs AFTER express.json() so req.body.phoneNumber is present)
   app.use('/api/v1/auth/login', (req, res, next) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const phone = req.body?.phoneNumber || '';
@@ -86,9 +124,7 @@ export async function createApp() {
   });
 
   app.use('/api/v1', (req, res, next) => {
-    const rawForwarded = req.headers['x-forwarded-for'];
-    const forwardedIp = typeof rawForwarded === 'string' ? rawForwarded.split(',')[0].trim() : Array.isArray(rawForwarded) ? rawForwarded[0] : null;
-    const ip = (req.headers['cf-connecting-ip'] as string) || (req.headers['x-real-ip'] as string) || forwardedIp || req.socket.remoteAddress || 'unknown';
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const now = Date.now();
     const rateData = ipRequests.get(ip);
 
@@ -105,11 +141,6 @@ export async function createApp() {
       next();
     }
   });
-
-  // Body and cookie parsing middleware
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-  app.use(cookieParser());
 
   // Database migrations and seed data are deployment concerns. Run
   // `npm run migrate` and, only for an explicit development environment,

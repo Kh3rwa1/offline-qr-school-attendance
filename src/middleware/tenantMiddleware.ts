@@ -9,10 +9,8 @@ type CapturedResponse = {
 };
 
 /**
- * Express 4 does not await async route handlers. The response methods are
- * therefore buffered while the route runs inside the tenant transaction; the
- * response is emitted only after the transaction has committed. This prevents
- * a successful response from racing a failed commit.
+ * Ensures tenant context is established inside the database session for RLS.
+ * Intercepts response completion safely with fallback cleanup listeners on client disconnect or unhandled error.
  */
 export async function requireTenant(
   req: AuthenticatedRequest,
@@ -26,8 +24,8 @@ export async function requireTenant(
   const targetSchoolId =
     req.params.schoolId ||
     (req.headers['x-school-id'] as string) ||
-    req.body.schoolId ||
-    req.query.schoolId;
+    req.body?.schoolId ||
+    req.query?.schoolId;
 
   if (!targetSchoolId) {
     return res.status(400).json({ error: 'MISSING_SCHOOL_ID', message: 'Target schoolId is required' });
@@ -62,9 +60,27 @@ export async function requireTenant(
   const originalJson = res.json.bind(res);
   const originalSend = res.send.bind(res);
   const originalEnd = res.end.bind(res);
+
   let captured: CapturedResponse | null = null;
   let resolveResponse!: (value: CapturedResponse) => void;
-  const responsePromise = new Promise<CapturedResponse>((resolve) => { resolveResponse = resolve; });
+  const responsePromise = new Promise<CapturedResponse>((resolve) => {
+    resolveResponse = resolve;
+  });
+
+  const restoreMethods = () => {
+    (res as any).json = originalJson;
+    (res as any).send = originalSend;
+    (res as any).end = originalEnd;
+  };
+
+  // Client disconnect listener
+  const onClose = () => {
+    if (!captured) {
+      captured = { method: 'end', args: [] };
+      resolveResponse(captured);
+    }
+  };
+  res.once('close', onClose);
 
   (res as any).json = (...args: any[]) => {
     if (!captured) {
@@ -94,17 +110,17 @@ export async function requireTenant(
       return responsePromise;
     });
 
-    (res as any).json = originalJson;
-    (res as any).send = originalSend;
-    (res as any).end = originalEnd;
+    restoreMethods();
+    res.removeListener('close', onClose);
 
-    if (response.method === 'json') originalJson(...response.args);
-    else if (response.method === 'send') originalSend(...response.args);
-    else originalEnd(...response.args);
+    if (response) {
+      if (response.method === 'json') originalJson(...response.args);
+      else if (response.method === 'send') originalSend(...response.args);
+      else originalEnd(...response.args);
+    }
   } catch (error) {
-    (res as any).json = originalJson;
-    (res as any).send = originalSend;
-    (res as any).end = originalEnd;
+    restoreMethods();
+    res.removeListener('close', onClose);
     console.error('Tenant transaction failed before response:', error);
     if (!res.headersSent) {
       res.status(500);

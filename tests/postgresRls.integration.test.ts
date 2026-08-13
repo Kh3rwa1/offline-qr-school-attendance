@@ -68,7 +68,10 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     process.env.DATABASE_URL = appUrl!;
     process.env.SYSTEM_DATABASE_URL = systemUrl!;
     process.env.AUTH_DATABASE_URL = process.env.PG_RLS_AUTH_DATABASE_URL || migrationUrl!;
-    process.env.SESSION_SECRET = 'integration-test-session-secret-0123456789';
+    process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'integration-test-session-secret-01234567890123456789';
+    process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'integration-test-metrics-token-01234567890123456789';
+    process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'integration-test-redis-hmac-secret-0123456789';
+    process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'integration-test-rfid-hmac-secret-0123456789';
     process.env.SMS_PROVIDER = 'fake';
     process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
     const { createApp } = await import('../server');

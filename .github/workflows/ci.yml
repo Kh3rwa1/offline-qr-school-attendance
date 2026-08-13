@@ -40,14 +40,14 @@ jobs:
       - name: Build Web Bundle & Worker Service
         run: npm run build
 
-      - name: Generate CycloneDX npm Software Bill of Materials (SBOM)
-        run: npx @cyclonedx/cyclonedx-npm --output-file output/sbom.cdx.json
+      - name: Generate CycloneDX 1.4 Software Bill of Materials (SBOM)
+        run: npx tsx scripts/generate-sbom.ts
 
       - name: Upload npm SBOM Artifact
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: sbom-cdx-npm
-          path: output/sbom.cdx.json
+          path: sbom.json
           if-no-files-found: error
 
   security-scan:

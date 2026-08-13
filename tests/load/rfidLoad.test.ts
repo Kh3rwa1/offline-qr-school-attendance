@@ -9,6 +9,8 @@ import { computeCanonicalSignature } from '../../src/services/rfid/cryptoService
 import { db } from '../../src/db';
 import { students } from '../../src/db/schema';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 describe('RFID Multi-Tenant Load & Endurance Certification Suite', () => {
   let schoolAId: string;
@@ -71,10 +73,10 @@ describe('RFID Multi-Tenant Load & Endurance Certification Suite', () => {
     credentialDigestA = credA.credentialDigest;
   });
 
-  function buildEnvelope(schoolId: string, readerId: string, credentialDigest: string, index: number) {
+  function buildEnvelope(schoolId: string, readerId: string, credentialDigest: string, index: number, runPrefix: string = 'r1') {
     const timestamp = new Date().toISOString();
-    const nonce = `nonce_load_${schoolId}_${index}_${Date.now()}_${Math.random()}`;
-    const clientEventId = `evt_load_${schoolId}_${index}_${Date.now()}_${Math.random()}`;
+    const nonce = `nonce_load_${schoolId}_${runPrefix}_${index}_${Date.now()}_${Math.random()}`;
+    const clientEventId = `evt_load_${schoolId}_${runPrefix}_${index}_${Date.now()}_${Math.random()}`;
     const proofPayload = `secure-proof-v1:${credentialDigest}:${nonce}:${timestamp}`;
     const secureProof = crypto.createHmac('sha256', secret).update(proofPayload).digest('hex');
 
@@ -143,13 +145,41 @@ describe('RFID Multi-Tenant Load & Endurance Certification Suite', () => {
     expect(resultsB.length).toBe(25);
   });
 
-  it('Offline 5,000-event batch sync processing benchmark', async () => {
-    const offlineEvents = Array.from({ length: 5000 }, (_, i) => buildEnvelope(schoolAId, readerAId, `digest_offline_${i}`, i));
-    const startTime = Date.now();
-    const results = await offlineService.syncOfflineEvents(schoolAId, offlineEvents as any);
-    const elapsed = Date.now() - startTime;
+  it('Offline 5,000-event batch sync processing benchmark across 3 measured runs', async () => {
+    const runs: { run: number; durationMs: number; rps: number }[] = [];
 
-    expect(results.length).toBe(5000);
-    expect(elapsed).toBeLessThan(10000);
+    // Warm-up run
+    const warmupEvents = Array.from({ length: 500 }, (_, i) => buildEnvelope(schoolAId, readerAId, `digest_warm_${i}`, i, 'warm'));
+    await offlineService.syncOfflineEvents(schoolAId, warmupEvents as any);
+
+    for (let runIdx = 1; runIdx <= 3; runIdx++) {
+      const offlineEvents = Array.from({ length: 5000 }, (_, i) => buildEnvelope(schoolAId, readerAId, `digest_offline_${i}`, i, `run${runIdx}`));
+      const startTime = Date.now();
+      const results = await offlineService.syncOfflineEvents(schoolAId, offlineEvents as any);
+      const elapsed = Date.now() - startTime;
+
+      expect(results.length).toBe(5000);
+      expect(elapsed).toBeLessThan(10000);
+
+      runs.push({
+        run: runIdx,
+        durationMs: elapsed,
+        rps: Number((5000 / (elapsed / 1000)).toFixed(2)),
+      });
+    }
+
+    const outputDir = path.join(process.cwd(), 'output');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      eventCount: 5000,
+      targetThresholdMs: 10000,
+      measuredRuns: runs,
+      allRunsPassed: runs.every((r) => r.durationMs < 10000),
+    };
+
+    fs.writeFileSync(path.join(outputDir, 'rfid-5k-performance-report.json'), JSON.stringify(reportData, null, 2));
+    expect(reportData.allRunsPassed).toBe(true);
   });
 });

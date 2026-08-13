@@ -11,13 +11,26 @@ export async function runLoadSmokeBenchmark() {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  // 1. Run migrations and seed/setup with fail-closed error handling
   try {
     const { runMigrations } = await import('../src/db/migrate');
     const { seedDatabase } = await import('../src/db/seed');
     await runMigrations();
     await seedDatabase();
   } catch (err: any) {
-    console.warn('Migration/seed setup warning during load smoke benchmark:', err.message);
+    const failureReport = {
+      phase: 'ENVIRONMENT_SETUP',
+      errorType: err.name || 'SETUP_ERROR',
+      message: err.message || 'Migration or database seed failed',
+      timestamp: new Date().toISOString(),
+      compliancePassed: false,
+    };
+    fs.writeFileSync(
+      path.join(outputDir, 'load-smoke-report.json'),
+      JSON.stringify(failureReport, null, 2)
+    );
+    console.error('Migration/seed setup failed during load smoke benchmark:', err);
+    throw new Error(`LOAD_SMOKE_SETUP_FAILED: ${err.message}`);
   }
 
   let report: any;

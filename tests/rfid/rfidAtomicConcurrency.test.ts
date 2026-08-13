@@ -6,7 +6,7 @@ import { computeCanonicalSignature } from '../../src/services/rfid/cryptoService
 import { runMigrations } from '../../src/db/migrate';
 import { seedDatabase } from '../../src/db/seed';
 import { db } from '../../src/db';
-import { students, attendanceSessions, rfidScanEvents } from '../../src/db/schema';
+import { students, attendanceSessions, rfidScanEvents, attendanceRecords, attendanceEvents } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -123,6 +123,18 @@ describe('RFID Atomic Replay & Concurrency Suite', () => {
       .from(rfidScanEvents)
       .where(and(eq(rfidScanEvents.schoolId, schoolAId), eq(rfidScanEvents.clientEventId, eventId)));
     expect(dbEvents).toHaveLength(1);
+
+    const dbAttEvents = await db
+      .select()
+      .from(attendanceEvents)
+      .where(and(eq(attendanceEvents.schoolId, schoolAId), eq(attendanceEvents.studentId, fixture.studentId)));
+    expect(dbAttEvents).toHaveLength(1);
+
+    const dbRecords = await db
+      .select()
+      .from(attendanceRecords)
+      .where(and(eq(attendanceRecords.schoolId, schoolAId), eq(attendanceRecords.studentId, fixture.studentId)));
+    expect(dbRecords).toHaveLength(1);
   });
 
   it('Rejects duplicate nonce submission with different event payload', async () => {

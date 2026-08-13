@@ -59,11 +59,17 @@ export const readerAuthMiddleware = async (
 
     // Strict mTLS certificate fingerprint verification for certificate-bound readers
     if (reader.certificateFingerprint || process.env.RFID_ENFORCE_INGRESS_MTLS === 'true') {
+      const ingressSecret = req.headers['x-trusted-ingress-secret'] as string;
+      const expectedIngressSecret = process.env.TRUSTED_INGRESS_SECRET;
+
+      if (expectedIngressSecret && ingressSecret !== expectedIngressSecret) {
+        return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'UNTRUSTED_INGRESS_PROXY' });
+      }
+
       const certFingerprint =
+        (req.headers['x-ingress-verified-reader-fingerprint'] as string) ||
         (req.headers['x-client-cert-fingerprint'] as string) ||
-        (req.headers['ssl-client-fingerprint'] as string) ||
-        (req.headers['x-ssl-cert-sha256-fingerprint'] as string) ||
-        (req.headers['x-reader-cert-fingerprint'] as string);
+        (req.headers['ssl-client-fingerprint'] as string);
 
       if (!certFingerprint || (reader.certificateFingerprint && certFingerprint.toLowerCase() !== reader.certificateFingerprint.toLowerCase())) {
         return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'READER_MTLS_CERTIFICATE_MISMATCH' });

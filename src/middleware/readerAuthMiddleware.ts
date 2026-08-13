@@ -22,15 +22,16 @@ export const readerAuthMiddleware = async (
   next: NextFunction
 ) => {
   try {
-    const readerId = (req.headers['x-reader-id'] as string) || req.body?.readerId;
-    const readerSignature = (req.headers['x-reader-signature'] as string) || req.body?.signature;
-    const readerTimestamp = (req.headers['x-reader-timestamp'] as string) || req.body?.readerTimestamp;
+    const body = req.body || {};
+    const readerId = (req.headers['x-reader-id'] as string) || body.readerId;
+    const readerSignature = (req.headers['x-reader-signature'] as string) || body.signature;
+    const readerTimestamp = (req.headers['x-reader-timestamp'] as string) || body.readerTimestamp;
 
     if (!readerId || !readerSignature || !readerTimestamp) {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Missing reader credentials or signature headers' });
     }
 
-    const schoolId = req.params.schoolId || req.body?.schoolId;
+    const schoolId = req.params.schoolId || body.schoolId;
     if (!schoolId) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing schoolId' });
     }
@@ -55,28 +56,31 @@ export const readerAuthMiddleware = async (
       return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'Reader is suspended or revoked' });
     }
 
-    // Determine reader secret (global RFID_HMAC_SECRET). Fail closed if missing in non-test.
-    const hmacSecret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    // Determine reader secret (per-reader secret or fallback global RFID_HMAC_SECRET). Fail closed if missing in non-test.
+    const hmacSecret =
+      reader.sharedSecretEncrypted ||
+      process.env.RFID_HMAC_SECRET ||
+      (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
     if (!hmacSecret) {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'No cryptographic secret configured for reader authentication' });
     }
 
     // Construct normalized scan envelope object for canonical signature verification
     const normalizedEnvelope = {
-      version: req.body.version || 1,
+      version: body.version || 1,
       schoolId,
       readerId: reader.id,
-      credentialDigest: req.body.credentialDigest,
-      secureProof: req.body.secureProof,
+      credentialDigest: body.credentialDigest,
+      secureProof: body.secureProof,
       readerTimestamp,
-      sequenceNumber: req.body.sequenceNumber,
-      nonce: req.body.nonce,
-      direction: req.body.direction || 'NONE',
-      attendanceSessionId: req.body.attendanceSessionId,
-      securityMode: req.body.securityMode || 'SECURE',
+      sequenceNumber: body.sequenceNumber,
+      nonce: body.nonce,
+      direction: body.direction || 'NONE',
+      attendanceSessionId: body.attendanceSessionId,
+      securityMode: body.securityMode || 'SECURE',
       signature: readerSignature,
-      clientEventId: req.body.clientEventId,
-      isOffline: req.body.isOffline || false,
+      clientEventId: body.clientEventId,
+      isOffline: body.isOffline || false,
     };
 
     const isValidSignature = verifyEnvelopeSignature(normalizedEnvelope, readerSignature, hmacSecret);
@@ -86,8 +90,13 @@ export const readerAuthMiddleware = async (
     }
 
     // Dynamic reader capabilities based on DB security capability
-    const capStr = reader.securityCapability || 'UID_ONLY';
-    const isSecureCap = capStr.includes('SECURE') || capStr.includes('MUTUAL');
+    const capStr = (reader.securityCapability || 'UID_ONLY').toUpperCase();
+    const isSecureCap =
+      capStr.includes('SECURE') ||
+      capStr.includes('MUTUAL') ||
+      capStr.includes('DESFIRE') ||
+      capStr.includes('EV2') ||
+      capStr.includes('EV3');
 
     req.readerContext = {
       readerId: reader.id,

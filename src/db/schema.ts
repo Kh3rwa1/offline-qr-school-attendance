@@ -602,6 +602,7 @@ export const rfidReaders = pgTable(
     adapterType: rfidAdapterTypeEnum('adapter_type').notNull().default('GATEWAY'),
     securityCapability: varchar('security_capability', { length: 100 }).notNull().default('UID_ONLY'),
     certificateFingerprint: varchar('certificate_fingerprint', { length: 255 }),
+    sharedSecretEncrypted: varchar('shared_secret_encrypted', { length: 512 }),
     status: rfidReaderStatusEnum('status').notNull().default('PENDING'),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     keyVersion: integer('key_version').notNull().default(1),

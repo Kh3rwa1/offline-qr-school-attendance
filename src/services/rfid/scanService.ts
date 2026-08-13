@@ -1,5 +1,5 @@
 import { db } from '../../db';
-import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions } from '../../db/schema';
+import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { isReaderAuthorized, getReaderById } from './readerService';
 import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
@@ -77,7 +77,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('READER_REVOKED', 'READER_REVOKED');
   }
 
-  const secret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+  const [readerObj] = await db.select().from(rfidReaders).where(and(eq(rfidReaders.id, envelope.readerId)));
+  const secret =
+    readerObj?.sharedSecretEncrypted ||
+    process.env.RFID_HMAC_SECRET ||
+    (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
   if (!secret) {
     throw new Error('RFID_HMAC_SECRET is missing in server configuration');
   }

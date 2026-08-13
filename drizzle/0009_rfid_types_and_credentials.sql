@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS rfid_readers (
   adapter_type rfid_adapter_type NOT NULL DEFAULT 'GATEWAY',
   security_capability VARCHAR(100) NOT NULL DEFAULT 'UID_ONLY',
   certificate_fingerprint VARCHAR(255),
+  shared_secret_encrypted VARCHAR(512),
   status rfid_reader_status NOT NULL DEFAULT 'PENDING',
   last_seen_at TIMESTAMPTZ,
   key_version INTEGER NOT NULL DEFAULT 1,

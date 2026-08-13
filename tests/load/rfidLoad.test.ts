@@ -144,12 +144,12 @@ describe('RFID Multi-Tenant Load & Endurance Certification Suite', () => {
   });
 
   it('Offline 5,000-event batch sync processing benchmark', async () => {
-    const offlineEvents = Array.from({ length: 100 }, (_, i) => buildEnvelope(schoolAId, readerAId, `digest_offline_${i}`, i));
+    const offlineEvents = Array.from({ length: 5000 }, (_, i) => buildEnvelope(schoolAId, readerAId, `digest_offline_${i}`, i));
     const startTime = Date.now();
     const results = await offlineService.syncOfflineEvents(schoolAId, offlineEvents as any);
     const elapsed = Date.now() - startTime;
 
-    expect(results.length).toBe(100);
-    expect(elapsed).toBeLessThan(5000);
+    expect(results.length).toBe(5000);
+    expect(elapsed).toBeLessThan(10000);
   });
 });

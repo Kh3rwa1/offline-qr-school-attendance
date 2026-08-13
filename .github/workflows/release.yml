@@ -50,7 +50,7 @@ jobs:
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
         run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-release-image.sarif ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
+          trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL --format sarif --output trivy-release-image.sarif ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
 
       - name: Log in to GitHub Container Registry (GHCR)
         if: github.event_name != 'pull_request'

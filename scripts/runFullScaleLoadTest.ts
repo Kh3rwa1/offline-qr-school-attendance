@@ -249,7 +249,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/classes/${t.classSectionId}/offline-roster`, {
-          headers: { 'x-device-identifier': t.deviceIdentifier || '' },
+          headers: { Cookie: t.authCookie || '', 'x-device-identifier': t.deviceIdentifier || '' },
         });
       },
       concurrency: isFullScale ? 120 : 10,
@@ -272,10 +272,10 @@ export async function runFullScaleLoadTest(
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/qr/reissue`, {
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/qr/verify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
-          body: JSON.stringify({ studentId: t.studentId }),
+          body: JSON.stringify({ rawToken: `sample-token-${index}` }),
         });
       },
       concurrency: isFullScale ? 120 : 10,
@@ -285,21 +285,18 @@ export async function runFullScaleLoadTest(
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        const clientSessionId = `sess-bench-${index}-${Date.now()}`;
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-batch`, {
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
           body: JSON.stringify({
-            clientSessionId,
-            classSectionId: t.classSectionId,
-            sessionDate: new Date().toISOString().split('T')[0],
+            deviceIdentifier: t.deviceIdentifier || 'device-1',
             events: [
               {
                 clientEventId: `evt-${index}-1`,
                 studentId: t.studentId,
-                rawToken: `token-${index}`,
-                scannedAt: new Date().toISOString(),
-                scanSource: 'USB',
+                clientTimestamp: new Date().toISOString(),
+                eventType: 'QR_SCANNED',
+                statusValue: 'PRESENT',
               },
             ],
           }),
@@ -312,21 +309,18 @@ export async function runFullScaleLoadTest(
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        const clientSessionId = `sess-replay-${index % 50}`;
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-batch`, {
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
           body: JSON.stringify({
-            clientSessionId,
-            classSectionId: t.classSectionId,
-            sessionDate: new Date().toISOString().split('T')[0],
+            deviceIdentifier: t.deviceIdentifier || 'device-1',
             events: [
               {
                 clientEventId: `evt-replay-${index % 50}`,
                 studentId: t.studentId,
-                rawToken: `token-replay-${index % 50}`,
-                scannedAt: new Date().toISOString(),
-                scanSource: 'USB',
+                clientTimestamp: new Date().toISOString(),
+                eventType: 'QR_SCANNED',
+                statusValue: 'PRESENT',
               },
             ],
           }),
@@ -339,7 +333,7 @@ export async function runFullScaleLoadTest(
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/reports/daily-summary?date=${new Date().toISOString().split('T')[0]}`, {
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/sessions`, {
           headers: { Cookie: t.authCookie || '' },
         });
       },
@@ -350,8 +344,8 @@ export async function runFullScaleLoadTest(
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/notifications/queue-status`, {
-          headers: { Cookie: t.authCookie || '' },
+        return fetch(`${baseUrl}/api/v1/notifications/history/${t.studentId}`, {
+          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId },
         });
       },
       concurrency: isFullScale ? 100 : 10,

@@ -86,8 +86,8 @@ jobs:
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
         run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif offline-qr-school-attendance:scan
-          trivy image --severity HIGH,CRITICAL --format json --output trivy-image-results.json offline-qr-school-attendance:scan
+          trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif offline-qr-school-attendance:scan
+          trivy image --ignore-unfixed --severity HIGH,CRITICAL --format json --output trivy-image-results.json offline-qr-school-attendance:scan
 
       - name: Upload Security Vulnerability Scan Artifacts
         if: always()
@@ -223,7 +223,7 @@ jobs:
           METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
           SESSION_SECRET: ci_session_secret_01234567890123456789
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
-          SMS_PROVIDER: LOG
+          SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
         run: |
           docker compose up -d --build

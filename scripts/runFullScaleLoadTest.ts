@@ -153,6 +153,7 @@ export async function runFullScaleLoadTest(
         });
       } else {
         teacherId = user[0].id;
+        await db.update(users).set({ passwordHash, status: 'ACTIVE' }).where(eq(users.id, teacherId));
       }
 
       let classes = await db.select().from(classSections).where(eq(classSections.schoolId, sch.id)).limit(1);

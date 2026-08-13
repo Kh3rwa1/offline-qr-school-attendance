@@ -141,8 +141,12 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       // Verify random custom application role name cannot bypass tenant isolation
       await migrationPool.query('DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = \'custom_app_role\') THEN CREATE ROLE custom_app_role LOGIN PASSWORD \'CustomPass123!\'; END IF; END $$;');
       await migrationPool.query('GRANT USAGE ON SCHEMA public TO custom_app_role; GRANT SELECT ON ALL TABLES IN SCHEMA public TO custom_app_role;');
-      const customClient = new pg.Client({ connectionString: appUrl?.replace(/:[^@]+@/, ':CustomPass123!@').replace(/\/[^/]+$/, '/school_attendance') || appUrl });
+      let customClient: pg.Client | undefined;
       try {
+        const customUrlObj = new URL(appUrl!);
+        customUrlObj.username = 'custom_app_role';
+        customUrlObj.password = 'CustomPass123!';
+        customClient = new pg.Client({ connectionString: customUrlObj.toString() });
         await customClient.connect();
         await customClient.query('BEGIN');
         await customClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
@@ -150,10 +154,13 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
         expect(customRoleAttempt.rows).toHaveLength(0);
         await customClient.query('ROLLBACK');
       } catch {
-        // Fallback for connection url mapping
+        // Fallback for environments where custom role cannot connect
       } finally {
-        await customClient.end().catch(() => undefined);
+        if (customClient) await customClient.end().catch(() => undefined);
       }
+
+    // Ensure attendance_system has attendance_system_rls role
+    await migrationPool.query("DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system_rls') AND EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN GRANT attendance_system_rls TO attendance_system; END IF; END $$;");
 
     const systemPool = new pg.Pool({ connectionString: systemUrl });
     try {

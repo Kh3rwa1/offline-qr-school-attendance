@@ -108,11 +108,13 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
   });
 
   it('proves cookie auth, tenant RLS, finalization, worker isolation and logout', async () => {
+    console.log('[RLS-STEP 1] Attempting login for teacher...');
     const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ phoneNumber: teacherPhone, password: teacherPassword, schoolId: schoolA }),
     });
+    console.log('[RLS-STEP 1] Login response status:', login.status);
     expect(login.status).toBe(200);
     const setCookie = login.headers.get('set-cookie') || '';
     expect(setCookie).toMatch(/HttpOnly/i);
@@ -122,14 +124,17 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     expect(loginBody.token).toBeUndefined();
     cookie = setCookie.split(';')[0];
 
+    console.log('[RLS-STEP 2] Fetching /api/v1/auth/me...');
     const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });
     expect(me.status).toBe(200);
     expect((await me.json()).sessionContext.schoolId).toBe(schoolA);
 
+    console.log('[RLS-STEP 3] Testing cross-tenant access...');
     const crossTenant = await fetch(`${baseUrl}/api/v1/schools/${schoolB}/attendance/classes`, { headers: { cookie } });
     expect(crossTenant.status).toBe(403);
     expect((await crossTenant.json()).error).toBe('CROSS_TENANT_DENIED');
 
+    console.log('[RLS-STEP 4] Testing appPool direct queries under tenant context...');
     const appClient = await appPool.connect();
     try {
       await appClient.query('BEGIN');
@@ -146,6 +151,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       expect(malformed.rows).toHaveLength(0);
       await appClient.query('ROLLBACK');
 
+      console.log('[RLS-STEP 5] Testing app role elevation denial...');
       // Verify restricted application role attendance_app cannot bypass tenant isolation by executing SET app.is_system = 'true'
       await appClient.query('BEGIN');
       await appClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
@@ -153,6 +159,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       expect(appRoleSystemAttempt.rows).toHaveLength(0);
       await appClient.query('ROLLBACK');
 
+      console.log('[RLS-STEP 6] Testing custom app role...');
       // Verify random custom application role name cannot bypass tenant isolation
       await migrationPool.query('DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = \'custom_app_role\') THEN CREATE ROLE custom_app_role LOGIN PASSWORD \'CustomPass123!\'; END IF; END $$;');
       await migrationPool.query('GRANT USAGE ON SCHEMA public TO custom_app_role; GRANT SELECT ON ALL TABLES IN SCHEMA public TO custom_app_role;');
@@ -174,6 +181,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
         if (customClient) await customClient.end().catch(() => undefined);
       }
 
+    console.log('[RLS-STEP 7] Testing systemPool queries...');
     // Ensure attendance_system has attendance_system_rls role
     await migrationPool.query("DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system_rls') AND EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN GRANT attendance_system_rls TO attendance_system; END IF; END $$;");
 
@@ -199,21 +207,26 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       appClient.release();
     }
 
+    console.log('[RLS-STEP 8] Checking login audit log...');
     const loginAudit = await migrationPool.query('SELECT id FROM audit_logs WHERE school_id = $1 AND actor_id = $2 AND action = $3', [schoolA, teacherId, 'USER_LOGIN']);
     expect(loginAudit.rows).toHaveLength(1);
 
+    console.log('[RLS-STEP 9] Creating attendance session...');
     const sessionResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions`, {
       method: 'POST', headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ classSectionId, sessionDate: '2026-08-12', sessionType: 'DAILY' }),
     });
     expect(sessionResponse.status).toBe(201);
     const session = (await sessionResponse.json()).data.session;
+
+    console.log('[RLS-STEP 10] Finalizing attendance session...');
     const finalizeResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions/${session.id}/status`, {
       method: 'PATCH', headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ status: 'FINALIZED', autoMarkAbsentForUnmarked: true }),
     });
     expect(finalizeResponse.status).toBe(200);
 
+    console.log('[RLS-STEP 11] Running notification worker queue processing...');
     const { getFakeSmsProvider } = await import('../src/services/sms/smsProvider');
     const { processNotificationQueue } = await import('../src/services/notificationWorker');
     getFakeSmsProvider().clearSentMessages();
@@ -224,6 +237,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     expect(getFakeSmsProvider().getSentMessages()).toHaveLength(2);
     expect(getFakeSmsProvider().getSentMessages().map((message) => message.params.dltPrincipalEntityId).sort()).toEqual(['ENTITY-A', 'ENTITY-B']);
 
+    console.log('[RLS-STEP 12] Testing concurrent notification queue processing...');
     getFakeSmsProvider().clearSentMessages();
     await migrationPool.query('INSERT INTO notification_jobs (school_id, attendance_session_id, student_id, recipient_phone, language, message_body, status, notification_type, finalized_attendance_version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)', [schoolB, sessionBId, studentBId, '+919876543211', 'bn', 'School B concurrent absence', 'QUEUED', 'ABSENCE', 'v2']);
     const concurrentResults = await Promise.all([
@@ -233,15 +247,18 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     expect(concurrentResults[0].sent + concurrentResults[1].sent).toBe(1);
     expect(getFakeSmsProvider().getSentMessages()).toHaveLength(1);
 
+    console.log('[RLS-STEP 13] Verifying notification jobs and sms settings counts...');
     const schoolBJobs = await migrationPool.query('SELECT count(*)::int AS count FROM notification_jobs WHERE school_id = $1', [schoolB]);
     const schoolBSettings = await migrationPool.query('SELECT count(*)::int AS count FROM school_sms_settings WHERE school_id = $1', [schoolB]);
     expect(schoolBJobs.rows[0].count).toBe(2);
     expect(schoolBSettings.rows[0].count).toBe(1);
 
+    console.log('[RLS-STEP 14] Testing user logout...');
     const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, { method: 'POST', headers: { cookie } });
     expect(logout.status).toBe(200);
     expect(logout.headers.get('set-cookie')).toMatch(/Expires=/i);
     const afterLogout = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });
     expect(afterLogout.status).toBe(401);
+    console.log('[RLS-STEP 15] All test steps finished successfully!');
   });
 });

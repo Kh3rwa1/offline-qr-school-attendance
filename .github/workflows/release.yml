@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4.1.0
+        uses: actions/setup-node@39370e3970a6d050c38000445ffc8f60f8d6621d # v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -54,7 +54,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry (GHCR)
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3.3.0
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -71,7 +71,7 @@ jobs:
 
       - name: Install Cosign for Keyless Image Signing
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3.7.0
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bec826aa1317710dab1929c7 # v3.7.0
 
       - name: Sign Container Image Digest with Cosign
         if: github.event_name != 'pull_request'
@@ -84,7 +84,7 @@ jobs:
           npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file output/sbom-npm.cdx.json
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2.2.1
+        uses: softprops/action-gh-release@c92800b6147e7c4f420e6f6630f589c314a3a60a # v2.2.1
         with:
           files: |
             output/sbom-npm.cdx.json

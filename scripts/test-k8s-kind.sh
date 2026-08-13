@@ -74,7 +74,10 @@ kubectl create secret generic school-attendance-secrets \
   --from-literal=SESSION_SECRET="kind-ci-session-secret-012345678901234567890123456789" \
   --from-literal=REDIS_URL="redis://redis:6379" \
   --from-literal=REDIS_KEY_HMAC_SECRET="kind-ci-redis-hmac-secret-012345678901234567890123456789" \
-  --from-literal=METRICS_AUTH_TOKEN="kind-ci-metrics-token-012345678901234567890123456789"
+  --from-literal=METRICS_AUTH_TOKEN="kind-ci-metrics-token-012345678901234567890123456789" \
+  --from-literal=SMS_PROVIDER="LOG" \
+  --from-literal=ALLOW_FAKE_SMS_IN_PRODUCTION="true" \
+  --from-literal=ALLOW_IN_MEMORY_RATE_LIMITER="true"
 
 # 6. Apply all Kubernetes manifests
 echo "6. Applying Kubernetes manifests from k8s/..."

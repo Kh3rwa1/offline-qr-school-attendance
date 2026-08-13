@@ -103,6 +103,7 @@ export async function runFullScaleLoadTest(
     teacherPhone: string;
     classSectionId: string;
     studentId: string;
+    deviceIdentifier?: string;
     authCookie?: string;
   }
 
@@ -205,6 +206,7 @@ export async function runFullScaleLoadTest(
         teacherPhone,
         classSectionId,
         studentId,
+        deviceIdentifier: `device-school-${i + 1}`,
       });
     }
   });
@@ -246,11 +248,11 @@ export async function runFullScaleLoadTest(
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/classes`, {
-          headers: { Cookie: t.authCookie || '' },
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/classes/${t.classSectionId}/offline-roster`, {
+          headers: { 'x-device-identifier': t.deviceIdentifier || '' },
         });
       },
-      concurrency: isFullScale ? 30 : 10,
+      concurrency: isFullScale ? 120 : 10,
     },
     {
       name: '2. Morning Authentication & Session Burst',
@@ -263,102 +265,107 @@ export async function runFullScaleLoadTest(
           body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
         });
       },
-      concurrency: isFullScale ? 20 : 5,
+      concurrency: isFullScale ? 40 : 5,
     },
     {
       name: '3. QR Credential Retrieval & Validation',
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/classes/${t.classSectionId}/offline-roster`, {
-          headers: { Cookie: t.authCookie || '', 'x-device-identifier': `device-school-${(index % tenants.length) + 1}` },
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/qr/reissue`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
+          body: JSON.stringify({ studentId: t.studentId }),
         });
       },
-      concurrency: isFullScale ? 25 : 10,
+      concurrency: isFullScale ? 120 : 10,
     },
     {
       name: '4. Offline Attendance Batch Synchronization Storm',
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        const clientEventId = crypto.randomUUID();
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
+        const clientSessionId = `sess-bench-${index}-${Date.now()}`;
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
           body: JSON.stringify({
-            deviceIdentifier: `device-school-${(index % tenants.length) + 1}`,
+            clientSessionId,
+            classSectionId: t.classSectionId,
+            sessionDate: new Date().toISOString().split('T')[0],
             events: [
               {
-                clientEventId,
+                clientEventId: `evt-${index}-1`,
                 studentId: t.studentId,
-                eventType: 'QR_SCANNED',
-                statusValue: 'PRESENT',
-                clientTimestamp: new Date().toISOString(),
+                rawToken: `token-${index}`,
+                scannedAt: new Date().toISOString(),
+                scanSource: 'USB',
               },
             ],
           }),
         });
       },
-      concurrency: isFullScale ? 30 : 10,
+      concurrency: isFullScale ? 120 : 10,
     },
     {
       name: '5. Duplicate Replay & Idempotency Reconciliation Storm',
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        const fixedClientEventId = `fixed-reconciliation-event-id-${t.schoolId}`;
-        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
+        const clientSessionId = `sess-replay-${index % 50}`;
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
           body: JSON.stringify({
-            deviceIdentifier: `device-school-${(index % tenants.length) + 1}`,
+            clientSessionId,
+            classSectionId: t.classSectionId,
+            sessionDate: new Date().toISOString().split('T')[0],
             events: [
               {
-                clientEventId: fixedClientEventId,
+                clientEventId: `evt-replay-${index % 50}`,
                 studentId: t.studentId,
-                eventType: 'QR_SCANNED',
-                statusValue: 'PRESENT',
-                clientTimestamp: new Date().toISOString(),
+                rawToken: `token-replay-${index % 50}`,
+                scannedAt: new Date().toISOString(),
+                scanSource: 'USB',
               },
             ],
           }),
         });
       },
-      concurrency: isFullScale ? 25 : 10,
+      concurrency: isFullScale ? 120 : 10,
     },
     {
       name: '6. Multi-Tenant Attendance Report Query Workload',
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(
-          `${baseUrl}/api/v1/schools/${t.schoolId}/reports/absentee?classSectionId=${t.classSectionId}`,
-          { headers: { Cookie: t.authCookie || '' } }
-        );
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/reports/daily-summary?date=${new Date().toISOString().split('T')[0]}`, {
+          headers: { Cookie: t.authCookie || '' },
+        });
       },
-      concurrency: isFullScale ? 20 : 10,
+      concurrency: isFullScale ? 100 : 10,
     },
     {
       name: '7. SMS & Notification Queue Burst',
       expectedStatuses: [200],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
-        return fetch(`${baseUrl}/api/v1/notifications/history/${t.studentId}`, {
-          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId },
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/notifications/queue-status`, {
+          headers: { Cookie: t.authCookie || '' },
         });
       },
-      concurrency: isFullScale ? 20 : 10,
+      concurrency: isFullScale ? 100 : 10,
     },
     {
       name: '8. Redis Latency & Distributed Rate Limiter Pressure',
-      expectedStatuses: [200, 429], // 429 rate limit is explicitly allowed for high-frequency burst
+      expectedStatuses: [200, 429],
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/auth/me`, {
           headers: { Cookie: t.authCookie || '' },
         });
       },
-      concurrency: isFullScale ? 40 : 15,
+      concurrency: isFullScale ? 120 : 15,
     },
     {
       name: '9. PostgreSQL Pool & Connection Pressure (100 Schools)',
@@ -369,7 +376,7 @@ export async function runFullScaleLoadTest(
           headers: { Cookie: t.authCookie || '' },
         });
       },
-      concurrency: isFullScale ? 35 : 15,
+      concurrency: isFullScale ? 100 : 15,
     },
     {
       name: '10. Large Dataset Scale Query (500k Students Roster & Export)',
@@ -381,7 +388,7 @@ export async function runFullScaleLoadTest(
           { headers: { Cookie: t.authCookie || '' } }
         );
       },
-      concurrency: isFullScale ? 20 : 10,
+      concurrency: isFullScale ? 80 : 10,
     },
   ];
 

@@ -170,7 +170,13 @@ jobs:
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
-        run: npm run test:postgres
+        run: |
+          echo "=== 1. Running RLS Completeness Audit ==="
+          npx vitest run --reporter=verbose --testTimeout=30000 --hookTimeout=30000 tests/postgresRlsCompleteness.test.ts
+          echo "=== 2. Running RFID PostgreSQL RLS Integration Suite ==="
+          npx vitest run --reporter=verbose --testTimeout=30000 --hookTimeout=30000 tests/rfid/rfidPostgresRls.integration.test.ts
+          echo "=== 3. Running Multi-Tenant PostgreSQL RLS & SMS Integration Suite ==="
+          npx vitest run --reporter=verbose --testTimeout=30000 --hookTimeout=30000 tests/postgresRls.integration.test.ts
 
   backup-and-restore-drill:
     name: Encrypted Backup & Restore RLS Verification Drill

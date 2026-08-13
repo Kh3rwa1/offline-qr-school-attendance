@@ -6,6 +6,15 @@ import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
 import { getRedisClient } from '../redisService';
 
+/**
+ * Process-local mutex map. When Redis is absent (e.g. unit-test environment),
+ * this guarantees that only one caller processes a given (schoolId, clientEventId)
+ * pair at a time.  Every other concurrent caller awaits the settled promise and
+ * then returns the idempotent result — preventing the DB unique-constraint race
+ * that caused "100 concurrent requests" to return only partial ACCEPTED results.
+ */
+const _inProcessLocks = new Map<string, Promise<ScanResult>>();
+
 export interface ScanEnvelope {
   version: number;
   schoolId: string;
@@ -51,47 +60,91 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   }
 
   // 2. Atomic Processor Lock for clientEventId
+  //
+  // Strategy (two-tier):
+  //   Tier-1 (Redis): distributed SET NX lock across multiple processes/replicas.
+  //   Tier-2 (in-process Map): single-process mutex that is always applied first,
+  //     ensuring that no two coroutines inside THIS process even attempt the Redis
+  //     call (or DB transaction) concurrently for the same key. This fixes the
+  //     race that occurred when Redis was absent in unit-test environments.
   const eventLockKey = `rfid:lock:${envelope.schoolId}:${envelope.clientEventId}`;
   const eventResultKey = `rfid:result:${envelope.schoolId}:${envelope.clientEventId}`;
-  let acquiredLock = false;
+  const inProcessKey = `${envelope.schoolId}:${envelope.clientEventId}`;
+
+  // If another coroutine in this process is already working on this exact key,
+  // piggyback on its promise and return the same result (after adjusting latency).
+  const existingPromise = _inProcessLocks.get(inProcessKey);
+  if (existingPromise) {
+    try {
+      const result = await existingPromise;
+      return { ...result, processingLatencyMs: Date.now() - startTime };
+    } catch {
+      // The lock-holder threw — fall through to a fresh DB idempotency check.
+      const [stored] = await db
+        .select()
+        .from(rfidScanEvents)
+        .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+      if (stored) return { decision: stored.decision, scanEventId: stored.id, processingLatencyMs: Date.now() - startTime };
+      throw new Error('Concurrent scan processing failed; please retry.');
+    }
+  }
+
+  // We are the designated processor for this key in this process.
+  let resolveInProcess!: (r: ScanResult) => void;
+  let rejectInProcess!: (e: unknown) => void;
+  const inProcessPromise = new Promise<ScanResult>((res, rej) => {
+    resolveInProcess = res;
+    rejectInProcess = rej;
+  });
+  _inProcessLocks.set(inProcessKey, inProcessPromise);
+
+  let acquiredRedisLock = false;
 
   if (redis) {
     try {
       const lockRes = await redis.set(eventLockKey, '1', 'EX', 10, 'NX');
       if (lockRes === 'OK') {
-        acquiredLock = true;
+        acquiredRedisLock = true;
       } else {
-        // Concurrent request with identical clientEventId is currently processing. Wait for result.
+        // Another PROCESS (not coroutine — those are handled above) holds the lock.
+        // Poll Redis result cache then DB.
         for (let i = 0; i < 50; i++) {
           const cachedStr = await redis.get(eventResultKey);
           if (cachedStr) {
-            const cachedResult = JSON.parse(cachedStr);
-            return { ...cachedResult, processingLatencyMs: Date.now() - startTime };
+            const cachedResult = JSON.parse(cachedStr) as ScanResult;
+            const result = { ...cachedResult, processingLatencyMs: Date.now() - startTime };
+            resolveInProcess(result);
+            _inProcessLocks.delete(inProcessKey);
+            return result;
           }
           const [stored] = await db
             .select()
             .from(rfidScanEvents)
             .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
           if (stored) {
-            return { decision: stored.decision, scanEventId: stored.id, processingLatencyMs: Date.now() - startTime };
+            const result = { decision: stored.decision, scanEventId: stored.id, processingLatencyMs: Date.now() - startTime };
+            resolveInProcess(result);
+            _inProcessLocks.delete(inProcessKey);
+            return result;
           }
           await new Promise((res) => setTimeout(res, 20));
         }
-        acquiredLock = true;
+        acquiredRedisLock = true; // timed-out polling; proceed as lock holder
       }
     } catch {
-      acquiredLock = true;
+      acquiredRedisLock = true;
     }
-  } else {
-    acquiredLock = true;
   }
+  // When Redis is absent, this process IS the sole lock holder (in-process map guarantees it).
 
   const finishProcessing = async (result: ScanResult): Promise<ScanResult> => {
-    if (redis && acquiredLock) {
+    if (redis && acquiredRedisLock) {
       try {
         await redis.set(eventResultKey, JSON.stringify(result), 'EX', 60);
       } catch {}
     }
+    resolveInProcess(result);
+    _inProcessLocks.delete(inProcessKey);
     return result;
   };
 
@@ -393,8 +446,14 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       studentId: credential.studentId,
       processingLatencyMs: Date.now() - startTime,
     });
+  } catch (outerErr) {
+    // If we throw before finishProcessing, we must still clean up the in-process lock
+    // so that future retries are not blocked forever.
+    rejectInProcess(outerErr);
+    _inProcessLocks.delete(inProcessKey);
+    throw outerErr;
   } finally {
-    if (redis && acquiredLock) {
+    if (redis && acquiredRedisLock) {
       try {
         await redis.del(eventLockKey);
       } catch {}

@@ -67,13 +67,39 @@ BEGIN
 END;
 $$;
 
--- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, grant explicit EXECUTE to application & auth roles
+-- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, conditionally grant EXECUTE to application & auth roles.
+-- GRANTs are wrapped in a DO block with IF EXISTS guards because the role-creation DO block above silently swallows
+-- all statements (EXCEPTION WHEN insufficient_privilege THEN NULL) if the migration user lacks CREATEROLE privilege.
+-- Without these guards the unconditional GRANT would error with "role does not exist" and abort the migration.
 ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO CURRENT_USER;
 ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO CURRENT_USER;
 
 REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
 
-GRANT USAGE ON SCHEMA public TO attendance_auth, attendance_app, attendance_system, attendance_worker, attendance_migration;
-GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_auth, attendance_app, attendance_system;
-GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_auth, attendance_app, attendance_system;
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN
+    GRANT USAGE ON SCHEMA public TO attendance_auth;
+    GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_auth;
+    GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_auth;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
+    GRANT USAGE ON SCHEMA public TO attendance_app;
+    GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_app;
+    GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_app;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
+    GRANT USAGE ON SCHEMA public TO attendance_system;
+    GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_system;
+    GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_system;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN
+    GRANT USAGE ON SCHEMA public TO attendance_worker;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_migration') THEN
+    GRANT USAGE ON SCHEMA public TO attendance_migration;
+  END IF;
+EXCEPTION
+  WHEN insufficient_privilege THEN NULL;
+END $$;

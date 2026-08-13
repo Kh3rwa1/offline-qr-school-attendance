@@ -542,9 +542,20 @@ export async function runFullScaleLoadTest(
     complianceFailures.push(`Post-load DB integrity failed: ${postLoadIntegrity.duplicateRecordCount} duplicate records, ${postLoadIntegrity.duplicateNotificationJobs} duplicate jobs`);
   }
 
-  const p95Violations = scenarioResults.filter((s) => s.p95Ms > (s.name.includes('Authentication') ? 600 : 300));
+  // p95 latency thresholds are configurable so that CI (shared GitHub Actions runner with cold
+  // Postgres/Redis containers) can use a relaxed ceiling without changing the full-scale benchmark.
+  // LOAD_P95_THRESHOLD_MS defaults to 300ms (production target).
+  // LOAD_AUTH_P95_THRESHOLD_MS defaults to 600ms (accounts for argon2id hashing time).
+  const p95ThresholdMs = Number(process.env.LOAD_P95_THRESHOLD_MS || 300);
+  const authP95ThresholdMs = Number(process.env.LOAD_AUTH_P95_THRESHOLD_MS || 600);
+
+  const p95Violations = scenarioResults.filter((s) =>
+    s.p95Ms > (s.name.includes('Authentication') ? authP95ThresholdMs : p95ThresholdMs)
+  );
   if (p95Violations.length > 0) {
-    complianceFailures.push(`p95 latency threshold (300ms) exceeded by: ${p95Violations.map((v) => v.name).join(', ')}`);
+    complianceFailures.push(
+      `p95 latency threshold (${p95ThresholdMs}ms non-auth, ${authP95ThresholdMs}ms auth) exceeded by: ${p95Violations.map((v) => v.name).join(', ')}`
+    );
   }
 
   if (isFullScale) {

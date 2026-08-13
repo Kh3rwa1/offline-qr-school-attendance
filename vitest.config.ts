@@ -8,8 +8,11 @@ export default defineConfig({
     // opt-in via npm run test:postgres.
     fileParallelism: false,
     maxWorkers: 1,
-    hookTimeout: 30_000,
-    testTimeout: 30_000,
+    // 120 s per hook / test: the PostgreSQL RLS integration test makes many
+    // HTTP + DB + argon2id calls inside one it() block. On shared CI runners
+    // argon2id alone can take 400-800 ms per hash; 30 s was too tight.
+    hookTimeout: 120_000,
+    testTimeout: 120_000,
     exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
   },
 });

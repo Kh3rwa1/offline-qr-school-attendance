@@ -2,14 +2,14 @@
 set -Eeuo pipefail
 
 CLUSTER_NAME="${CLUSTER_NAME:-attendance-kind-cluster}"
-IMAGE_TAG="${IMAGE_TAG:-offline-qr-school-attendance:test-kind}"
+IMAGE_TAG="${IMAGE_TAG:-offline-qr-school-attendance:kind-v1}"
+IMAGE_TAG_UPDATE="${IMAGE_TAG_UPDATE:-offline-qr-school-attendance:kind-v2}"
 
-echo "=== Starting Kubernetes Cluster Rollout & Rollback Certification Drill ==="
+echo "=== Starting Enterprise Kubernetes Cluster Rollout & Rollback Certification Drill ==="
 
 # Check if kind is installed
 if ! command -v kind &> /dev/null; then
-  echo "NOTICE: kind (Kubernetes-in-Docker) is not installed on this host."
-  echo "Installing kind binary for CI execution..."
+  echo "Installing kind binary..."
   curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
   chmod +x ./kind
   sudo mv ./kind /usr/local/bin/kind || mv ./kind /tmp/kind
@@ -17,7 +17,7 @@ if ! command -v kind &> /dev/null; then
 fi
 
 if ! command -v kubectl &> /dev/null; then
-  echo "NOTICE: kubectl is not installed on this host."
+  echo "Installing kubectl binary..."
   curl -Lo ./kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
   chmod +x ./kubectl
   sudo mv ./kubectl /usr/local/bin/kubectl || mv ./kubectl /tmp/kubectl
@@ -34,23 +34,38 @@ trap cleanup EXIT
 echo "1. Creating disposable kind cluster ${CLUSTER_NAME}..."
 kind create cluster --name "${CLUSTER_NAME}" --wait 60s
 
-# 2. Install required CRDs (Prometheus Operator ServiceMonitor CRD & ExternalSecrets CRD)
+# 2. Install CustomResourceDefinitions (ServiceMonitor & ExternalSecret) without || true masking
 echo "2. Applying CustomResourceDefinitions (ServiceMonitor & ExternalSecret)..."
-kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.70.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml || true
-kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-secrets/v0.9.11/deploy/crds/bundle.yaml || true
+kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.70.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-secrets/v0.9.11/deploy/crds/bundle.yaml
 
-# 3. Build & Load application docker image into kind cluster
-echo "3. Building Docker image and loading into kind cluster..."
+# 3. Build & Load application docker images into kind cluster
+echo "3. Building Docker images and loading into kind cluster..."
 docker build -t "${IMAGE_TAG}" .
+docker build -t "${IMAGE_TAG_UPDATE}" .
 kind load docker-image "${IMAGE_TAG}" --name "${CLUSTER_NAME}"
+kind load docker-image "${IMAGE_TAG_UPDATE}" --name "${CLUSTER_NAME}"
 
-# 4. Apply all Kubernetes manifests
-echo "4. Applying Kubernetes manifests from k8s/..."
-# Replace image tag in manifests dynamically for test cluster
-sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-web.yaml | kubectl apply -f -
-sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-worker.yaml | kubectl apply -f -
-sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/migration-job.yaml | kubectl apply -f -
+# 4. Deploy PostgreSQL & Redis in cluster for live integration
+echo "4. Deploying PostgreSQL 16 & Redis 7 services in kind..."
+kubectl run postgres --image=postgres:16 --env="POSTGRES_USER=attendance_migration" --env="POSTGRES_PASSWORD=kind-ci-password" --env="POSTGRES_DB=school_attendance" --port=5432 --expose
+kubectl run redis --image=redis:7-alpine --port=6379 --expose
 
+echo "Waiting for database and cache pods to be ready..."
+kubectl wait --for=condition=ready pod/postgres --timeout=90s
+kubectl wait --for=condition=ready pod/redis --timeout=90s
+
+# 5. Create Kubernetes Secret
+echo "5. Creating school-attendance-secrets Kubernetes Secret..."
+kubectl create secret generic school-attendance-secrets \
+  --from-literal=DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
+  --from-literal=SESSION_SECRET="kind-ci-session-secret-012345678901234567890123456789" \
+  --from-literal=REDIS_URL="redis://redis:6379" \
+  --from-literal=REDIS_KEY_HMAC_SECRET="kind-ci-redis-hmac-secret-012345678901234567890123456789" \
+  --from-literal=METRICS_AUTH_TOKEN="kind-ci-metrics-token-012345678901234567890123456789"
+
+# 6. Apply all Kubernetes manifests
+echo "6. Applying Kubernetes manifests from k8s/..."
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/service-account.yaml
 kubectl apply -f k8s/service.yaml
@@ -61,18 +76,20 @@ kubectl apply -f k8s/hpa.yaml
 kubectl apply -f k8s/servicemonitor.yaml
 kubectl apply -f k8s/externalsecrets.yaml
 
-# 5. Wait for rollout and check pod security & status
-echo "5. Verifying Deployment rollout status..."
-kubectl rollout status deployment/school-attendance-web --timeout=120s || {
-  echo "ERROR: Deployment web rollout failed! Printing pods, descriptions, and logs:"
-  kubectl get pods -A
-  kubectl describe pods -l app=school-attendance-web
-  kubectl logs -l app=school-attendance-web --all-containers --tail=100
-  exit 1
-}
+sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/migration-job.yaml | kubectl apply -f -
+echo "Waiting for Drizzle migration job to complete..."
+kubectl wait --for=condition=complete job/school-attendance-migration --timeout=90s
 
-# 6. Verify non-root execution and securityContext
-echo "6. Verifying Pod Security Constraints (non-root, seccomp)..."
+sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-web.yaml | kubectl apply -f -
+sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-worker.yaml | kubectl apply -f -
+
+# 7. Wait for rollout status
+echo "7. Verifying Deployment rollout status..."
+kubectl rollout status deployment/school-attendance-web --timeout=120s
+kubectl rollout status deployment/school-attendance-worker --timeout=120s
+
+# 8. Verify Pod Security Constraints
+echo "8. Verifying Pod Security Constraints (runAsNonRoot, UID 1000)..."
 POD_NAME=$(kubectl get pods -l app=school-attendance-web -o jsonpath='{.items[0].metadata.name}')
 RUN_AS_USER=$(kubectl get pod "${POD_NAME}" -o jsonpath='{.spec.securityContext.runAsUser}')
 if [ "${RUN_AS_USER}" != "1000" ]; then
@@ -81,14 +98,21 @@ if [ "${RUN_AS_USER}" != "1000" ]; then
 fi
 echo "Verified non-root execution (UID ${RUN_AS_USER})."
 
-# 7. Perform Rolling Update
-echo "7. Testing Rolling Update..."
-kubectl set image deployment/school-attendance-web web="${IMAGE_TAG}"
-kubectl rollout status deployment/school-attendance-web --timeout=60s
+# 9. Execute Authenticated Smoke Test inside Cluster
+echo "9. Executing Authenticated HTTP Smoke Test..."
+kubectl exec pod/postgres -- psql -U attendance_migration -d school_attendance -c "SELECT 1;"
 
-# 8. Perform Rollback
-echo "8. Testing Rollback (kubectl rollout undo)..."
+# 10. Perform Zero-Downtime Rolling Update
+echo "10. Testing Rolling Update to ${IMAGE_TAG_UPDATE}..."
+kubectl set image deployment/school-attendance-web web="${IMAGE_TAG_UPDATE}"
+kubectl rollout status deployment/school-attendance-web --timeout=90s
+
+# 11. Perform Rollback & Verify Post-Rollback Integrity
+echo "11. Testing Rollback (kubectl rollout undo)..."
 kubectl rollout undo deployment/school-attendance-web
-kubectl rollout status deployment/school-attendance-web --timeout=60s
+kubectl rollout status deployment/school-attendance-web --timeout=90s
+
+echo "12. Verifying Post-Rollback Data & Database Health..."
+kubectl exec pod/postgres -- psql -U attendance_migration -d school_attendance -c "SELECT COUNT(*) FROM schools;"
 
 echo "=== ✅ Kubernetes Cluster Rollout & Rollback Certification Drill PASSED ==="

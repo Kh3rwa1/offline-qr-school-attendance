@@ -7,6 +7,7 @@ import {
   academicYears,
   users,
   schoolMemberships,
+  teacherProfiles,
   devices,
   classSections,
   teacherAssignments,
@@ -18,7 +19,7 @@ import {
   notificationJobs,
 } from '../src/db/schema';
 import { runMigrations } from '../src/db/migrate';
-import { sql, count, eq } from 'drizzle-orm';
+import { sql, count, eq, inArray } from 'drizzle-orm';
 import { hashPassword } from '../src/auth/password';
 
 export interface EndpointMetric {
@@ -43,6 +44,7 @@ export interface ScenarioResult {
   p95Ms: number;
   p99Ms: number;
   durationSeconds: number;
+  expectedStatuses: number[];
   endpointMetrics: EndpointMetric[];
 }
 
@@ -72,16 +74,16 @@ export interface FullScaleReport {
   scenarios: ScenarioResult[];
   postLoadIntegrity: PostLoadIntegrityReport;
   compliancePassed: boolean;
+  complianceFailures: string[];
 }
 
 export async function runFullScaleLoadTest(
   isFullScale = process.env.FULL_500K_BENCHMARK === '1',
   targetDurationSeconds = Number(process.env.LOAD_TEST_DURATION_SEC || (process.env.FULL_500K_BENCHMARK === '1' ? 900 : 30))
 ): Promise<FullScaleReport> {
-  console.log(`=== Starting 10/10 Enterprise Business Load & Performance Benchmark ===`);
-  console.log(`Mode: ${isFullScale ? 'FULL-SCALE 500k-Student' : 'CI Business Load Gate'} | Duration Target: ${targetDurationSeconds}s`);
+  console.log(`=== Starting 10/10 Enterprise Multi-Tenant Load Benchmark ===`);
+  console.log(`Mode: ${isFullScale ? 'FULL-SCALE 100-School 500k-Student' : 'CI Business Load Gate'} | Duration Target: ${targetDurationSeconds}s`);
 
-  // Ensure test server credentials & environment variables are present
   process.env.NODE_ENV = 'production';
   process.env.TEST_SERVER_STATIC = 'true';
   process.env.RUN_SERVER = 'false';
@@ -91,114 +93,121 @@ export async function runFullScaleLoadTest(
   process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'fullscale-metrics-token-012345678901234567890123456789';
   process.env.ALLOW_IN_MEMORY_RATE_LIMITER = process.env.ALLOW_IN_MEMORY_RATE_LIMITER || 'true';
 
-  // Ensure DB schema migrations are applied
   await runMigrations();
 
-  // Seed baseline benchmark school & credentials if not already populated
   const passwordHash = await hashPassword('TeacherPassword123!');
-  let benchmarkSchoolId = '';
-  let benchmarkTeacherPhone = '+919900010002';
-  let benchmarkClassSectionId = '';
-  let benchmarkStudentId = '';
-  let benchmarkRawToken = '';
+
+  // Seed / fetch multi-tenant context
+  interface TenantContext {
+    schoolId: string;
+    teacherPhone: string;
+    classSectionId: string;
+    studentId: string;
+    authCookie?: string;
+  }
+
+  const tenants: TenantContext[] = [];
 
   await withSystemContext(async () => {
-    let existingSchool = await db.select().from(schools).limit(1);
-    if (existingSchool.length === 0) {
+    let existingSchools = await db.select().from(schools).limit(100);
+    if (existingSchools.length === 0) {
+      // Seed at least 1 benchmark school
       const sId = crypto.randomUUID();
       await db.insert(schools).values({
         id: sId,
-        name: 'Benchmark School Alpha',
-        udiseCode: '19100999',
+        name: 'Benchmark School 1',
+        udiseCode: '19100101',
         district: 'Benchmark District',
         status: 'ACTIVE',
       });
-      existingSchool = await db.select().from(schools).where(eq(schools.id, sId));
-    }
-    benchmarkSchoolId = existingSchool[0].id;
-
-    let existingUser = await db.select().from(users).where(eq(users.phoneNumber, benchmarkTeacherPhone));
-    let teacherId = '';
-    if (existingUser.length === 0) {
-      teacherId = crypto.randomUUID();
-      await db.insert(users).values({
-        id: teacherId,
-        fullName: 'Benchmark Teacher',
-        phoneNumber: benchmarkTeacherPhone,
-        passwordHash,
-        status: 'ACTIVE',
-      });
-      await db.insert(schoolMemberships).values({
-        schoolId: benchmarkSchoolId,
-        userId: teacherId,
-        role: 'TEACHER',
-        status: 'ACTIVE',
-      });
-      await db.insert(devices).values({
-        schoolId: benchmarkSchoolId,
-        userId: teacherId,
-        deviceIdentifier: 'device-school-1',
-        deviceModel: 'Benchmarking Scanner',
-        status: 'AUTHORIZED',
-      });
-    } else {
-      teacherId = existingUser[0].id;
+      existingSchools = await db.select().from(schools).where(eq(schools.id, sId));
     }
 
-    let existingClasses = await db.select().from(classSections).where(eq(classSections.schoolId, benchmarkSchoolId)).limit(1);
-    if (existingClasses.length === 0) {
-      const cId = crypto.randomUUID();
-      const acadId = crypto.randomUUID();
-      await db.insert(academicYears).values({
-        id: acadId,
-        schoolId: benchmarkSchoolId,
-        name: '2026',
-        startDate: '2026-01-01',
-        endDate: '2026-12-31',
-        isCurrent: true,
-      });
-      await db.insert(classSections).values({
-        id: cId,
-        schoolId: benchmarkSchoolId,
-        academicYearId: acadId,
-        className: 'Class 1',
-        sectionName: 'A',
-      });
-      await db.insert(teacherAssignments).values({
-        schoolId: benchmarkSchoolId,
-        teacherId,
-        classSectionId: cId,
-      });
-      existingClasses = await db.select().from(classSections).where(eq(classSections.id, cId));
-    }
-    benchmarkClassSectionId = existingClasses[0].id;
+    for (let i = 0; i < existingSchools.length; i++) {
+      const sch = existingSchools[i];
+      const teacherPhone = `+9199${String(i + 1).padStart(4, '0')}0002`;
 
-    let existingStudents = await db.select().from(students).where(eq(students.schoolId, benchmarkSchoolId)).limit(1);
-    if (existingStudents.length === 0) {
-      const stId = crypto.randomUUID();
-      await db.insert(students).values({
-        id: stId,
-        schoolId: benchmarkSchoolId,
-        studentCode: 'STU-BENCH-1',
-        name: 'Benchmark Student 1',
-        status: 'ACTIVE',
-      });
-      existingStudents = await db.select().from(students).where(eq(students.id, stId));
-    }
-    benchmarkStudentId = existingStudents[0].id;
+      let user = await db.select().from(users).where(eq(users.phoneNumber, teacherPhone)).limit(1);
+      let teacherId = '';
+      if (user.length === 0) {
+        teacherId = crypto.randomUUID();
+        await db.insert(users).values({
+          id: teacherId,
+          fullName: `Teacher School ${i + 1}`,
+          phoneNumber: teacherPhone,
+          passwordHash,
+          status: 'ACTIVE',
+        });
+        await db.insert(schoolMemberships).values({
+          schoolId: sch.id,
+          userId: teacherId,
+          role: 'TEACHER',
+          status: 'ACTIVE',
+        });
+        await db.insert(devices).values({
+          schoolId: sch.id,
+          userId: teacherId,
+          deviceIdentifier: `device-school-${i + 1}`,
+          deviceModel: 'Benchmarking Scanner',
+          status: 'AUTHORIZED',
+        });
+      } else {
+        teacherId = user[0].id;
+      }
 
-    benchmarkRawToken = crypto.randomBytes(32).toString('hex');
-    const tokenDigest = crypto.createHash('sha256').update(benchmarkRawToken).digest('hex');
-    await db.insert(qrCredentials).values({
-      schoolId: benchmarkSchoolId,
-      studentId: benchmarkStudentId,
-      tokenDigest,
-      version: 1,
-      status: 'ACTIVE',
-    }).onConflictDoNothing();
+      let classes = await db.select().from(classSections).where(eq(classSections.schoolId, sch.id)).limit(1);
+      let classSectionId = '';
+      if (classes.length === 0) {
+        const acadId = crypto.randomUUID();
+        await db.insert(academicYears).values({
+          id: acadId,
+          schoolId: sch.id,
+          name: '2026',
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+          isCurrent: true,
+        });
+        classSectionId = crypto.randomUUID();
+        await db.insert(classSections).values({
+          id: classSectionId,
+          schoolId: sch.id,
+          academicYearId: acadId,
+          className: 'Class 1',
+          sectionName: 'A',
+        });
+        await db.insert(teacherAssignments).values({
+          schoolId: sch.id,
+          teacherId,
+          classSectionId,
+        });
+      } else {
+        classSectionId = classes[0].id;
+      }
+
+      let stList = await db.select().from(students).where(eq(students.schoolId, sch.id)).limit(1);
+      let studentId = '';
+      if (stList.length === 0) {
+        studentId = crypto.randomUUID();
+        await db.insert(students).values({
+          id: studentId,
+          schoolId: sch.id,
+          studentCode: `STU-${i + 1}-1`,
+          name: `Student ${i + 1}-1`,
+          status: 'ACTIVE',
+        });
+      } else {
+        studentId = stList[0].id;
+      }
+
+      tenants.push({
+        schoolId: sch.id,
+        teacherPhone,
+        classSectionId,
+        studentId,
+      });
+    }
   });
 
-  // Count actual verified schools & students in DB
   const [schoolsCountRow] = await db.select({ count: count() }).from(schools);
   const [studentsCountRow] = await db.select({ count: count() }).from(students);
   const verifiedSchools = schoolsCountRow.count;
@@ -214,69 +223,98 @@ export async function runFullScaleLoadTest(
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
-  // Helper to authenticate session and get cookie
-  async function getAuthCookie(phone = benchmarkTeacherPhone, password = 'TeacherPassword123!'): Promise<string> {
+  // Pre-authenticate teacher sessions across multi-tenant context
+  for (const t of tenants) {
     const res = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phoneNumber: phone, password }),
+      body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
     });
-    if (!res.ok) {
-      throw new Error(`Login failed with status ${res.status}`);
+    if (res.ok) {
+      const cookie = res.headers.get('set-cookie');
+      t.authCookie = cookie ? cookie.split(';')[0] : '';
     }
-    const cookie = res.headers.get('set-cookie');
-    return cookie ? cookie.split(';')[0] : '';
   }
 
-  const authCookie = await getAuthCookie();
+  const primaryTenant = tenants[0];
 
-  // Define 10 authentic business benchmark scenarios
+  // Define 10 authentic scenarios with operation-specific expected status codes
   const scenarioDefinitions = [
     {
       name: '1. Normal School-Day Roster & Session Retrieval',
-      execute: async () => {
-        return fetch(`${baseUrl}/api/v1/schools/${benchmarkSchoolId}/attendance/classes`, {
-          headers: { Cookie: authCookie },
-        });
-      },
-      concurrency: isFullScale ? 25 : 10,
-      total: isFullScale ? 5000 : 200,
-    },
-    {
-      name: '2. Morning Authentication & Session Burst',
-      execute: async () => {
-        return fetch(`${baseUrl}/api/v1/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phoneNumber: benchmarkTeacherPhone, password: 'TeacherPassword123!' }),
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/classes`, {
+          headers: { Cookie: t.authCookie || '' },
         });
       },
       concurrency: isFullScale ? 30 : 10,
-      total: isFullScale ? 6000 : 200,
+    },
+    {
+      name: '2. Morning Authentication & Session Burst',
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
+        return fetch(`${baseUrl}/api/v1/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
+        });
+      },
+      concurrency: isFullScale ? 40 : 10,
     },
     {
       name: '3. QR Credential Retrieval & Validation',
-      execute: async () => {
-        return fetch(`${baseUrl}/api/v1/schools/${benchmarkSchoolId}/sync/classes/${benchmarkClassSectionId}/offline-roster`, {
-          headers: { Cookie: authCookie, 'x-device-identifier': 'device-school-1' },
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/classes/${t.classSectionId}/offline-roster`, {
+          headers: { Cookie: t.authCookie || '', 'x-device-identifier': `device-school-${(index % tenants.length) + 1}` },
         });
       },
-      concurrency: isFullScale ? 20 : 10,
-      total: isFullScale ? 150 : 150,
+      concurrency: isFullScale ? 25 : 10,
     },
     {
       name: '4. Offline Attendance Batch Synchronization Storm',
-      execute: async () => {
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
         const clientEventId = crypto.randomUUID();
-        return fetch(`${baseUrl}/api/v1/schools/${benchmarkSchoolId}/sync/attendance-events`, {
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
           body: JSON.stringify({
-            deviceIdentifier: 'device-school-1',
+            deviceIdentifier: `device-school-${(index % tenants.length) + 1}`,
             events: [
               {
                 clientEventId,
-                studentId: benchmarkStudentId,
+                studentId: t.studentId,
+                eventType: 'QR_SCANNED',
+                statusValue: 'PRESENT',
+                clientTimestamp: new Date().toISOString(),
+              },
+            ],
+          }),
+        });
+      },
+      concurrency: isFullScale ? 30 : 10,
+    },
+    {
+      name: '5. Duplicate Replay & Idempotency Reconciliation Storm',
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
+        const fixedClientEventId = `fixed-reconciliation-event-id-${t.schoolId}`;
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
+          body: JSON.stringify({
+            deviceIdentifier: `device-school-${(index % tenants.length) + 1}`,
+            events: [
+              {
+                clientEventId: fixedClientEventId,
+                studentId: t.studentId,
                 eventType: 'QR_SCANNED',
                 statusValue: 'PRESENT',
                 clientTimestamp: new Date().toISOString(),
@@ -286,84 +324,63 @@ export async function runFullScaleLoadTest(
         });
       },
       concurrency: isFullScale ? 25 : 10,
-      total: isFullScale ? 5000 : 200,
-    },
-    {
-      name: '5. Duplicate Replay & Idempotency Reconciliation Storm',
-      execute: async () => {
-        // Repeatedly send identical clientEventId to test idempotency
-        const fixedClientEventId = 'fixed-reconciliation-event-id-12345';
-        return fetch(`${baseUrl}/api/v1/schools/${benchmarkSchoolId}/sync/attendance-events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: authCookie },
-          body: JSON.stringify({
-            deviceIdentifier: 'device-school-1',
-            events: [
-              {
-                clientEventId: fixedClientEventId,
-                studentId: benchmarkStudentId,
-                eventType: 'QR_SCANNED',
-                statusValue: 'PRESENT',
-                clientTimestamp: new Date().toISOString(),
-              },
-            ],
-          }),
-        });
-      },
-      concurrency: isFullScale ? 20 : 10,
-      total: isFullScale ? 4000 : 150,
     },
     {
       name: '6. Multi-Tenant Attendance Report Query Workload',
-      execute: async () => {
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
         return fetch(
-          `${baseUrl}/api/v1/schools/${benchmarkSchoolId}/reports/absentee?classSectionId=${benchmarkClassSectionId}`,
-          { headers: { Cookie: authCookie } }
+          `${baseUrl}/api/v1/schools/${t.schoolId}/reports/absentee?classSectionId=${t.classSectionId}`,
+          { headers: { Cookie: t.authCookie || '' } }
         );
       },
-      concurrency: isFullScale ? 15 : 10,
-      total: isFullScale ? 3000 : 150,
+      concurrency: isFullScale ? 20 : 10,
     },
     {
       name: '7. SMS & Notification Queue Burst',
-      execute: async () => {
-        return fetch(`${baseUrl}/api/v1/notifications/history/${benchmarkStudentId}`, {
-          headers: { Cookie: authCookie, 'x-school-id': benchmarkSchoolId },
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
+        return fetch(`${baseUrl}/api/v1/notifications/history/${t.studentId}`, {
+          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId },
         });
       },
-      concurrency: isFullScale ? 15 : 10,
-      total: isFullScale ? 3000 : 100,
+      concurrency: isFullScale ? 20 : 10,
     },
     {
       name: '8. Redis Latency & Distributed Rate Limiter Pressure',
-      execute: async () => {
+      expectedStatuses: [200, 429], // 429 rate limit is explicitly allowed for high-frequency burst
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/auth/me`, {
-          headers: { Cookie: authCookie },
+          headers: { Cookie: t.authCookie || '' },
         });
       },
-      concurrency: isFullScale ? 30 : 15,
-      total: isFullScale ? 6000 : 250,
+      concurrency: isFullScale ? 40 : 15,
     },
     {
-      name: '9. PostgreSQL Pool & Connection Pressure',
-      execute: async () => {
-        return fetch(`${baseUrl}/api/v1/schools/${benchmarkSchoolId}/attendance/sessions`, {
-          headers: { Cookie: authCookie },
+      name: '9. PostgreSQL Pool & Connection Pressure (100 Schools)',
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
+        return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/sessions`, {
+          headers: { Cookie: t.authCookie || '' },
         });
       },
-      concurrency: isFullScale ? 25 : 15,
-      total: isFullScale ? 5000 : 200,
+      concurrency: isFullScale ? 35 : 15,
     },
     {
       name: '10. Large Dataset Scale Query (500k Students Roster & Export)',
-      execute: async () => {
+      expectedStatuses: [200],
+      execute: async (index: number) => {
+        const t = tenants[index % tenants.length];
         return fetch(
-          `${baseUrl}/api/v1/schools/${benchmarkSchoolId}/reports/monthly-register?classSectionId=${benchmarkClassSectionId}&year=2026&month=8`,
-          { headers: { Cookie: authCookie } }
+          `${baseUrl}/api/v1/schools/${t.schoolId}/reports/monthly-register?classSectionId=${t.classSectionId}&year=2026&month=8`,
+          { headers: { Cookie: t.authCookie || '' } }
         );
       },
-      concurrency: isFullScale ? 15 : 10,
-      total: isFullScale ? 3000 : 150,
+      concurrency: isFullScale ? 20 : 10,
     },
   ];
 
@@ -373,29 +390,32 @@ export async function runFullScaleLoadTest(
   let grandTotalUnexpectedFailed = 0;
   const globalStartTime = Date.now();
 
+  const perScenarioDurationMs = Math.max(500, Math.floor((targetDurationSeconds * 1000) / scenarioDefinitions.length));
+
   try {
     for (const scDef of scenarioDefinitions) {
-      console.log(`Executing Scenario: ${scDef.name}...`);
+      console.log(`Executing Scenario: ${scDef.name} (Duration: ${perScenarioDurationMs / 1000}s)...`);
       const scStart = Date.now();
       const latenciesMs: number[] = [];
       const statusCounts: Record<number, number> = {};
       let successful = 0;
       let unexpectedFailed = 0;
+      let reqCounter = 0;
 
-      const batchCount = Math.ceil(scDef.total / scDef.concurrency);
-      for (let b = 0; b < batchCount; b++) {
+      // Time-controlled sustained execution loop
+      while (Date.now() - scStart < perScenarioDurationMs) {
         const batchPromises = Array.from({ length: scDef.concurrency }, async () => {
+          const idx = ++reqCounter;
           const reqStart = Date.now();
           try {
-            const res = await scDef.execute();
+            const res = await scDef.execute(idx);
             const duration = Date.now() - reqStart;
             latenciesMs.push(duration);
 
             const status = res.status;
             statusCounts[status] = (statusCounts[status] || 0) + 1;
 
-            // 200-299 is successful. Expected business 401/403/409/429 status codes are tracked separately.
-            if (res.ok || [401, 403, 409, 429].includes(status)) {
+            if (scDef.expectedStatuses.includes(status)) {
               successful++;
             } else {
               unexpectedFailed++;
@@ -417,21 +437,24 @@ export async function runFullScaleLoadTest(
         return latenciesMs[Math.max(0, Math.min(idx, latenciesMs.length - 1))];
       };
 
+      const totalReq = successful + unexpectedFailed;
+
       const result: ScenarioResult = {
         name: scDef.name,
-        totalRequests: scDef.total,
+        totalRequests: totalReq,
         successfulRequests: successful,
         failedRequests: unexpectedFailed,
-        unexpectedErrorRatePercent: Number(((unexpectedFailed / scDef.total) * 100).toFixed(2)),
-        rps: Number((scDef.total / scDuration).toFixed(2)),
+        unexpectedErrorRatePercent: Number(((unexpectedFailed / Math.max(1, totalReq)) * 100).toFixed(2)),
+        rps: Number((totalReq / scDuration).toFixed(2)),
         p50Ms: getPercentile(50),
         p95Ms: getPercentile(95),
         p99Ms: getPercentile(99),
         durationSeconds: Number(scDuration.toFixed(2)),
+        expectedStatuses: scDef.expectedStatuses,
         endpointMetrics: [
           {
             endpoint: scDef.name,
-            totalRequests: scDef.total,
+            totalRequests: totalReq,
             successfulRequests: successful,
             unexpectedFailures: unexpectedFailed,
             expectedStatusCodes: statusCounts,
@@ -443,7 +466,7 @@ export async function runFullScaleLoadTest(
       };
 
       scenarioResults.push(result);
-      grandTotalRequests += scDef.total;
+      grandTotalRequests += totalReq;
       grandTotalSuccessful += successful;
       grandTotalUnexpectedFailed += unexpectedFailed;
     }
@@ -452,10 +475,10 @@ export async function runFullScaleLoadTest(
   }
 
   const globalDurationSeconds = Number(((Date.now() - globalStartTime) / 1000).toFixed(2));
-  const overallErrorRatePercent = Number(((grandTotalUnexpectedFailed / grandTotalRequests) * 100).toFixed(2));
+  const overallErrorRatePercent = Number(((grandTotalUnexpectedFailed / Math.max(1, grandTotalRequests)) * 100).toFixed(2));
   const overallRps = Number((grandTotalRequests / globalDurationSeconds).toFixed(2));
 
-  // Perform Post-Load Database Integrity Checks
+  // Post-Load Database Integrity Checks
   console.log('Running Post-Load Database Integrity Verification...');
   let postLoadIntegrity: PostLoadIntegrityReport = {
     timestamp: new Date().toISOString(),
@@ -473,7 +496,6 @@ export async function runFullScaleLoadTest(
     const [recCount] = await db.select({ count: count() }).from(attendanceRecords);
     const [evtCount] = await db.select({ count: count() }).from(attendanceEvents);
 
-    // Duplicate check on attendanceRecords (school_id, attendance_session_id, student_id)
     const duplicates = await db.execute(sql`
       SELECT school_id, attendance_session_id, student_id, COUNT(*)
       FROM attendance_records
@@ -481,7 +503,6 @@ export async function runFullScaleLoadTest(
       HAVING COUNT(*) > 1
     `);
 
-    // Duplicate check on notificationJobs (school_id, student_id, attendance_session_id, notification_type, finalized_attendance_version)
     const duplicateJobs = await db.execute(sql`
       SELECT school_id, student_id, attendance_session_id, notification_type, finalized_attendance_version, COUNT(*)
       FROM notification_jobs
@@ -504,6 +525,38 @@ export async function runFullScaleLoadTest(
     };
   });
 
+  // Strict Compliance Verification Assertions
+  const complianceFailures: string[] = [];
+
+  if (overallErrorRatePercent > 1.0) {
+    complianceFailures.push(`Overall unexpected error rate ${overallErrorRatePercent}% exceeds threshold 1.0%`);
+  }
+  if (!postLoadIntegrity.integrityPassed) {
+    complianceFailures.push(`Post-load DB integrity failed: ${postLoadIntegrity.duplicateRecordCount} duplicate records, ${postLoadIntegrity.duplicateNotificationJobs} duplicate jobs`);
+  }
+
+  const p95Violations = scenarioResults.filter((s) => s.p95Ms > 300);
+  if (p95Violations.length > 0) {
+    complianceFailures.push(`p95 latency threshold (300ms) exceeded by: ${p95Violations.map((v) => v.name).join(', ')}`);
+  }
+
+  if (isFullScale) {
+    if (globalDurationSeconds < targetDurationSeconds - 10) {
+      complianceFailures.push(`Sustained duration ${globalDurationSeconds}s fell below target ${targetDurationSeconds}s`);
+    }
+    if (overallRps < 500) {
+      complianceFailures.push(`Sustained throughput ${overallRps} RPS fell below 500 RPS threshold`);
+    }
+    if (verifiedSchools < 100) {
+      complianceFailures.push(`Verified schools ${verifiedSchools} fell below 100 school requirement`);
+    }
+    if (verifiedStudents < 450000) {
+      complianceFailures.push(`Verified students ${verifiedStudents} fell below 450,000 student dataset requirement`);
+    }
+  }
+
+  const compliancePassed = complianceFailures.length === 0;
+
   const outputDir = path.join(process.cwd(), 'output');
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -514,15 +567,10 @@ export async function runFullScaleLoadTest(
     JSON.stringify(postLoadIntegrity, null, 2)
   );
 
-  // Determine compliance verdict
-  const compliancePassed = overallErrorRatePercent <= 1.0 && postLoadIntegrity.integrityPassed;
-
-  let commitSha = 'e0f436e2cc8bbf0342c241bbfa4a281f6b289438';
+  let commitSha = '34e03a9';
   try {
     commitSha = fs.readFileSync(path.join(process.cwd(), '.git/HEAD'), 'utf-8').trim();
-  } catch {
-    // fallback
-  }
+  } catch {}
 
   const report: FullScaleReport = {
     timestamp: new Date().toISOString(),
@@ -539,6 +587,7 @@ export async function runFullScaleLoadTest(
     scenarios: scenarioResults,
     postLoadIntegrity,
     compliancePassed,
+    complianceFailures,
   };
 
   fs.writeFileSync(path.join(outputDir, 'full-scale-report.json'), JSON.stringify(report, null, 2));
@@ -549,21 +598,22 @@ export async function runFullScaleLoadTest(
 - **Git Commit**: \`${report.gitCommitSha}\`
 - **Target Environment**: ${report.targetEnvironment}
 - **Verified Scale**: ${report.verifiedSchools} Schools / ${report.verifiedStudents} Students
-- **Measured Duration**: ${report.durationSeconds}s
+- **Measured Duration**: ${report.durationSeconds}s (Target: ${targetDurationSeconds}s)
 - **Total Business Requests**: ${report.totalBusinessRequests}
 - **Overall Throughput**: ${report.overallRps} RPS
 - **Unexpected Error Rate**: ${report.overallErrorRatePercent}% (Threshold ≤ 1.0%)
 - **Data Integrity Status**: ${report.postLoadIntegrity.integrityPassed ? 'PASSED (0 duplicates, 0 orphaned events)' : 'FAILED'}
 - **Compliance Verdict**: ${report.compliancePassed ? '✅ CERTIFIED GREEN' : '❌ FAILED'}
+${report.complianceFailures.length > 0 ? `\n### Compliance Failures\n${report.complianceFailures.map((f) => `- ❌ ${f}`).join('\n')}` : ''}
 
 ## Scenario Breakdown
 
-| Scenario | Requests | Successful | Unexpected Failures | Error Rate | RPS | p50 (ms) | p95 (ms) | p99 (ms) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Scenario | Requests | Successful | Unexpected Failures | Error Rate | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Expected Statuses |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 ${report.scenarios
   .map(
     (s) =>
-      `| ${s.name} | ${s.totalRequests} | ${s.successfulRequests} | ${s.failedRequests} | ${s.unexpectedErrorRatePercent}% | ${s.rps} | ${s.p50Ms} | ${s.p95Ms} | ${s.p99Ms} |`
+      `| ${s.name} | ${s.totalRequests} | ${s.successfulRequests} | ${s.failedRequests} | ${s.unexpectedErrorRatePercent}% | ${s.rps} | ${s.p50Ms} | ${s.p95Ms} | ${s.p99Ms} | ${s.expectedStatuses.join('/')} |`
   )
   .join('\n')}
 
@@ -578,10 +628,11 @@ ${report.scenarios
   fs.writeFileSync(path.join(outputDir, 'full-scale-report.md'), markdownReport);
 
   console.log('=== Business Load Benchmark Execution Complete ===');
-  console.log(`Saved reports to:`);
-  console.log(`- output/full-scale-report.json`);
-  console.log(`- output/full-scale-report.md`);
-  console.log(`- output/post-load-integrity-report.json`);
+  console.log(`Duration: ${globalDurationSeconds}s | Total Requests: ${grandTotalRequests} | Successful: ${grandTotalSuccessful} | Unexpected Failures: ${grandTotalUnexpectedFailed}`);
+  console.log(`Compliance Verdict: ${compliancePassed ? 'PASSED' : 'FAILED'}`);
+  if (complianceFailures.length > 0) {
+    console.error('Compliance Failures:', complianceFailures);
+  }
 
   return report;
 }

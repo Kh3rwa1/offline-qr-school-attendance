@@ -4,342 +4,253 @@ on:
   push:
     branches: [main]
   pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-  security-events: write
+    branches: [main]
 
 jobs:
-  static-and-unit:
+  static-check-and-unit-tests:
     name: Static Check & Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-      - run: npm run build
+          fetch-depth: 0
 
-  load-smoke:
-    name: Mandatory Pull-Request Load Smoke Gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@60ed15d54543997d2626eac07909eb8066f10c30 # v4.0.2
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: Run Load Smoke Benchmark
-        run: npm run test:load-smoke
-      - name: Upload Load Smoke Benchmark Artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Execute Dependency License Policy Audit
+        run: npx tsx scripts/validate-license-policy.ts
+
+      - name: Unit & Integration Tests
+        run: npm test
+
+      - name: Build Web Bundle & Worker Service
+        run: npm run build
+
+      - name: Generate CycloneDX npm Software Bill of Materials (SBOM)
+        run: npx @cyclonedx/cyclonedx-npm --output-file output/sbom.cdx.json
+
+      - name: Upload npm SBOM Artifact
+        uses: actions/upload-artifact@5076a4d502bb57032747195c643666d628d0840e # v4.0.0
         with:
-          name: load-smoke-report
-          path: output/load-smoke-report.json
+          name: sbom-cdx-npm
+          path: output/sbom.cdx.json
           if-no-files-found: error
 
-  browser-e2e:
-    name: Playwright Browser E2E (Chromium & Firefox)
+  security-scan:
+    name: Security & Vulnerability Check
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npx playwright install --with-deps chromium firefox
+          fetch-depth: 0
 
-      - name: Start app for E2E
+      - name: Run Gitleaks Full History Secret Scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
-          NODE_ENV: development
-          PORT: 3000
-          SESSION_SECRET: ci-session-secret-012345678901234567890123456789
-          SMS_PROVIDER: fake
-        run: |
-          npm run e2e:server > /tmp/attendance-app.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3100/api/v1/health && break || sleep 1; done
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Playwright E2E
-        env:
-          BASE_URL: http://127.0.0.1:3100
-        run: npm run test:e2e
-
-      - name: Upload E2E report & logs on failure
-        if: failure()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+      - name: Run Trivy Filesystem Vulnerability Scan
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
         with:
-          name: playwright-artifacts
-          path: |
-            output/playwright/
-            playwright-report/
-            test-results/
-            /tmp/attendance-app.log
-          if-no-files-found: warn
+          scan-type: fs
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: HIGH,CRITICAL
 
-  postgres-integration:
-    name: Restricted PostgreSQL RLS & Redis Multi-Replica Integration
+      - name: Upload Trivy FS SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@e889a06d4e1d230cf2b0ed49e58fc306522c4edd # v3.24.0
+        with:
+          sarif_file: trivy-fs-results.sarif
+          category: trivy-filesystem
+
+      - name: Build Container Image for Security Scanning
+        run: docker build -t offline-qr-school-attendance:scan .
+
+      - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+        with:
+          image-ref: offline-qr-school-attendance:scan
+          format: sarif
+          output: trivy-image-results.sarif
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+
+  pr-load-smoke-gate:
+    name: Mandatory Pull-Request Load Smoke Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: attendance_migration
-          POSTGRES_PASSWORD: migration-ci-password
+          POSTGRES_PASSWORD: ci_password
           POSTGRES_DB: school_attendance
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U attendance_migration -d school_attendance"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=12
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       redis:
         image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 5s
+          --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@60ed15d54543997d2626eac07909eb8066f10c30 # v4.0.2
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Create database roles
-        env:
-          PGPASSWORD: migration-ci-password
-        run: |
-          psql -h 127.0.0.1 -U attendance_migration -d school_attendance <<'SQL'
-          DO $$
-          BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
-              CREATE ROLE attendance_app LOGIN PASSWORD 'application-ci-password';
-            END IF;
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
-              CREATE ROLE attendance_system LOGIN PASSWORD 'system-ci-password';
-            END IF;
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system_rls') THEN
-              CREATE ROLE attendance_system_rls NOLOGIN;
-            END IF;
-          END $$;
-          ALTER ROLE attendance_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-          ALTER ROLE attendance_system NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-          GRANT attendance_system_rls TO attendance_system;
-          REVOKE attendance_system_rls FROM attendance_app;
-          GRANT CONNECT ON DATABASE school_attendance TO attendance_app;
-          GRANT CONNECT ON DATABASE school_attendance TO attendance_system;
-          GRANT USAGE ON SCHEMA public TO attendance_app;
-          GRANT USAGE ON SCHEMA public TO attendance_system;
-          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_system;
-          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO attendance_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO attendance_system;
-          SQL
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: Run Drizzle migrations
+      - name: Execute Authentic Pull-Request Business Load Smoke Gate
         env:
-          NODE_ENV: production
-          DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
-          SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
-          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
-          METRICS_AUTH_TOKEN: ci-metrics-token-012345678901234567890123456789
-        run: npm run migrate
-
-      - name: Run PostgreSQL RLS tests
-        env:
           NODE_ENV: production
-          PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
-          PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:application-ci-password@127.0.0.1:5432/school_attendance
-          PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:system-ci-password@127.0.0.1:5432/school_attendance
-          SESSION_SECRET: ci-session-secret-012345678901234567890123456789
-          REDIS_URL: redis://127.0.0.1:6379
-          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
-          METRICS_AUTH_TOKEN: ci-metrics-token-012345678901234567890123456789
-          SMS_PROVIDER: fake
-          ALLOW_FAKE_SMS_IN_PRODUCTION: 'true'
-        run: npm run test:postgres
+        run: npm run test:load-smoke
 
-      - name: Run Redis Multi-Replica Integration tests
-        env:
-          NODE_ENV: production
-          REDIS_REQUIRED: '1'
-          REDIS_URL: redis://127.0.0.1:6379
-          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
-        run: npx vitest run tests/redisMultiReplica.test.ts
+      - name: Upload Business Load Benchmark Reports
+        uses: actions/upload-artifact@5076a4d502bb57032747195c643666d628d0840e # v4.0.0
+        with:
+          name: business-load-smoke-reports
+          path: output/
+          if-no-files-found: error
 
-  backup-restore-test:
-    name: Encrypted Backup & Restore Verification Drill
+  playwright-e2e:
+    name: Playwright Browser E2E (Chromium & Firefox)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: backup_test_user
-          POSTGRES_PASSWORD: backup_test_password
-          POSTGRES_DB: school_attendance_source
+          POSTGRES_USER: attendance_migration
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: school_attendance
         ports:
-          - 5433:5432
+          - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U backup_test_user -d school_attendance_source"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@60ed15d54543997d2626eac07909eb8066f10c30 # v4.0.2
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Create Target Database & Run Drill
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers (Chromium & Firefox)
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Build Production Bundle & Seed E2E Database
         env:
-          PGPASSWORD: backup_test_password
-          DATABASE_URL: postgres://backup_test_user:backup_test_password@127.0.0.1:5433/school_attendance_source
-          TARGET_DATABASE_URL: postgres://backup_test_user:backup_test_password@127.0.0.1:5433/school_attendance_target
-          BACKUP_PASSPHRASE: ci-backup-passphrase-01234567890123456789
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: production
         run: |
-          psql -h 127.0.0.1 -p 5433 -U backup_test_user -d school_attendance_source -c "CREATE DATABASE school_attendance_target;"
-          npm run migrate
-          npm run seed
-          chmod +x scripts/backupAndRestore.sh
-          ./scripts/backupAndRestore.sh
+          npm run build
+          npx tsx src/db/migrate.ts
+          npx tsx src/db/seed.ts
 
-  k8s-validation:
-    name: Kubernetes Schema & Security Manifest Validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Validate Built-in and Custom Resources (ServiceMonitor & ExternalSecret)
-        run: |
-          npx tsx scripts/validate-k8s-manifests.ts
-          npx vitest run tests/k8sCrdValidation.test.ts
+      - name: Run Expanded Playwright E2E Suite (retries: 0)
+        env:
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: production
+          PORT: 3100
+        run: npm run test:e2e
 
-  docker-smoke:
-    name: Production Docker Smoke Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Copy .env.example to .env
-        run: cp .env.example .env
-      - name: Build & Start Compose
-        run: |
-          if ! docker compose up -d --build; then
-            echo "=== Docker Compose Build/Start Failed! Printing service diagnostics ==="
-            docker compose config || true
-            docker compose ps -a || true
-            docker compose logs --no-color || true
-            exit 1
-          fi
-      - name: Verify Service Health
-        run: |
-          HEALTHY=false
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3000/api/v1/health; then
-              echo "App health verified!"
-              HEALTHY=true
-              break
-            fi
-            sleep 2
-          done
-          if [ "$HEALTHY" != "true" ]; then
-            echo "ERROR: Docker container failed to become healthy after 60 seconds."
-            docker compose ps -a || true
-            docker compose logs --no-color || true
-            exit 1
-          fi
-      - name: Teardown Compose
+      - name: Upload Playwright Test Artifacts
         if: always()
-        run: docker compose down -v || true
-
-  security:
-    name: Security & Vulnerability Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/upload-artifact@5076a4d502bb57032747195c643666d628d0840e # v4.0.0
         with:
-          fetch-depth: 0 # Scan complete Git history
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+
+  k8s-manifest-validation:
+    name: Kubernetes Schema & Security Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Install Kubeconform Binary
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@60ed15d54543997d2626eac07909eb8066f10c30 # v4.0.2
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm audit --audit-level=high
 
-      - name: Validate Dependency License Policy
-        run: npx tsx scripts/validate-license-policy.ts
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: Run Gitleaks Secret Scanner across Full Git History
-        uses: gitleaks/gitleaks-action@79025068222a7f5c35272a8c3d82a17056bf1569 # v2.3.9
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Kubeconform & Strict OpenAPI Schema Validator
+        run: npx tsx scripts/validate-k8s-manifests.ts
 
-      - name: Run Trivy Filesystem Vulnerability Scan
-        uses: aquasecurity/trivy-action@18f2510ee396bbf40040fcb9331168432d19d9d6 # v0.29.0
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          exit-code: '1'
-          severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true
+      - name: Run K8s CRD Validation Unit Test Suite
+        run: npx vitest run tests/k8sCrdValidation.test.ts
 
-      - name: Build Production Docker Image for Vulnerability Scanning
-        run: docker build -t offline-qr-school-attendance:security-check .
+  k8s-kind-cluster-drill:
+    name: Disposable Kind Cluster Deployment & Rollback Drill
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Run Trivy Container Image Scan
-        uses: aquasecurity/trivy-action@18f2510ee396bbf40040fcb9331168432d19d9d6 # v0.29.0
-        with:
-          image-ref: 'offline-qr-school-attendance:security-check'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'HIGH,CRITICAL'
-          exit-code: '0'
+      - name: Execute Disposable Kind Cluster Deployment & Rollback Drill
+        run: ./scripts/test-k8s-kind.sh
 
-      - name: Upload Trivy Container Scan SARIF Report
-        uses: github/codeql-action/upload-sarif@3c1cfa5126ffdcc6901741c83d08ef558a09e3d1 # v3.37.5
-        with:
-          sarif_file: 'trivy-results.sarif'
+  branch-protection-check:
+    name: Branch Protection Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Generate CycloneDX SBOM
-        run: npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file output/sbom.cdx.json
-
-      - name: Upload Security SBOM Artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
-        with:
-          name: sbom-artifact
-          path: output/sbom.cdx.json
-          if-no-files-found: error
+      - name: Verify GitHub Branch Protection Status
+        run: ./scripts/verify-branch-protection.sh

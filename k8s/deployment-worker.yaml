@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: sms-worker
-          image: ghcr.io/kh3rwa1/offline-qr-school-attendance@sha256:e0f436e2cc8bbf0342c241bbfa4a281f6b2894380123456789abcdef01234567
+          image: offline-qr-school-attendance:v1.0.0
           imagePullPolicy: IfNotPresent
           command: ["node", "dist/sms-worker.cjs"]
           securityContext:

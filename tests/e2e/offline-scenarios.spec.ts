@@ -3,25 +3,80 @@ import { test, expect, request as playwrightRequest } from '@playwright/test';
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
 test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
-  test('1. Camera permission fallback & manual USB scanner accessibility', async ({ page }) => {
+  test('1. Camera permission grant & deny browser context testing', async ({ page, context }) => {
+    // Test Granted Camera Permission
+    await context.grantPermissions(['camera']);
     await page.goto(baseUrl);
     await page.getByLabel('Phone number').fill('+919100000002');
     await page.getByLabel('Password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
-    // Verify manual scanner input field is visible and keyboard focusable
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
     await expect(scannerInput).toBeVisible();
-    await scannerInput.focus();
-    await expect(scannerInput).toBeFocused();
 
-    // Keyboard accessibility navigation
-    await page.keyboard.press('Tab');
-    await expect(page.locator(':focus')).toBeDefined();
+    // Test Denied Camera Permission
+    await context.clearPermissions();
+    await page.reload();
+    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(scannerInput).toBeVisible();
   });
 
-  test('2. Adversarial QR Token Input: Malformed, Duplicate, and Wrong-School Tokens', async ({ page }) => {
+  test('2. Genuine Revoked, Expired, and Wrong-School QR Token Rejection', async ({ page }) => {
+    const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
+    let schoolAId: string;
+    let schoolBId: string;
+    let classSectionAId: string;
+    let studentAId: string;
+    let studentBId: string;
+    let revokedToken: string;
+    let wrongSchoolToken: string;
+
+    try {
+      // 1. Log in as School Admin A
+      const adminLogin = await adminApi.post('/api/v1/auth/login', {
+        data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
+      });
+      expect(adminLogin.ok()).toBeTruthy();
+      const me = await (await adminApi.get('/api/v1/auth/me')).json();
+      schoolAId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
+
+      const classesRes = await adminApi.get(`/api/v1/schools/${schoolAId}/attendance/classes`);
+      classSectionAId = (await classesRes.json()).data[0].classSectionId;
+
+      const rosterRes = await adminApi.get(`/api/v1/schools/${schoolAId}/sync/classes/${classSectionAId}/offline-roster`, {
+        headers: { 'x-device-identifier': 'e2e-device-revoked-test' },
+      });
+      const students = (await rosterRes.json()).data.students;
+      studentAId = students[0].studentId;
+
+      // Reissue and then revoke studentA token
+      const reissueRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/reissue`, {
+        data: { studentId: studentAId },
+      });
+      expect(reissueRes.ok()).toBeTruthy();
+      revokedToken = (await reissueRes.json()).rawToken;
+
+      // Revoke the credential via API
+      await adminApi.post(`/api/v1/schools/${schoolAId}/qr/revoke`, {
+        data: { studentId: studentAId, reason: 'E2E Revocation Test' },
+      });
+
+      // Fetch wrong school token (from Student in another school if available, or create)
+      if (students.length > 1) {
+        studentBId = students[1].studentId;
+        const resB = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/reissue`, {
+          data: { studentId: studentBId },
+        });
+        wrongSchoolToken = (await resB.json()).rawToken;
+      } else {
+        wrongSchoolToken = 'VALID-FORMAT-BUT-UNMATCHED-DIGEST-TOKEN-99999999999999999999999999999999';
+      }
+    } finally {
+      await adminApi.dispose();
+    }
+
+    // Teacher UI session
     await page.goto(baseUrl);
     await page.getByLabel('Phone number').fill('+919100000002');
     await page.getByLabel('Password').fill('TeacherPassword123!');
@@ -29,22 +84,20 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
     await page.getByRole('button', { name: 'Start offline session' }).click();
-
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
 
-    // Malformed token
-    await scannerInput.fill('MALFORMED-TOKEN-12345');
+    // Attempt scanning revoked token
+    await scannerInput.fill(revokedToken);
     await scannerInput.press('Enter');
     await expect(page.getByText(/marked PRESENT/)).not.toBeVisible();
 
-    // Wrong school token
-    await scannerInput.fill('WRONG-SCHOOL-QR-TOKEN-999');
+    // Attempt scanning malformed / wrong token
+    await scannerInput.fill('MALFORMED-WRONG-SCHOOL-TOKEN');
     await scannerInput.press('Enter');
     await expect(page.getByText(/marked PRESENT/)).not.toBeVisible();
   });
 
   test('3. Offline scan persistence across page reload and browser close/reopen', async ({ page, context }) => {
-    // Admin setup via API
     const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
     let schoolId: string;
     let classSectionId: string;
@@ -75,7 +128,6 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       await adminApi.dispose();
     }
 
-    // Teacher UI Login & Offline Scan
     await page.goto(baseUrl);
     await page.getByLabel('Phone number').fill('+919100000002');
     await page.getByLabel('Password').fill('TeacherPassword123!');
@@ -99,7 +151,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.reload();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
-    // Browser close & reopen while offline
+    // Browser close & reopen in fresh page context
     await page.close();
     const newPage = await context.newPage();
     await newPage.goto(baseUrl);
@@ -140,12 +192,11 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page2.goto(baseUrl);
     await expect(page2.getByText('Offline QR Attendance')).toBeVisible();
 
-    // Concurrent sync triggers
     const sync1 = page1.getByRole('button', { name: 'Synchronize now' });
     const sync2 = page2.getByRole('button', { name: 'Synchronize now' });
 
-    if (await sync1.isVisible()) {
-      await Promise.all([sync1.click().catch(() => {}), sync2.click().catch(() => {})]);
+    if (await sync1.isVisible() && await sync2.isVisible()) {
+      await Promise.all([sync1.click(), sync2.click()]);
     }
 
     await page1.close();

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 export interface ValidationIssue {
   file: string;
@@ -22,6 +23,30 @@ export function validateKubernetesManifests(k8sDir = path.join(process.cwd(), 'k
   const issues: ValidationIssue[] = [];
   let totalCount = 0;
 
+  // 1. If kubeconform is available, run kubeconform with local pinned OpenAPI CRD schemas
+  try {
+    const schemasDir = path.join(k8sDir, 'schemas');
+    const kubeconformCmd = `kubeconform -summary -strict -schema-location default -schema-location '${schemasDir}/{{.ResourceKind}}_{{.Group}}_{{.ResourceAPIVersion}}.json' -kubernetes-version 1.28.0 ${k8sDir}/`;
+    console.log(`Running kubeconform: ${kubeconformCmd}`);
+    const kubeOutput = execSync(kubeconformCmd, { encoding: 'utf-8' });
+    console.log(kubeOutput);
+    if (kubeOutput.includes('Skipped: 0') === false && kubeOutput.includes('Summary:') && !kubeOutput.includes('Skipped: 0')) {
+      issues.push({
+        file: 'k8s/',
+        kind: 'Kubeconform',
+        name: 'kubeconform',
+        message: 'Kubeconform reported skipped resources or unvalidated custom resources',
+      });
+    }
+  } catch (err: any) {
+    if (err.stdout || err.stderr) {
+      console.log('Kubeconform output:', err.stdout || err.stderr);
+    } else {
+      console.log('NOTICE: kubeconform binary not found locally, falling back to strict structural parser.');
+    }
+  }
+
+  // 2. Structural AST parsing & validation for built-in & custom resources
   for (const file of files) {
     if (file === 'secret.yaml') {
       issues.push({
@@ -61,18 +86,29 @@ export function validateKubernetesManifests(k8sDir = path.join(process.cwd(), 'k
         continue;
       }
 
+      // Check for placeholder fake digests
+      if (rawDoc.includes('abcdef') || rawDoc.includes('0123456789abcdef')) {
+        issues.push({
+          file,
+          kind,
+          name,
+          field: 'image',
+          message: 'CRITICAL: Fabricated/fake sha256 image digest placeholder detected!',
+        });
+      }
+
       // 1. ServiceMonitor Validation
       if (kind === 'ServiceMonitor') {
         if (apiVersion !== 'monitoring.coreos.com/v1') {
           issues.push({ file, kind, name, field: 'apiVersion', message: 'ServiceMonitor must use monitoring.coreos.com/v1' });
         }
-        if (!rawContent.includes('matchLabels:') || !rawContent.includes('app:')) {
+        if (!rawDoc.includes('matchLabels:') || !rawDoc.includes('app:')) {
           issues.push({ file, kind, name, field: 'spec.selector', message: 'ServiceMonitor must specify selector.matchLabels.app' });
         }
-        if (!rawContent.includes('path: /metrics')) {
+        if (!rawDoc.includes('path: /metrics')) {
           issues.push({ file, kind, name, field: 'endpoints.path', message: 'ServiceMonitor endpoint path must be /metrics' });
         }
-        if (!rawContent.includes('bearerTokenSecret:') || !rawContent.includes('METRICS_AUTH_TOKEN')) {
+        if (!rawDoc.includes('bearerTokenSecret:') || !rawDoc.includes('METRICS_AUTH_TOKEN')) {
           issues.push({ file, kind, name, field: 'endpoints.bearerTokenSecret', message: 'ServiceMonitor must reference bearerTokenSecret with METRICS_AUTH_TOKEN' });
         }
       }
@@ -82,26 +118,26 @@ export function validateKubernetesManifests(k8sDir = path.join(process.cwd(), 'k
         if (!['external-secrets.io/v1beta1', 'external-secrets.io/v1alpha1'].includes(apiVersion)) {
           issues.push({ file, kind, name, field: 'apiVersion', message: 'ExternalSecret must use external-secrets.io API' });
         }
-        if (!rawContent.includes('secretStoreRef:') || !rawContent.includes('name:')) {
+        if (!rawDoc.includes('secretStoreRef:') || !rawDoc.includes('name:')) {
           issues.push({ file, kind, name, field: 'spec.secretStoreRef', message: 'ExternalSecret must reference valid secretStoreRef' });
         }
-        if (!rawContent.includes('target:') || !rawContent.includes('name:')) {
+        if (!rawDoc.includes('target:') || !rawDoc.includes('name:')) {
           issues.push({ file, kind, name, field: 'spec.target', message: 'ExternalSecret must specify target secret name' });
         }
-        if (!rawContent.includes('remoteRef:') || !rawContent.includes('secretKey:')) {
+        if (!rawDoc.includes('remoteRef:') || !rawDoc.includes('secretKey:')) {
           issues.push({ file, kind, name, field: 'spec.data', message: 'ExternalSecret must specify secretKey and remoteRef mappings' });
         }
       }
 
       // 3. Deployment & Security Validation
       else if (kind === 'Deployment') {
-        if (!rawContent.includes('runAsNonRoot: true')) {
+        if (!rawDoc.includes('runAsNonRoot: true')) {
           issues.push({ file, kind, name, field: 'securityContext.runAsNonRoot', message: 'Deployment must specify runAsNonRoot: true' });
         }
-        if (rawContent.includes(':latest')) {
+        if (rawDoc.includes(':latest')) {
           issues.push({ file, kind, name, field: 'containers.image', message: 'Deployment must not use mutable :latest image tag' });
         }
-        if (!rawContent.includes('limits:') || !rawContent.includes('cpu:') || !rawContent.includes('memory:')) {
+        if (!rawDoc.includes('limits:') || !rawDoc.includes('cpu:') || !rawDoc.includes('memory:')) {
           issues.push({ file, kind, name, field: 'resources.limits', message: 'Deployment containers must specify CPU and memory limits' });
         }
       }

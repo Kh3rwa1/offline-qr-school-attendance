@@ -53,7 +53,7 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
       );
       await client.query('COMMIT');
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw err;
     } finally {
       client.release();
@@ -101,6 +101,9 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
       expect(creds.rows[0].school_id).toBe(schoolA);
 
       await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
     } finally {
       client.release();
     }
@@ -116,6 +119,9 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
       expect(updateRes.rowCount).toBe(0);
 
       await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
     } finally {
       client.release();
     }
@@ -135,6 +141,9 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
       ).rejects.toThrow();
 
       await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
     } finally {
       client.release();
     }

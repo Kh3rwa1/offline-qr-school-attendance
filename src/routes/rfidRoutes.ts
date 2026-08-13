@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { requireTenant } from '../middleware/tenantMiddleware';
+import { tenantHandler } from '../middleware/tenantHandler';
 import { readerAuthMiddleware, ReaderAuthenticatedRequest } from '../middleware/readerAuthMiddleware';
 import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
@@ -61,9 +61,8 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { studentId, credentialDigest, securityMode, keyVersion, expiresAt } = req.body;
       const credential = await credentialService.enrollCredential({
@@ -79,15 +78,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/credentials',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const studentId = req.query.studentId as string;
       if (studentId) {
@@ -98,15 +96,14 @@ rfidRouter.get(
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/credentials/:credentialId',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const credential = await credentialService.getCredentialById(req.params.credentialId, req.params.schoolId);
       if (!credential) return res.status(404).json({ success: false, error: 'Credential not found' });
@@ -114,15 +111,14 @@ rfidRouter.get(
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/activate',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const credential = await credentialService.activateCredential(
         req.params.credentialId,
@@ -133,15 +129,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/suspend',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { reason } = req.body;
       const credential = await credentialService.suspendCredential(
@@ -154,15 +149,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/reactivate',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const credential = await credentialService.reactivateCredential(
         req.params.credentialId,
@@ -173,15 +167,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/revoke',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { reason } = req.body;
       const credential = await credentialService.revokeCredential(
@@ -194,15 +187,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/replace',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { newCredentialDigest, securityMode, keyVersion } = req.body;
       const credential = await credentialService.replaceCredential({
@@ -217,15 +209,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/bulk-enroll',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { entries } = req.body;
       const results = await credentialService.bulkEnroll({
@@ -237,22 +228,21 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/credentials/student/:studentId/history',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const credentials = await credentialService.getCredentialHistory(req.params.schoolId, req.params.studentId);
       return res.json({ success: true, credentials });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 // ============================================================================
@@ -261,9 +251,8 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/register',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reader = await readerService.registerReader({
         schoolId: req.params.schoolId,
@@ -282,15 +271,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/readers',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const readers = await readerService.listReaders(req.params.schoolId, {
         status: req.query.status as any,
@@ -299,15 +287,14 @@ rfidRouter.get(
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reader = await readerService.getReaderById(req.params.readerId, req.params.schoolId);
       if (!reader) return res.status(404).json({ success: false, error: 'Reader not found' });
@@ -315,30 +302,28 @@ rfidRouter.get(
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/approve',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reader = await readerService.approveReader(req.params.readerId, req.params.schoolId, req.user!.id);
       return res.json({ success: true, reader });
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/suspend',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reader = await readerService.suspendReader(
         req.params.readerId,
@@ -350,15 +335,14 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/revoke',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reader = await readerService.revokeReader(
         req.params.readerId,
@@ -370,37 +354,35 @@ rfidRouter.post(
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.patch(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reader = await readerService.updateReaderConfig(req.params.readerId, req.params.schoolId, req.body);
       return res.json({ success: true, reader });
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId/health',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const health = await readerService.getReaderHealth(req.params.readerId, req.params.schoolId);
       return res.json({ success: true, health });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 // Reader-authenticated heartbeat
@@ -465,8 +447,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/scans',
   requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const scans = await db
         .select()
@@ -479,43 +460,40 @@ rfidRouter.get(
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/provision',
   requireAuth,
-  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const provisioning = await readerService.provisionReader(req.params.readerId, req.params.schoolId, req.user!.id);
       return res.json({ success: true, provisioning });
     } catch (error: any) {
       return res.status(400).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/reports/readers',
   requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const readers = await readerService.listReaders(req.params.schoolId);
       return res.json({ success: true, report: readers });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/reports/rejections',
   requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
+  tenantHandler(async (req: AuthenticatedRequest, res: Response) => {
     try {
       const rejections = await db
         .select()
@@ -529,5 +507,5 @@ rfidRouter.get(
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
-  }
+  })
 );

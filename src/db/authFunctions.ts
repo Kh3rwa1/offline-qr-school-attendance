@@ -40,7 +40,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 } | null> {
   const pool = getAuthPool();
   if (pool) {
-    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM lookup_auth_user_by_phone($1)', [phoneNumber]);
+    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
     if (res.rows.length === 0) return null;
     const row = res.rows[0];
     return {
@@ -54,7 +54,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 
   // Fallback for PGlite / in-memory unit tests
   try {
-    const res = await executeSql(`SELECT id, full_name, phone_number, password_hash, status FROM lookup_auth_user_by_phone('${phoneNumber.replace(/'/g, "''")}')`);
+    const res = await executeSql(`SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone('${phoneNumber.replace(/'/g, "''")}')`);
     if (res?.rows && res.rows.length > 0) {
       const row = res.rows[0];
       return {
@@ -90,7 +90,7 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
 }>> {
   const pool = getAuthPool();
   if (pool) {
-    const res = await pool.query('SELECT school_id, school_name, role, status FROM get_user_school_memberships($1)', [userId]);
+    const res = await pool.query('SELECT school_id, school_name, role, status FROM public.get_user_school_memberships($1::uuid)', [userId]);
     return res.rows.map((r) => ({
       schoolId: r.school_id,
       schoolName: r.school_name,
@@ -100,7 +100,7 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
   }
 
   try {
-    const res = await executeSql(`SELECT school_id, school_name, role, status FROM get_user_school_memberships('${userId}')`);
+    const res = await executeSql(`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships('${userId}')`);
     if (res?.rows) {
       return res.rows.map((r: any) => ({
         schoolId: r.school_id,

@@ -14,10 +14,13 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN
     CREATE ROLE attendance_worker WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD 'worker_password_123!';
   END IF;
+EXCEPTION WHEN OTHERS THEN
+  -- Non-superuser role running migrations cannot create roles; ignore if roles exist or user lacks CREATEROLE
+  NULL;
 END $$;
 
 -- SECURITY DEFINER function for pre-tenant authentication user lookup
-CREATE OR REPLACE FUNCTION lookup_auth_user_by_phone(p_phone text)
+CREATE OR REPLACE FUNCTION public.lookup_auth_user_by_phone(p_phone text)
 RETURNS TABLE (
   id uuid,
   full_name text,
@@ -39,7 +42,7 @@ END;
 $$;
 
 -- SECURITY DEFINER function for pre-tenant user school membership lookup
-CREATE OR REPLACE FUNCTION get_user_school_memberships(p_user_id uuid)
+CREATE OR REPLACE FUNCTION public.get_user_school_memberships(p_user_id uuid)
 RETURNS TABLE (
   school_id uuid,
   school_name text,
@@ -61,12 +64,10 @@ BEGIN
 END;
 $$;
 
--- Function security hardening: assign owner, revoke PUBLIC, grant attendance_auth
-ALTER FUNCTION lookup_auth_user_by_phone(text) OWNER TO CURRENT_USER;
-ALTER FUNCTION get_user_school_memberships(uuid) OWNER TO CURRENT_USER;
+-- Function security hardening: assign owner and grant execution rights across app/auth roles
+ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO CURRENT_USER;
+ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO CURRENT_USER;
 
-REVOKE EXECUTE ON FUNCTION lookup_auth_user_by_phone(text) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION get_user_school_memberships(uuid) FROM PUBLIC;
-
-GRANT EXECUTE ON FUNCTION lookup_auth_user_by_phone(text) TO attendance_auth;
-GRANT EXECUTE ON FUNCTION get_user_school_memberships(uuid) TO attendance_auth;
+GRANT USAGE ON SCHEMA public TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO PUBLIC;

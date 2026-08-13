@@ -321,8 +321,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     });
   } catch (err: any) {
     const errMsg = String(err?.message || '') + ' ' + String(err?.cause?.message || '') + ' ' + String(err?.cause?.code || '');
-    if (err?.code === '23505' || err?.cause?.code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('rfid_scan_events_client_event_idx')) {
-      for (let attempt = 0; attempt < 15; attempt++) {
+    if (err?.code === '23505' || err?.cause?.code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('rfid_scan_events_client_event_idx') || errMsg.includes('attendance_events_client_event_idx')) {
+      for (let attempt = 0; attempt < 50; attempt++) {
         const [existing] = await db
           .select()
           .from(rfidScanEvents)
@@ -334,7 +334,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
             processingLatencyMs: Date.now() - startTime,
           };
         }
-        await new Promise((res) => setTimeout(res, 15));
+        await new Promise((res) => setTimeout(res, 20));
       }
     }
     throw err;

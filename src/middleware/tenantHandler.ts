@@ -11,13 +11,15 @@ export interface TenantContext {
   userRole: string;
 }
 
-export type TenantHandlerFn = (ctx: TenantContext) => Promise<{
-  status?: number;
-  data?: any;
-  body?: any;
-  contentType?: string;
-  headers?: Record<string, string>;
-} | void>;
+export type TenantHandlerFn =
+  | ((ctx: TenantContext) => Promise<{
+      status?: number;
+      data?: any;
+      body?: any;
+      contentType?: string;
+      headers?: Record<string, string>;
+    } | void>)
+  | ((req: AuthenticatedRequest, res: Response, next?: NextFunction) => Promise<any>);
 
 /**
  * Robust, non-monkey-patching tenant transaction wrapper.
@@ -75,7 +77,10 @@ export function tenantHandler(handler: TenantHandlerFn) {
     try {
       // Execute handler inside database tenant context transaction
       const result = await withTenantContext(schoolId, async () => {
-        return await handler({
+        if (handler.length > 1) {
+          return await (handler as any)(req, res, next);
+        }
+        return await (handler as any)({
           req,
           res,
           schoolId,
@@ -91,7 +96,7 @@ export function tenantHandler(handler: TenantHandlerFn) {
         const statusCode = result.status || 200;
         if (result.headers) {
           for (const [k, v] of Object.entries(result.headers)) {
-            res.setHeader(k, v);
+            res.setHeader(k, v as string);
           }
         }
         if (result.contentType) {
@@ -125,3 +130,5 @@ export function tenantHandler(handler: TenantHandlerFn) {
     }
   };
 }
+
+export const withTenantTxHandler = tenantHandler;

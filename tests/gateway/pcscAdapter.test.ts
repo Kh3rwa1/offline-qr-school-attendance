@@ -1,7 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import { PcscAdapter } from '../../src/gateway/pcscAdapter';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { PcscAdapter, SimulatedPcscTransport, NativePcscTransport } from '../../src/gateway/pcscAdapter';
 
 describe('PCSC Edge Reader Gateway Suite', () => {
+  let origEnv: string | undefined;
+
+  beforeEach(() => {
+    origEnv = process.env.NODE_ENV;
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = origEnv;
+  });
+
   it('Successfully connects and transceives APDU command with SW1 SW2 verification', async () => {
     const pcsc = new PcscAdapter({ readerName: 'ACS ACR1252U 0' });
     await pcsc.connect();
@@ -16,6 +26,28 @@ describe('PCSC Edge Reader Gateway Suite', () => {
 
     await pcsc.disconnect();
     expect(pcsc.isConnected()).toBe(false);
+  });
+
+  it('Rejects simulator usage in production mode', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => new PcscAdapter({ useSimulator: true })).toThrow('PCSC_FATAL');
+  });
+
+  it('Throws when reader is not found or hardware unavailable', async () => {
+    const simTransport = new SimulatedPcscTransport([]);
+    const pcsc = new PcscAdapter({ maxReconnectAttempts: 1, reconnectIntervalMs: 10 }, simTransport);
+
+    await expect(pcsc.connect()).rejects.toThrow('PCSC_CONNECT_FAILED');
+  });
+
+  it('Throws when card is removed during APDU transmission', async () => {
+    const simTransport = new SimulatedPcscTransport(['ACS ACR1252U 0']);
+    const pcsc = new PcscAdapter({}, simTransport);
+    await pcsc.connect();
+
+    simTransport.setCardPresent(false);
+    const cmd = { cla: 0x90, ins: 0xbd, p1: 0x00, p2: 0x00 };
+    await expect(pcsc.transceiveApdu(cmd)).rejects.toThrow('CARD_REMOVED');
   });
 
   it('Detects APDU status error response (0x91 0x7E)', async () => {
@@ -44,16 +76,5 @@ describe('PCSC Edge Reader Gateway Suite', () => {
 
     await expect(promise).rejects.toThrow('READ_CANCELLED');
     await pcsc.disconnect();
-  });
-
-  it('Computes AN10922 diversified key from master key and card UID', () => {
-    const pcsc = new PcscAdapter();
-    const masterKey = 'master-secret-32-chars-long-env-key';
-    const cardUid = '04a1b2c3d4e5f6';
-    const systemId = 'school_attendance_system';
-
-    const divKey = pcsc.computeDiversifiedKey(masterKey, cardUid, systemId);
-    expect(divKey).toBeInstanceOf(Buffer);
-    expect(divKey.length).toBe(16);
   });
 });

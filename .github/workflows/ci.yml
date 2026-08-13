@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -43,7 +43,7 @@ jobs:
         run: npx @cyclonedx/cyclonedx-npm --output-file output/sbom.cdx.json
 
       - name: Upload npm SBOM Artifact
-        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
+        uses: actions/upload-artifact@v4.4.3
         with:
           name: sbom-cdx-npm
           path: output/sbom.cdx.json
@@ -57,12 +57,12 @@ jobs:
       security-events: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
 
       - name: Run Gitleaks Full History Secret Scan
-        uses: gitleaks/gitleaks-action@e0423ae58619bc5a5e31d516d2524a87c10b7d34
+        uses: gitleaks/gitleaks-action@v2.3.8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -76,7 +76,7 @@ jobs:
           trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae
+        uses: github/codeql-action/upload-sarif@v3.27.9
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem
@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload Security Vulnerability Scan Artifacts
         if: always()
-        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
+        uses: actions/upload-artifact@v4.4.3
         with:
           name: trivy-security-reports
           path: |
@@ -130,10 +130,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -172,10 +172,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -205,7 +205,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Build & Launch Docker Compose Stack
         env:

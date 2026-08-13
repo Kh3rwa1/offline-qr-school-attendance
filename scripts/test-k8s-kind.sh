@@ -29,7 +29,7 @@ dump_diagnostics() {
   kubectl get events -A --sort-by=.lastTimestamp || true
   kubectl describe pods -A || true
   kubectl describe jobs -A || true
-  kubectl logs -A --all-containers --prefix --tail=200 || true
+  kubectl logs -l app --all-containers --prefix --tail=200 || true
 }
 
 cleanup() {
@@ -116,7 +116,7 @@ echo "Verified non-root execution (UID ${RUN_AS_USER})."
 
 # 9. Execute Authenticated HTTP Application Smoke Test
 echo "9. Executing Authenticated HTTP Application Smoke Test..."
-kubectl port-forward service/school-attendance-web-service 3100:3000 &
+kubectl port-forward service/school-attendance-web-service 3100:80 &
 PF_PID=$!
 sleep 3
 

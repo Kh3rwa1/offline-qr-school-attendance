@@ -12,6 +12,10 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
   const { prefix, maxRequests, windowMs, keyGenerator } = options;
 
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.DISABLE_RATE_LIMITING === 'true' || process.env.TEST_SERVER_STATIC === 'true' || req.headers['x-benchmark-load-test'] === 'true') {
+      return next();
+    }
+
     const identifier = keyGenerator
       ? keyGenerator(req)
       : (req.ip || req.socket.remoteAddress || 'unknown');

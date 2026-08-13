@@ -353,6 +353,8 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          SMS_PROVIDER: console
+          ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
         run: |
           npm run build
           npx tsx src/db/migrate.ts
@@ -366,6 +368,7 @@ jobs:
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          DISABLE_RATE_LIMITING: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           PORT: 3100
@@ -376,7 +379,7 @@ jobs:
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: playwright-report
-          path: playwright-report/
+          path: output/playwright/
           if-no-files-found: ignore
 
   k8s-manifest-validation:

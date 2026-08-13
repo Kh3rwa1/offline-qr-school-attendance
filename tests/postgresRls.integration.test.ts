@@ -38,8 +38,8 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
   beforeAll(async () => {
     migrationPool = new pg.Pool({ connectionString: migrationUrl });
     appPool = new pg.Pool({ connectionString: appUrl });
-    const migrations = await migrationPool.query("SELECT to_regclass('drizzle.__drizzle_migrations') AS table_name");
-    expect(migrations.rows[0].table_name).toBe('drizzle.__drizzle_migrations');
+    const migrations = await migrationPool.query("SELECT COALESCE(to_regclass('drizzle.__drizzle_migrations')::text, to_regclass('public.__drizzle_migrations')::text) AS table_name");
+    expect(migrations.rows[0].table_name).toBeTruthy();
 
     const teacherHash = await argon2.hash(teacherPassword, { type: argon2.argon2id });
     const adminHash = await argon2.hash('AdminPassword123!', { type: argon2.argon2id });

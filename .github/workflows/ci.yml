@@ -244,7 +244,7 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
       - name: Validate Kubernetes Manifest Schemas
         run: |
-          kubeconform -summary -strict -skip ServiceMonitor -kubernetes-version 1.28.0 k8s/
+          kubeconform -summary -strict -skip ServiceMonitor,ExternalSecret -kubernetes-version 1.28.0 k8s/
           if [ -f k8s/secret.yaml ]; then
             echo "ERROR: k8s/secret.yaml must not be committed to git!"
             exit 1

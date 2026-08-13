@@ -4,6 +4,7 @@ import { rfidReaders } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { SecurityCapability } from '../services/rfid/adapters/types';
 import { verifyEnvelopeSignature } from '../services/rfid/cryptoService';
+import { decryptReaderSecret } from '../services/rfid/readerService';
 
 export interface ReaderContext {
   readerId: string;
@@ -58,7 +59,7 @@ export const readerAuthMiddleware = async (
 
     // Determine reader secret (per-reader secret or fallback global RFID_HMAC_SECRET). Fail closed if missing in non-test.
     const hmacSecret =
-      reader.sharedSecretEncrypted ||
+      (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
       process.env.RFID_HMAC_SECRET ||
       (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
     if (!hmacSecret) {

@@ -1,7 +1,7 @@
 import { db } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
 import { eq, and, gt } from 'drizzle-orm';
-import { isReaderAuthorized, getReaderById } from './readerService';
+import { isReaderAuthorized, getReaderById, decryptReaderSecret } from './readerService';
 import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
 import { getRedisClient } from '../redisService';
@@ -79,7 +79,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
   const [readerObj] = await db.select().from(rfidReaders).where(and(eq(rfidReaders.id, envelope.readerId)));
   const secret =
-    readerObj?.sharedSecretEncrypted ||
+    (readerObj?.sharedSecretEncrypted ? decryptReaderSecret(readerObj.sharedSecretEncrypted) : null) ||
     process.env.RFID_HMAC_SECRET ||
     (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
   if (!secret) {

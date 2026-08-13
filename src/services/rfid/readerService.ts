@@ -2,6 +2,43 @@ import { db } from '../../db';
 import { rfidReaders } from '../../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
+import crypto from 'crypto';
+
+export function encryptReaderSecret(secret: string): string {
+  const masterKeyHex = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+  const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
+  const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
+}
+
+export function decryptReaderSecret(encryptedStr: string): string {
+  if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
+  try {
+    const masterKeyHex = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+    const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
+    const [ivHex, tagHex, cipherHex] = encryptedStr.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    const tag = Buffer.from(tagHex, 'hex');
+    const cipherText = Buffer.from(cipherHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
+    decipher.setAuthTag(tag);
+    return decipher.update(cipherText).toString('utf8') + decipher.final('utf8');
+  } catch {
+    return encryptedStr;
+  }
+}
+
+export function sanitizeReader(reader: any): any {
+  if (!reader) return reader;
+  if (Array.isArray(reader)) {
+    return reader.map(sanitizeReader);
+  }
+  const { sharedSecretEncrypted, ...rest } = reader;
+  return rest;
+}
 
 export async function registerReader(params: {
   schoolId: string;
@@ -14,6 +51,7 @@ export async function registerReader(params: {
   adapterType: 'GATEWAY' | 'USB_HID' | 'WEB_SERIAL' | 'NETWORK';
   securityCapability?: string;
   certificateFingerprint?: string;
+  sharedSecret?: string;
   actorId?: string;
 }) {
   const [existing] = await db
@@ -30,6 +68,9 @@ export async function registerReader(params: {
     throw new Error('Device claimed by another school');
   }
 
+  const rawSecret = params.sharedSecret || crypto.randomBytes(32).toString('hex');
+  const encryptedSecret = encryptReaderSecret(rawSecret);
+
   const [inserted] = await db
     .insert(rfidReaders)
     .values({
@@ -43,6 +84,7 @@ export async function registerReader(params: {
       adapterType: params.adapterType,
       securityCapability: params.securityCapability || 'UID_ONLY',
       certificateFingerprint: params.certificateFingerprint,
+      sharedSecretEncrypted: encryptedSecret,
       status: 'PENDING',
     })
     .returning();
@@ -55,7 +97,7 @@ export async function registerReader(params: {
     resourceType: 'RFID_READER',
   });
 
-  return inserted;
+  return sanitizeReader(inserted);
 }
 
 function sanitizeActorId(actorId?: string): string | null {
@@ -74,7 +116,7 @@ export async function approveReader(readerId: string, schoolId: string, actorId?
 
   if (!reader) throw new Error('Reader not found or not PENDING');
   await createAuditLog({ schoolId, actorId: sanitizeActorId(actorId), action: 'RFID_READER_APPROVED', resourceId: readerId, resourceType: 'RFID_READER' });
-  return reader;
+  return sanitizeReader(reader);
 }
 
 export async function suspendReader(readerId: string, schoolId: string, reason: string, actorId?: string) {
@@ -87,7 +129,7 @@ export async function suspendReader(readerId: string, schoolId: string, reason: 
   if (reader) {
     await createAuditLog({ schoolId, actorId: sanitizeActorId(actorId), action: 'RFID_READER_SUSPENDED', resourceId: readerId, resourceType: 'RFID_READER', metadata: { reason } });
   }
-  return reader;
+  return sanitizeReader(reader);
 }
 
 export async function revokeReader(readerId: string, schoolId: string, reason: string, actorId?: string) {
@@ -100,7 +142,7 @@ export async function revokeReader(readerId: string, schoolId: string, reason: s
   if (reader) {
     await createAuditLog({ schoolId, actorId: sanitizeActorId(actorId), action: 'RFID_READER_REVOKED', resourceId: readerId, resourceType: 'RFID_READER', metadata: { reason } });
   }
-  return reader;
+  return sanitizeReader(reader);
 }
 
 export async function retireReader(readerId: string, schoolId: string) {
@@ -109,7 +151,7 @@ export async function retireReader(readerId: string, schoolId: string) {
     .set({ status: 'RETIRED' })
     .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)))
     .returning();
-  return reader;
+  return sanitizeReader(reader);
 }
 
 export async function updateReaderConfig(
@@ -122,7 +164,7 @@ export async function updateReaderConfig(
     .set({ ...config })
     .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)))
     .returning();
-  return reader;
+  return sanitizeReader(reader);
 }
 
 export async function recordHeartbeat(readerId: string, schoolId: string) {
@@ -147,12 +189,12 @@ export async function getReaderById(readerId: string, schoolId: string) {
     .select()
     .from(rfidReaders)
     .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)));
-  return reader || null;
+  return sanitizeReader(reader || null);
 }
 
 export async function getReaderHealth(readerId: string, schoolId: string) {
   const reader = await getReaderById(readerId, schoolId);
-  return reader;
+  return sanitizeReader(reader);
 }
 
 export async function listReaders(schoolId: string, filters?: { status?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED' | 'RETIRED' }) {
@@ -160,11 +202,15 @@ export async function listReaders(schoolId: string, filters?: { status?: 'PENDIN
   if (filters?.status) {
     conditions.push(eq(rfidReaders.status, filters.status));
   }
-  return await db.select().from(rfidReaders).where(and(...conditions));
+  const readers = await db.select().from(rfidReaders).where(and(...conditions));
+  return sanitizeReader(readers);
 }
 
 export async function isReaderAuthorized(readerId: string, schoolId: string) {
-  const reader = await getReaderById(readerId, schoolId);
+  const [reader] = await db
+    .select()
+    .from(rfidReaders)
+    .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)));
   return !!(reader && reader.status === 'ACTIVE');
 }
 
@@ -181,4 +227,7 @@ export const readerService = {
   getReaderHealth,
   listReaders,
   isReaderAuthorized,
+  decryptReaderSecret,
+  encryptReaderSecret,
+  sanitizeReader,
 };

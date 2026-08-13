@@ -61,12 +61,19 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
     (a, b) => new Date(a.readerTimestamp).getTime() - new Date(b.readerTimestamp).getTime()
   );
 
-  const results = [];
-  for (const event of sortedEvents) {
-    if (event.schoolId === schoolId) {
-      const res = await processScan({ ...event, isOffline: true });
-      results.push(res);
-    }
+  const results: any[] = [];
+  const chunkSize = 50;
+  for (let i = 0; i < sortedEvents.length; i += chunkSize) {
+    const chunk = sortedEvents.slice(i, i + chunkSize);
+    const chunkResults = await Promise.all(
+      chunk.map(async (event) => {
+        if (event.schoolId === schoolId) {
+          return await processScan({ ...event, isOffline: true });
+        }
+        return { decision: 'WRONG_SCHOOL', rejectionCode: 'SCHOOL_MISMATCH', processingLatencyMs: 0 };
+      })
+    );
+    results.push(...chunkResults);
   }
   return results;
 }

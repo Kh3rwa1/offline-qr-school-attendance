@@ -2,21 +2,13 @@
 title = "Gitleaks Config"
 
 [allowlist]
-description = "Global allowlist for confirmed non-secret CI test credentials and synthetic test environment variables"
+description = "Narrow allowlist for synthetic test environment secrets and known test fixture constants"
 regexes = [
-  '''ci[_-]session[_-]secret.*''',
-  '''ci[_-]metrics[_-]auth[_-]token.*''',
-  '''ci[_-]rfid[_-]hmac[_-]secret.*''',
-  '''kind[_-]ci[_-].*''',
-  '''load[_-]test[_-]secret.*''',
-  '''test[_-]secret[_-]32[_-]chars.*''',
+  '''ci_rfid_hmac_secret_key_32bytes_long''',
+  '''kind-ci-rfid-hmac-secret-32bytes''',
+  '''test-secret-32-chars-length-environment''',
+  '''load-test-secret-32-chars-length''',
   '''SchoolAdminPassword123!''',
   '''TeacherPassword123!''',
   '''SuperSecretAdminPassword123!'''
-]
-paths = [
-  '''\.github/workflows/.*''',
-  '''tests/.*''',
-  '''scripts/.*''',
-  '''docker-compose\.yml'''
 ]

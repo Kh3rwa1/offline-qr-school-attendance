@@ -79,26 +79,39 @@ export function computeAesCmac(key: Buffer, message: Buffer): Buffer {
 }
 
 /**
+ * APDU Frame formatting for DESFire EV2/EV3 Commands
+ */
+export function formatDesfireApdu(ins: number, p1: number = 0x00, p2: number = 0x00, data?: Buffer): Buffer {
+  const cla = 0x90; // DESFire APDU CLA
+  const lc = data ? data.length : 0;
+  const header = Buffer.from([cla, ins, p1, p2, lc]);
+  const le = Buffer.from([0x00]);
+  return data ? Buffer.concat([header, data, le]) : Buffer.concat([header, le]);
+}
+
+/**
  * Simulates DESFire EV2/EV3 3-Pass AES-128 Mutual Authentication Protocol Exchange
  */
 export function simulateDesfire3PassAuthentication(masterKeyHex: string, cardUidHex: string) {
-  // 1. AN10922 Key Diversification (AES-128)
+  // 1. AN10922 Key Diversification (AES-128 CMAC based)
   const masterKey = Buffer.from(masterKeyHex.padEnd(32, '0').slice(0, 32), 'hex');
   const cardUid = Buffer.from(cardUidHex.padEnd(14, '0').slice(0, 14), 'hex');
-  const divData = Buffer.concat([Buffer.from([0x01]), cardUid, Buffer.alloc(8, 0)]);
-  
-  const cipherDiv = crypto.createCipheriv('aes-128-ecb', masterKey, null);
-  cipherDiv.setAutoPadding(false);
-  const sessionDivKey = Buffer.concat([cipherDiv.update(divData), cipherDiv.final()]);
+  const divInput = Buffer.concat([Buffer.from([0x01]), cardUid, Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]);
+  const sessionDivKey = computeAesCmac(masterKey, divInput);
+
+  // APDU Step 1: Reader sends AuthenticateAES APDU (0x90 0xAA 0x00 0x00 0x01 0x00 0x00)
+  const apdu1 = formatDesfireApdu(0xaa, 0x00, 0x00, Buffer.from([0x00]));
+  expect(apdu1[0]).toBe(0x90); // CLA
+  expect(apdu1[1]).toBe(0xaa); // INS AuthenticateAES
 
   // 2. Card generates random challenge RndB (16 bytes)
   const RndB = crypto.randomBytes(16);
-
-  // Encrypt RndB (Status 0xAF = Additional Frame)
   const cipherRndB = crypto.createCipheriv('aes-128-cbc', sessionDivKey, Buffer.alloc(16, 0));
   cipherRndB.setAutoPadding(false);
   const encRndB = Buffer.concat([cipherRndB.update(RndB), cipherRndB.final()]);
-  const statusStep1 = 0xaf; // 0xAF indicates card expects next token
+
+  // Card APDU Response (encRndB + Status 0x91 0xAF)
+  const cardResponse1 = Buffer.concat([encRndB, Buffer.from([0x91, 0xaf])]);
 
   // 3. Reader decrypts RndB, generates RndA (16 bytes), rotates RndB' (1 byte left)
   const RndB_rotated = Buffer.alloc(16);
@@ -120,7 +133,9 @@ export function simulateDesfire3PassAuthentication(masterKeyHex: string, cardUid
   const cipherTokenC = crypto.createCipheriv('aes-128-cbc', sessionDivKey, encTokenReader.subarray(16, 32));
   cipherTokenC.setAutoPadding(false);
   const encTokenCard = Buffer.concat([cipherTokenC.update(RndA_rotated), cipherTokenC.final()]);
-  const statusStep2 = 0x9000; // 0x9000 = SW1/SW2 Success
+  
+  // Card APDU Response 2 (encTokenCard + Status 0x91 0x00)
+  const cardResponse2 = Buffer.concat([encTokenCard, Buffer.from([0x91, 0x00])]);
 
   // 5. Derive Session Key (K_sess = RndA[0..3] || RndB[0..3] || RndA[12..15] || RndB[12..15])
   const sessionKey = Buffer.concat([
@@ -137,27 +152,29 @@ export function simulateDesfire3PassAuthentication(masterKeyHex: string, cardUid
   // Verification assertions
   const isRndBValid = RndB_rotated.equals(Buffer.concat([RndB.subarray(1, 16), RndB.subarray(0, 1)]));
   const isRndAValid = RndA_rotated.equals(Buffer.concat([RndA.subarray(1, 16), RndA.subarray(0, 1)]));
-  const authenticated = isRndBValid && isRndAValid && statusStep2 === 0x9000;
+  const sw1 = cardResponse2[cardResponse2.length - 2];
+  const sw2 = cardResponse2[cardResponse2.length - 1];
+  const authenticated = isRndBValid && isRndAValid && sw1 === 0x91 && sw2 === 0x00;
 
   return {
     authenticated,
     sessionDivKey: sessionDivKey.toString('hex'),
     sessionKey: sessionKey.toString('hex'),
     transactionCmac: cmac.toString('hex'),
-    statusBytes: '0x9000',
+    statusBytes: '0x9100',
     rndA: RndA.toString('hex'),
     rndB: RndB.toString('hex'),
   };
 }
 
 describe('Hardware Certification Framework (DESFire EV2/EV3 & Reader Drivers)', () => {
-  it('Computes RFC 4493 AES-128 CMAC accurately', () => {
+  it('Computes RFC 4493 AES-128 CMAC test vector accurately', () => {
+    // Official RFC 4493 Test Vector 1 (16-byte message)
     const key = Buffer.from('2b7e151628aed2a6abf7158809cf4f3c', 'hex');
     const msg = Buffer.from('6bc1bee22e409f96e93d7e117393172a', 'hex');
     const cmac = computeAesCmac(key, msg);
 
-    expect(cmac).toBeDefined();
-    expect(cmac.length).toBe(16);
+    expect(cmac.toString('hex')).toBe('070a16b46b4d4144f79bdd9dd04a287c');
   });
 
   it('Executes 3-Pass AES-128 Mutual Authentication Challenge-Response Protocol Simulation', () => {
@@ -168,7 +185,7 @@ describe('Hardware Certification Framework (DESFire EV2/EV3 & Reader Drivers)', 
     expect(authResult.authenticated).toBe(true);
     expect(authResult.sessionKey).toHaveLength(32);
     expect(authResult.transactionCmac).toHaveLength(32);
-    expect(authResult.statusBytes).toBe('0x9000');
+    expect(authResult.statusBytes).toBe('0x9100');
   });
 
   it('Hardware Probe / Live Reader Status Checker', () => {

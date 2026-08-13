@@ -57,6 +57,7 @@ describe('RFID Router & Middleware Integration Suite', () => {
       name: 'Main Gate Reader',
       adapterType: 'GATEWAY',
       securityCapability: 'DESFIRE_EV2',
+      sharedSecret: hmacSecret,
     });
     const approved = await readerService.approveReader(reader.id, schoolId);
     readerId = approved.id;

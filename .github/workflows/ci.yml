@@ -242,7 +242,9 @@ jobs:
 
       - name: Teardown Docker Compose Stack
         if: always()
-        run: docker compose down -v
+        run: |
+          docker compose logs --tail 200 > compose-failure.log || true
+          docker compose down -v || true
 
   pr-load-smoke-gate:
     name: Mandatory Pull-Request Load Smoke Gate
@@ -293,6 +295,8 @@ jobs:
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          SMS_PROVIDER: console
+          ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
         run: npm run test:load-smoke
 
       - name: Upload Business Load Benchmark Reports

@@ -2,25 +2,6 @@ import { test, expect, request as playwrightRequest } from '@playwright/test';
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
-async function prepareOfflineSession(page: any) {
-  const classSelect = page.locator('select');
-  if (await classSelect.isVisible()) {
-    const options = await classSelect.locator('option').allInnerTexts();
-    if (options.length > 0) {
-      await classSelect.selectOption({ index: 0 });
-    }
-  }
-  const downloadBtn = page.getByRole('button', { name: 'Download roster' });
-  if (await downloadBtn.isVisible()) {
-    await downloadBtn.click();
-    await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
-  }
-  const startBtn = page.getByRole('button', { name: 'Start offline session' });
-  if (await startBtn.isVisible()) {
-    await startBtn.click();
-  }
-}
-
 test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
   test('1. Camera permission grant & deny browser context testing', async ({ page, context }) => {
     if (context.browser()?.browserType().name() === 'chromium') {
@@ -32,8 +13,6 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
-    await prepareOfflineSession(page);
-
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
     await expect(scannerInput).toBeVisible();
 
@@ -42,6 +21,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     }
     await page.reload();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(scannerInput).toBeVisible();
   });
 
   test('2. Genuine Revoked, Expired, and Wrong-School QR Token Rejection', async ({ page }) => {
@@ -60,29 +40,31 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       schoolAId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
 
       const classesRes = await adminApi.get(`/api/v1/schools/${schoolAId}/attendance/classes`);
+      expect(classesRes.ok()).toBeTruthy();
       const classesData = await classesRes.json();
-      if (classesData.data && classesData.data.length > 0) {
-        classSectionAId = classesData.data[0].classSectionId;
+      expect(classesData.data.length).toBeGreaterThan(0);
+      classSectionAId = classesData.data[0].classSectionId;
 
-        const rosterRes = await adminApi.get(`/api/v1/schools/${schoolAId}/sync/classes/${classSectionAId}/offline-roster`, {
-          headers: { 'x-device-identifier': 'e2e-device-revoked-test' },
-        });
-        const rosterData = await rosterRes.json();
-        const students = rosterData.data?.students || [];
+      const rosterRes = await adminApi.get(`/api/v1/schools/${schoolAId}/sync/classes/${classSectionAId}/offline-roster`, {
+        headers: { 'x-device-identifier': 'e2e-device-revoked-test' },
+      });
+      expect(rosterRes.ok()).toBeTruthy();
+      const rosterData = await rosterRes.json();
+      const students = rosterData.data?.students || [];
+      expect(students.length).toBeGreaterThan(0);
 
-        if (students.length > 0) {
-          studentAId = students[0].studentId;
-          const reissueRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/reissue`, {
-            data: { studentId: studentAId },
-          });
-          if (reissueRes.ok()) {
-            revokedToken = (await reissueRes.json()).rawToken;
-            await adminApi.post(`/api/v1/schools/${schoolAId}/qr/revoke`, {
-              data: { studentId: studentAId, reason: 'E2E Revocation Test' },
-            });
-          }
-        }
-      }
+      studentAId = students[0].studentId;
+      const reissueRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/reissue`, {
+        data: { studentId: studentAId },
+      });
+      expect(reissueRes.ok()).toBeTruthy();
+      revokedToken = (await reissueRes.json()).rawToken;
+      expect(revokedToken).not.toBe('');
+
+      const revokeRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/revoke`, {
+        data: { studentId: studentAId, reason: 'E2E Revocation Test' },
+      });
+      expect(revokeRes.ok()).toBeTruthy();
     } finally {
       await adminApi.dispose();
     }
@@ -93,38 +75,120 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
-    await prepareOfflineSession(page);
+    await page.waitForFunction((id) => {
+      const sel = document.querySelector('select');
+      return sel && Array.from(sel.options).some(o => o.value === id);
+    }, classSectionAId);
+    await page.locator('select').selectOption(classSectionAId);
+    await page.getByRole('button', { name: 'Download roster' }).click();
+    await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
+    await page.getByRole('button', { name: 'Start offline session' }).click();
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
-    await expect(scannerInput).toBeVisible();
 
-    if (revokedToken) {
-      await scannerInput.fill(revokedToken);
-      await scannerInput.press('Enter');
-      await expect(page.getByText(/marked PRESENT/)).not.toBeVisible();
-    }
+    await scannerInput.fill(revokedToken);
+    await scannerInput.press('Enter');
+    await expect(page.getByText(/marked PRESENT/)).not.toBeVisible();
 
     await scannerInput.fill('MALFORMED-WRONG-SCHOOL-TOKEN');
     await scannerInput.press('Enter');
     await expect(page.getByText(/marked PRESENT/)).not.toBeVisible();
   });
 
-  test('3. Offline scan persistence across page reload and browser close/reopen', async ({ page, context }) => {
+  test('3. Offline scan persistence across page reload, browser close/reopen, and backend sync', async ({ page, context }) => {
+    const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
+    let schoolId: string;
+    let classSectionId: string;
+    let validToken = '';
+
+    try {
+      const adminLogin = await adminApi.post('/api/v1/auth/login', {
+        data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
+      });
+      expect(adminLogin.ok()).toBeTruthy();
+      const me = await (await adminApi.get('/api/v1/auth/me')).json();
+      schoolId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
+
+      const classesRes = await adminApi.get(`/api/v1/schools/${schoolId}/attendance/classes`);
+      expect(classesRes.ok()).toBeTruthy();
+      classSectionId = (await classesRes.json()).data[0].classSectionId;
+
+      const rosterRes = await adminApi.get(`/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`, {
+        headers: { 'x-device-identifier': 'e2e-device-persistence-test' },
+      });
+      expect(rosterRes.ok()).toBeTruthy();
+      const students = (await rosterRes.json()).data.students;
+      expect(students.length).toBeGreaterThan(0);
+
+      const reissueRes = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, {
+        data: { studentId: students[0].studentId },
+      });
+      expect(reissueRes.ok()).toBeTruthy();
+      validToken = (await reissueRes.json()).rawToken;
+      expect(validToken).not.toBe('');
+    } finally {
+      await adminApi.dispose();
+    }
+
     await page.goto(baseUrl);
     await page.getByLabel('Phone number').fill('+919100000002');
     await page.getByLabel('Password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
-    await prepareOfflineSession(page);
+    await page.waitForFunction((id) => {
+      const sel = document.querySelector('select');
+      return sel && Array.from(sel.options).some(o => o.value === id);
+    }, classSectionId);
+    await page.locator('select').selectOption(classSectionId);
+    await page.getByRole('button', { name: 'Download roster' }).click();
+    await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
+    await page.getByRole('button', { name: 'Start offline session' }).click();
+
+    // Go offline and scan valid token
+    await context.setOffline(true);
+    const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
+    await scannerInput.fill(validToken);
+    await scannerInput.press('Enter');
+    await expect(page.getByText(/marked PRESENT/)).toBeVisible();
+
+    // Reload page while offline -> verify session & attendance persist
     await page.reload();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
-    const newPage = await context.newPage();
-    await newPage.goto(baseUrl);
-    await expect(newPage.getByText('Offline QR Attendance')).toBeVisible();
-    await newPage.close();
+    // Close page, open new page in same offline context -> verify persistence
+    await page.close();
+    const reopened = await context.newPage();
+    await reopened.goto(baseUrl);
+    await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+
+    // Reconnect online & sync
+    await context.setOffline(false);
+    await reopened.reload();
+    await expect(reopened.getByText('Online')).toBeVisible();
+    await reopened.getByRole('button', { name: 'Synchronize now' }).click();
+    await expect(reopened.getByText(/synchronized/)).toBeVisible();
+
+    // Server verification API query
+    const verificationApi = await playwrightRequest.newContext({ baseURL: baseUrl });
+    try {
+      const teacherLogin = await verificationApi.post('/api/v1/auth/login', {
+        data: { phoneNumber: '+919100000002', password: 'TeacherPassword123!' },
+      });
+      expect(teacherLogin.ok()).toBeTruthy();
+      const sessionsRes = await verificationApi.get(`/api/v1/schools/${schoolId}/attendance/sessions?classSectionId=${classSectionId}`);
+      expect(sessionsRes.ok()).toBeTruthy();
+      const sessions = (await sessionsRes.json()).data;
+      expect(sessions.length).toBeGreaterThan(0);
+      const detailsRes = await verificationApi.get(`/api/v1/schools/${schoolId}/attendance/sessions/${sessions[0].id}`);
+      expect(detailsRes.ok()).toBeTruthy();
+      const details = (await detailsRes.json()).data;
+      const presents = details.roster.filter((record: { status: string }) => record.status === 'PRESENT');
+      expect(presents).toHaveLength(1);
+    } finally {
+      await verificationApi.dispose();
+    }
   });
 
   test('4. Two browser tabs synchronizing concurrently without record duplication', async ({ context }) => {
@@ -136,8 +200,6 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page1.getByLabel('Password').fill('TeacherPassword123!');
     await page1.getByRole('button', { name: 'Sign in' }).click();
     await expect(page1.getByText('Offline QR Attendance')).toBeVisible();
-
-    await prepareOfflineSession(page1);
 
     await page2.goto(baseUrl);
     await expect(page2.getByText('Offline QR Attendance')).toBeVisible();

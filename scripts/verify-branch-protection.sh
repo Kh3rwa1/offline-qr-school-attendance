@@ -4,6 +4,7 @@ set -Eeuo pipefail
 REPO_OWNER="${REPO_OWNER:-Kh3rwa1}"
 REPO_NAME="${REPO_NAME:-offline-qr-school-attendance}"
 BRANCH="${BRANCH:-main}"
+STRICT="${REQUIRE_STRICT_BRANCH_PROTECTION:-false}"
 
 echo "=== Verifying Branch Protection Status for ${REPO_OWNER}/${REPO_NAME}:${BRANCH} ==="
 
@@ -12,8 +13,10 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
     echo "Querying GitHub Branch Protection API via gh CLI..."
     RESPONSE=$(gh api "repos/${REPO_OWNER}/${REPO_NAME}/branches/${BRANCH}/protection" 2>&1 || true)
   else
-    echo "NOTICE: Neither GITHUB_TOKEN nor gh CLI authentication is available."
-    echo "Branch protection status marked as EXTERNALLY PENDING."
+    echo "ERROR: Neither GITHUB_TOKEN nor gh CLI authentication is available."
+    if [ "${STRICT}" = "true" ]; then
+      exit 1
+    fi
     exit 0
   fi
 else
@@ -23,17 +26,23 @@ else
 fi
 
 if echo "${RESPONSE}" | grep -q "Branch not protected"; then
-  echo "STATUS: EXTERNALLY PENDING (Branch '${BRANCH}' protection is currently NOT enabled on remote GitHub repository)."
+  echo "STATUS: NOT PROTECTED (Branch '${BRANCH}' protection is NOT enabled on remote GitHub repository)."
   echo "To enable branch protection, an administrator must execute:"
   echo "GITHUB_TOKEN=<admin-token> ./scripts/setup-branch-protection.sh"
+  if [ "${STRICT}" = "true" ]; then
+    exit 1
+  fi
   exit 0
 elif echo "${RESPONSE}" | grep -q "required_status_checks"; then
   echo "STATUS: VERIFIED ACTIVE (Branch protection is active on '${BRANCH}')."
   echo "${RESPONSE}"
   exit 0
 else
-  echo "STATUS: UNVERIFIED / EXTERNALLY PENDING."
+  echo "STATUS: UNVERIFIED / PENDING ADMIN AUTHENTICATION."
   echo "Response output:"
   echo "${RESPONSE}"
+  if [ "${STRICT}" = "true" ]; then
+    exit 1
+  fi
   exit 0
 fi

@@ -40,6 +40,10 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   await page.getByLabel('Password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+  await page.waitForFunction((id) => {
+    const sel = document.querySelector('select');
+    return sel && Array.from(sel.options).some(o => o.value === id);
+  }, classSectionId);
   await page.locator('select').selectOption(classSectionId);
   await page.getByRole('button', { name: 'Download roster' }).click();
   await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();

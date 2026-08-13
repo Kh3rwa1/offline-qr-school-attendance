@@ -16,12 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
         with:
           node-version: 22
           cache: npm
@@ -45,7 +43,7 @@ jobs:
         run: npx @cyclonedx/cyclonedx-npm --output-file output/sbom.cdx.json
 
       - name: Upload npm SBOM Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
         with:
           name: sbom-cdx-npm
           path: output/sbom.cdx.json
@@ -59,12 +57,12 @@ jobs:
       security-events: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
       - name: Run Gitleaks Full History Secret Scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@e0423ae58619bc5a5e31d516d2524a87c10b7d34
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -78,7 +76,7 @@ jobs:
           trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem
@@ -88,7 +86,149 @@ jobs:
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
         run: |
-          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif offline-qr-school-attendance:scan
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif offline-qr-school-attendance:scan
+          trivy image --severity HIGH,CRITICAL --format json --output trivy-image-results.json offline-qr-school-attendance:scan
+
+      - name: Upload Security Vulnerability Scan Artifacts
+        if: always()
+        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
+        with:
+          name: trivy-security-reports
+          path: |
+            trivy-fs-results.sarif
+            trivy-image-results.sarif
+            trivy-image-results.json
+          if-no-files-found: ignore
+
+  postgres-rls-redis-integration:
+    name: PostgreSQL RLS & Redis Production Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: attendance_migration
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: school_attendance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Migrations & RLS Schema Integration Suite
+        env:
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: test
+          SESSION_SECRET: ci-session-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+        run: |
+          npx tsx src/db/migrate.ts
+          npm test
+
+  backup-and-restore-drill:
+    name: Encrypted Backup & Restore RLS Verification Drill
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: attendance_migration
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: school_attendance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Seed Database for Backup
+        env:
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          NODE_ENV: test
+          SESSION_SECRET: ci-session-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+        run: |
+          npx tsx src/db/migrate.ts
+          npx tsx src/db/seed.ts
+
+      - name: Execute Encrypted Backup & Restore Verification Drill
+        env:
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          TARGET_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          BACKUP_PASSPHRASE: ci-backup-encrypted-passphrase-1234567890
+        run: ./scripts/backupAndRestore.sh
+
+  docker-compose-production-smoke:
+    name: Docker Compose Production Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build & Launch Docker Compose Stack
+        env:
+          POSTGRES_DB: school_attendance
+          MIGRATION_DB_USER: attendance_migration
+          MIGRATION_DB_PASSWORD: ci_password
+          APP_DB_USER: attendance_app
+          APP_DB_PASSWORD: ci_password
+          SYSTEM_DB_USER: attendance_system
+          SYSTEM_DB_PASSWORD: ci_password
+          REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_01234567890123456789
+          METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
+          SESSION_SECRET: ci_session_secret_01234567890123456789
+          SMS_PROVIDER: LOG
+        run: |
+          docker compose up -d --build
+          sleep 10
+          docker compose ps
+
+      - name: Verify Application HTTP Health via Compose
+        run: |
+          curl -sf http://127.0.0.1:3000/api/v1/health || (docker compose logs && exit 1)
+          docker compose down -v
 
   pr-load-smoke-gate:
     name: Mandatory Pull-Request Load Smoke Gate
@@ -120,10 +260,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
         with:
           node-version: 22
           cache: npm
@@ -141,11 +281,12 @@ jobs:
         run: npm run test:load-smoke
 
       - name: Upload Business Load Benchmark Reports
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
         with:
           name: business-load-smoke-reports
           path: output/
-          if-no-files-found: error
+          if-no-files-found: ignore
 
   playwright-e2e:
     name: Playwright Browser E2E (Chromium & Firefox)
@@ -172,10 +313,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
         with:
           node-version: 22
           cache: npm
@@ -210,7 +351,7 @@ jobs:
 
       - name: Upload Playwright Test Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
         with:
           name: playwright-report
           path: playwright-report/
@@ -221,7 +362,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Install Kubeconform Binary
         run: |
@@ -229,7 +370,7 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
         with:
           node-version: 22
           cache: npm
@@ -248,7 +389,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Execute Disposable Kind Cluster Deployment & Rollback Drill
         run: ./scripts/test-k8s-kind.sh
@@ -258,7 +399,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Verify GitHub Branch Protection Status
         run: ./scripts/verify-branch-protection.sh

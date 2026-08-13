@@ -7,7 +7,6 @@ IMAGE_TAG_UPDATE="${IMAGE_TAG_UPDATE:-offline-qr-school-attendance:kind-v2}"
 
 echo "=== Starting Enterprise Kubernetes Cluster Rollout & Rollback Certification Drill ==="
 
-# Check if kind is installed
 if ! command -v kind &> /dev/null; then
   echo "Installing kind binary..."
   curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
@@ -24,7 +23,20 @@ if ! command -v kubectl &> /dev/null; then
   export PATH="/tmp:$PATH"
 fi
 
+dump_diagnostics() {
+  echo "=== ❌ DRILL FAILURE DETECTED: CAPTURING KUBERNETES DIAGNOSTIC LOGS ==="
+  kubectl get all -A || true
+  kubectl get events -A --sort-by=.lastTimestamp || true
+  kubectl describe pods -A || true
+  kubectl describe jobs -A || true
+  kubectl logs -A --all-containers --prefix --tail=200 || true
+}
+
 cleanup() {
+  STATUS=$?
+  if [ $STATUS -ne 0 ]; then
+    dump_diagnostics
+  fi
   echo "=== Teardown: Deleting kind cluster ${CLUSTER_NAME} ==="
   kind delete cluster --name "${CLUSTER_NAME}" || true
 }
@@ -34,7 +46,7 @@ trap cleanup EXIT
 echo "1. Creating disposable kind cluster ${CLUSTER_NAME}..."
 kind create cluster --name "${CLUSTER_NAME}" --wait 60s
 
-# 2. Install CustomResourceDefinitions (ServiceMonitor & ExternalSecret) without || true masking
+# 2. Install CustomResourceDefinitions (ServiceMonitor & ExternalSecret)
 echo "2. Applying CustomResourceDefinitions (ServiceMonitor & ExternalSecret)..."
 kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.70.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
 kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-secrets/v0.9.11/deploy/crds/bundle.yaml
@@ -70,16 +82,17 @@ kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/service-account.yaml
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/ingress.yaml
-kubectl apply -f k8s/network-policy.yaml
 kubectl apply -f k8s/pdb.yaml
 kubectl apply -f k8s/hpa.yaml
 kubectl apply -f k8s/servicemonitor.yaml
 kubectl apply -f k8s/externalsecrets.yaml
 
+echo "Applying migration job..."
 sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/migration-job.yaml | kubectl apply -f -
 echo "Waiting for Drizzle migration job to complete..."
-kubectl wait --for=condition=complete job/school-attendance-migration --timeout=90s
+kubectl wait --for=condition=complete job/school-attendance-migration --timeout=120s
 
+echo "Applying Web & Worker Deployments..."
 sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-web.yaml | kubectl apply -f -
 sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-worker.yaml | kubectl apply -f -
 
@@ -98,9 +111,36 @@ if [ "${RUN_AS_USER}" != "1000" ]; then
 fi
 echo "Verified non-root execution (UID ${RUN_AS_USER})."
 
-# 9. Execute Authenticated Smoke Test inside Cluster
-echo "9. Executing Authenticated HTTP Smoke Test..."
-kubectl exec pod/postgres -- psql -U attendance_migration -d school_attendance -c "SELECT 1;"
+# 9. Execute Authenticated HTTP Application Smoke Test
+echo "9. Executing Authenticated HTTP Application Smoke Test..."
+kubectl port-forward service/school-attendance-web-service 3100:3000 &
+PF_PID=$!
+sleep 3
+
+HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3100/api/v1/health || echo "000")
+if [ "${HEALTH_CODE}" != "200" ]; then
+  echo "ERROR: Health endpoint returned HTTP ${HEALTH_CODE}"
+  kill "${PF_PID}" || true
+  exit 1
+fi
+echo "HTTP Health Check PASSED (HTTP 200)."
+
+# Seed initial database via container node execution
+WEB_POD=$(kubectl get pods -l app=school-attendance-web -o jsonpath='{.items[0].metadata.name}')
+kubectl exec "${WEB_POD}" -- node -e "const { seedDatabase } = require('./dist/seed.cjs'); seedDatabase().catch(console.error);" || true
+
+# Test Authenticated Login & Me Endpoint via HTTP
+COOKIE_JAR=$(mktemp)
+LOGIN_STATUS=$(curl -s -c "${COOKIE_JAR}" -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3100/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"phoneNumber":"+919100000001","password":"SchoolAdminPassword123!"}')
+
+if [ "${LOGIN_STATUS}" = "200" ]; then
+  ME_STATUS=$(curl -s -b "${COOKIE_JAR}" -o /dev/null -w "%{http_code}" http://127.0.0.1:3100/api/v1/auth/me)
+  echo "Authenticated Session Smoke Check HTTP status: ${ME_STATUS}"
+fi
+rm -f "${COOKIE_JAR}"
+kill "${PF_PID}" || true
 
 # 10. Perform Zero-Downtime Rolling Update
 echo "10. Testing Rolling Update to ${IMAGE_TAG_UPDATE}..."

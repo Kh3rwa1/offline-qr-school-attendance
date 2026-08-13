@@ -44,7 +44,7 @@ jobs:
       - name: Run Load Smoke Benchmark
         run: npm run test:load-smoke
       - name: Upload Load Smoke Benchmark Artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: load-smoke-report
           path: output/load-smoke-report.json
@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload E2E report & logs on failure
         if: failure()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-artifacts
           path: |
@@ -338,7 +338,7 @@ jobs:
         run: npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file output/sbom.cdx.json
 
       - name: Upload Security SBOM Artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-artifact
           path: output/sbom.cdx.json

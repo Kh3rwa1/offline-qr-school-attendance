@@ -3,20 +3,23 @@
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_migration') THEN
-    CREATE ROLE attendance_migration WITH LOGIN PASSWORD 'migration_password_123!';
+    CREATE ROLE attendance_migration WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
-    CREATE ROLE attendance_app WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD 'app_password_123!';
+    CREATE ROLE attendance_app WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN
-    CREATE ROLE attendance_auth WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD 'auth_password_123!';
+    CREATE ROLE attendance_auth WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN
-    CREATE ROLE attendance_worker WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD 'worker_password_123!';
+    CREATE ROLE attendance_worker WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
-EXCEPTION WHEN OTHERS THEN
-  -- Non-superuser role running migrations cannot create roles; ignore if roles exist or user lacks CREATEROLE
-  NULL;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
+    CREATE ROLE attendance_system WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN insufficient_privilege THEN NULL;
 END $$;
 
 -- SECURITY DEFINER function for pre-tenant authentication user lookup
@@ -64,10 +67,13 @@ BEGIN
 END;
 $$;
 
--- Function security hardening: assign owner and grant execution rights across app/auth roles
+-- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, grant explicit EXECUTE to application & auth roles
 ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO CURRENT_USER;
 ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO CURRENT_USER;
 
-GRANT USAGE ON SCHEMA public TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO PUBLIC;
+REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
+
+GRANT USAGE ON SCHEMA public TO attendance_auth, attendance_app, attendance_system, attendance_worker, attendance_migration;
+GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_auth, attendance_app, attendance_system;
+GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_auth, attendance_app, attendance_system;

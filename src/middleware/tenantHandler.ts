@@ -5,28 +5,25 @@ import { withTenantContext } from '../db';
 
 export interface TenantContext {
   req: AuthenticatedRequest;
-  res: Response;
   schoolId: string;
   user: any;
   userRole: string;
 }
 
-export type TenantHandlerFn =
-  | ((ctx: TenantContext) => Promise<{
-      status?: number;
-      data?: any;
-      body?: any;
-      contentType?: string;
-      headers?: Record<string, string>;
-    } | void>)
-  | ((req: AuthenticatedRequest, res: Response, next?: NextFunction) => Promise<any>);
+export type TenantHandlerFn = (ctx: TenantContext) => Promise<{
+  status?: number;
+  data?: any;
+  body?: any;
+  contentType?: string;
+  headers?: Record<string, string>;
+} | void>;
 
 /**
- * Robust, non-monkey-patching tenant transaction wrapper.
+ * Pure context-returning tenant transaction wrapper.
  * Performs auth & role verification, opens database tenant context, awaits handler, commits, and sends response only after commit succeeds.
  */
 export function tenantHandler(handler: TenantHandlerFn) {
-  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return async (req: AuthenticatedRequest, res: Response, _next: NextFunction) => {
     if (!req.sessionContext) {
       return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
     }
@@ -77,12 +74,8 @@ export function tenantHandler(handler: TenantHandlerFn) {
     try {
       // Execute handler inside database tenant context transaction
       const result = await withTenantContext(schoolId, async () => {
-        if (handler.length > 1) {
-          return await (handler as any)(req, res, next);
-        }
-        return await (handler as any)({
+        return await handler({
           req,
-          res,
           schoolId,
           user,
           userRole: userRole!,
@@ -110,6 +103,7 @@ export function tenantHandler(handler: TenantHandlerFn) {
         }
         return res.status(statusCode).json(payload);
       }
+      return res.status(200).json({ success: true });
     } catch (error: any) {
       if (res.headersSent) return;
       console.error('[tenantHandler] Transaction failed before response:', error);

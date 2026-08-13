@@ -87,9 +87,13 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
 
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
-    await migrationPool.query('DELETE FROM schools WHERE id IN ($1, $2)', [schoolA, schoolB]);
-    await appPool.end();
-    await migrationPool.end();
+    try {
+      await migrationPool.query('DELETE FROM schools WHERE id IN ($1, $2)', [schoolA, schoolB]);
+    } catch {}
+    await appPool.end().catch(() => {});
+    await migrationPool.end().catch(() => {});
+    const { closeDatabasePools } = await import('../src/db');
+    await closeDatabasePools();
   });
 
   it('proves cookie auth, tenant RLS, finalization, worker isolation and logout', async () => {

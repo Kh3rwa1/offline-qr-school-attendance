@@ -176,8 +176,14 @@ export async function withSystemContext<T>(fn: (tx: any) => Promise<T>): Promise
 export async function closeDatabasePools(): Promise<void> {
   if (appPoolInstance) {
     await appPoolInstance.end().catch(() => {});
+    appPoolInstance = undefined;
   }
   if (systemPoolInstance) {
     await systemPoolInstance.end().catch(() => {});
+    systemPoolInstance = undefined;
   }
+  try {
+    const { closeAuthPool } = await import('./authFunctions');
+    await closeAuthPool();
+  } catch {}
 }

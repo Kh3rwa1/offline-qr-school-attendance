@@ -21,6 +21,13 @@ function getAuthPool(): pg.Pool | null {
   return null;
 }
 
+export async function closeAuthPool(): Promise<void> {
+  if (authPoolInstance) {
+    await authPoolInstance.end().catch(() => {});
+    authPoolInstance = undefined;
+  }
+}
+
 export async function timingSafeVerifyPassword(userHash: string | null | undefined, passwordAttempt: string): Promise<boolean> {
   const hashToVerify = userHash && userHash.startsWith('$argon2') ? userHash : DUMMY_PASSWORD_HASH;
   try {

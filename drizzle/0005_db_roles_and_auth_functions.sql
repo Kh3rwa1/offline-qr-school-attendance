@@ -36,6 +36,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
+  PERFORM set_config('app.is_system', 'true', true);
   RETURN QUERY
   SELECT u.id, u.full_name, u.phone_number, u.password_hash, u.status
   FROM public.users u
@@ -57,6 +58,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
+  PERFORM set_config('app.is_system', 'true', true);
   RETURN QUERY
   SELECT m.school_id, s.name AS school_name, m.role, m.status
   FROM public.school_memberships m

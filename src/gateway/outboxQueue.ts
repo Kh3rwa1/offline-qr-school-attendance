@@ -33,13 +33,15 @@ export class OutboxQueue {
     }
     this.queueFilePath = path.join(this.storageDir, 'outbox-queue.json.enc');
 
-    const keyStr = config?.deviceEncryptionKey || process.env.RFID_OUTBOX_ENCRYPTION_KEY || process.env.RFID_HMAC_SECRET;
-    if (process.env.NODE_ENV === 'production' && (!keyStr || keyStr.length < 32)) {
+    const keyStr = config?.deviceEncryptionKey || process.env.RFID_OUTBOX_ENCRYPTION_KEY || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-outbox-device-key-32-chars-long-env' : undefined);
+    if (!keyStr) {
+      throw new Error('OUTBOX_FATAL: Required outbox device encryption key is missing in server configuration');
+    }
+    if (process.env.NODE_ENV === 'production' && keyStr.length < 32) {
       throw new Error('OUTBOX_FATAL: RFID_OUTBOX_ENCRYPTION_KEY must be at least 32 bytes in production mode');
     }
 
-    const effectiveSecret = keyStr || 'test-outbox-device-key-32-chars-long-env';
-    this.secretKey = Buffer.from(crypto.hkdfSync('sha256', effectiveSecret, 'outbox-salt', 'device-outbox-key', 32));
+    this.secretKey = Buffer.from(crypto.hkdfSync('sha256', keyStr, 'outbox-salt', 'device-outbox-key', 32));
     this.maxCapacity = config?.maxCapacity || parseInt(process.env.RFID_OFFLINE_QUEUE_CAPACITY || '10000', 10);
     this.maxRetries = config?.maxRetries || 5;
   }

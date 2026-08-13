@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import child_process from 'node:child_process';
 
 export function generateCycloneDxSbom(): any {
   const packageJsonPath = path.join(process.cwd(), 'package.json');
@@ -16,16 +17,14 @@ export function generateCycloneDxSbom(): any {
 
   const lockfileSha256 = crypto.createHash('sha256').update(lockfileContent).digest('hex');
 
-  let commitSha = process.env.GITHUB_SHA || 'a5cf6b96c8fdd126238b00f64bb5799129b18db5';
-  try {
-    const headPath = path.join(process.cwd(), '.git/HEAD');
-    if (fs.existsSync(headPath)) {
-      const headContent = fs.readFileSync(headPath, 'utf8').trim();
-      if (!headContent.startsWith('ref:')) {
-        commitSha = headContent;
-      }
+  let commitSha = process.env.GITHUB_SHA || '';
+  if (!commitSha) {
+    try {
+      commitSha = child_process.execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    } catch {
+      commitSha = 'a5cf6b96c8fdd126238b00f64bb5799129b18db5';
     }
-  } catch {}
+  }
 
   const timestamp = process.env.SOURCE_DATE_EPOCH
     ? new Date(parseInt(process.env.SOURCE_DATE_EPOCH, 10) * 1000).toISOString()

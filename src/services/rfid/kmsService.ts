@@ -164,7 +164,8 @@ export class KMSService {
         dataKey = await this.provider.decryptDataKey(envelope.kmsKeyId, envelope.encryptedDataKey, envelope.keyVersion);
       } else {
         // Local fallback key for legacy format
-        const purposeSecret = this.purposeSecrets.get(envelope.kmsKeyId as CryptoKeyPurpose) || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+        const purposeSecret = this.purposeSecrets.get(envelope.kmsKeyId as CryptoKeyPurpose) || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+        if (!purposeSecret) throw new Error('KMS_FATAL: Required cryptographic secret is missing in server configuration');
         dataKey = Buffer.from(crypto.hkdfSync('sha256', purposeSecret, 'kms-salt', `kms-provider-${envelope.kmsKeyId}`, 32));
       }
 
@@ -189,7 +190,8 @@ export class KMSService {
    */
   encryptSecret(plainSecret: string, purpose: CryptoKeyPurpose = 'DATABASE_ENCRYPTION_KEK'): string {
     if (!plainSecret) throw new Error('KMS_ERROR: Cannot encrypt empty secret');
-    const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+    const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    if (!secret) throw new Error('KMS_FATAL: Required cryptographic secret is missing in server configuration');
     const key = Buffer.from(crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32));
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -211,7 +213,8 @@ export class KMSService {
       throw new Error('KMS_DECRYPT_FAILED: Truncated or empty envelope components');
     }
     try {
-      const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+      const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      if (!secret) throw new Error('KMS_FATAL: Required cryptographic secret is missing in server configuration');
       const key = Buffer.from(crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32));
       const iv = Buffer.from(ivHex, 'hex');
       const tag = Buffer.from(tagHex, 'hex');

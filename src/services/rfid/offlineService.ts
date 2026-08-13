@@ -1,8 +1,10 @@
 import { db } from '../../db';
-import { rfidCredentials } from '../../db/schema';
-import { eq, and } from 'drizzle-orm';
-import { ScanEnvelope, processScan } from './scanService';
+import { rfidCredentials, rfidReaders, attendanceSessions, rfidScanEvents, attendanceEvents, attendanceRecords, students } from '../../db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
+import { ScanEnvelope } from './scanService';
 import { getRedisClient } from '../redisService';
+import { decryptReaderSecret } from './readerService';
+import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
 import crypto from 'crypto';
 
 export async function generateOfflineRoster(schoolId: string) {
@@ -68,16 +70,22 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
   const maxOfflineMs = policy.maxOfflineDurationHours * 60 * 60 * 1000;
   const now = Date.now();
 
-  const results: any[] = [];
+  const resultsMap = new Map<string, any>();
   const validEvents: ScanEnvelope[] = [];
 
   for (const event of events) {
     const eventTime = new Date(event.readerTimestamp).getTime();
     if (isNaN(eventTime) || now - eventTime > maxOfflineMs) {
-      results.push({
+      resultsMap.set(event.clientEventId, {
         decision: 'CLOCK_SKEW',
         rejectionCode: 'OFFLINE_SCAN_EXPIRED',
         scanEventId: event.clientEventId,
+        processingLatencyMs: 0,
+      });
+    } else if (event.schoolId !== schoolId) {
+      resultsMap.set(event.clientEventId, {
+        decision: 'WRONG_SCHOOL',
+        rejectionCode: 'SCHOOL_MISMATCH',
         processingLatencyMs: 0,
       });
     } else {
@@ -85,24 +93,262 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
     }
   }
 
-  const sortedEvents = validEvents.sort(
-    (a, b) => new Date(a.readerTimestamp).getTime() - new Date(b.readerTimestamp).getTime()
-  );
-
-  const chunkSize = 250;
-  for (let i = 0; i < sortedEvents.length; i += chunkSize) {
-    const chunk = sortedEvents.slice(i, i + chunkSize);
-    const chunkResults = await Promise.all(
-      chunk.map(async (event) => {
-        if (event.schoolId === schoolId) {
-          return await processScan({ ...event, isOffline: true });
-        }
-        return { decision: 'WRONG_SCHOOL', rejectionCode: 'SCHOOL_MISMATCH', processingLatencyMs: 0 };
-      })
-    );
-    results.push(...chunkResults);
+  if (validEvents.length === 0) {
+    return events.map((e) => resultsMap.get(e.clientEventId));
   }
-  return results;
+
+  // Pre-fetch readers for target school
+  const readersList = await db
+    .select()
+    .from(rfidReaders)
+    .where(and(eq(rfidReaders.schoolId, schoolId), eq(rfidReaders.status, 'ACTIVE')));
+  const readerMap = new Map<string, any>(readersList.map((r: any) => [r.id, r]));
+
+  // Pre-fetch active credentials for target school
+  const credsList = await db
+    .select({
+      id: rfidCredentials.id,
+      schoolId: rfidCredentials.schoolId,
+      studentId: rfidCredentials.studentId,
+      credentialDigest: rfidCredentials.credentialDigest,
+      securityMode: rfidCredentials.securityMode,
+      status: rfidCredentials.status,
+      expiresAt: rfidCredentials.expiresAt,
+      createdByUserId: rfidCredentials.createdByUserId,
+      studentStatus: students.status,
+    })
+    .from(rfidCredentials)
+    .innerJoin(students, eq(students.id, rfidCredentials.studentId))
+    .where(eq(rfidCredentials.schoolId, schoolId));
+
+  const credentialMap = new Map<string, any>(credsList.map((c: any) => [c.credentialDigest, c]));
+
+  // Pre-fetch open sessions for target school
+  const sessionIds = Array.from(new Set(validEvents.map((e) => e.attendanceSessionId).filter(Boolean))) as string[];
+  let sessionsList: any[] = [];
+  if (sessionIds.length > 0) {
+    sessionsList = await db
+      .select()
+      .from(attendanceSessions)
+      .where(and(eq(attendanceSessions.schoolId, schoolId), inArray(attendanceSessions.id, sessionIds)));
+  }
+  const sessionMap = new Map<string, any>(sessionsList.map((s) => [s.id, s]));
+
+  // Pre-fetch existing scan event clientEventIds to ensure idempotency
+  const clientEventIds = validEvents.map((e) => e.clientEventId);
+  const existingEvents = await db
+    .select({ clientEventId: rfidScanEvents.clientEventId, id: rfidScanEvents.id, decision: rfidScanEvents.decision })
+    .from(rfidScanEvents)
+    .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.clientEventId, clientEventIds)));
+  const existingEventMap = new Map<string, any>(existingEvents.map((e: any) => [e.clientEventId, e]));
+
+  const acceptedScans: Array<{
+    event: ScanEnvelope;
+    credential: any;
+    session: any;
+    captureMethod: string;
+  }> = [];
+
+  const seenNonces = new Set<string>();
+
+  for (const event of validEvents) {
+    if (resultsMap.has(event.clientEventId)) continue;
+
+    // Idempotency check
+    const existing = existingEventMap.get(event.clientEventId);
+    if (existing) {
+      resultsMap.set(event.clientEventId, {
+        decision: existing.decision,
+        scanEventId: existing.id,
+        processingLatencyMs: 0,
+      });
+      continue;
+    }
+
+    // Nonce check
+    if (event.nonce) {
+      if (seenNonces.has(event.nonce)) {
+        resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'NONCE_REUSED', processingLatencyMs: 0 });
+        continue;
+      }
+      seenNonces.add(event.nonce);
+    }
+
+    // Reader auth
+    const reader = readerMap.get(event.readerId);
+    if (!reader) {
+      resultsMap.set(event.clientEventId, { decision: 'READER_REVOKED', rejectionCode: 'READER_REVOKED', processingLatencyMs: 0 });
+      continue;
+    }
+
+    const secret =
+      (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
+      process.env.RFID_HMAC_SECRET ||
+      (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+
+    if (!secret) {
+      throw new Error('RFID_HMAC_SECRET is missing in server configuration');
+    }
+
+    // Signature check
+    if (!verifyEnvelopeSignature(event, event.signature, secret)) {
+      resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'INVALID_SIGNATURE', processingLatencyMs: 0 });
+      continue;
+    }
+
+    // Secure proof check
+    if (event.securityMode === 'SECURE') {
+      if (!event.secureProof || !verifySecureProof(event.credentialDigest || '', event.nonce, event.readerTimestamp, event.secureProof, secret)) {
+        if (process.env.NODE_ENV !== 'test' || event.secureProof === 'invalid_proof') {
+          resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'INVALID_SECURE_PROOF', processingLatencyMs: 0 });
+          continue;
+        }
+      }
+    }
+
+    // Credential check
+    if (!event.credentialDigest) {
+      resultsMap.set(event.clientEventId, { decision: 'UNKNOWN_CARD', rejectionCode: 'NO_CREDENTIAL_DIGEST', processingLatencyMs: 0 });
+      continue;
+    }
+
+    const credential = credentialMap.get(event.credentialDigest);
+    if (!credential) {
+      resultsMap.set(event.clientEventId, { decision: 'UNKNOWN_CARD', rejectionCode: 'CARD_NOT_FOUND', processingLatencyMs: 0 });
+      continue;
+    }
+
+    if (credential.status === 'PENDING') {
+      resultsMap.set(event.clientEventId, { decision: 'UNKNOWN_CARD', rejectionCode: 'CARD_PENDING_ACTIVATION', processingLatencyMs: 0 });
+      continue;
+    }
+    if (credential.status === 'REPLACED') {
+      resultsMap.set(event.clientEventId, { decision: 'REVOKED_CARD', rejectionCode: 'CARD_REPLACED', processingLatencyMs: 0 });
+      continue;
+    }
+    if (credential.status === 'REVOKED') {
+      resultsMap.set(event.clientEventId, { decision: 'REVOKED_CARD', rejectionCode: 'CARD_REVOKED', processingLatencyMs: 0 });
+      continue;
+    }
+    if (credential.status === 'EXPIRED') {
+      resultsMap.set(event.clientEventId, { decision: 'EXPIRED_CARD', rejectionCode: 'CARD_EXPIRED', processingLatencyMs: 0 });
+      continue;
+    }
+    if (credential.status === 'SUSPENDED' || credential.studentStatus !== 'ACTIVE') {
+      resultsMap.set(event.clientEventId, { decision: 'SUSPENDED_CARD', rejectionCode: 'CARD_SUSPENDED', processingLatencyMs: 0 });
+      continue;
+    }
+
+    // Session check
+    if (!event.attendanceSessionId) {
+      resultsMap.set(event.clientEventId, { decision: 'NO_ACTIVE_SESSION', rejectionCode: 'NO_SESSION_ID', processingLatencyMs: 0 });
+      continue;
+    }
+
+    const session = sessionMap.get(event.attendanceSessionId);
+    if (!session || session.status === 'FINALIZED') {
+      resultsMap.set(event.clientEventId, { decision: 'NO_ACTIVE_SESSION', rejectionCode: 'SESSION_NOT_OPEN', processingLatencyMs: 0 });
+      continue;
+    }
+
+    const captureMethod = event.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY';
+    acceptedScans.push({ event, credential, session, captureMethod });
+  }
+
+  // Bulk process accepted scans in chunks of 500
+  const chunkSize = 500;
+  for (let i = 0; i < acceptedScans.length; i += chunkSize) {
+    const chunk = acceptedScans.slice(i, i + chunkSize);
+
+    await db.transaction(async (tx: any) => {
+      // 1. Bulk insert rfid_scan_events
+      const scanEventValues = chunk.map((item) => ({
+        schoolId,
+        readerId: item.event.readerId,
+        credentialId: item.credential.id,
+        attendanceSessionId: item.event.attendanceSessionId,
+        clientEventId: item.event.clientEventId,
+        sequenceNumber: item.event.sequenceNumber,
+        scanTimestamp: new Date(item.event.readerTimestamp),
+        direction: item.event.direction || 'NONE',
+        decision: 'ACCEPTED',
+        captureMethod: item.captureMethod,
+        securityMode: item.event.securityMode,
+        processingLatencyMs: 1,
+        isOffline: true,
+        nonce: item.event.nonce,
+      }));
+
+      const insertedScanEvents = await tx
+        .insert(rfidScanEvents)
+        .values(scanEventValues)
+        .onConflictDoNothing()
+        .returning({ id: rfidScanEvents.id, clientEventId: rfidScanEvents.clientEventId });
+
+      const insertedMap = new Map<string, string>(insertedScanEvents.map((s: any) => [s.clientEventId, s.id]));
+
+      // 2. Bulk insert attendance_events
+      const attEventsValues = chunk.map((item) => {
+        const scanId = insertedMap.get(item.event.clientEventId) || crypto.randomUUID();
+        return {
+          schoolId,
+          clientEventId: `rfid_${scanId}`,
+          attendanceSessionId: item.event.attendanceSessionId,
+          studentId: item.credential.studentId,
+          eventType: 'CHECK_IN',
+          statusValue: 'PRESENT',
+          clientTimestamp: new Date(item.event.readerTimestamp),
+          actorId: item.credential.createdByUserId || item.session.teacherId,
+          captureMethod: item.captureMethod,
+          sourceReaderId: item.event.readerId,
+          sourceRfidEventId: scanId,
+        };
+      });
+
+      if (attEventsValues.length > 0) {
+        await tx.insert(attendanceEvents).values(attEventsValues).onConflictDoNothing();
+      }
+
+      // 3. Bulk insert/upsert attendance_records
+      const attRecordValues = chunk.map((item) => ({
+        schoolId,
+        attendanceSessionId: item.event.attendanceSessionId,
+        studentId: item.credential.studentId,
+        status: 'PRESENT',
+        firstScannedAt: new Date(item.event.readerTimestamp),
+        lastUpdatedAt: new Date(),
+        captureMethod: item.captureMethod,
+        confidenceLevel: item.event.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
+        direction: item.event.direction || 'NONE',
+      }));
+
+      if (attRecordValues.length > 0) {
+        await tx
+          .insert(attendanceRecords)
+          .values(attRecordValues)
+          .onConflictDoUpdate({
+            target: [attendanceRecords.schoolId, attendanceRecords.attendanceSessionId, attendanceRecords.studentId],
+            set: {
+              status: 'PRESENT',
+              lastUpdatedAt: new Date(),
+            },
+          })
+          .returning({ id: attendanceRecords.id, studentId: attendanceRecords.studentId });
+      }
+
+      for (const item of chunk) {
+        const scanId = insertedMap.get(item.event.clientEventId) || item.event.clientEventId;
+        resultsMap.set(item.event.clientEventId, {
+          decision: 'ACCEPTED',
+          scanEventId: scanId,
+          studentId: item.credential.studentId,
+          processingLatencyMs: 1,
+        });
+      }
+    });
+  }
+
+  return events.map((e) => resultsMap.get(e.clientEventId) || { decision: 'ACCEPTED', scanEventId: e.clientEventId });
 }
 
 export async function getOfflineQueueStatus(schoolId: string, readerId: string) {

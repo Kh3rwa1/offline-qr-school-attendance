@@ -67,6 +67,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     process.env.TEST_SERVER_STATIC = 'true';
     process.env.DATABASE_URL = appUrl!;
     process.env.SYSTEM_DATABASE_URL = systemUrl!;
+    process.env.AUTH_DATABASE_URL = process.env.PG_RLS_AUTH_DATABASE_URL || migrationUrl!;
     process.env.SESSION_SECRET = 'integration-test-session-secret-0123456789';
     process.env.SMS_PROVIDER = 'fake';
     process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';

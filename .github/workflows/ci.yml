@@ -149,11 +149,12 @@ jobs:
 
       - name: Create Database Roles (attendance_app, attendance_auth, attendance_worker) & Privileges
         run: |
-          PGPASSWORD=ci_password psql -h 127.0.0.1 -U attendance_migration -d school_attendance -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN CREATE ROLE attendance_app LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN CREATE ROLE attendance_auth LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN CREATE ROLE attendance_worker LOGIN PASSWORD 'ci_password'; END IF; GRANT CONNECT ON DATABASE school_attendance TO attendance_app, attendance_auth, attendance_worker; GRANT USAGE ON SCHEMA public TO attendance_app, attendance_auth, attendance_worker; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_app; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO attendance_app; END \$\$;"
+          PGPASSWORD=ci_password psql -h 127.0.0.1 -U attendance_migration -d school_attendance -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN CREATE ROLE attendance_app LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN CREATE ROLE attendance_auth LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN CREATE ROLE attendance_worker LOGIN PASSWORD 'ci_password'; END IF; GRANT CONNECT ON DATABASE school_attendance TO attendance_app, attendance_auth, attendance_worker; GRANT USAGE ON SCHEMA public TO attendance_app, attendance_auth, attendance_worker; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_app; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_app; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO attendance_auth, attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO attendance_auth, attendance_app; END \$\$;"
 
       - name: Run RLS Schema Integration Suite
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
           SESSION_SECRET: ci-session-secret-01234567890123456789
@@ -163,6 +164,7 @@ jobs:
           PRODUCTION_PG_TEST: "1"
           PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
+          PG_RLS_AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
         run: npm test
 
   backup-and-restore-drill:

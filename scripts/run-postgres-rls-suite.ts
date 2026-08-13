@@ -1,16 +1,29 @@
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+process.env.RUN_SERVER = 'false';
+process.env.TEST_SERVER_STATIC = 'true';
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'integration-test-session-secret-01234567890123456789';
+process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'integration-test-metrics-token-01234567890123456789';
+process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'integration-test-redis-hmac-secret-0123456789';
+process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'integration-test-rfid-hmac-secret-0123456789';
+process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
+
 import pg from 'pg';
 import crypto from 'node:crypto';
 import argon2 from 'argon2';
 
 const migrationUrl = process.env.PG_RLS_MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
-const appUrl = process.env.PG_RLS_APPLICATION_DATABASE_URL;
-const authUrl = process.env.PG_RLS_AUTH_DATABASE_URL || process.env.AUTH_DATABASE_URL;
+const appUrl = process.env.PG_RLS_APPLICATION_DATABASE_URL || process.env.DATABASE_URL;
+const authUrl = process.env.PG_RLS_AUTH_DATABASE_URL || process.env.AUTH_DATABASE_URL || migrationUrl;
 const systemUrl = process.env.PG_RLS_SYSTEM_DATABASE_URL || appUrl;
 
 if (!migrationUrl || !appUrl) {
   console.error('FATAL: PG_RLS_MIGRATION_DATABASE_URL and PG_RLS_APPLICATION_DATABASE_URL are required.');
   process.exit(1);
 }
+
+process.env.DATABASE_URL = appUrl;
+process.env.SYSTEM_DATABASE_URL = systemUrl;
+process.env.AUTH_DATABASE_URL = authUrl;
 
 function assert(condition: boolean, message: string) {
   if (!condition) {

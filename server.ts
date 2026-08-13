@@ -218,7 +218,7 @@ export async function startServer() {
   process.on('SIGINT', shutdown);
 }
 
-if (process.env.NODE_ENV !== 'test' && process.env.RUN_SERVER !== 'false') {
+if (process.env.NODE_ENV !== 'test' && process.env.RUN_SERVER !== 'false' && !process.env.VITEST) {
   void startServer().catch((error) => {
     console.error('Server startup failed:', error);
     process.exitCode = 1;

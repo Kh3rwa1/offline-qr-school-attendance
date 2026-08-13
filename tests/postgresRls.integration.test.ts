@@ -94,6 +94,9 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     await migrationPool.end().catch(() => {});
     const { closeDatabasePools } = await import('../src/db');
     await closeDatabasePools();
+    const { closeRedisConnection } = await import('../src/services/redisService');
+    await closeRedisConnection();
+    process.env.NODE_ENV = 'test';
   });
 
   it('proves cookie auth, tenant RLS, finalization, worker isolation and logout', async () => {

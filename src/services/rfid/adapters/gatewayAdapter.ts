@@ -6,6 +6,7 @@ import {
   ReadOptions,
   ScanEnvelope
 } from './types';
+import { computeCanonicalSignature } from '../cryptoService';
 import crypto from 'crypto';
 
 export class GatewayAdapter implements ReaderAdapter {
@@ -91,12 +92,8 @@ export class GatewayAdapter implements ReaderAdapter {
         isOffline: false,
       };
 
-      // Canonical signature computation
-      const payloadStr = Object.keys(envelope)
-        .sort()
-        .map((k) => `${k}:${envelope[k] ?? ''}`)
-        .join('|');
-      envelope.signature = crypto.createHmac('sha256', secret).update(payloadStr).digest('hex');
+      // Canonical signature computation matching server verification
+      envelope.signature = computeCanonicalSignature(envelope, secret);
 
       clearTimeout(timer);
       resolve(envelope as ScanEnvelope);

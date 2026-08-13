@@ -258,6 +258,7 @@ export const readerService = {
   suspendReader,
   revokeReader,
   retireReader,
+  provisionReader,
   updateReaderConfig,
   recordHeartbeat,
   detectClockDrift,

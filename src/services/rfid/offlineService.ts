@@ -36,7 +36,10 @@ export async function generateOfflineRoster(schoolId: string) {
     revokedDigests: revokedCredentials.map((c: any) => c.credentialDigest),
   };
 
-  const secret = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+  const secret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+  if (!secret) {
+    throw new Error('RFID_HMAC_SECRET is missing in server configuration for offline roster signing');
+  }
   const signature = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
 
   return {

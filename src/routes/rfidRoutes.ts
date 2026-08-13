@@ -482,17 +482,28 @@ rfidRouter.get(
   }
 );
 
+rfidRouter.post(
+  '/:schoolId/rfid/readers/:readerId/provision',
+  requireAuth,
+  tenantHandler,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const provisioning = await readerService.provisionReader(req.params.readerId, req.params.schoolId, req.user!.id);
+      return res.json({ success: true, provisioning });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+  }
+);
+
 rfidRouter.get(
   '/:schoolId/rfid/reports/readers',
   requireAuth,
   tenantHandler,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const readers = await db
-        .select()
-        .from(rfidReaders)
-        .where(eq(rfidReaders.schoolId, req.params.schoolId));
-
+      const readers = await readerService.listReaders(req.params.schoolId);
       return res.json({ success: true, report: readers });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });

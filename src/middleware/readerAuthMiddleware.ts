@@ -57,11 +57,11 @@ export const readerAuthMiddleware = async (
       return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'Reader is suspended or revoked' });
     }
 
-    // Validate certificate fingerprint if client/proxy passed TLS certificate fingerprint header
-    const certFingerprint = req.headers['x-reader-cert-fingerprint'] as string;
-    if (certFingerprint && reader.certificateFingerprint) {
-      if (certFingerprint.toLowerCase() !== reader.certificateFingerprint.toLowerCase()) {
-        return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'mTLS certificate fingerprint mismatch' });
+    // Strict mTLS certificate fingerprint verification for certificate-bound readers
+    if (reader.certificateFingerprint) {
+      const certFingerprint = req.headers['x-reader-cert-fingerprint'] as string;
+      if (!certFingerprint || certFingerprint.toLowerCase() !== reader.certificateFingerprint.toLowerCase()) {
+        return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'mTLS client certificate required and mismatched' });
       }
     }
 

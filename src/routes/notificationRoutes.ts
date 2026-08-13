@@ -51,7 +51,7 @@ router.post('/callback', async (req: Request, res: Response) => {
 
   const { providerMessageId, status, failureReason, deliveredAt } = parsedPayload;
 
-  const [job] = await withSystemContext(async () => db
+  const [job] = await withSystemContext(async (tx) => tx
     .select()
     .from(notificationJobs)
     .where(eq(notificationJobs.providerMessageId, providerMessageId)));

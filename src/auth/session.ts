@@ -40,8 +40,8 @@ export async function createSession(
   const hashedToken = hashToken(token);
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
-  await withSystemContext(async () => {
-    await db.insert(authSessions).values({
+  await withSystemContext(async (tx) => {
+    await tx.insert(authSessions).values({
       userId,
       schoolId: schoolId || null,
       sessionToken: hashedToken,
@@ -55,12 +55,12 @@ export async function createSession(
 export async function getSession(token: string): Promise<SessionContext | null> {
   if (!token) return null;
 
-  return withSystemContext(async () => {
+  return withSystemContext(async (tx) => {
     const now = new Date();
     const hashedToken = hashToken(token);
 
     // Find active non-expired session by SHA-256 token hash
-    const [sessionRecord] = await db
+    const [sessionRecord] = await tx
       .select()
       .from(authSessions)
       .where(and(
@@ -71,7 +71,7 @@ export async function getSession(token: string): Promise<SessionContext | null> 
     if (!sessionRecord) return null;
 
     // Find user details
-    const [userRecord] = await db
+    const [userRecord] = await tx
       .select()
       .from(users)
       .where(eq(users.id, sessionRecord.userId));
@@ -81,7 +81,7 @@ export async function getSession(token: string): Promise<SessionContext | null> 
     }
 
     // Find user school memberships
-    const memberships = await db
+    const memberships = await tx
       .select({
         schoolId: schoolMemberships.schoolId,
         schoolName: schools.name,
@@ -102,7 +102,7 @@ export async function getSession(token: string): Promise<SessionContext | null> 
         (m: { schoolId: string; schoolName: string; role: string; status: string }) => m.schoolId === sessionRecord.schoolId
       );
       if (!activeMembership && memberships.some((membership: SessionContext['memberships'][number]) => membership.role === 'SUPER_ADMIN')) {
-        const [targetSchool] = await db
+        const [targetSchool] = await tx
           .select({ id: schools.id })
           .from(schools)
           .where(and(eq(schools.id, sessionRecord.schoolId), eq(schools.status, 'ACTIVE')));
@@ -135,7 +135,7 @@ export async function getSession(token: string): Promise<SessionContext | null> 
 export async function invalidateSession(token: string): Promise<void> {
   if (!token) return;
   const hashedToken = hashToken(token);
-  await withSystemContext(async () => {
-    await db.delete(authSessions).where(eq(authSessions.sessionToken, hashedToken));
+  await withSystemContext(async (tx) => {
+    await tx.delete(authSessions).where(eq(authSessions.sessionToken, hashedToken));
   });
 }

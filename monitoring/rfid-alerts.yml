@@ -1,0 +1,83 @@
+groups:
+  - name: rfid-alerts
+    rules:
+      - alert: RfidReaderOffline
+        expr: (time() - rfid_readers_last_seen_seconds) > 300
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RFID Reader {{ $labels.reader_id }} is offline"
+          description: "Reader has not been seen for over 5 minutes."
+
+      - alert: RfidQueueBacklog
+        expr: rfid_offline_queue_depth > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High RFID offline queue depth"
+          description: "Queue depth is {{ $value }}, exceeding threshold of 1000."
+
+      - alert: RfidStaleEvents
+        expr: rfid_offline_event_age_seconds > 3600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Stale RFID events detected"
+          description: "Oldest queued event is older than 1 hour."
+
+      - alert: RfidReplayAttempts
+        expr: increase(rfid_replay_attempts_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High number of RFID replay attempts"
+          description: "Over 10 replay attempts detected in the last 5 minutes."
+
+      - alert: RfidExcessiveUnknownCards
+        expr: increase(rfid_unknown_card_attempts_total[5m]) > 50
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Excessive unknown RFID cards"
+          description: "Over 50 unknown card taps in the last 5 minutes."
+
+      - alert: RfidHighErrorRate
+        expr: sum(rate(rfid_scans_total{decision="ERROR"}[5m])) / sum(rate(rfid_scans_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High RFID scan error rate"
+          description: "Error rate is above 5%."
+
+      - alert: RfidClockDrift
+        expr: abs(rfid_reader_clock_drift_seconds) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RFID Reader clock drift"
+          description: "Clock drift on reader {{ $labels.reader_id }} is over 60s."
+
+      - alert: RfidRedisUnavailable
+        expr: app_redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis dependency unavailable"
+          description: "Redis is down, impacting RFID rate limiting and caching."
+
+      - alert: RfidPostgresUnavailable
+        expr: app_postgres_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL dependency unavailable"
+          description: "PostgreSQL is down, impacting RFID event persistence."

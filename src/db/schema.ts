@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   uuid,
   varchar,
   text,
@@ -7,6 +8,7 @@ import {
   timestamp,
   date,
   integer,
+  bigint,
   jsonb,
   uniqueIndex,
   index,
@@ -326,9 +328,14 @@ export const attendanceEvents = pgTable(
     deviceId: uuid('device_id').references(() => devices.id),
     actorId: uuid('actor_id').notNull().references(() => users.id),
     metadata: jsonb('metadata'),
+    // RFID extensions (migration 0010)
+    captureMethod: varchar('capture_method', { length: 30 }).notNull().default('QR'),
+    sourceReaderId: uuid('source_reader_id'),
+    sourceRfidEventId: uuid('source_rfid_event_id'),
   },
   (table) => ({
     schoolSessionIdx: index('attendance_events_school_session_idx').on(table.schoolId, table.attendanceSessionId),
+    captureMethodIdx: index('attendance_events_capture_method_idx').on(table.schoolId, table.captureMethod),
   })
 );
 
@@ -346,6 +353,10 @@ export const attendanceRecords = pgTable(
     firstScannedAt: timestamp('first_scanned_at', { withTimezone: true }),
     lastUpdatedAt: timestamp('last_updated_at', { withTimezone: true }).notNull().defaultNow(),
     hasConflict: boolean('has_conflict').notNull().default(false),
+    // RFID extensions (migration 0010)
+    captureMethod: varchar('capture_method', { length: 30 }).notNull().default('QR'),
+    confidenceLevel: varchar('confidence_level', { length: 20 }).notNull().default('HIGH'),
+    direction: varchar('direction', { length: 20 }),
   },
   (table) => ({
     recordUnique: uniqueIndex('attendance_records_unique_idx').on(
@@ -354,6 +365,7 @@ export const attendanceRecords = pgTable(
       table.studentId
     ),
     schoolStatusIdx: index('attendance_records_school_status_idx').on(table.schoolId, table.status),
+    captureMethodIdx: index('attendance_records_capture_method_idx').on(table.schoolId, table.captureMethod),
   })
 );
 
@@ -482,5 +494,157 @@ export const auditLogs = pgTable(
   },
   (table) => ({
     schoolCreatedIdx: index('audit_logs_school_created_idx').on(table.schoolId, table.createdAt),
+  })
+);
+
+// ============================================================
+// RFID/NFC Tables (Migration 0009)
+// ============================================================
+
+// RFID Enums
+export const rfidCredentialStatusEnum = pgEnum('rfid_credential_status', [
+  'PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED', 'REPLACED', 'EXPIRED',
+]);
+
+export const rfidReaderStatusEnum = pgEnum('rfid_reader_status', [
+  'PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED', 'RETIRED',
+]);
+
+export const rfidSecurityModeEnum = pgEnum('rfid_security_mode', [
+  'SECURE', 'UID_LEGACY',
+]);
+
+export const rfidAdapterTypeEnum = pgEnum('rfid_adapter_type', [
+  'GATEWAY', 'USB_HID', 'WEB_SERIAL', 'NETWORK',
+]);
+
+export const captureMethodEnum = pgEnum('capture_method', [
+  'QR', 'RFID_SECURE', 'RFID_UID_LEGACY', 'MANUAL',
+]);
+
+export const scanDecisionEnum = pgEnum('scan_decision', [
+  'ACCEPTED', 'DUPLICATE', 'UNKNOWN_CARD', 'REVOKED_CARD', 'EXPIRED_CARD',
+  'SUSPENDED_CARD', 'READER_REVOKED', 'WRONG_SCHOOL', 'NO_ACTIVE_SESSION',
+  'ALREADY_PRESENT', 'REPLAY_REJECTED', 'CLOCK_SKEW', 'RATE_LIMITED',
+  'DEPENDENCY_UNAVAILABLE',
+]);
+
+export const directionModeEnum = pgEnum('direction_mode', [
+  'ENTRY', 'EXIT', 'BIDIRECTIONAL', 'NONE',
+]);
+
+// 25. RFID Key Versions
+export const rfidKeyVersions = pgTable(
+  'rfid_key_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    keyVersion: integer('key_version').notNull(),
+    securityMode: rfidSecurityModeEnum('security_mode').notNull().default('SECURE'),
+    algorithm: varchar('algorithm', { length: 50 }).notNull().default('HMAC-SHA256'),
+    secretReference: varchar('secret_reference', { length: 255 }).notNull(),
+    isCurrent: boolean('is_current').notNull().default(false),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    schoolVersionUnique: uniqueIndex('rfid_key_versions_school_version_idx').on(table.schoolId, table.keyVersion),
+  })
+);
+
+// 26. RFID Credentials
+export const rfidCredentials = pgTable(
+  'rfid_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id').notNull().references(() => students.id, { onDelete: 'cascade' }),
+    credentialDigest: varchar('credential_digest', { length: 255 }).notNull(),
+    securityMode: rfidSecurityModeEnum('security_mode').notNull().default('SECURE'),
+    keyVersion: integer('key_version').notNull().default(1),
+    status: rfidCredentialStatusEnum('status').notNull().default('PENDING'),
+    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revocationReason: text('revocation_reason'),
+    replacedByCredentialId: uuid('replaced_by_credential_id'),
+    createdByUserId: uuid('created_by_user_id').notNull().references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    activeStudentUnique: uniqueIndex('rfid_credentials_active_student_idx')
+      .on(table.schoolId, table.studentId)
+      .where(sql`${table.status} = 'ACTIVE'`),
+    digestSchoolUnique: uniqueIndex('rfid_credentials_digest_school_idx')
+      .on(table.schoolId, table.credentialDigest)
+      .where(sql`${table.status} IN ('PENDING', 'ACTIVE', 'SUSPENDED')`),
+    lookupIdx: index('rfid_credentials_lookup_idx').on(table.schoolId, table.credentialDigest, table.status),
+    studentIdx: index('rfid_credentials_student_idx').on(table.schoolId, table.studentId, table.createdAt),
+  })
+);
+
+// 27. RFID Readers
+export const rfidReaders = pgTable(
+  'rfid_readers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    deviceId: varchar('device_id', { length: 255 }).notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    location: varchar('location', { length: 255 }),
+    directionMode: directionModeEnum('direction_mode').notNull().default('NONE'),
+    readerModel: varchar('reader_model', { length: 100 }),
+    firmwareVersion: varchar('firmware_version', { length: 100 }),
+    adapterType: rfidAdapterTypeEnum('adapter_type').notNull().default('GATEWAY'),
+    securityCapability: varchar('security_capability', { length: 100 }).notNull().default('UID_ONLY'),
+    certificateFingerprint: varchar('certificate_fingerprint', { length: 255 }),
+    status: rfidReaderStatusEnum('status').notNull().default('PENDING'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    keyVersion: integer('key_version').notNull().default(1),
+    clockDriftMs: integer('clock_drift_ms'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    schoolDeviceUnique: uniqueIndex('rfid_readers_school_device_idx').on(table.schoolId, table.deviceId),
+    deviceGlobalUnique: uniqueIndex('rfid_readers_device_global_idx')
+      .on(table.deviceId)
+      .where(sql`${table.status} IN ('PENDING', 'ACTIVE', 'SUSPENDED')`),
+    statusIdx: index('rfid_readers_status_idx').on(table.schoolId, table.status),
+  })
+);
+
+// 28. RFID Scan Events
+export const rfidScanEvents = pgTable(
+  'rfid_scan_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    readerId: uuid('reader_id').notNull().references(() => rfidReaders.id),
+    credentialId: uuid('credential_id').references(() => rfidCredentials.id),
+    attendanceSessionId: uuid('attendance_session_id').references(() => attendanceSessions.id),
+    clientEventId: varchar('client_event_id', { length: 255 }).notNull(),
+    sequenceNumber: bigint('sequence_number', { mode: 'number' }),
+    scanTimestamp: timestamp('scan_timestamp', { withTimezone: true }).notNull(),
+    serverReceivedAt: timestamp('server_received_at', { withTimezone: true }).notNull().defaultNow(),
+    direction: directionModeEnum('direction'),
+    decision: scanDecisionEnum('decision').notNull(),
+    rejectionCode: varchar('rejection_code', { length: 100 }),
+    captureMethod: captureMethodEnum('capture_method').notNull().default('RFID_SECURE'),
+    securityMode: rfidSecurityModeEnum('security_mode').notNull().default('SECURE'),
+    processingLatencyMs: integer('processing_latency_ms'),
+    isOffline: boolean('is_offline').notNull().default(false),
+    nonce: varchar('nonce', { length: 255 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    clientEventUnique: uniqueIndex('rfid_scan_events_client_event_idx').on(table.schoolId, table.clientEventId),
+    readerIdx: index('rfid_scan_events_reader_idx').on(table.schoolId, table.readerId, table.scanTimestamp),
+    decisionIdx: index('rfid_scan_events_decision_idx').on(table.schoolId, table.decision, table.scanTimestamp),
+    sessionIdx: index('rfid_scan_events_session_idx').on(table.schoolId, table.attendanceSessionId, table.scanTimestamp),
   })
 );

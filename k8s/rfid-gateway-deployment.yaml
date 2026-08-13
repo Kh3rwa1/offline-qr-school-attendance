@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rfid-gateway
+  labels:
+    app: rfid-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rfid-gateway
+  template:
+    metadata:
+      labels:
+        app: rfid-gateway
+    spec:
+      serviceAccountName: rfid-gateway-sa
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rfid-gateway
+          image: offline-qr-school-attendance:v1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ['node', 'dist/rfid-gateway.js']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+          ports:
+            - containerPort: 3001
+              name: http
+          envFrom:
+            - secretRef:
+                name: school-attendance-secrets
+            - configMapRef:
+                name: school-attendance-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 3001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}

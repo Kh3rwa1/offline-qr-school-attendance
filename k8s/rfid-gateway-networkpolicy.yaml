@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rfid-gateway-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: rfid-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from RFID reader pods
+    - from:
+        - podSelector:
+            matchLabels:
+              role: rfid-reader
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Allow ingress from the main web application
+    - from:
+        - podSelector:
+            matchLabels:
+              app: school-attendance-web
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Allow ingress from configurable CIDR for physical readers
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 3001
+  egress:
+    # PostgreSQL
+    - ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - ports:
+        - protocol: TCP
+          port: 6379
+    # DNS resolution
+    - ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53

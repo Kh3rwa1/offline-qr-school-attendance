@@ -1,0 +1,64 @@
+{
+  "title": "RFID Monitoring Dashboard",
+  "panels": [
+    {
+      "title": "RFID Scans by Decision",
+      "type": "barchart",
+      "targets": [
+        { "expr": "sum by (decision) (rate(rfid_scans_total[5m]))" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "stacking": { "mode": "normal" } } } }
+    },
+    {
+      "title": "Reader Status",
+      "type": "stat",
+      "targets": [
+        { "expr": "sum by (status) (rfid_readers_status)" }
+      ]
+    },
+    {
+      "title": "Scan Latency (p50/p95/p99)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(rfid_scan_duration_seconds_bucket[5m]))", "legendFormat": "p99" },
+        { "expr": "histogram_quantile(0.95, rate(rfid_scan_duration_seconds_bucket[5m]))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.50, rate(rfid_scan_duration_seconds_bucket[5m]))", "legendFormat": "p50" }
+      ]
+    },
+    {
+      "title": "Offline Queue Depth",
+      "type": "gauge",
+      "targets": [
+        { "expr": "rfid_offline_queue_depth" }
+      ]
+    },
+    {
+      "title": "QR vs RFID Attendance",
+      "type": "piechart",
+      "targets": [
+        { "expr": "sum by (method) (attendance_by_capture_method_total)" }
+      ]
+    },
+    {
+      "title": "Credentials by Status",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rfid_credentials_total" }
+      ]
+    },
+    {
+      "title": "Replay Attempts (Counter)",
+      "type": "stat",
+      "targets": [
+        { "expr": "sum(increase(rfid_replay_attempts_total[1h]))" }
+      ]
+    },
+    {
+      "title": "Unknown Card Attempts",
+      "type": "stat",
+      "targets": [
+        { "expr": "sum(increase(rfid_unknown_card_attempts_total[1h]))" }
+      ]
+    }
+  ]
+}

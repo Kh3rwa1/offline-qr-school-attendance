@@ -107,4 +107,32 @@ export const rateLimitPolicies = {
     maxRequests: 30,
     windowMs: 15 * 60 * 1000,
   }),
+
+  rfidScan: createDistributedRateLimiter({
+    prefix: 'rfid-scan',
+    maxRequests: 120,
+    windowMs: 60 * 1000,
+    keyGenerator: (req) => {
+      const readerId = req.headers['x-reader-id'] as string || req.ip || 'unknown';
+      return `reader:${readerId}`;
+    },
+  }),
+
+  rfidEnrollment: createDistributedRateLimiter({
+    prefix: 'rfid-enroll',
+    maxRequests: 60,
+    windowMs: 60 * 1000,
+  }),
+
+  rfidReaderPairing: createDistributedRateLimiter({
+    prefix: 'rfid-pair',
+    maxRequests: 10,
+    windowMs: 15 * 60 * 1000,
+  }),
+
+  rfidUnknownCard: createDistributedRateLimiter({
+    prefix: 'rfid-unknown',
+    maxRequests: 20,
+    windowMs: 60 * 1000,
+  }),
 };

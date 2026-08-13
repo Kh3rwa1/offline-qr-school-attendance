@@ -14,6 +14,7 @@ import syncRouter from './src/routes/syncRoutes';
 import reportRouter from './src/routes/reportRoutes';
 import auditRouter from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
+import { rfidRouter } from './src/routes/rfidRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -145,6 +146,8 @@ export async function createApp() {
   app.use('/api/v1/schools', studentRouter);
   app.use('/api/v1/schools', importRouter);
   app.use('/api/v1/schools', qrRouter);
+  app.use('/api/v1/schools', rateLimitPolicies.rfidScan ?? rateLimitPolicies.generalApi);
+  app.use('/api/v1/schools', rfidRouter);
   app.use('/api/v1/schools/:schoolId/attendance', attendanceRouter);
   app.use('/api/v1/schools/:schoolId/sync', syncRouter);
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);

@@ -13,6 +13,15 @@ import { offlineDb, OfflineRosterItem, OfflineSessionItem, OfflineSessionRosterI
 import { estimateSmsSegments } from './services/sms/smsUtils';
 import { api, ApiError } from './services/api';
 
+import RfidDashboard from './components/rfid/RfidDashboard';
+import CardEnrollmentWizard from './components/rfid/CardEnrollmentWizard';
+import ReaderManagement from './components/rfid/ReaderManagement';
+import CardStatusPanel from './components/rfid/CardStatusPanel';
+import BulkEnrollment from './components/rfid/BulkEnrollment';
+import OfflineQueueIndicator from './components/rfid/OfflineQueueIndicator';
+import RfidReports from './components/rfid/RfidReports';
+import ScanResultDisplay from './components/rfid/ScanResultDisplay';
+
 type User = { id: string; fullName: string; phoneNumber: string };
 type Membership = { schoolId: string; schoolName: string; role: string; status: string };
 type AuthState = { user: User; memberships: Membership[]; schoolId: string; cachedAt: number; expiresAt: number };
@@ -38,7 +47,8 @@ export default function App() {
   const [sessionRoster, setSessionRoster] = useState<OfflineSessionRosterItem[]>([]);
   const [outboxCount, setOutboxCount] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [activeView, setActiveView] = useState<'scanner' | 'roster' | 'review' | 'reports' | 'admin'>('scanner');
+  const [activeView, setActiveView] = useState<'scanner' | 'roster' | 'review' | 'reports' | 'admin' | 'rfid'>('scanner');
+  const [rfidSubView, setRfidSubView] = useState<'dashboard' | 'cards' | 'readers' | 'reports' | 'enroll' | 'bulk'>('dashboard');
   const [scanInput, setScanInput] = useState('');
   const [report, setReport] = useState<any>(null);
   const [finalizing, setFinalizing] = useState(false);
@@ -344,15 +354,28 @@ export default function App() {
   const leaveExcused = sessionRoster.filter((item) => item.status === 'LEAVE' || item.status === 'EXCUSED').length;
   const expectedSmsSegments = sessionRoster.filter((item) => item.status === 'ABSENT' || item.status === 'UNMARKED')
     .reduce((total) => total + estimateSmsSegments('absence').segmentCount, 0);
-  const admin = auth.memberships.find((m) => m.schoolId === auth.schoolId)?.role === 'SCHOOL_ADMIN' || auth.memberships.find((m) => m.schoolId === auth.schoolId)?.role === 'SUPER_ADMIN';
+  
+  const activeMembership = auth.memberships.find((m) => m.schoolId === auth.schoolId);
+  const admin = activeMembership?.role === 'SCHOOL_ADMIN' || activeMembership?.role === 'SUPER_ADMIN';
+  const rfidAdmin = admin || activeMembership?.role === 'RFID_OPERATOR';
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-5">
         <header className="bg-white rounded-3xl p-5 shadow-sm flex flex-wrap gap-4 items-center justify-between">
           <div><h1 className="text-xl font-black text-slate-800">Offline QR Attendance</h1><p className="text-sm text-slate-500">{auth.memberships.find((m) => m.schoolId === auth.schoolId)?.schoolName || 'School'} · {auth.user.fullName}</p></div>
-          <div className="flex flex-wrap items-center gap-2"><span className={`px-3 py-2 rounded-xl text-xs font-bold flex gap-1 items-center ${online ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{online ? <Wifi className="w-4" /> : <CloudOff className="w-4" />}{online ? 'Online' : 'Offline'}</span><button onClick={handleLogout} className="px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold"><LogOut className="inline w-4 mr-1" />Sign out</button></div>
-          <nav className="w-full flex flex-wrap gap-2 border-t pt-3"><button onClick={() => setActiveView('scanner')} className="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 font-bold text-sm">Scanner</button><button onClick={() => setActiveView('roster')} className="px-3 py-2 rounded-lg text-sm">Roster</button><button onClick={() => { setActiveView('reports'); void loadReport(); }} className="px-3 py-2 rounded-lg text-sm">Reports</button>{admin && <button onClick={() => setActiveView('admin')} className="px-3 py-2 rounded-lg text-sm">Admin</button>}<span className="ml-auto text-sm text-slate-500 self-center">{outboxCount} unsynced</span></nav>
+          <div className="flex flex-wrap items-center gap-2">
+            <OfflineQueueIndicator online={online} depth={outboxCount} lastSync={new Date()} age={0} />
+            <button onClick={handleLogout} className="px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold"><LogOut className="inline w-4 mr-1" />Sign out</button>
+          </div>
+          <nav className="w-full flex flex-wrap gap-2 border-t pt-3">
+            <button onClick={() => setActiveView('scanner')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeView === 'scanner' ? 'bg-blue-50 text-blue-700' : ''}`}>Scanner</button>
+            <button onClick={() => setActiveView('roster')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeView === 'roster' ? 'bg-blue-50 text-blue-700' : ''}`}>Roster</button>
+            <button onClick={() => { setActiveView('reports'); void loadReport(); }} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeView === 'reports' ? 'bg-blue-50 text-blue-700' : ''}`}>Reports</button>
+            {admin && <button onClick={() => setActiveView('admin')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeView === 'admin' ? 'bg-blue-50 text-blue-700' : ''}`}>Admin</button>}
+            {rfidAdmin && <button onClick={() => setActiveView('rfid')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeView === 'rfid' ? 'bg-blue-50 text-blue-700' : ''}`}>RFID</button>}
+            <span className="ml-auto text-sm text-slate-500 self-center">{outboxCount} unsynced</span>
+          </nav>
         </header>
 
         {feedback && <div role="status" className={`rounded-2xl p-4 font-bold ${feedback.kind === 'success' ? 'bg-emerald-100 text-emerald-800' : feedback.kind === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}`}>{feedback.text}</div>}
@@ -376,7 +399,30 @@ export default function App() {
         {activeView === 'reports' && <section className="bg-white rounded-3xl p-5 shadow-sm"><h2 className="text-xl font-black mb-4">Live class report</h2>{report ? <pre className="text-xs whitespace-pre-wrap bg-slate-50 rounded-xl p-4 overflow-auto">{JSON.stringify(report, null, 2)}</pre> : <p className="text-slate-500">Select a class to load its report.</p>}</section>}
 
         {activeView === 'admin' && admin && <section className="bg-white rounded-3xl p-5 shadow-sm"><h2 className="text-xl font-black mb-4">Credential administration</h2><p className="text-sm text-slate-500 mb-4">Reissue explicitly revokes the previous credential before issuing a new one.</p><div className="grid md:grid-cols-2 gap-3">{roster.map((student) => <div key={student.studentId} className="border rounded-xl p-3 flex justify-between items-center"><span><b>{student.name}</b><small className="block text-slate-500">Roll {student.rollNumber}</small></span><button onClick={() => void reissueQr(student.studentId)} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold"><ShieldAlert className="inline w-4 mr-1" />Reissue</button></div>)}</div></section>}
+        
+        {activeView === 'rfid' && rfidAdmin && (
+          <section className="space-y-4">
+            <div className="bg-white p-3 rounded-2xl shadow-sm flex gap-2">
+              <button onClick={() => setRfidSubView('dashboard')} className={`px-4 py-2 rounded-xl text-sm font-bold ${rfidSubView === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Dashboard</button>
+              <button onClick={() => setRfidSubView('cards')} className={`px-4 py-2 rounded-xl text-sm font-bold ${rfidSubView === 'cards' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Cards</button>
+              <button onClick={() => setRfidSubView('enroll')} className={`px-4 py-2 rounded-xl text-sm font-bold ${rfidSubView === 'enroll' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Enroll</button>
+              <button onClick={() => setRfidSubView('bulk')} className={`px-4 py-2 rounded-xl text-sm font-bold ${rfidSubView === 'bulk' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Bulk Enroll</button>
+              <button onClick={() => setRfidSubView('readers')} className={`px-4 py-2 rounded-xl text-sm font-bold ${rfidSubView === 'readers' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Readers</button>
+              <button onClick={() => setRfidSubView('reports')} className={`px-4 py-2 rounded-xl text-sm font-bold ${rfidSubView === 'reports' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Reports</button>
+            </div>
+            
+            {rfidSubView === 'dashboard' && <RfidDashboard schoolId={auth.schoolId} />}
+            {rfidSubView === 'cards' && <CardStatusPanel studentId="" />}
+            {rfidSubView === 'enroll' && <CardEnrollmentWizard schoolId={auth.schoolId} />}
+            {rfidSubView === 'bulk' && <BulkEnrollment />}
+            {rfidSubView === 'readers' && <ReaderManagement schoolId={auth.schoolId} />}
+            {rfidSubView === 'reports' && <RfidReports schoolId={auth.schoolId} />}
+          </section>
+        )}
       </div>
+      
+      {/* Mock scan result display component usage */}
+      <ScanResultDisplay result={null} />
     </main>
   );
 }

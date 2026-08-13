@@ -88,7 +88,12 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
   });
 
   afterAll(async () => {
-    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (server) {
+      if (typeof server.closeAllConnections === 'function') {
+        server.closeAllConnections();
+      }
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
     try {
       await migrationPool.query('DELETE FROM schools WHERE id IN ($1, $2)', [schoolA, schoolB]);
     } catch {}

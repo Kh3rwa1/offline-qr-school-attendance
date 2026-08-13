@@ -1,0 +1,36 @@
+name: Release & Governance Packaging
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  discussions: write
+
+jobs:
+  release:
+    name: Production Release Governance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Generate CycloneDX SBOM
+        run: npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file output/sbom.cdx.json
+
+      - name: Create Release
+        uses: softprops/action-gh-release@c95fe0f26ba488d011d61a349c256086f6f96613 # v2.2.1
+        with:
+          files: |
+            output/sbom.cdx.json
+            dist/server.cjs
+            dist/migrate.cjs
+            dist/sms-worker.cjs
+          generate_release_notes: true

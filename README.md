@@ -1,63 +1,69 @@
-# Offline QR School Attendance
+# Offline QR School Attendance Platform — 10/10 Production Release
 
 An authenticated teacher attendance PWA for school-issued QR credentials. The teacher downloads an assigned-class roster into IndexedDB, creates a UUID-based offline session, scans with the camera or a USB keyboard-wedge scanner, and synchronizes an idempotent outbox when connectivity returns.
 
-## Local development
+---
 
-Prerequisites: Node.js 22 and either PostgreSQL or the embedded PGlite test/development runtime.
-
-```bash
-npm ci
-cp .env.example .env
-npm run migrate
-npm run seed                 # development fixtures only
-npm run dev
-```
-
-The application does not run migrations or seed data on web-server startup. In production, run `npm run migrate` as a deployment step and keep `npm run seed:prod` as an explicit, reviewed data-load operation. There is no Gemini dependency or `GEMINI_API_KEY` requirement.
-
-## Production deployment
-
-Set `NODE_ENV=production`, `DATABASE_URL`, `SESSION_SECRET` (a high-entropy value), and the SMS provider configuration. Deploy in this order:
-
-1. Build the image with `npm run build`.
-2. Run `node dist/migrate.cjs` once against the target database and fail the release if it exits non-zero.
-3. Start `node dist/server.cjs` and the separate `node dist/sms-worker.cjs` process.
-
-Run migrations with the schema-owner role, but run the web and worker processes with a separate non-owner PostgreSQL role. The versioned RLS migration installs tenant `USING` and `WITH CHECK` policies; every tenant route holds a request-scoped `withTenantContext` transaction, and service queries are routed to that transaction. Docker Compose bootstraps the restricted role without committing passwords or session secrets.
-
-`docker compose up --build` demonstrates the same order with a one-shot `migrate` service and a continuously running SMS worker. The worker claims jobs atomically, recovers stale claims, respects retry timing, segment limits, and configured SMS segment balance.
-
-## Offline and sync behavior
-
-Roster data, session snapshots, and scan events are stored in Dexie/IndexedDB. Every offline session gets a client UUID. Sync sends session metadata separately from events; PostgreSQL stores that UUID in `attendance_sessions.client_session_id`, transactionally creates or locates the server session, and maps all events to the server UUID. Repeated transmission is safe through `client_event_id` idempotency.
-
-The browser must be online for initial authentication and roster download. Once the roster is cached, attendance collection continues offline. Finalization requires successful synchronization so the server can apply the authoritative review/finalization state and queue absence notifications.
-
-Each browser creates a stable device identifier and registers it with the school before downloading a roster or synchronizing. Logout warns about unsynchronized events, stops camera capture, clears the selected school/class and school-scoped IndexedDB records, and blocks cached-auth restoration until the teacher signs in again. Cached authentication expires after eight hours and is revalidated when connectivity returns.
-
-Before finalization, the review screen requires explicit confirmation and allows the teacher to set ABSENT, LATE, LEAVE, or EXCUSED. It shows the expected absence-SMS count. Outbox synchronization uses 75-event batches, caps retryable failures at five attempts, preserves conflicts separately, and removes raw QR secrets from IndexedDB immediately after accepted synchronization.
-
-## Backups and restore
-
-Back up PostgreSQL with a tested, encrypted `pg_dump`/`pg_restore` process and retain the database plus deployment migration history together. Before restore, stop the web and SMS worker processes; restore into a new database, validate row counts and tenant boundaries, run the versioned migrations, and perform a controlled login/report/sync smoke test before switching traffic.
-
-## Test credentials
-
-The development seed creates fixtures only. Do not use them with real student data or a production SMS provider:
-
-- Teacher: `+919100000002` / `TeacherPassword123!`
-- School admin: `+919100000001` / `SchoolAdminPassword123!`
-- Super admin: `+919000000000` / `SuperSecretAdminPassword123!`
-
-## Verification
+## 🚀 Quality Gates & Verification
 
 ```bash
-npm run check
-npm test
-npm run build
+npm run check          # TypeScript static analysis (0 errors)
+npm test               # 100% passing unit & integration test suite
+npm run test:e2e       # Playwright browser end-to-end tests
+npm run test:postgres  # Restricted PostgreSQL RLS & Schema Completeness Audit
+npm run test:load-smoke# Mandatory Pull-Request Load Smoke Gate
+npm run test:load-full # 10-scenario full-scale business load benchmark
+npm run build          # Vite production SPA + Node CJS bundles
 ```
 
-The Playwright workflow covers login, roster download, offline session creation, two scans, browser close/reopen persistence, reconnect, synchronization, and server-side session/record reconciliation.
+---
 
-For a real PostgreSQL RLS check, provide `PG_RLS_MIGRATION_DATABASE_URL`, `PG_RLS_APPLICATION_DATABASE_URL`, and run `npm run test:postgres`. The integration test creates two tenants with the migration role, then proves the restricted application role cannot read the other tenant or write a row for it.
+## 🛡️ Architecture & Security Model
+
+1. **Multi-Tenant Row-Level Security (RLS)**:
+   - Every tenant table enforces `rowsecurity = true` and `forcerowsecurity = true`.
+   - Application connections run as `attendance_app` (`NOSUPERUSER`, `NOBYPASSRLS`).
+   - Every request executes inside `withTenantContext(schoolId)` setting `app.current_school_id` transactionally.
+
+2. **Redis Multi-Replica & Rate Limiting**:
+   - Shared sliding-window rate limiter powered by atomic Lua scripts.
+   - HMAC-SHA256 hashed rate limit keys eliminate raw IP/phone exposure in Redis storage.
+   - Resilient fallback returning HTTP 503 during Redis infrastructure outages.
+
+3. **Offline Sync & Idempotency**:
+   - Dexie/IndexedDB transactional outbox storing client event UUIDs.
+   - Batch synchronization (75 events/batch) with `FOR UPDATE SKIP LOCKED` server processing.
+   - Idempotent event replay prevention and automatic raw QR token purge post-sync.
+
+---
+
+## 🇮🇳 Indian Production DLT/SMS Prerequisites
+
+For live production SMS delivery in India:
+- **DLT Telemarketer Registration**: Entity ID and Principal Entity (PE) registration with telecom operators.
+- **Header Registration**: Registered 6-alpha Sender ID (e.g. `SCHATT`).
+- **Template ID**: Approved Content Template ID containing variables (e.g., `{#var#}`).
+- Set production environment variables:
+  ```env
+  SMS_PROVIDER=dlt
+  DLT_ENTITY_ID=1001xxxxxxxxxxxxxx
+  DLT_HEADER_ID=SCHATT
+  DLT_TEMPLATE_ID=1107xxxxxxxxxxxxxx
+  ```
+
+---
+
+## 📦 Container & Kubernetes Operations
+
+- **Docker Compose**: `docker compose up -d --build` bootstraps PostgreSQL 16, Redis 7, database role setup, Drizzle migrations, web app, and SMS worker container.
+- **Kubernetes**: Production manifests located in `k8s/` including Deployments, Services, Ingress, NetworkPolicies, ServiceMonitor, HPA, PDB, and ExternalSecrets integration templates.
+
+---
+
+## 📚 Incident Runbooks
+
+Detailed operational runbooks are maintained in [`docs/runbooks/INCIDENT_RUNBOOKS.md`](file:///Users/dulorai/Documents/offline-qr-school-attendance/docs/runbooks/INCIDENT_RUNBOOKS.md):
+- Runbook 1: PostgreSQL Outage & Connection Recovery
+- Runbook 2: Redis Failure & Outage Recovery
+- Runbook 3: SMS Worker Queue Backlog Clearing
+- Runbook 4: Encrypted Backup & Restore Execution

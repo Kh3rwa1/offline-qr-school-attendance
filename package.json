@@ -15,6 +15,7 @@
     "e2e:server": "tsx scripts/e2e-server.ts",
     "test:postgres": "PRODUCTION_PG_TEST=1 vitest run tests/postgresRls.integration.test.ts tests/postgresRlsCompleteness.test.ts",
     "test:load-smoke": "tsx scripts/runLoadSmokeBenchmark.ts",
+    "test:load-full": "tsx scripts/runFullScaleLoadTest.ts",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
     "seed:prod": "tsx src/db/seed_production.ts",

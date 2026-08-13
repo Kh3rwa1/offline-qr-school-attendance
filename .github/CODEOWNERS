@@ -1,0 +1,11 @@
+# Global Code Owners
+* @Kh3rwa1
+
+# Database Migrations & Schemas
+/src/db/ @Kh3rwa1
+
+# Security & Infrastructure
+/.github/workflows/ @Kh3rwa1
+/k8s/ @Kh3rwa1
+/docker-compose.yml @Kh3rwa1
+/Dockerfile @Kh3rwa1

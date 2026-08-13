@@ -1,0 +1,44 @@
+groups:
+  - name: school_attendance_alerts
+    rules:
+      - alert: HighHttpErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 1.0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP error rate exceeds 1% over 5 minutes"
+          description: "Current error rate is {{ $value }}%"
+
+      - alert: HighHttpLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP p95 latency exceeds 500ms"
+          description: "p95 latency is {{ $value }}s"
+
+      - alert: PostgresDown
+        expr: app_postgres_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL database connection is down"
+
+      - alert: RedisDown
+        expr: app_redis_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis cache connection is down"
+
+      - alert: SmsQueueBacklogHigh
+        expr: app_notification_queue_depth > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SMS notification queue backlog exceeds 1,000 pending jobs"

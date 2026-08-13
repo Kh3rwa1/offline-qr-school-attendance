@@ -43,14 +43,14 @@ jobs:
         run: |
           docker build -t ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }} -t ${{ env.IMAGE_NAME }}:latest .
 
+      - name: Install Trivy Security Scanner Binary
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /tmp
+          sudo mv /tmp/trivy /usr/local/bin/trivy
+
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
-          format: sarif
-          output: trivy-release-image.sarif
-          exit-code: '1'
-          severity: HIGH,CRITICAL
+        run: |
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-release-image.sarif ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
 
       - name: Log in to GitHub Container Registry (GHCR)
         if: github.event_name != 'pull_request'

@@ -68,14 +68,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Trivy Security Scanner Binary
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /tmp
+          sudo mv /tmp/trivy /usr/local/bin/trivy
+
       - name: Run Trivy Filesystem Vulnerability Scan
-        uses: aquasecurity/trivy-action@v0.30.0
-        with:
-          scan-type: fs
-          ignore-unfixed: true
-          format: sarif
-          output: trivy-fs-results.sarif
-          severity: HIGH,CRITICAL
+        run: |
+          trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -87,13 +87,8 @@ jobs:
         run: docker build -t offline-qr-school-attendance:scan .
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
-        uses: aquasecurity/trivy-action@v0.30.0
-        with:
-          image-ref: offline-qr-school-attendance:scan
-          format: sarif
-          output: trivy-image-results.sarif
-          exit-code: '1'
-          severity: HIGH,CRITICAL
+        run: |
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif offline-qr-school-attendance:scan
 
   pr-load-smoke-gate:
     name: Mandatory Pull-Request Load Smoke Gate

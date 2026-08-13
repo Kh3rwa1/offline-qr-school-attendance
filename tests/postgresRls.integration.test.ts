@@ -14,8 +14,8 @@ if (requested && !enabled) {
 }
 
 describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS integration', () => {
-  const migrationPool = new pg.Pool({ connectionString: migrationUrl });
-  const appPool = new pg.Pool({ connectionString: appUrl });
+  let migrationPool: pg.Pool;
+  let appPool: pg.Pool;
   const schoolA = crypto.randomUUID();
   const schoolB = crypto.randomUUID();
   const teacherId = crypto.randomUUID();
@@ -36,6 +36,8 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
   let cookie = '';
 
   beforeAll(async () => {
+    migrationPool = new pg.Pool({ connectionString: migrationUrl });
+    appPool = new pg.Pool({ connectionString: appUrl });
     const migrations = await migrationPool.query("SELECT to_regclass('drizzle.__drizzle_migrations') AS table_name");
     expect(migrations.rows[0].table_name).toBe('drizzle.__drizzle_migrations');
 

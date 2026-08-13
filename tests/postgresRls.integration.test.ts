@@ -63,6 +63,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     await migrationPool.query('INSERT INTO student_guardians (student_id, guardian_id, is_primary) VALUES ($1, $2, true)', [studentBId, guardianBId]);
     await migrationPool.query('INSERT INTO school_sms_settings (school_id, sms_enabled, dlt_principal_entity_id, dlt_header, segment_balance, max_segments_per_message) VALUES ($1, true, $2, $3, $4, $5)', [schoolB, 'ENTITY-B', 'HEADERB', 10, 4]);
     await migrationPool.query('COMMIT');
+    await migrationPool.query("DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_system; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_system; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO attendance_system; END IF; IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_worker; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_worker; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO attendance_worker; END IF; END $$;");
 
     process.env.NODE_ENV = 'production';
     process.env.RUN_SERVER = 'false';

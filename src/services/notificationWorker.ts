@@ -165,7 +165,7 @@ async function processClaimedJob(job: ClaimedJob, provider: SmsProvider, maxRetr
       return 'CANCELLED';
     }
 
-    const isFake = provider.name === 'fake';
+    const isFake = provider.name === 'fake' || provider.name === 'console';
     if (process.env.NODE_ENV === 'production' && !isFake && (!effectiveSettings.dltPrincipalEntityId || !effectiveSettings.dltHeader)) {
       await db.update(notificationJobs).set({ status: 'PERMANENT_FAILURE', failureReason: 'DLT_CONFIGURATION_REQUIRED', attemptCount: job.attemptCount + 1, claimedAt: null, claimedBy: null }).where(eq(notificationJobs.id, job.id));
       await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount + 1, status: 'PERMANENT_FAILURE', errorMessage: 'DLT_CONFIGURATION_REQUIRED' });

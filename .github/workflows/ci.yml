@@ -193,6 +193,9 @@ jobs:
           npx tsx src/db/migrate.ts
           npx tsx src/db/seed.ts
 
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
       - name: Execute Encrypted Backup & Restore Verification Drill
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
@@ -219,10 +222,11 @@ jobs:
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_01234567890123456789
           METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
           SESSION_SECRET: ci_session_secret_01234567890123456789
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: LOG
         run: |
           docker compose up -d --build
-          sleep 10
+          sleep 25
           docker compose ps
 
       - name: Verify Application HTTP Health via Compose

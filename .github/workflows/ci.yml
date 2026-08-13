@@ -136,6 +136,8 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
+          SESSION_SECRET: ci-session-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
         run: npm run test:load-smoke
 
       - name: Upload Business Load Benchmark Reports
@@ -189,6 +191,8 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
+          SESSION_SECRET: ci-session-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
         run: |
           npm run build
           npx tsx src/db/migrate.ts
@@ -199,6 +203,8 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
+          SESSION_SECRET: ci-session-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           PORT: 3100
         run: npm run test:e2e
 

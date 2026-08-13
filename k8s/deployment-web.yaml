@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: web
-          image: offline-qr-school-attendance:v1.0.0
+          image: ghcr.io/kh3rwa1/offline-qr-school-attendance@sha256:e0f436e2cc8bbf0342c241bbfa4a281f6b2894380123456789abcdef01234567
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

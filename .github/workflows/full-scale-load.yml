@@ -1,0 +1,94 @@
+name: Full-Scale Load & Performance Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      schools:
+        description: 'Target School Count (default: 100)'
+        required: true
+        default: '100'
+      students_per_school:
+        description: 'Students Per School (default: 5000 for 500k total)'
+        required: true
+        default: '5000'
+      duration_seconds:
+        description: 'Benchmark Duration in Seconds (default: 900 for 15 minutes)'
+        required: true
+        default: '900'
+
+permissions:
+  contents: read
+
+jobs:
+  full-scale-benchmark:
+    name: 100-School 500k-Student Business Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: attendance_migration
+          POSTGRES_PASSWORD: migration-ci-password
+          POSTGRES_DB: school_attendance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U attendance_migration -d school_attendance"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Run Database Migrations
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+          REDIS_URL: redis://127.0.0.1:6379
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
+        run: npm run migrate
+
+      - name: Generate 500,000 Student Scale Dataset
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          SCALE_SCHOOLS: ${{ inputs.schools }}
+          SCALE_STUDENTS_PER_SCHOOL: ${{ inputs.students_per_school }}
+        run: npx tsx scripts/generateScaleDataset.ts
+
+      - name: Execute 15-Minute 500 RPS Business Load Benchmark
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          FULL_500K_BENCHMARK: '1'
+          LOAD_TEST_DURATION_SEC: ${{ inputs.duration_seconds }}
+        run: npm run test:load-full
+
+      - name: Upload Full-Scale Benchmark Reports
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: full-scale-benchmark-reports
+          path: |
+            output/scale-dataset-report.json
+            output/full-scale-report.json
+            output/full-scale-report.md
+            output/post-load-integrity-report.json
+          if-no-files-found: error

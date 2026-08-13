@@ -51,7 +51,7 @@ jobs:
           if-no-files-found: error
 
   browser-e2e:
-    name: Playwright Browser E2E
+    name: Playwright Browser E2E (Chromium & Firefox)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -62,7 +62,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox
 
       - name: Start app for E2E
         env:
@@ -237,18 +237,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Install Kubeconform
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate Built-in and Custom Resources (ServiceMonitor & ExternalSecret)
         run: |
-          wget -q https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
-          tar -xzf kubeconform-linux-amd64.tar.gz
-          sudo mv kubeconform /usr/local/bin/
-      - name: Validate Kubernetes Manifest Schemas
-        run: |
-          kubeconform -summary -strict -skip ServiceMonitor,ExternalSecret -kubernetes-version 1.28.0 k8s/
-          if [ -f k8s/secret.yaml ]; then
-            echo "ERROR: k8s/secret.yaml must not be committed to git!"
-            exit 1
-          fi
+          npx tsx scripts/validate-k8s-manifests.ts
+          npx vitest run tests/k8sCrdValidation.test.ts
 
   docker-smoke:
     name: Production Docker Smoke Test
@@ -291,15 +288,51 @@ jobs:
   security:
     name: Security & Vulnerability Check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # Scan complete Git history
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high
+
+      - name: Validate Dependency License Policy
+        run: npx tsx scripts/validate-license-policy.ts
+
+      - name: Run Gitleaks Secret Scanner across Full Git History
+        uses: gitleaks/gitleaks-action@79025068222a7f5c35272a8c3d82a17056bf1569 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy Filesystem Vulnerability Scan
+        uses: aquasecurity/trivy-action@18f2510ee396bbf40040fcb9331168432d19d9d6 # v0.29.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Build Production Docker Image for Vulnerability Scanning
+        run: docker build -t offline-qr-school-attendance:security-check .
+
+      - name: Run Trivy Container Image Scan
+        uses: aquasecurity/trivy-action@18f2510ee396bbf40040fcb9331168432d19d9d6 # v0.29.0
+        with:
+          image-ref: 'offline-qr-school-attendance:security-check'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+
+      - name: Upload Trivy Container Scan SARIF Report
+        uses: github/codeql-action/upload-sarif@3c1cfa5126ffdcc6901741c83d08ef558a09e3d1 # v3.37.5
+        with:
+          sarif_file: 'trivy-results.sarif'
 
       - name: Generate CycloneDX SBOM
         run: npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file output/sbom.cdx.json

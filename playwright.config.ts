@@ -6,7 +6,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  retries: 0, // Enforce zero retries so product bugs are never hidden
   reporter: process.env.CI ? [['html', { outputFolder: 'output/playwright/report', open: 'never' }], ['line']] : 'list',
   outputDir: 'output/playwright/test-results',
   use: {
@@ -14,12 +14,23 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    ...devices['Desktop Chrome'],
   },
-  webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run e2e:server',
-    url: 'http://127.0.0.1:3100/api/v1/health',
-    timeout: 120_000,
-    reuseExistingServer: false,
-  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+  ],
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: 'npm run e2e:server',
+        url: 'http://127.0.0.1:3100/api/v1/health',
+        timeout: 120_000,
+        reuseExistingServer: false,
+      },
 });

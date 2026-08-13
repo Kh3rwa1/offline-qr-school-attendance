@@ -27,7 +27,7 @@ spec:
         - name: rfid-gateway
           image: offline-qr-school-attendance:v1.0.0
           imagePullPolicy: IfNotPresent
-          command: ['node', 'dist/rfid-gateway.js']
+          command: ['node', 'dist/server.cjs']
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

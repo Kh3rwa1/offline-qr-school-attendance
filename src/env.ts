@@ -51,4 +51,8 @@ export function validateProductionEnv() {
   return parsed;
 }
 
+if (parsedEnv.NODE_ENV === 'production' && parsedEnv.COMPONENT === 'web') {
+  validateProductionEnv();
+}
+
 export const env = parsedEnv;

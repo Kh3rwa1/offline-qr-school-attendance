@@ -141,7 +141,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: school_attendance_rfid_gateway
-    command: ['node', 'dist/server.js']
+    command: ['node', 'dist/server.cjs']
     environment:
       NODE_ENV: production
       PORT: 3001

@@ -49,7 +49,7 @@ export async function registerReader(params: {
 
   await createAuditLog({
     schoolId: params.schoolId,
-    actorId: params.actorId || 'SYSTEM',
+    actorId: params.actorId || null,
     action: 'RFID_READER_REGISTERED',
     resourceId: inserted.id,
     resourceType: 'RFID_READER',
@@ -58,7 +58,14 @@ export async function registerReader(params: {
   return inserted;
 }
 
-export async function approveReader(readerId: string, schoolId: string, actorId: string = 'SYSTEM') {
+function sanitizeActorId(actorId?: string): string | null {
+  if (!actorId || actorId === 'SYSTEM' || !/^[0-9a-fA-F-]{36}$/.test(actorId)) {
+    return null;
+  }
+  return actorId;
+}
+
+export async function approveReader(readerId: string, schoolId: string, actorId?: string) {
   const [reader] = await db
     .update(rfidReaders)
     .set({ status: 'ACTIVE' })
@@ -66,11 +73,11 @@ export async function approveReader(readerId: string, schoolId: string, actorId:
     .returning();
 
   if (!reader) throw new Error('Reader not found or not PENDING');
-  await createAuditLog({ schoolId, actorId, action: 'RFID_READER_APPROVED', resourceId: readerId, resourceType: 'RFID_READER' });
+  await createAuditLog({ schoolId, actorId: sanitizeActorId(actorId), action: 'RFID_READER_APPROVED', resourceId: readerId, resourceType: 'RFID_READER' });
   return reader;
 }
 
-export async function suspendReader(readerId: string, schoolId: string, reason: string, actorId: string = 'SYSTEM') {
+export async function suspendReader(readerId: string, schoolId: string, reason: string, actorId?: string) {
   const [reader] = await db
     .update(rfidReaders)
     .set({ status: 'SUSPENDED' })
@@ -78,12 +85,12 @@ export async function suspendReader(readerId: string, schoolId: string, reason: 
     .returning();
 
   if (reader) {
-    await createAuditLog({ schoolId, actorId, action: 'RFID_READER_SUSPENDED', resourceId: readerId, resourceType: 'RFID_READER', metadata: { reason } });
+    await createAuditLog({ schoolId, actorId: sanitizeActorId(actorId), action: 'RFID_READER_SUSPENDED', resourceId: readerId, resourceType: 'RFID_READER', metadata: { reason } });
   }
   return reader;
 }
 
-export async function revokeReader(readerId: string, schoolId: string, reason: string, actorId: string = 'SYSTEM') {
+export async function revokeReader(readerId: string, schoolId: string, reason: string, actorId?: string) {
   const [reader] = await db
     .update(rfidReaders)
     .set({ status: 'REVOKED' })
@@ -91,7 +98,7 @@ export async function revokeReader(readerId: string, schoolId: string, reason: s
     .returning();
 
   if (reader) {
-    await createAuditLog({ schoolId, actorId, action: 'RFID_READER_REVOKED', resourceId: readerId, resourceType: 'RFID_READER', metadata: { reason } });
+    await createAuditLog({ schoolId, actorId: sanitizeActorId(actorId), action: 'RFID_READER_REVOKED', resourceId: readerId, resourceType: 'RFID_READER', metadata: { reason } });
   }
   return reader;
 }

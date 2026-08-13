@@ -312,9 +312,9 @@ export const credentialService = {
   getCredentialHistory,
   getHistory: (studentId: string, schoolId: string) => getCredentialHistory(schoolId, studentId),
   getCredentialById,
-  bulkEnroll: async (entries: any[], schoolId: string) => {
-    if (Array.isArray(entries) && typeof schoolId === 'string') {
-      const formatted = entries.map((e) => ({
+  bulkEnroll: async (paramsOrEntries: any, schoolId?: string) => {
+    if (Array.isArray(paramsOrEntries) && typeof schoolId === 'string') {
+      const formatted = paramsOrEntries.map((e) => ({
         studentId: e.studentId,
         credentialDigest: e.credentialDigest || e.uid || 'digest',
         securityMode: (e.securityMode || 'SECURE') as 'SECURE' | 'UID_LEGACY',
@@ -322,6 +322,6 @@ export const credentialService = {
       }));
       return bulkEnroll({ schoolId, entries: formatted, operatorUserId: 'operator_1' });
     }
-    return bulkEnroll(entries as any);
+    return bulkEnroll(paramsOrEntries);
   },
 };

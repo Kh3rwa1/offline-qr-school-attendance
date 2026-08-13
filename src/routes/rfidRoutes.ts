@@ -2,23 +2,46 @@ import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { tenantHandler } from '../middleware/tenantHandler';
 import { readerAuthMiddleware, ReaderAuthenticatedRequest } from '../middleware/readerAuthMiddleware';
+import { scanService } from '../services/rfid/scanService';
+import { credentialService } from '../services/rfid/credentialService';
+import { readerService } from '../services/rfid/readerService';
+import { offlineService } from '../services/rfid/offlineService';
+import { db } from '../db';
+import { rfidScanEvents, rfidReaders } from '../db/schema';
+import { eq, and, desc } from 'drizzle-orm';
 
 export const rfidRouter = Router();
 
 // ============================================================================
-// SCAN ENDPOINT (Reader-authenticated, not user-authenticated)
+// SCAN ENDPOINT (Reader-authenticated)
 // ============================================================================
 rfidRouter.post(
   '/:schoolId/rfid/scans',
   readerAuthMiddleware,
-  // Note: Add validation for envelope schema here if necessary
   async (req: ReaderAuthenticatedRequest, res: Response) => {
     try {
-      // TODO: Calls scanService.processScan
-      // For now, return 200 ACCEPTED
-      return res.status(200).json({ status: 'ACCEPTED' });
-    } catch (error) {
-      return res.status(503).json({ error: 'SERVICE_UNAVAILABLE' });
+      const envelope = {
+        version: req.body.version || 1,
+        schoolId: req.params.schoolId,
+        readerId: req.headers['x-reader-id'] as string || req.body.readerId,
+        credentialDigest: req.body.credentialDigest,
+        secureProof: req.body.secureProof,
+        readerTimestamp: req.headers['x-reader-timestamp'] as string || req.body.readerTimestamp || new Date().toISOString(),
+        sequenceNumber: req.body.sequenceNumber,
+        nonce: req.body.nonce || `nonce_${Date.now()}_${Math.random()}`,
+        direction: req.body.direction || 'NONE',
+        attendanceSessionId: req.body.attendanceSessionId,
+        securityMode: req.body.securityMode || 'SECURE',
+        signature: req.headers['x-reader-signature'] as string || req.body.signature || '',
+        clientEventId: req.body.clientEventId || `evt_${Date.now()}_${Math.random()}`,
+        isOffline: req.body.isOffline || false,
+      };
+
+      const result = await scanService.processScan(envelope);
+      return res.status(result.decision === 'ACCEPTED' ? 200 : 400).json(result);
+    } catch (error: any) {
+      console.error('Scan processing API error:', error);
+      return res.status(500).json({ error: 'SCAN_PROCESSING_FAILED', message: error.message });
     }
   }
 );
@@ -32,7 +55,21 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.status(201).json({ status: 'enrollment_created' });
+    try {
+      const { studentId, credentialDigest, securityMode, keyVersion, expiresAt } = req.body;
+      const credential = await credentialService.enrollCredential({
+        schoolId: req.params.schoolId,
+        studentId,
+        credentialDigest,
+        securityMode: securityMode || 'SECURE',
+        keyVersion: keyVersion || 1,
+        operatorUserId: req.user!.id,
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      });
+      return res.status(201).json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -42,7 +79,16 @@ rfidRouter.get(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ credentials: [] });
+    try {
+      const studentId = req.query.studentId as string;
+      if (studentId) {
+        const credentials = await credentialService.getCredentialHistory(req.params.schoolId, studentId);
+        return res.json({ success: true, credentials });
+      }
+      return res.json({ success: true, credentials: [] });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -52,7 +98,13 @@ rfidRouter.get(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ credential: {} });
+    try {
+      const credential = await credentialService.getCredentialById(req.params.credentialId, req.params.schoolId);
+      if (!credential) return res.status(404).json({ success: false, error: 'Credential not found' });
+      return res.json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -62,7 +114,16 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'activated' });
+    try {
+      const credential = await credentialService.activateCredential(
+        req.params.credentialId,
+        req.params.schoolId,
+        req.user!.id
+      );
+      return res.json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -72,7 +133,18 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'suspended' });
+    try {
+      const { reason } = req.body;
+      const credential = await credentialService.suspendCredential(
+        req.params.credentialId,
+        req.params.schoolId,
+        reason || 'Suspended by admin',
+        req.user!.id
+      );
+      return res.json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -82,7 +154,16 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'reactivated' });
+    try {
+      const credential = await credentialService.reactivateCredential(
+        req.params.credentialId,
+        req.params.schoolId,
+        req.user!.id
+      );
+      return res.json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -92,7 +173,18 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'revoked' });
+    try {
+      const { reason } = req.body;
+      const credential = await credentialService.revokeCredential(
+        req.params.credentialId,
+        req.params.schoolId,
+        reason || 'Revoked by admin',
+        req.user!.id
+      );
+      return res.json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -102,7 +194,20 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'replaced' });
+    try {
+      const { newCredentialDigest, securityMode, keyVersion } = req.body;
+      const credential = await credentialService.replaceCredential({
+        oldCredentialId: req.params.credentialId,
+        newCredentialDigest,
+        schoolId: req.params.schoolId,
+        securityMode: securityMode || 'SECURE',
+        keyVersion: keyVersion || 1,
+        operatorUserId: req.user!.id,
+      });
+      return res.json({ success: true, credential });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -112,7 +217,17 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'bulk_enrollment_started' });
+    try {
+      const { entries } = req.body;
+      const results = await credentialService.bulkEnroll({
+        schoolId: req.params.schoolId,
+        entries: entries || [],
+        operatorUserId: req.user!.id,
+      });
+      return res.json({ success: true, results });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -122,7 +237,12 @@ rfidRouter.get(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ history: [] });
+    try {
+      const credentials = await credentialService.getCredentialHistory(req.params.schoolId, req.params.studentId);
+      return res.json({ success: true, credentials });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -135,7 +255,24 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.status(201).json({ status: 'registered' });
+    try {
+      const reader = await readerService.registerReader({
+        schoolId: req.params.schoolId,
+        deviceId: req.body.deviceId,
+        name: req.body.name,
+        location: req.body.location,
+        directionMode: req.body.directionMode,
+        readerModel: req.body.readerModel,
+        firmwareVersion: req.body.firmwareVersion,
+        adapterType: req.body.adapterType || 'GATEWAY',
+        securityCapability: req.body.securityCapability,
+        certificateFingerprint: req.body.certificateFingerprint,
+        actorId: req.user!.id,
+      });
+      return res.status(201).json({ success: true, reader });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -145,7 +282,14 @@ rfidRouter.get(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ readers: [] });
+    try {
+      const readers = await readerService.listReaders(req.params.schoolId, {
+        status: req.query.status as any,
+      });
+      return res.json({ success: true, readers });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -155,7 +299,13 @@ rfidRouter.get(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ reader: {} });
+    try {
+      const reader = await readerService.getReaderById(req.params.readerId, req.params.schoolId);
+      if (!reader) return res.status(404).json({ success: false, error: 'Reader not found' });
+      return res.json({ success: true, reader });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -165,7 +315,12 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'approved' });
+    try {
+      const reader = await readerService.approveReader(req.params.readerId, req.params.schoolId, req.user!.id);
+      return res.json({ success: true, reader });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -175,7 +330,17 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'suspended' });
+    try {
+      const reader = await readerService.suspendReader(
+        req.params.readerId,
+        req.params.schoolId,
+        req.body.reason || 'Suspended by admin',
+        req.user!.id
+      );
+      return res.json({ success: true, reader });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -185,7 +350,17 @@ rfidRouter.post(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'revoked' });
+    try {
+      const reader = await readerService.revokeReader(
+        req.params.readerId,
+        req.params.schoolId,
+        req.body.reason || 'Revoked by admin',
+        req.user!.id
+      );
+      return res.json({ success: true, reader });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -195,7 +370,12 @@ rfidRouter.patch(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'updated' });
+    try {
+      const reader = await readerService.updateReaderConfig(req.params.readerId, req.params.schoolId, req.body);
+      return res.json({ success: true, reader });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -205,7 +385,12 @@ rfidRouter.get(
   tenantHandler,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ health: {} });
+    try {
+      const health = await readerService.getReaderHealth(req.params.readerId, req.params.schoolId);
+      return res.json({ success: true, health });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -214,7 +399,12 @@ rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/heartbeat',
   readerAuthMiddleware,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'ok' });
+    try {
+      await readerService.recordHeartbeat(req.params.readerId, req.params.schoolId);
+      return res.json({ success: true, status: 'ok' });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -225,7 +415,12 @@ rfidRouter.get(
   '/:schoolId/rfid/offline/roster',
   readerAuthMiddleware,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
-    return res.json({ roster: [] });
+    try {
+      const roster = await offlineService.generateOfflineRoster(req.params.schoolId);
+      return res.json({ success: true, roster });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -233,7 +428,12 @@ rfidRouter.post(
   '/:schoolId/rfid/offline/sync',
   readerAuthMiddleware,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
-    return res.json({ status: 'synced' });
+    try {
+      const results = await offlineService.syncOfflineEvents(req.params.schoolId, req.body.events || []);
+      return res.json({ success: true, results });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -241,7 +441,12 @@ rfidRouter.get(
   '/:schoolId/rfid/offline/policy',
   readerAuthMiddleware,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
-    return res.json({ policy: {} });
+    try {
+      const policy = offlineService.getOfflinePolicy(req.params.schoolId);
+      return res.json({ success: true, policy });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -253,7 +458,18 @@ rfidRouter.get(
   requireAuth,
   tenantHandler,
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ report: [] });
+    try {
+      const scans = await db
+        .select()
+        .from(rfidScanEvents)
+        .where(eq(rfidScanEvents.schoolId, req.params.schoolId))
+        .orderBy(desc(rfidScanEvents.scanTimestamp))
+        .limit(100);
+
+      return res.json({ success: true, report: scans });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -262,7 +478,16 @@ rfidRouter.get(
   requireAuth,
   tenantHandler,
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ report: [] });
+    try {
+      const readers = await db
+        .select()
+        .from(rfidReaders)
+        .where(eq(rfidReaders.schoolId, req.params.schoolId));
+
+      return res.json({ success: true, report: readers });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );
 
@@ -271,6 +496,18 @@ rfidRouter.get(
   requireAuth,
   tenantHandler,
   async (req: AuthenticatedRequest, res: Response) => {
-    return res.json({ report: [] });
+    try {
+      const rejections = await db
+        .select()
+        .from(rfidScanEvents)
+        .where(and(eq(rfidScanEvents.schoolId, req.params.schoolId)))
+        .orderBy(desc(rfidScanEvents.scanTimestamp))
+        .limit(100);
+
+      const filtered = rejections.filter((r: any) => r.decision !== 'ACCEPTED');
+      return res.json({ success: true, report: filtered });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
 );

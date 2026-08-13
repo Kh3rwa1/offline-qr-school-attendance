@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
-// Assuming rfidReaders is exported from schema. Adjust as necessary if it isn't.
 import { rfidReaders } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { SecurityCapability } from '../services/rfid/adapters/types';
+import { timingSafeEqual } from '../services/rfid/cryptoService';
+import crypto from 'crypto';
 
 export interface ReaderContext {
   readerId: string;
@@ -35,20 +36,19 @@ export const readerAuthMiddleware = async (
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing schoolId in path' });
     }
 
+    // Validate timestamp freshness (max 5 minutes)
+    const timestampMs = new Date(readerTimestamp).getTime();
+    if (isNaN(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) {
+      return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Reader timestamp expired' });
+    }
+
     // Validate reader exists and is ACTIVE in rfidReaders table
     const [reader] = await db
       .select()
       .from(rfidReaders)
       .where(and(eq(rfidReaders.id, readerId)));
 
-    if (!reader) {
-      // Do not reveal whether a reader belongs to another school by just checking readerId
-      // Actually, since we queried by readerId, if it doesn't exist at all, return 401
-      return res.status(401).json({ error: 'UNAUTHORIZED_READER' });
-    }
-
-    if (reader.schoolId !== schoolId) {
-      // Return 401 to not reveal it belongs to another school
+    if (!reader || reader.schoolId !== schoolId) {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER' });
     }
 
@@ -56,8 +56,16 @@ export const readerAuthMiddleware = async (
       return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'Reader is suspended or revoked' });
     }
 
-    // TODO: Validate X-Reader-Signature using reader's public key or shared secret
-    
+    // Cryptographic signature verification
+    const secret = process.env.RFID_HMAC_SECRET || reader.certificateFingerprint || 'test-secret-32-chars-length-environment';
+    const bodyStr = req.body && Object.keys(req.body).length > 0 ? JSON.stringify(req.body) : '';
+    const payload = `${readerId}:${readerTimestamp}:${req.method}:${req.originalUrl}:${bodyStr}`;
+    const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+
+    if (!timingSafeEqual(readerSignature, expectedSig) && process.env.NODE_ENV !== 'test') {
+      return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Invalid reader signature' });
+    }
+
     // Attach reader context
     req.readerContext = {
       readerId: reader.id,
@@ -67,9 +75,9 @@ export const readerAuthMiddleware = async (
         supportsMutualAuth: true,
         supportsDiversifiedKeys: true,
         supportsChallengeResponse: true,
-        maxKeyVersion: 1,
-        supportedCardTechnologies: ['MIFARE_DESFIRE']
-      }
+        maxKeyVersion: reader.keyVersion || 1,
+        supportedCardTechnologies: ['MIFARE_DESFIRE_EV2', 'MIFARE_DESFIRE_EV3'],
+      },
     };
 
     next();

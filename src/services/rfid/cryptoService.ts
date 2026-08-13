@@ -26,7 +26,7 @@ export function computeCredentialDigest(
   paramsOrUid:
     | string
     | {
-        hmacSecret: string;
+        hmacSecret?: string;
         keyVersion: number;
         schoolId: string;
         securityMode?: 'SECURE' | 'UID_LEGACY';
@@ -35,7 +35,7 @@ export function computeCredentialDigest(
   schoolIdParam?: string,
   keyVersionParam?: number
 ): string {
-  let secret = process.env.RFID_HMAC_SECRET || 'default-rfid-hmac-secret-key-32bytes';
+  let secret = process.env.RFID_HMAC_SECRET;
   let schoolId = 'default-school';
   let keyVersion = 1;
   let securityMode = 'SECURE';
@@ -52,6 +52,14 @@ export function computeCredentialDigest(
     securityMode = paramsOrUid.securityMode || 'SECURE';
     if (paramsOrUid.uidBytes) {
       uidHex = paramsOrUid.uidBytes.toString('hex').toUpperCase();
+    }
+  }
+
+  if (!secret) {
+    if (process.env.NODE_ENV === 'test') {
+      secret = 'test-secret-32-chars-length-environment';
+    } else {
+      throw new Error('RFID_HMAC_SECRET must be configured for credential digest computation');
     }
   }
 

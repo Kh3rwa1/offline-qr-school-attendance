@@ -92,7 +92,7 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
       expect(readersA.rows).toHaveLength(1);
       expect(readersA.rows[0].id).toBe(readerAId);
 
-      const readersB = await client.query('SELECT id, school_id FROM rfid_readers WHERE school_id = $2', [schoolA, schoolB]);
+      const readersB = await client.query('SELECT id, school_id FROM rfid_readers WHERE school_id = $1', [schoolB]);
       expect(readersB.rows).toHaveLength(0);
 
       // Query credentials

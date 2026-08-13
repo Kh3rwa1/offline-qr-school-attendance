@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { db, withSystemContext } from '../db';
 import { users, schoolMemberships, schools } from '../db/schema';
 import { verifyPassword } from '../auth/password';
-import { timingSafeVerifyPassword } from '../db/authFunctions';
+import { timingSafeVerifyPassword, lookupAuthUserByPhone, getUserSchoolMemberships } from '../db/authFunctions';
 import { createSession, invalidateSession } from '../auth/session';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { createAuditLog } from '../services/auditLogService';
@@ -31,11 +31,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   }
 
   const { phoneNumber, password, schoolId } = parsed.data;
-  const user = await withSystemContext(async () => {
-    const [candidate] = await db.select().from(users).where(eq(users.phoneNumber, phoneNumber));
-    return candidate;
-  });
-
+  const user = await lookupAuthUserByPhone(phoneNumber);
   const isValidPassword = await timingSafeVerifyPassword(user?.passwordHash, password);
 
   if (!user || !isValidPassword || user.status === 'SUSPENDED') {
@@ -43,63 +39,38 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await withSystemContext(async () => {
-      const memberships = await db
-        .select({
-          schoolId: schoolMemberships.schoolId,
-          schoolName: schools.name,
-          role: schoolMemberships.role,
-          status: schoolMemberships.status,
-        })
-        .from(schoolMemberships)
-        .innerJoin(schools, eq(schoolMemberships.schoolId, schools.id))
-        .where(and(
-          eq(schoolMemberships.userId, user.id),
-          eq(schoolMemberships.status, 'ACTIVE'),
-          eq(schools.status, 'ACTIVE'),
-        ));
+    const memberships = await getUserSchoolMemberships(user.id);
+    const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
+    let targetSchoolId = schoolId;
 
-      const isSuperAdmin = memberships.some((membership: { schoolId: string; role: string }) => membership.role === 'SUPER_ADMIN');
-      let targetSchoolId = schoolId;
+    if (targetSchoolId) {
+      const assigned = memberships.some((m) => m.schoolId === targetSchoolId);
+      if (!assigned && !isSuperAdmin) throw new Error('SCHOOL_ACCESS_DENIED');
+    } else {
+      targetSchoolId = memberships[0]?.schoolId;
+    }
 
-      if (targetSchoolId) {
-        const assigned = memberships.some((membership: { schoolId: string; role: string }) => membership.schoolId === targetSchoolId);
-        if (!assigned && !isSuperAdmin) throw new Error('SCHOOL_ACCESS_DENIED');
-        if (isSuperAdmin && !assigned) {
-          const [targetSchool] = await db
-            .select({ id: schools.id })
-            .from(schools)
-            .where(and(eq(schools.id, targetSchoolId), eq(schools.status, 'ACTIVE')));
-          if (!targetSchool) throw new Error('SCHOOL_ACCESS_DENIED');
-        }
-      } else {
-        targetSchoolId = memberships[0]?.schoolId;
-      }
+    if (!targetSchoolId) throw new Error('SCHOOL_ACCESS_DENIED');
 
-      if (!targetSchoolId) throw new Error('SCHOOL_ACCESS_DENIED');
-
-      const session = await createSession(user.id, targetSchoolId);
-      await createAuditLog({
-        schoolId: targetSchoolId,
-        actorId: user.id,
-        action: 'USER_LOGIN',
-        resourceType: 'USER',
-        resourceId: user.id,
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'],
-      });
-
-      return { memberships, ...session };
+    const session = await createSession(user.id, targetSchoolId);
+    await createAuditLog({
+      schoolId: targetSchoolId,
+      actorId: user.id,
+      action: 'USER_LOGIN',
+      resourceType: 'USER',
+      resourceId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
     });
 
-    res.cookie('session', result.token, { ...sessionCookieOptions, expires: result.expiresAt });
+    res.cookie('session', session.token, { ...sessionCookieOptions, expires: session.expiresAt });
     return res.json({
       user: {
         id: user.id,
         fullName: user.fullName,
         phoneNumber: user.phoneNumber,
       },
-      memberships: result.memberships,
+      memberships,
     });
   } catch (error: any) {
     if (error?.message === 'SCHOOL_ACCESS_DENIED') {

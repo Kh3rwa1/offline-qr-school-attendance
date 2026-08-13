@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   static-check-and-unit-tests:
     name: Static Check & Unit Tests
@@ -50,6 +54,9 @@ jobs:
   security-scan:
     name: Security & Vulnerability Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -62,7 +69,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy Filesystem Vulnerability Scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@v0.30.0
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -80,7 +87,7 @@ jobs:
         run: docker build -t offline-qr-school-attendance:scan .
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@v0.30.0
         with:
           image-ref: offline-qr-school-attendance:scan
           format: sarif

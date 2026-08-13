@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/seed.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
@@ -69,5 +69,8 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

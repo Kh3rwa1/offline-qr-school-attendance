@@ -23,7 +23,7 @@ fi
 START_TIME=$(date +%s)
 
 echo "1. Creating AES-256 encrypted PostgreSQL backup to ${BACKUP_FILE}..."
-pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -out "${BACKUP_FILE}"
+pg_dump --clean --if-exists "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -out "${BACKUP_FILE}"
 echo "Backup created and encrypted successfully. Size: $(du -sh "${BACKUP_FILE}" | cut -f1)"
 
 echo "2. Decrypting and verifying backup archive integrity..."

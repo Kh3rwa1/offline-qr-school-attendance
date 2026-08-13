@@ -1,5 +1,6 @@
 # Stage 1: Build application
 FROM node:22-alpine AS builder
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
 
 WORKDIR /app
 
@@ -11,6 +12,7 @@ RUN npm run build
 
 # Stage 2: Runtime image
 FROM node:22-alpine AS runner
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
 
 WORKDIR /app
 

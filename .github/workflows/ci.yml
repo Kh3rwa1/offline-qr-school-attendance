@@ -282,6 +282,7 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
         run: npm run test:load-smoke
 
       - name: Upload Business Load Benchmark Reports
@@ -350,6 +351,7 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           PORT: 3100
         run: npm run test:e2e
 

@@ -207,7 +207,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     const sync1 = page1.getByRole('button', { name: 'Synchronize now' });
     const sync2 = page2.getByRole('button', { name: 'Synchronize now' });
 
-    if (await sync1.isVisible() && await sync2.isVisible()) {
+    if (await sync1.isVisible() && await sync2.isVisible() && await sync1.isEnabled() && await sync2.isEnabled()) {
       await Promise.all([sync1.click(), sync2.click()]);
     }
 

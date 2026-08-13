@@ -153,9 +153,10 @@ export async function checkRateLimit(
   prefix: string,
   identifier: string,
   maxRequests: number,
-  windowMs: number
+  windowMs: number,
+  customClient?: Redis
 ): Promise<RateLimitResult> {
-  const client = getRedisClient();
+  const client = customClient || getRedisClient();
   const key = hashRateLimitKey(prefix, identifier);
   const now = Date.now();
   const clearBefore = now - windowMs;

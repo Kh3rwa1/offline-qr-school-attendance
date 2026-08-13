@@ -3,8 +3,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { checkRateLimit, initRedis, closeRedisConnection, hashRateLimitKey } from '../src/services/redisService';
 
 describe('Phase 6 — Redis Multi-Replica & Resilience Integration Tests', () => {
-  let redis1: Redis | null = null;
-  let redis2: Redis | null = null;
+  let redis1: Redis;
+  let redis2: Redis;
   let isRedisConnected = false;
   const testKeysCreated: string[] = [];
 
@@ -14,19 +14,26 @@ describe('Phase 6 — Redis Multi-Replica & Resilience Integration Tests', () =>
     process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'ci-redis-hmac-secret-012345678901234567890123456789';
 
     try {
-      const primary = await initRedis();
-      if (primary && primary.status === 'ready') {
-        redis1 = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, enableOfflineQueue: false });
-        redis2 = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, enableOfflineQueue: false });
+      await initRedis();
+      redis1 = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, enableOfflineQueue: false });
+      redis2 = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, enableOfflineQueue: false });
 
-        await Promise.all([
-          new Promise<void>((resolve) => redis1?.on('ready', resolve)),
-          new Promise<void>((resolve) => redis2?.on('ready', resolve)),
-        ]);
-        isRedisConnected = true;
-      }
+      await Promise.all([
+        new Promise<void>((resolve, reject) => {
+          redis1.on('ready', resolve);
+          redis1.on('error', reject);
+        }),
+        new Promise<void>((resolve, reject) => {
+          redis2.on('ready', resolve);
+          redis2.on('error', reject);
+        }),
+      ]);
+      isRedisConnected = true;
     } catch (err: any) {
-      console.warn('[RedisMultiReplicaTest] Local Redis service not available on 127.0.0.1:6379. Multi-replica tests will be skipped locally:', err.message);
+      if (process.env.REDIS_REQUIRED === '1') {
+        throw new Error(`REDIS_REQUIRED_IN_CI: Redis service on 127.0.0.1:6379 is required for multi-replica integration tests: ${err.message}`);
+      }
+      console.warn('[RedisMultiReplicaTest] Local Redis service not available. Multi-replica tests will be skipped locally:', err.message);
       isRedisConnected = false;
     }
   });
@@ -38,7 +45,7 @@ describe('Phase 6 — Redis Multi-Replica & Resilience Integration Tests', () =>
       }
       await redis1.quit().catch(() => undefined);
     }
-    if (redis2) {
+    if (redis2 && redis2.status === 'ready') {
       await redis2.quit().catch(() => undefined);
     }
     await closeRedisConnection();
@@ -57,24 +64,26 @@ describe('Phase 6 — Redis Multi-Replica & Resilience Integration Tests', () =>
     const keyName = hashRateLimitKey(prefix, identifier);
     testKeysCreated.push(keyName);
 
-    // Instance 1 consumes 3 requests
+    // Replica 1 consumes first 3 requests
     for (let i = 1; i <= 3; i++) {
-      const res = await checkRateLimit(prefix, identifier, limit, windowMs);
+      const res = await checkRateLimit(prefix, identifier, limit, windowMs, redis1);
       expect(res.allowed).toBe(true);
       expect(res.currentCount).toBe(i);
+      expect(res.isRedisError).toBe(false);
     }
 
-    // Instance 2 consumes 3 requests against the same Redis key
+    // Replica 2 consumes next 3 requests against the exact same shared key in Redis
     for (let i = 4; i <= 6; i++) {
-      const res = await checkRateLimit(prefix, identifier, limit, windowMs);
+      const res = await checkRateLimit(prefix, identifier, limit, windowMs, redis2);
       expect(res.allowed).toBe(true);
       expect(res.currentCount).toBe(i);
+      expect(res.isRedisError).toBe(false);
     }
 
-    // 7th request from Instance 1 is denied (429)
-    const exceeded = await checkRateLimit(prefix, identifier, limit, windowMs);
+    // 7th request from Replica 1 is denied (429) and currentCount remains 6
+    const exceeded = await checkRateLimit(prefix, identifier, limit, windowMs, redis1);
     expect(exceeded.allowed).toBe(false);
-    expect(exceeded.currentCount).toBe(7);
+    expect(exceeded.currentCount).toBe(6);
     expect(exceeded.isRedisError).toBe(false);
   });
 
@@ -98,9 +107,33 @@ describe('Phase 6 — Redis Multi-Replica & Resilience Integration Tests', () =>
     }
   });
 
-  it('returns isRedisError: true (producing HTTP 503) when Redis connection drops', async () => {
-    const res = await checkRateLimit('outage-test', 'id', 5, 60000);
-    expect(res).toBeDefined();
-    expect(typeof res.allowed).toBe('boolean');
+  it('simulates Redis connection outage and clean recovery', async () => {
+    if (!isRedisConnected) return;
+
+    const outageClient = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: 0, enableOfflineQueue: false });
+    await new Promise<void>((resolve) => outageClient.on('ready', resolve));
+
+    // Verify healthy state returns allowed: true
+    const healthyRes = await checkRateLimit('outage', 'id', 5, 60000, outageClient);
+    expect(healthyRes.isRedisError).toBe(false);
+
+    // Disconnect client to simulate outage
+    outageClient.disconnect();
+
+    // Verify outage returns isRedisError: true (producing HTTP 503)
+    const outageRes = await checkRateLimit('outage', 'id', 5, 60000, outageClient);
+    expect(outageRes.isRedisError).toBe(true);
+    expect(outageRes.allowed).toBe(false);
+
+    // Reconnect client to simulate recovery
+    const recoveredClient = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: 2, enableOfflineQueue: false });
+    await new Promise<void>((resolve) => recoveredClient.on('ready', resolve));
+
+    // Verify recovered client resumes normal rate limiting (allowed: true, isRedisError: false)
+    const recoveredRes = await checkRateLimit('outage', 'id', 5, 60000, recoveredClient);
+    expect(recoveredRes.isRedisError).toBe(false);
+    expect(recoveredRes.allowed).toBe(true);
+
+    await recoveredClient.quit();
   });
 });

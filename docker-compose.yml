@@ -121,7 +121,10 @@ services:
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
     command: ['node', 'dist/sms-worker.cjs']
     healthcheck:
-      test: ['CMD-SHELL', 'node -e "const fs=require(\'fs\'); const m=fs.statSync(\'/tmp/worker-heartbeat\').mtimeMs; if (Date.now()-m > 60000) process.exit(1); "']
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const fs=require('fs'); const m=fs.statSync('/tmp/worker-heartbeat').mtimeMs; if(Date.now()-m > 60000) process.exit(1);"
       interval: 10s
       timeout: 5s
       retries: 3

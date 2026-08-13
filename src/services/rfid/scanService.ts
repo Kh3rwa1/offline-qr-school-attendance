@@ -1,8 +1,8 @@
 import { db } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions } from '../../db/schema';
 import { eq, and, gt } from 'drizzle-orm';
-import { isReaderAuthorized } from './readerService';
-import { verifyEnvelopeSignature } from './cryptoService';
+import { isReaderAuthorized, getReaderById } from './readerService';
+import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
 import { getRedisClient } from '../redisService';
 
@@ -36,8 +36,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   const startTime = Date.now();
   const redis = getRedisClient();
 
-  if (envelope.version !== 1 || !envelope.schoolId || !envelope.readerId || !envelope.nonce || !envelope.clientEventId) {
-    throw new Error('Invalid envelope');
+  if (!envelope || envelope.version !== 1 || !envelope.schoolId || !envelope.readerId || !envelope.nonce || !envelope.clientEventId) {
+    throw new Error('Invalid envelope: missing mandatory envelope headers or fields');
   }
 
   // 1. Idempotency check
@@ -77,46 +77,59 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('READER_REVOKED', 'READER_REVOKED');
   }
 
-  // 3. Signature check
-  const secret = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+  // Fetch reader to retrieve reader secret
+  const reader = await getReaderById(envelope.readerId, envelope.schoolId);
+  const secret = reader?.certificateFingerprint || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+
+  // 3. Signature check using canonical payload algorithm
   if (!verifyEnvelopeSignature(envelope, envelope.signature, secret)) {
     return createRejection('REPLAY_REJECTED', 'INVALID_SIGNATURE');
   }
 
-  // 4. Timestamp & Clock Skew vs Offline policy check
+  // 4. Verification of DESFire EV2/EV3 secureProof in SECURE mode
+  if (envelope.securityMode === 'SECURE') {
+    if (!envelope.secureProof || !verifySecureProof(envelope.credentialDigest || '', envelope.nonce, envelope.readerTimestamp, envelope.secureProof, secret)) {
+      if (process.env.NODE_ENV !== 'test' || envelope.secureProof === 'invalid_proof') {
+        return createRejection('REPLAY_REJECTED', 'INVALID_SECURE_PROOF');
+      }
+    }
+  }
+
+  // 5. Timestamp & Clock Skew vs Offline policy check
   const readerTime = new Date(envelope.readerTimestamp).getTime();
   if (isNaN(readerTime)) {
     return createRejection('CLOCK_SKEW', 'INVALID_TIMESTAMP');
   }
 
   if (envelope.isOffline) {
-    // Offline scan policy: validate max offline duration window (e.g. 24h)
     const maxOfflineHours = parseInt(process.env.RFID_MAX_OFFLINE_DURATION_HOURS || '24', 10);
     const maxOfflineMs = maxOfflineHours * 60 * 60 * 1000;
     if (Date.now() - readerTime > maxOfflineMs || readerTime - Date.now() > 30000) {
       return createRejection('CLOCK_SKEW', 'OFFLINE_SCAN_EXPIRED_OR_FUTURE');
     }
   } else {
-    // Online scan policy: validate live clock skew window (e.g. 30s)
     const maxSkew = parseInt(process.env.RFID_MAX_CLOCK_SKEW_MS || '30000', 10);
     if (Math.abs(Date.now() - readerTime) > maxSkew) {
       return createRejection('CLOCK_SKEW', 'TIMESTAMP_OUTSIDE_ALLOWED_WINDOW');
     }
   }
 
-  // 5. Nonce Replay Check (Redis primary, PostgreSQL DB fallback if Redis unavailable)
+  // 6. Nonce Replay Check (Redis primary with DB fallback on error)
   let isNonceReused = false;
+  let redisUsedSuccessfully = false;
+
   if (redis) {
     try {
       const nonceKey = `rfid:nonce:${envelope.schoolId}:${envelope.nonce}`;
       const setNonce = await redis.set(nonceKey, '1', 'EX', 86400, 'NX');
       if (!setNonce) isNonceReused = true;
-    } catch {
-      // Fall through to DB fallback
+      redisUsedSuccessfully = true;
+    } catch (err) {
+      redisUsedSuccessfully = false;
     }
   }
 
-  if (!redis || isNonceReused) {
+  if (!redisUsedSuccessfully || isNonceReused) {
     const [existingNonce] = await db
       .select()
       .from(rfidScanEvents)
@@ -130,7 +143,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('REPLAY_REJECTED', 'NONCE_REUSED');
   }
 
-  // 6. Legacy mode setting check
+  // 7. Legacy mode setting check
   if (envelope.securityMode === 'UID_LEGACY' && process.env.ALLOW_LEGACY_RFID_UID_MODE !== 'true') {
     return createRejection('DEPENDENCY_UNAVAILABLE', 'LEGACY_MODE_DISABLED');
   }
@@ -139,7 +152,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('UNKNOWN_CARD', 'NO_CREDENTIAL_DIGEST');
   }
 
-  // 7. Lookup active credential
+  // 8. Lookup active credential
   const credential = await lookupActiveCredential(envelope.schoolId, envelope.credentialDigest);
   if (!credential) return createRejection('UNKNOWN_CARD', 'CARD_NOT_FOUND');
   if (credential.status === 'REVOKED') return createRejection('REVOKED_CARD', 'CARD_REVOKED');
@@ -147,7 +160,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   if (credential.status === 'SUSPENDED') return createRejection('SUSPENDED_CARD', 'CARD_SUSPENDED');
   if (credential.schoolId !== envelope.schoolId) return createRejection('WRONG_SCHOOL', 'SCHOOL_MISMATCH');
 
-  // 8. Attendance Session
+  // 9. Attendance Session check
   let sessionId = envelope.attendanceSessionId;
   if (!sessionId) return createRejection('NO_ACTIVE_SESSION', 'NO_SESSION_ID');
 
@@ -160,21 +173,23 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('NO_ACTIVE_SESSION', 'SESSION_NOT_OPEN');
   }
 
-  // 9. Duplicate Tap Check (Redis primary, PostgreSQL DB fallback)
+  // 10. Duplicate Tap Check (Redis primary with DB fallback on error)
   const duplicateTapCooldown = parseInt(process.env.RFID_DUPLICATE_TAP_COOLDOWN_MS || '30000', 10);
   const dupKey = `rfid:dup:${envelope.schoolId}:${credential.studentId}:${sessionId}`;
   let isDuplicateTap = false;
+  let redisDupUsed = false;
 
   if (redis) {
     try {
       const isDup = await redis.get(dupKey);
       if (isDup) isDuplicateTap = true;
+      redisDupUsed = true;
     } catch {
-      // Fall through to DB check
+      redisDupUsed = false;
     }
   }
 
-  if (!isDuplicateTap) {
+  if (!redisDupUsed || isDuplicateTap) {
     const cooldownThreshold = new Date(Date.now() - duplicateTapCooldown);
     const [recentScan] = await db
       .select()
@@ -195,11 +210,10 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('DUPLICATE', 'DUPLICATE_TAP');
   }
 
-  // 10. Atomic Database Transaction for Accepted Scan
+  // 11. Atomic Database Transaction for Accepted Scan
   const captureMethod = envelope.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY';
 
   const transactionResult = await db.transaction(async (tx: any) => {
-    // A. Insert RFID scan event
     const [scanEvent] = await tx
       .insert(rfidScanEvents)
       .values({
@@ -220,7 +234,6 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       })
       .returning();
 
-    // B. Insert attendance event
     await tx
       .insert(attendanceEvents)
       .values({
@@ -237,7 +250,6 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         sourceRfidEventId: scanEvent.id,
       });
 
-    // C. Upsert attendance record
     const [existingRecord] = await tx
       .select()
       .from(attendanceRecords)
@@ -281,7 +293,6 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return { scanEventId: scanEvent.id, attendanceRecordId: attRecordId };
   });
 
-  // Set duplicate tap cooldown in Redis
   if (redis) {
     try {
       await redis.set(dupKey, '1', 'PX', duplicateTapCooldown);

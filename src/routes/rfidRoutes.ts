@@ -20,20 +20,29 @@ rfidRouter.post(
   readerAuthMiddleware,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
     try {
+      const clientEventId = req.body.clientEventId;
+      const nonce = req.body.nonce;
+      const readerTimestamp = (req.headers['x-reader-timestamp'] as string) || req.body.readerTimestamp;
+      const signature = (req.headers['x-reader-signature'] as string) || req.body.signature;
+
+      if (!clientEventId || !nonce || !readerTimestamp || !signature) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing mandatory signed envelope fields (clientEventId, nonce, readerTimestamp, signature)' });
+      }
+
       const envelope = {
         version: req.body.version || 1,
         schoolId: req.params.schoolId,
-        readerId: req.headers['x-reader-id'] as string || req.body.readerId,
+        readerId: (req.headers['x-reader-id'] as string) || req.body.readerId,
         credentialDigest: req.body.credentialDigest,
         secureProof: req.body.secureProof,
-        readerTimestamp: req.headers['x-reader-timestamp'] as string || req.body.readerTimestamp || new Date().toISOString(),
+        readerTimestamp,
         sequenceNumber: req.body.sequenceNumber,
-        nonce: req.body.nonce || `nonce_${Date.now()}_${Math.random()}`,
+        nonce,
         direction: req.body.direction || 'NONE',
         attendanceSessionId: req.body.attendanceSessionId,
         securityMode: req.body.securityMode || 'SECURE',
-        signature: req.headers['x-reader-signature'] as string || req.body.signature || '',
-        clientEventId: req.body.clientEventId || `evt_${Date.now()}_${Math.random()}`,
+        signature,
+        clientEventId,
         isOffline: req.body.isOffline || false,
       };
 

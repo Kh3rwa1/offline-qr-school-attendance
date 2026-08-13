@@ -1,22 +1,21 @@
 import crypto from 'crypto';
 
 /**
- * Normalizes UID: uppercase, strip colons/hyphens/spaces, validate hex.
+ * Normalizes an 8/14/20 character hex string to uppercase without separators.
  */
-export function canonicalizeUid(rawUid: string): string {
-  if (!rawUid) throw new Error('UID is required');
-  const cleanUid = rawUid.toUpperCase().replace(/[:\-\s]/g, '');
-  if (!/^[0-9A-F]+$/.test(cleanUid)) {
-    throw new Error('Invalid UID format');
+export function canonicalizeUid(uid: string): string {
+  if (!uid || typeof uid !== 'string') {
+    throw new Error('UID is required');
   }
-  if (cleanUid.length > 28) {
-    throw new Error('UID too long');
+  const cleaned = uid.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+  if (cleaned.length < 8 || cleaned.length > 24) {
+    throw new Error(`Invalid RFID/NFC UID length: ${cleaned.length} chars.`);
   }
-  return cleanUid;
+  return cleaned;
 }
 
-export function canonicalizeUidBuffer(rawUid: string): Buffer {
-  return Buffer.from(canonicalizeUid(rawUid), 'hex');
+export function canonicalizeUidBuffer(buf: Buffer): string {
+  return canonicalizeUid(buf.toString('hex'));
 }
 
 /**
@@ -94,7 +93,31 @@ export function generateNonce(): string {
 }
 
 /**
- * HMAC-SHA256 verification of scan envelope.
+ * Computes canonical HMAC-SHA256 signature for scan payloads or request headers.
+ */
+export function computeCanonicalSignature(
+  envelopeOrData: any,
+  secret: string
+): string {
+  let payload = envelopeOrData;
+  if (typeof envelopeOrData === 'object' && envelopeOrData !== null) {
+    const { signature: _sig, ...envelopeData } = envelopeOrData;
+    const sortedKeys = Object.keys(envelopeData).sort();
+    const sortedObj: Record<string, any> = {};
+    for (const k of sortedKeys) {
+      if (envelopeData[k] !== undefined) {
+        sortedObj[k] = envelopeData[k];
+      }
+    }
+    payload = JSON.stringify(sortedObj);
+  }
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(String(payload));
+  return hmac.digest('hex');
+}
+
+/**
+ * Unified HMAC-SHA256 signature verification.
  */
 export function verifyEnvelopeSignature(
   envelopeOrData: any,
@@ -102,18 +125,28 @@ export function verifyEnvelopeSignature(
   publicKeyOrSecret: string
 ): boolean {
   try {
-    let payload = envelopeOrData;
-    if (typeof envelopeOrData === 'object' && envelopeOrData !== null) {
-      const { signature: _sig, ...envelopeData } = envelopeOrData;
-      payload = JSON.stringify(envelopeData, Object.keys(envelopeData).sort());
-    }
-    const hmac = crypto.createHmac('sha256', publicKeyOrSecret);
-    hmac.update(String(payload));
-    const expected = hmac.digest('hex');
+    if (!signature || !publicKeyOrSecret) return false;
+    const expected = computeCanonicalSignature(envelopeOrData, publicKeyOrSecret);
     return timingSafeEqual(signature, expected);
   } catch (err) {
     return false;
   }
+}
+
+/**
+ * Verifies DESFire EV2/EV3 transaction secureProof.
+ */
+export function verifySecureProof(
+  credentialDigest: string,
+  nonce: string,
+  readerTimestamp: string,
+  secureProof: string,
+  secret: string
+): boolean {
+  if (!secureProof || !secret) return false;
+  const payload = `secure-proof-v1:${credentialDigest}:${nonce}:${readerTimestamp}`;
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return timingSafeEqual(secureProof, expected);
 }
 
 /**
@@ -136,7 +169,9 @@ export const cryptoService = {
   generateHmacDigest,
   timingSafeEqual,
   generateNonce,
+  computeCanonicalSignature,
   verifyEnvelopeSignature,
   verifySignature,
+  verifySecureProof,
   redactCredentialDigest,
 };

@@ -40,7 +40,7 @@ AS $$
 BEGIN
   PERFORM set_config('app.is_system', 'true', true);
   RETURN QUERY
-  SELECT u.id, u.full_name, u.phone_number, u.password_hash, u.status
+  SELECT u.id, u.full_name::text, u.phone_number::text, u.password_hash::text, u.status::text
   FROM public.users u
   WHERE u.phone_number = p_phone
   LIMIT 1;
@@ -63,7 +63,7 @@ AS $$
 BEGIN
   PERFORM set_config('app.is_system', 'true', true);
   RETURN QUERY
-  SELECT m.school_id, s.name AS school_name, m.role, m.status
+  SELECT m.school_id, s.name::text AS school_name, m.role::text, m.status::text
   FROM public.school_memberships m
   JOIN public.schools s ON s.id = m.school_id
   WHERE m.user_id = p_user_id

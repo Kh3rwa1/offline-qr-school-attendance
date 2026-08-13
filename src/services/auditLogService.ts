@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { withSystemContext } from '../db';
 import { auditLogs } from '../db/schema';
 
 export interface AuditLogParams {
@@ -32,21 +32,42 @@ export function sanitizeMetadata(data?: Record<string, any>): Record<string, any
   return sanitized;
 }
 
-export async function createAuditLog(params: AuditLogParams) {
-  const [inserted] = await db
-    .insert(auditLogs)
-    .values({
-      schoolId: params.schoolId || null,
-      actorId: params.actorId || null,
-      action: params.action,
-      resourceType: params.resourceType,
-      resourceId: params.resourceId || null,
-      ipAddress: params.ipAddress || null,
-      userAgent: params.userAgent || null,
-      metadata: sanitizeMetadata(params.metadata),
-    })
-    .returning();
+export async function createAuditLog(params: AuditLogParams, customTx?: any) {
+  if (customTx) {
+    const [inserted] = await customTx
+      .insert(auditLogs)
+      .values({
+        schoolId: params.schoolId || null,
+        actorId: params.actorId || null,
+        action: params.action,
+        resourceType: params.resourceType,
+        resourceId: params.resourceId || null,
+        ipAddress: params.ipAddress || null,
+        userAgent: params.userAgent || null,
+        metadata: sanitizeMetadata(params.metadata),
+      })
+      .returning();
 
-  if (!inserted) throw new Error('AUDIT_LOG_WRITE_FAILED');
-  return inserted;
+    if (!inserted) throw new Error('AUDIT_LOG_WRITE_FAILED');
+    return inserted;
+  }
+
+  return withSystemContext(async (tx) => {
+    const [inserted] = await tx
+      .insert(auditLogs)
+      .values({
+        schoolId: params.schoolId || null,
+        actorId: params.actorId || null,
+        action: params.action,
+        resourceType: params.resourceType,
+        resourceId: params.resourceId || null,
+        ipAddress: params.ipAddress || null,
+        userAgent: params.userAgent || null,
+        metadata: sanitizeMetadata(params.metadata),
+      })
+      .returning();
+
+    if (!inserted) throw new Error('AUDIT_LOG_WRITE_FAILED');
+    return inserted;
+  });
 }

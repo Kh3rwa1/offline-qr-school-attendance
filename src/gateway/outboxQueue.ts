@@ -39,7 +39,7 @@ export class OutboxQueue {
     }
 
     const effectiveSecret = keyStr || 'test-outbox-device-key-32-chars-long-env';
-    this.secretKey = crypto.hkdfSync('sha256', effectiveSecret, 'outbox-salt', 'device-outbox-key', 32);
+    this.secretKey = Buffer.from(crypto.hkdfSync('sha256', effectiveSecret, 'outbox-salt', 'device-outbox-key', 32));
     this.maxCapacity = config?.maxCapacity || parseInt(process.env.RFID_OFFLINE_QUEUE_CAPACITY || '10000', 10);
     this.maxRetries = config?.maxRetries || 5;
   }

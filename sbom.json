@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.4.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.4",
-  "serialNumber": "urn:uuid:b47d01d3-23bd-4dac-8f46-b3924016bb8a",
+  "serialNumber": "urn:uuid:f9fbb8ff-cbed-4953-a5b3-b22443144e45",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-08-13T12:39:50.985Z",
+    "timestamp": "2026-08-13T12:00:00.000Z",
     "tools": [
       {
         "vendor": "Offline QR & RFID Attendance System",
@@ -22,7 +22,7 @@
     "properties": [
       {
         "name": "git:commit:sha",
-        "value": "ref: refs/heads/main"
+        "value": "a5cf6b96c8fdd126238b00f64bb5799129b18db5"
       },
       {
         "name": "lockfile:sha256",

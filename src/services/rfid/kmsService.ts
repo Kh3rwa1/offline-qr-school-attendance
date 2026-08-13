@@ -165,7 +165,7 @@ export class KMSService {
       } else {
         // Local fallback key for legacy format
         const purposeSecret = this.purposeSecrets.get(envelope.kmsKeyId as CryptoKeyPurpose) || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
-        dataKey = crypto.hkdfSync('sha256', purposeSecret, 'kms-salt', `kms-provider-${envelope.kmsKeyId}`, 32);
+        dataKey = Buffer.from(crypto.hkdfSync('sha256', purposeSecret, 'kms-salt', `kms-provider-${envelope.kmsKeyId}`, 32));
       }
 
       const iv = Buffer.from(envelope.iv, 'hex');
@@ -190,7 +190,7 @@ export class KMSService {
   encryptSecret(plainSecret: string, purpose: CryptoKeyPurpose = 'DATABASE_ENCRYPTION_KEK'): string {
     if (!plainSecret) throw new Error('KMS_ERROR: Cannot encrypt empty secret');
     const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
-    const key = crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32);
+    const key = Buffer.from(crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32));
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const encrypted = Buffer.concat([cipher.update(plainSecret, 'utf8'), cipher.final()]);
@@ -212,7 +212,7 @@ export class KMSService {
     }
     try {
       const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
-      const key = crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32);
+      const key = Buffer.from(crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32));
       const iv = Buffer.from(ivHex, 'hex');
       const tag = Buffer.from(tagHex, 'hex');
       const cipherText = Buffer.from(cipherHex, 'hex');

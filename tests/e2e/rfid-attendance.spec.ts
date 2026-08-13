@@ -93,7 +93,9 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
       data: envelope,
     });
 
-    // Accept 200 (Accepted scan) or 400/401 (Test mock container environment response)
-    expect([200, 400, 401]).toContain(res.status());
+    // Require HTTP 200 and ACCEPTED decision for valid signed E2E scan
+    expect(res.status()).toBe(200);
+    const result = await res.json();
+    expect(result.decision).toBe('ACCEPTED');
   });
 });

@@ -22,9 +22,9 @@ export async function seedDatabase() {
     // Each test that asks for the fixture expects a clean tenant graph. This
     // reset is test-only; production never calls seedDatabase automatically.
     for (const table of [
-      'attendance_events', 'attendance_records', 'rfid_scan_events',
+      'attendance_events', 'attendance_corrections', 'attendance_records', 'rfid_scan_events',
       'rfid_credentials', 'rfid_readers', 'rfid_key_versions',
-      'audit_logs', 'notification_attempts', 'notification_jobs', 'attendance_corrections',
+      'audit_logs', 'notification_attempts', 'notification_jobs',
       'attendance_session_roster', 'attendance_sessions',
       'qr_credentials', 'student_guardians', 'guardians', 'enrollments', 'students',
       'teacher_assignments', 'teacher_profiles', 'devices', 'class_sections',

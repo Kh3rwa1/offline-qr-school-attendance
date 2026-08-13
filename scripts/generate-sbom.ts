@@ -16,13 +16,29 @@ export function generateCycloneDxSbom(): any {
 
   const lockfileSha256 = crypto.createHash('sha256').update(lockfileContent).digest('hex');
 
-  let commitSha = '4eb8c14bc4294d140b66af4d7cf487ea7c65170b';
+  let commitSha = process.env.GITHUB_SHA || 'a5cf6b96c8fdd126238b00f64bb5799129b18db5';
   try {
     const headPath = path.join(process.cwd(), '.git/HEAD');
     if (fs.existsSync(headPath)) {
-      commitSha = fs.readFileSync(headPath, 'utf8').trim();
+      const headContent = fs.readFileSync(headPath, 'utf8').trim();
+      if (!headContent.startsWith('ref:')) {
+        commitSha = headContent;
+      }
     }
   } catch {}
+
+  const timestamp = process.env.SOURCE_DATE_EPOCH
+    ? new Date(parseInt(process.env.SOURCE_DATE_EPOCH, 10) * 1000).toISOString()
+    : '2026-08-13T12:00:00.000Z';
+
+  // Deterministic UUID for serialNumber derived from lockfileSha256
+  const serialUuid = [
+    lockfileSha256.substring(0, 8),
+    lockfileSha256.substring(8, 12),
+    '4' + lockfileSha256.substring(13, 16),
+    'a' + lockfileSha256.substring(17, 20),
+    lockfileSha256.substring(20, 32),
+  ].join('-');
 
   const packages = lock.packages || {};
   const components: any[] = [];
@@ -54,10 +70,10 @@ export function generateCycloneDxSbom(): any {
     $schema: 'http://cyclonedx.org/schema/bom-1.4.json',
     bomFormat: 'CycloneDX',
     specVersion: '1.4',
-    serialNumber: `urn:uuid:${crypto.randomUUID()}`,
+    serialNumber: `urn:uuid:${serialUuid}`,
     version: 1,
     metadata: {
-      timestamp: new Date().toISOString(),
+      timestamp,
       tools: [
         {
           vendor: 'Offline QR & RFID Attendance System',

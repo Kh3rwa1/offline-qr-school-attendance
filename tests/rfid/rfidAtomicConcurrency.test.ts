@@ -163,4 +163,17 @@ describe('RFID Atomic Replay & Concurrency Suite', () => {
     expect(resLow.decision).toBe('REPLAY_REJECTED');
     expect(resLow.rejectionCode).toBe('OUT_OF_ORDER_SEQUENCE');
   });
+
+  it('Gracefully falls back to DB idempotency when Redis is unavailable', async () => {
+    const fixture = await createTestStudentAndCredential('ATOMIC-NO-REDIS', 'digest_atomic_no_redis');
+    const eventId = `evt_no_redis_${Date.now()}`;
+    const envelope = buildEnvelope(schoolAId, readerAId, fixture.credentialDigest, fixture.sessionId, 600, undefined, eventId);
+
+    const res1 = await scanService.processScan(envelope as any);
+    expect(res1.decision).toBe('ACCEPTED');
+
+    const res2 = await scanService.processScan(envelope as any);
+    expect(res2.decision).toBe('ACCEPTED');
+    expect(res2.scanEventId).toBe(res1.scanEventId);
+  });
 });

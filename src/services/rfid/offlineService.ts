@@ -89,7 +89,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
     (a, b) => new Date(a.readerTimestamp).getTime() - new Date(b.readerTimestamp).getTime()
   );
 
-  const chunkSize = 100;
+  const chunkSize = 250;
   for (let i = 0; i < sortedEvents.length; i += chunkSize) {
     const chunk = sortedEvents.slice(i, i + chunkSize);
     const chunkResults = await Promise.all(

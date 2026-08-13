@@ -68,7 +68,11 @@ export class GatewayAdapter implements ReaderAdapter {
       const timestamp = new Date().toISOString();
       const clientEventId = `evt_gw_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
       const credentialDigest = options.expectedDigest || `digest_gw_${crypto.randomBytes(16).toString('hex')}`;
-      const secret = this.config.sharedSecret || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+      const secret = this.config.sharedSecret || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      if (!secret) {
+        clearTimeout(timer);
+        return reject(new Error('No cryptographic shared secret configured for GatewayAdapter'));
+      }
 
       // Compute DESFire EV2 secureProof MAC
       const proofPayload = `secure-proof-v1:${credentialDigest}:${nonce}:${timestamp}`;

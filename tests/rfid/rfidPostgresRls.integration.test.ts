@@ -12,6 +12,7 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
   let appPool: pg.Pool;
   const schoolA = crypto.randomUUID();
   const schoolB = crypto.randomUUID();
+  const userAId = crypto.randomUUID();
   const readerAId = crypto.randomUUID();
   const readerBId = crypto.randomUUID();
   const credentialAId = crypto.randomUUID();
@@ -32,6 +33,11 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
       );
 
       await client.query(
+        'INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5)',
+        [userAId, 'RLS Admin User A', '+919999999999', 'hash', 'ACTIVE']
+      );
+
+      await client.query(
         'INSERT INTO students (id, school_id, student_code, name, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
         [studentAId, schoolA, 'RLS-RFID-01', 'RLS Student A', 'ACTIVE', studentBId, schoolB, 'RLS-RFID-02', 'RLS Student B', 'ACTIVE']
       );
@@ -43,7 +49,7 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
 
       await client.query(
         'INSERT INTO rfid_credentials (id, school_id, student_id, credential_digest, security_mode, key_version, status, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        [credentialAId, schoolA, studentAId, 'digest_rls_test_card_a', 'SECURE', 1, 'ACTIVE', studentAId]
+        [credentialAId, schoolA, studentAId, 'digest_rls_test_card_a', 'SECURE', 1, 'ACTIVE', userAId]
       );
       await client.query('COMMIT');
     } catch (err) {
@@ -56,7 +62,18 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
 
   afterAll(async () => {
     if (migrationPool) {
-      await migrationPool.query('DELETE FROM schools WHERE id IN ($1, $2)', [schoolA, schoolB]);
+      const client = await migrationPool.connect();
+      try {
+        await client.query('DELETE FROM rfid_credentials WHERE school_id IN ($1, $2)', [schoolA, schoolB]);
+        await client.query('DELETE FROM rfid_readers WHERE school_id IN ($1, $2)', [schoolA, schoolB]);
+        await client.query('DELETE FROM students WHERE school_id IN ($1, $2)', [schoolA, schoolB]);
+        await client.query('DELETE FROM users WHERE id = $1', [userAId]);
+        await client.query('DELETE FROM schools WHERE id IN ($1, $2)', [schoolA, schoolB]);
+      } catch (err) {
+        // Ignore cleanup errors
+      } finally {
+        client.release();
+      }
       await migrationPool.end();
     }
     if (appPool) {

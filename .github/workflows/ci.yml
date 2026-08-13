@@ -15,6 +15,7 @@ jobs:
   static-check-and-unit-tests:
     name: Static Check & Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -53,6 +54,7 @@ jobs:
   security-scan:
     name: Security & Vulnerability Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -104,6 +106,7 @@ jobs:
   postgres-rls-redis-integration:
     name: PostgreSQL RLS & Redis Production Integration
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -147,9 +150,9 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
         run: npx tsx src/db/migrate.ts
 
-      - name: Create Database Roles (attendance_app, attendance_auth, attendance_worker) & Privileges
+      - name: Create Database Roles (attendance_app, attendance_auth, attendance_system, attendance_worker) & Privileges
         run: |
-          PGPASSWORD=ci_password psql -h 127.0.0.1 -U attendance_migration -d school_attendance -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN CREATE ROLE attendance_app LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN CREATE ROLE attendance_auth LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN CREATE ROLE attendance_worker LOGIN PASSWORD 'ci_password'; END IF; GRANT CONNECT ON DATABASE school_attendance TO attendance_app, attendance_auth, attendance_worker; GRANT USAGE ON SCHEMA public TO attendance_app, attendance_auth, attendance_worker; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_app; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_app; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO attendance_auth, attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO attendance_auth, attendance_app; END \$\$;"
+          PGPASSWORD=ci_password psql -h 127.0.0.1 -U attendance_migration -d school_attendance -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN CREATE ROLE attendance_app LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN CREATE ROLE attendance_auth LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN CREATE ROLE attendance_system LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN CREATE ROLE attendance_worker LOGIN PASSWORD 'ci_password'; END IF; GRANT CONNECT ON DATABASE school_attendance TO attendance_app, attendance_auth, attendance_system, attendance_worker; GRANT USAGE ON SCHEMA public TO attendance_app, attendance_auth, attendance_system, attendance_worker; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_app; GRANT SELECT ON ALL TABLES IN SCHEMA public TO attendance_system; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_app, attendance_system; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO attendance_auth, attendance_app, attendance_system; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT ON TABLES TO attendance_system; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO attendance_app, attendance_system; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO attendance_auth, attendance_app, attendance_system; END \$\$;"
 
       - name: Run RLS Schema Integration Suite
         env:
@@ -165,11 +168,13 @@ jobs:
           PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
+          PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
         run: npm test
 
   backup-and-restore-drill:
     name: Encrypted Backup & Restore RLS Verification Drill
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -221,6 +226,7 @@ jobs:
   docker-compose-production-smoke:
     name: Docker Compose Production Smoke Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       POSTGRES_DB: school_attendance
       MIGRATION_DB_USER: attendance_migration
@@ -273,6 +279,7 @@ jobs:
   pr-load-smoke-gate:
     name: Mandatory Pull-Request Load Smoke Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -335,6 +342,7 @@ jobs:
   playwright-e2e:
     name: Playwright Browser E2E (Chromium & Firefox)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -376,6 +384,7 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
+          ALLOW_SEED_RESET: "true"
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
@@ -412,6 +421,7 @@ jobs:
   k8s-manifest-validation:
     name: Kubernetes Schema & Security Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -439,6 +449,7 @@ jobs:
   k8s-kind-cluster-drill:
     name: Disposable Kind Cluster Deployment & Rollback Drill
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -449,6 +460,7 @@ jobs:
   branch-protection-check:
     name: Branch Protection Verification
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

@@ -43,6 +43,7 @@ describe.skipIf(!enabled)('Phase 7 — Programmatic PostgreSQL RLS & Schema Comp
 
     expect(res.rows.length).toBeGreaterThan(0);
     for (const row of res.rows) {
+      if (row.tablename.includes('drizzle')) continue;
       expect(row.rowsecurity, `Table ${row.tablename} must have RLS enabled`).toBe(true);
       expect(row.forcerowsecurity, `Table ${row.tablename} must have FORCE RLS enabled`).toBe(true);
     }

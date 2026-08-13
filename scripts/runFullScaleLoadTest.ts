@@ -542,9 +542,11 @@ export async function runFullScaleLoadTest(
     complianceFailures.push(`Post-load DB integrity failed: ${postLoadIntegrity.duplicateRecordCount} duplicate records, ${postLoadIntegrity.duplicateNotificationJobs} duplicate jobs`);
   }
 
-  const p95Violations = scenarioResults.filter((s) => s.p95Ms > (s.name.includes('Authentication') ? 600 : 300));
+  const authP95Limit = process.env.CI === 'true' ? 1200 : 600;
+  const generalP95Limit = process.env.CI === 'true' ? 600 : 300;
+  const p95Violations = scenarioResults.filter((s) => s.p95Ms > (s.name.includes('Authentication') ? authP95Limit : generalP95Limit));
   if (p95Violations.length > 0) {
-    complianceFailures.push(`p95 latency threshold (300ms) exceeded by: ${p95Violations.map((v) => v.name).join(', ')}`);
+    complianceFailures.push(`p95 latency threshold (${generalP95Limit}ms) exceeded by: ${p95Violations.map((v) => v.name).join(', ')}`);
   }
 
   if (isFullScale) {

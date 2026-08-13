@@ -5,6 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: 0, // Enforce zero retries so product bugs are never hidden
   reporter: process.env.CI ? [['html', { outputFolder: 'output/playwright/report', open: 'never' }], ['line']] : 'list',

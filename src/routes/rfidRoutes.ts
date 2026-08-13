@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { tenantHandler } from '../middleware/tenantHandler';
+import { requireTenant } from '../middleware/tenantMiddleware';
 import { readerAuthMiddleware, ReaderAuthenticatedRequest } from '../middleware/readerAuthMiddleware';
 import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
@@ -61,7 +61,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -85,7 +85,7 @@ rfidRouter.post(
 rfidRouter.get(
   '/:schoolId/rfid/credentials',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -104,7 +104,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/credentials/:credentialId',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -120,7 +120,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/activate',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -139,7 +139,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/suspend',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -160,7 +160,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/reactivate',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -179,7 +179,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/revoke',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -200,7 +200,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/replace',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -223,7 +223,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/credentials/bulk-enroll',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -243,7 +243,7 @@ rfidRouter.post(
 rfidRouter.get(
   '/:schoolId/rfid/credentials/student/:studentId/history',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -261,7 +261,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/register',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -288,7 +288,7 @@ rfidRouter.post(
 rfidRouter.get(
   '/:schoolId/rfid/readers',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -305,7 +305,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -321,7 +321,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/approve',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -336,7 +336,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/suspend',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -356,7 +356,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/revoke',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -376,7 +376,7 @@ rfidRouter.post(
 rfidRouter.patch(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -391,7 +391,7 @@ rfidRouter.patch(
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId/health',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -465,7 +465,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/scans',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const scans = await db
@@ -485,7 +485,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/provision',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -500,7 +500,7 @@ rfidRouter.post(
 rfidRouter.get(
   '/:schoolId/rfid/reports/readers',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const readers = await readerService.listReaders(req.params.schoolId);
@@ -514,7 +514,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/rejections',
   requireAuth,
-  tenantHandler,
+  requireTenant,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const rejections = await db

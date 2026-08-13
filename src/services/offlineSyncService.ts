@@ -345,6 +345,7 @@ export async function syncOutboxEvents(params: {
       const response = await fetchImpl(`/api/v1/schools/${schoolId}/sync/attendance-events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       const json = await response.json().catch(() => ({}));

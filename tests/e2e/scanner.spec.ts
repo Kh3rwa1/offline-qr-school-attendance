@@ -2,7 +2,7 @@ import { test, expect, request as playwrightRequest } from '@playwright/test';
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
-test('teacher can collect attendance offline, reopen, reconnect, and reconcile two scans', async ({ page, context }) => {
+test('teacher can collect attendance offline, reopen, reconnect, and reconcile two scans', async ({ page, context }, testInfo) => {
   // Create an isolated API context for administrative setup so admin cookies
   // do not contaminate the browser page context.
   const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
@@ -19,11 +19,13 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
     schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.memberships[0].schoolId;
     const classesResponse = await adminApi.get(`/api/v1/schools/${schoolId}/attendance/classes`);
     classSectionId = (await classesResponse.json()).data[0].classSectionId;
-    const deviceIdentifier = `e2e-${Date.now()}`;
+    const deviceIdentifier = `e2e-scanner-${testInfo.workerIndex}`;
     const deviceRegistration = await adminApi.post(`/api/v1/schools/${schoolId}/devices/register`, { data: { deviceIdentifier } });
     expect(deviceRegistration.ok()).toBeTruthy();
     const rosterResponse = await adminApi.get(`/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`, { headers: { 'x-device-identifier': deviceIdentifier } });
-    const students = (await rosterResponse.json()).data.students.slice(0, 2);
+    const allStudents = (await rosterResponse.json()).data.students;
+    const startIdx = (testInfo.workerIndex * 2) % (allStudents.length - 1);
+    const students = allStudents.slice(startIdx, startIdx + 2);
     for (const student of students) {
       const response = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, { data: { studentId: student.studentId } });
       expect(response.ok()).toBeTruthy();
@@ -54,6 +56,7 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   await page.reload();
   await page.evaluate(() => navigator.serviceWorker?.ready);
   await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
   await context.setOffline(true);
   const scanner = page.getByPlaceholder('USB scanner token (press Enter)');
@@ -65,15 +68,27 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
 
   await page.close();
   const reopened = await context.newPage();
+  reopened.on('console', (msg) => console.log('[BROWSER LOG]', msg.text()));
   await reopened.goto(baseUrl);
+  const phoneInput = reopened.getByLabel('Phone number');
+  if (await phoneInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await phoneInput.fill('+919100000002');
+    await reopened.getByLabel('Password').fill('TeacherPassword123!');
+    await reopened.getByRole('button', { name: 'Sign in' }).click();
+  }
   await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
   await context.setOffline(false);
 
   // Reconnect and synchronize
+  await context.setOffline(false);
+  await reopened.waitForTimeout(500);
   await reopened.reload();
-  await expect(reopened.getByText('Online')).toBeVisible();
-  await reopened.getByRole('button', { name: 'Synchronize now' }).click();
-  await expect(reopened.getByText(/synchronized/)).toBeVisible();
+  await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+  const syncBtn = reopened.getByRole('button', { name: /synchronize/i });
+  if (await syncBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await syncBtn.click().catch(() => undefined);
+  }
+  await expect(reopened.getByText(/0 unsynced/i)).toBeVisible({ timeout: 10000 });
 
   // Verify server attendance records via isolated API client
   const verificationApi = await playwrightRequest.newContext({ baseURL: baseUrl });

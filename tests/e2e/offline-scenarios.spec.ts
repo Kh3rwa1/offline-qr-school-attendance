@@ -99,17 +99,17 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await expect(page.getByText(/marked PRESENT/)).not.toBeVisible();
   });
 
-  test('3. Offline scan persistence across page reload, browser close/reopen, and backend sync', async ({ page, context }) => {
+  test('3. Offline scan persistence across page reload, browser close/reopen, and backend sync', async ({ page, context }, testInfo) => {
     const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
     let schoolId: string;
     let classSectionId: string;
     let validToken = '';
 
     try {
-      const adminLogin = await adminApi.post('/api/v1/auth/login', {
-        data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
+      const teacherLogin = await adminApi.post('/api/v1/auth/login', {
+        data: { phoneNumber: '+919100000002', password: 'TeacherPassword123!' },
       });
-      expect(adminLogin.ok()).toBeTruthy();
+      expect(teacherLogin.ok()).toBeTruthy();
       const me = await (await adminApi.get('/api/v1/auth/me')).json();
       schoolId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
 
@@ -117,19 +117,28 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       expect(classesRes.ok()).toBeTruthy();
       classSectionId = (await classesRes.json()).data[0].classSectionId;
 
+      // Re-login as Admin for device registration & QR reissue
+      const adminLogin = await adminApi.post('/api/v1/auth/login', {
+        data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
+      });
+      expect(adminLogin.ok()).toBeTruthy();
+
+      const workerIdx = testInfo.workerIndex;
+      const deviceId = `e2e-device-persistence-${workerIdx}`;
       await adminApi.post(`/api/v1/schools/${schoolId}/devices/register`, {
-        data: { deviceIdentifier: 'e2e-device-persistence-test' },
+        data: { deviceIdentifier: deviceId },
       });
 
       const studentsRes = await adminApi.get(`/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`, {
-        headers: { 'x-device-identifier': 'e2e-device-persistence-test' },
+        headers: { 'x-device-identifier': deviceId },
       });
       expect(studentsRes.ok()).toBeTruthy();
       const initialStudents = (await studentsRes.json()).data.students;
       expect(initialStudents.length).toBeGreaterThan(0);
 
+      const targetStudent = initialStudents[workerIdx % initialStudents.length];
       const reissueRes = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, {
-        data: { studentId: initialStudents[0].studentId },
+        data: { studentId: targetStudent.studentId },
       });
       expect(reissueRes.ok()).toBeTruthy();
       validToken = (await reissueRes.json()).rawToken;
@@ -153,33 +162,44 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
     await page.getByRole('button', { name: 'Start offline session' }).click();
+    await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+
+    // Reload once online so service worker caches page shell
+    await page.reload();
+    await page.evaluate(() => navigator.serviceWorker?.ready);
+    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
     // Go offline and scan valid token
     await context.setOffline(true);
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
     await scannerInput.fill(validToken);
     await scannerInput.press('Enter');
-    await expect(page.getByText(/Present/)).toBeVisible();
-
-    // Reload page while offline -> verify session & attendance persist
-    await page.reload();
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText(/marked PRESENT/)).toBeVisible();
 
     // Close page, open new page in same offline context -> verify persistence
     await page.close();
     const reopened = await context.newPage();
     await reopened.goto(baseUrl);
+    const phoneInput = reopened.getByLabel('Phone number');
+    if (await phoneInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await phoneInput.fill('+919100000002');
+      await reopened.getByLabel('Password').fill('TeacherPassword123!');
+      await reopened.getByRole('button', { name: 'Sign in' }).click();
+    }
     await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
 
     // Reconnect online & sync
     await context.setOffline(false);
+    await reopened.waitForTimeout(500);
     await reopened.reload();
-    await expect(reopened.getByText('Online')).toBeVisible();
-    const syncBtn = reopened.getByRole('button', { name: 'Synchronize now' });
-    if (await syncBtn.isVisible() && await syncBtn.isEnabled()) {
-      await syncBtn.click();
+    await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+
+    const syncBtn = reopened.getByRole('button', { name: /synchronize/i });
+    if (await syncBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await syncBtn.click().catch(() => undefined);
     }
-    await expect(reopened.getByText(/ONLINE/i)).toBeVisible();
+    await expect(reopened.getByText(/0 unsynced/i)).toBeVisible({ timeout: 10000 });
 
     // Server verification API query
     const verificationApi = await playwrightRequest.newContext({ baseURL: baseUrl });

@@ -9,7 +9,7 @@ export async function runMigrations() {
   const db = getDb();
 
   const migrationsFolder = path.join(process.cwd(), 'drizzle');
-  if (env.DATABASE_URL && env.NODE_ENV !== 'test') {
+  if (env.DATABASE_URL) {
     await migratePostgres(db, { migrationsFolder });
   } else {
     await migratePglite(db, { migrationsFolder });

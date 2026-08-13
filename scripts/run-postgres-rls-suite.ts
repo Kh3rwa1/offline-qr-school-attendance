@@ -10,6 +10,7 @@ process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 import pg from 'pg';
 import crypto from 'node:crypto';
 import argon2 from 'argon2';
+import fs from 'node:fs';
 
 const migrationUrl = process.env.PG_RLS_MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
 const appUrl = process.env.PG_RLS_APPLICATION_DATABASE_URL || process.env.DATABASE_URL;
@@ -366,9 +367,22 @@ async function main() {
     await runRfidIsolationSuite(migrationPool, appPool);
     await runPostgresRlsIntegrationSuite(migrationPool, appPool);
     console.log('\n🎉 ALL POSTGRESQL RLS & REDIS PRODUCTION INTEGRATION CHECKS PASSED SUCCESSFULLY!\n');
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      try {
+        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '\n### ✅ PostgreSQL RLS & Redis Integration Suite: ALL CHECKS PASSED\n');
+      } catch {}
+    }
     process.exit(0);
   } catch (err: any) {
     console.error('\n❌ POSTGRESQL RLS INTEGRATION SUITE FAILED:', err);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      try {
+        fs.appendFileSync(
+          process.env.GITHUB_STEP_SUMMARY,
+          `\n### ❌ PostgreSQL RLS Integration Suite Failed\n\`\`\`\n${err?.stack || err?.message || err}\n\`\`\`\n`
+        );
+      } catch {}
+    }
     process.exit(1);
   } finally {
     await appPool.end().catch(() => {});

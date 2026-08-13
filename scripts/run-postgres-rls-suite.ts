@@ -48,12 +48,15 @@ async function runCompletenessAudit(migrationPool: pg.Pool, appPool: pg.Pool) {
     WHERE t.schemaname = 'public' AND c.relkind = 'r';
   `);
   assert(tablesRes.rows.length > 0, 'Must find public tables in database');
+  console.log(`Found ${tablesRes.rows.length} public tables:`);
   for (const row of tablesRes.rows) {
-    if (row.tablename.includes('drizzle')) continue;
+    const isDrizzle = row.tablename.includes('drizzle');
+    console.log(`  - ${row.tablename}: rls=${row.rowsecurity}, force=${row.forcerowsecurity} ${isDrizzle ? '(drizzle-skipped)' : ''}`);
+    if (isDrizzle) continue;
     assert(row.rowsecurity === true, `Table ${row.tablename} must have RLS enabled (relrowsecurity=true)`);
     assert(row.forcerowsecurity === true, `Table ${row.tablename} must have FORCE RLS enabled (relforcerowsecurity=true)`);
   }
-  console.log(`  ✅ All ${tablesRes.rows.length} public tables have rowsecurity=true and forcerowsecurity=true`);
+  console.log(`  ✅ All ${tablesRes.rows.length} public tables validated.`);
 
   // 1.2 Non-superuser & No bypass RLS on roles
   console.log('[Audit 1.2] Checking database roles are NOSUPERUSER and NOBYPASSRLS...');
@@ -62,6 +65,7 @@ async function runCompletenessAudit(migrationPool: pg.Pool, appPool: pg.Pool) {
     FROM pg_roles
     WHERE rolname IN ('attendance_app', 'attendance_auth', 'attendance_worker')
   `);
+  console.log('Roles found:', JSON.stringify(rolesRes.rows));
   assert(rolesRes.rows.length >= 1, 'Restricted application roles must exist in database');
   for (const row of rolesRes.rows) {
     assert(row.rolsuper === false, `Role ${row.rolname} must be NOSUPERUSER`);
@@ -76,6 +80,7 @@ async function runCompletenessAudit(migrationPool: pg.Pool, appPool: pg.Pool) {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
     const res = await client.query('SELECT COUNT(*) FROM students');
+    console.log('Audit 1.3 students count with app.is_system=true:', res.rows[0]);
     assert(Number(res.rows[0].count) === 0, 'attendance_app role setting app.is_system=true must see 0 rows');
     await client.query('ROLLBACK');
 
@@ -83,6 +88,7 @@ async function runCompletenessAudit(migrationPool: pg.Pool, appPool: pg.Pool) {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.is_system', 'false', true), set_config('app.current_school_id', '', true)");
     const resEmpty = await client.query('SELECT COUNT(*) FROM students');
+    console.log('Audit 1.4 students count with empty school_id:', resEmpty.rows[0]);
     assert(Number(resEmpty.rows[0].count) === 0, 'attendance_app role with empty school_id must see 0 rows');
     await client.query('ROLLBACK');
   } finally {

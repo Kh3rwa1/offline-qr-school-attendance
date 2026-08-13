@@ -247,7 +247,8 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ phoneNumber: teacherPhone, password: teacherPassword, schoolId: schoolA }),
     });
-    assert(login.status === 200, `Login failed with status ${login.status}`);
+    const loginBody = await login.json();
+    assert(login.status === 200, `Login failed with status ${login.status}: ${JSON.stringify(loginBody)}`);
     const setCookie = login.headers.get('set-cookie') || '';
     assert(/HttpOnly/i.test(setCookie), 'Session cookie must have HttpOnly');
     assert(/SameSite=Lax/i.test(setCookie), 'Session cookie must have SameSite=Lax');
@@ -255,13 +256,14 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
 
     console.log('[Integration 3.4] Testing GET /api/v1/auth/me session context...');
     const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });
-    assert(me.status === 200, `/me returned status ${me.status}`);
     const meData = await me.json();
+    assert(me.status === 200, `/me returned status ${me.status}: ${JSON.stringify(meData)}`);
     assert(meData.sessionContext.schoolId === schoolA, 'Session context must be school A');
 
     console.log('[Integration 3.5] Testing cross-tenant route protection...');
     const crossTenant = await fetch(`${baseUrl}/api/v1/schools/${schoolB}/attendance/classes`, { headers: { cookie } });
-    assert(crossTenant.status === 403, `Cross-tenant access must return 403 (got ${crossTenant.status})`);
+    const crossTenantData = await crossTenant.json();
+    assert(crossTenant.status === 403, `Cross-tenant access must return 403 (got ${crossTenant.status}): ${JSON.stringify(crossTenantData)}`);
 
     console.log('[Integration 3.6] Testing attendance session creation...');
     const sessionResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions`, {
@@ -269,8 +271,9 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
       headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ classSectionId, sessionDate: '2026-08-12', sessionType: 'DAILY' }),
     });
-    assert(sessionResponse.status === 201, `Create session failed with ${sessionResponse.status}`);
-    const session = (await sessionResponse.json()).data.session;
+    const sessionData = await sessionResponse.json();
+    assert(sessionResponse.status === 201, `Create session failed with ${sessionResponse.status}: ${JSON.stringify(sessionData)}`);
+    const session = sessionData.data.session;
 
     console.log('[Integration 3.7] Finalizing attendance session (auto-marking absent)...');
     const finalizeResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions/${session.id}/status`, {
@@ -278,7 +281,8 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
       headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ status: 'FINALIZED', autoMarkAbsentForUnmarked: true }),
     });
-    assert(finalizeResponse.status === 200, `Finalize session failed with ${finalizeResponse.status}`);
+    const finalizeData = await finalizeResponse.json();
+    assert(finalizeResponse.status === 200, `Finalize session failed with ${finalizeResponse.status}: ${JSON.stringify(finalizeData)}`);
 
     console.log('[Integration 3.8] Processing SMS notification queue via background worker...');
     const { getFakeSmsProvider } = await import('../src/services/sms/smsProvider');

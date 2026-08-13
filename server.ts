@@ -1,7 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { env } from './src/env';
 import { authRouter } from './src/routes/authRoutes';
 import { schoolRouter } from './src/routes/schoolRoutes';
@@ -156,6 +155,7 @@ export async function createApp() {
 
   // Development: Vite Middleware / Production Static Assets
   if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

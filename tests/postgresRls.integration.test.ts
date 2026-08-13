@@ -79,12 +79,13 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
     const { createApp } = await import('../server');
     const app = await createApp();
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       server = app.listen(0, '127.0.0.1', () => {
         const address = server.address();
-        baseUrl = `http://127.0.0.1:${address.port}`;
+        baseUrl = `http://127.0.0.1:${(address as any).port}`;
         resolve();
       });
+      server.on('error', reject);
     });
   });
 

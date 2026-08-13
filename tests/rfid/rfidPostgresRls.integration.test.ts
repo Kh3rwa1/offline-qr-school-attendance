@@ -32,9 +32,10 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
         [schoolA, 'RFID RLS School A', 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', 'Test', 'ACTIVE']
       );
 
+      const userPhone = `+9199${String(Date.now()).slice(-8)}`;
       await client.query(
         'INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5)',
-        [userAId, 'RLS Admin User A', '+919999999999', 'hash', 'ACTIVE']
+        [userAId, 'RLS Admin User A', userPhone, 'hash', 'ACTIVE']
       );
 
       await client.query(

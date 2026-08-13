@@ -149,6 +149,10 @@ jobs:
           NODE_ENV: test
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          PRODUCTION_PG_TEST: "1"
+          PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
         run: |
           npx tsx src/db/migrate.ts
           npm test
@@ -218,6 +222,7 @@ jobs:
       REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_01234567890123456789
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
+      RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
       ALLOW_IN_MEMORY_RATE_LIMITER: "true"
       SMS_PROVIDER: console
       ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -303,6 +308,7 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -362,6 +368,7 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
         run: |
@@ -376,6 +383,7 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           DISABLE_RATE_LIMITING: "true"
           SMS_PROVIDER: console

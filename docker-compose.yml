@@ -47,7 +47,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
-      RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:-ci_rfid_hmac_secret_key_32bytes_long}
+      RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null']
       interval: 10s
@@ -152,7 +152,7 @@ services:
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
-      RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:-ci_rfid_hmac_secret_key_32bytes_long}
+      RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
       ALLOW_LEGACY_RFID_UID_MODE: ${ALLOW_LEGACY_RFID_UID_MODE:-false}
     ports:
       - '3001:3001'

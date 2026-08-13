@@ -55,22 +55,31 @@ export const readerAuthMiddleware = async (
       return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'Reader is suspended or revoked' });
     }
 
-    // Determine reader secret (reader fingerprint or global HMAC secret). Fail closed if missing.
-    const secret = reader.certificateFingerprint || process.env.RFID_HMAC_SECRET;
-    if (!secret && process.env.NODE_ENV !== 'test') {
-      return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'No cryptographic key configured for reader' });
+    // Determine reader secret (global RFID_HMAC_SECRET). Fail closed if missing in non-test.
+    const hmacSecret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    if (!hmacSecret) {
+      return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'No cryptographic secret configured for reader authentication' });
     }
-    const activeSecret = secret || 'test-secret-32-chars-length-environment';
 
-    // Verify unified canonical signature over payload or header context
-    const payloadToVerify = req.body && Object.keys(req.body).length > 0 ? req.body : {
-      readerId,
-      readerTimestamp,
+    // Construct normalized scan envelope object for canonical signature verification
+    const normalizedEnvelope = {
+      version: req.body.version || 1,
       schoolId,
-      path: req.originalUrl,
+      readerId: reader.id,
+      credentialDigest: req.body.credentialDigest,
+      secureProof: req.body.secureProof,
+      readerTimestamp,
+      sequenceNumber: req.body.sequenceNumber,
+      nonce: req.body.nonce,
+      direction: req.body.direction || 'NONE',
+      attendanceSessionId: req.body.attendanceSessionId,
+      securityMode: req.body.securityMode || 'SECURE',
+      signature: readerSignature,
+      clientEventId: req.body.clientEventId,
+      isOffline: req.body.isOffline || false,
     };
 
-    const isValidSignature = verifyEnvelopeSignature(payloadToVerify, readerSignature, activeSecret);
+    const isValidSignature = verifyEnvelopeSignature(normalizedEnvelope, readerSignature, hmacSecret);
 
     if (!isValidSignature && process.env.NODE_ENV !== 'test') {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Invalid reader HMAC signature' });

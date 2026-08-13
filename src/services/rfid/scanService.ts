@@ -77,9 +77,10 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('READER_REVOKED', 'READER_REVOKED');
   }
 
-  // Fetch reader to retrieve reader secret
-  const reader = await getReaderById(envelope.readerId, envelope.schoolId);
-  const secret = reader?.certificateFingerprint || process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+  const secret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+  if (!secret) {
+    throw new Error('RFID_HMAC_SECRET is missing in server configuration');
+  }
 
   // 3. Signature check using canonical payload algorithm
   if (!verifyEnvelopeSignature(envelope, envelope.signature, secret)) {
@@ -244,7 +245,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         eventType: 'CHECK_IN',
         statusValue: 'PRESENT',
         clientTimestamp: new Date(envelope.readerTimestamp),
-        actorId: credential.studentId,
+        actorId: credential.createdByUserId || session.teacherId,
         captureMethod,
         sourceReaderId: envelope.readerId,
         sourceRfidEventId: scanEvent.id,

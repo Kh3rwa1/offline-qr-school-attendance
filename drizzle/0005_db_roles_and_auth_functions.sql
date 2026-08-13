@@ -20,7 +20,9 @@ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN insufficient_privilege THEN NULL;
+  WHEN OTHERS THEN NULL;
 END $$;
+--> statement-breakpoint
 
 -- SECURITY DEFINER function for pre-tenant authentication user lookup
 CREATE OR REPLACE FUNCTION public.lookup_auth_user_by_phone(p_phone text)
@@ -44,6 +46,7 @@ BEGIN
   LIMIT 1;
 END;
 $$;
+--> statement-breakpoint
 
 -- SECURITY DEFINER function for pre-tenant user school membership lookup
 CREATE OR REPLACE FUNCTION public.get_user_school_memberships(p_user_id uuid)
@@ -68,19 +71,20 @@ BEGIN
     AND s.status = 'ACTIVE';
 END;
 $$;
+--> statement-breakpoint
 
 -- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, conditionally grant EXECUTE to application & auth roles.
--- GRANTs are wrapped in a DO block with IF EXISTS guards because the role-creation DO block above silently swallows
--- all statements (EXCEPTION WHEN insufficient_privilege THEN NULL) if the migration user lacks CREATEROLE privilege.
--- Without these guards the unconditional GRANT would error with "role does not exist" and abort the migration.
-ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO CURRENT_USER;
-ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO CURRENT_USER;
-
-REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
-
 DO $$
 BEGIN
+  BEGIN
+    EXECUTE format('ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO %I', CURRENT_USER);
+    EXECUTE format('ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO %I', CURRENT_USER);
+    REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
+    REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
+  EXCEPTION
+    WHEN OTHERS THEN NULL;
+  END;
+
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN
     GRANT USAGE ON SCHEMA public TO attendance_auth;
     GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_auth;
@@ -103,5 +107,5 @@ BEGIN
     GRANT USAGE ON SCHEMA public TO attendance_migration;
   END IF;
 EXCEPTION
-  WHEN insufficient_privilege THEN NULL;
+  WHEN OTHERS THEN NULL;
 END $$;

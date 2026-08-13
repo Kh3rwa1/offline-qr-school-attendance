@@ -46,7 +46,7 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     await migrationPool.query('BEGIN');
     await migrationPool.query('INSERT INTO schools (id, name, district, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, 'RLS School A', 'Test', 'ACTIVE', schoolB, 'RLS School B', 'Test', 'ACTIVE']);
     await migrationPool.query('INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)', [teacherId, 'RLS Teacher', teacherPhone, teacherHash, 'ACTIVE', adminId, 'RLS Admin', `+9197${String(Date.now()).slice(-8)}`, adminHash, 'ACTIVE']);
-    await migrationPool.query('INSERT INTO school_memberships (school_id, user_id, role, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, teacherId, 'TEACHER', 'ACTIVE', schoolA, adminId, 'SCHOOL_ADMIN', 'ACTIVE']);
+    await migrationPool.query('INSERT INTO school_memberships (school_id, user_id, role, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, teacherId, 'TEACHER', 'ACTIVE', schoolB, adminId, 'SCHOOL_ADMIN', 'ACTIVE']);
     await migrationPool.query('INSERT INTO academic_years (id, school_id, name, start_date, end_date, is_current) VALUES ($1, $2, $3, $4, $5, true)', [academicYearId, schoolA, '2026', '2026-01-01', '2026-12-31']);
     await migrationPool.query('INSERT INTO class_sections (id, school_id, academic_year_id, class_name, section_name) VALUES ($1, $2, $3, $4, $5)', [classSectionId, schoolA, academicYearId, 'Class 8', 'A']);
     await migrationPool.query('INSERT INTO teacher_assignments (school_id, teacher_id, class_section_id) VALUES ($1, $2, $3)', [schoolA, teacherId, classSectionId]);

@@ -62,7 +62,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy Filesystem Vulnerability Scan
-        uses: aquasecurity/trivy-action@v0.29.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -80,7 +80,7 @@ jobs:
         run: docker build -t offline-qr-school-attendance:scan .
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
-        uses: aquasecurity/trivy-action@v0.29.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: offline-qr-school-attendance:scan
           format: sarif

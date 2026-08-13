@@ -61,6 +61,9 @@ export class GatewayAdapter implements ReaderAdapter {
       if (options.signal) {
         options.signal.addEventListener('abort', onAbort);
       }
+      if (this.activeAbortController) {
+        this.activeAbortController.signal.addEventListener('abort', onAbort);
+      }
       timeoutSignal.addEventListener('abort', onAbort);
 
       // Simulate physical reader RF polling & AES 3-pass APDU exchange sequence

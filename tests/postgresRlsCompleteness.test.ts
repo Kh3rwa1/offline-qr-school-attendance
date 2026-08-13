@@ -52,12 +52,14 @@ describe.skipIf(!enabled)('Phase 7 — Programmatic PostgreSQL RLS & Schema Comp
     const res = await migrationPool.query(`
       SELECT rolname, rolsuper, rolbypassrls
       FROM pg_roles
-      WHERE rolname = 'attendance_app'
+      WHERE rolname IN ('attendance_app', 'attendance_auth', 'attendance_worker')
     `);
 
-    expect(res.rows).toHaveLength(1);
-    expect(res.rows[0].rolsuper).toBe(false);
-    expect(res.rows[0].rolbypassrls).toBe(false);
+    expect(res.rows.length).toBeGreaterThanOrEqual(1);
+    for (const row of res.rows) {
+      expect(row.rolsuper, `Role ${row.rolname} must be NOSUPERUSER`).toBe(false);
+      expect(row.rolbypassrls, `Role ${row.rolname} must be NOBYPASSRLS`).toBe(false);
+    }
   });
 
   it('proves application role cannot elevate privileges by setting app.is_system = true', async () => {

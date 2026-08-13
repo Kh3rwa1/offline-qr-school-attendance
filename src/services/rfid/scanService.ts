@@ -52,24 +52,29 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
   const createRejection = async (decision: any, rejectionCode: string): Promise<ScanResult> => {
     const latency = Date.now() - startTime;
-    const [inserted] = await db
-      .insert(rfidScanEvents)
-      .values({
-        schoolId: envelope.schoolId,
-        readerId: envelope.readerId,
-        clientEventId: envelope.clientEventId,
-        scanTimestamp: new Date(envelope.readerTimestamp),
-        decision,
-        rejectionCode,
-        captureMethod: envelope.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY',
-        securityMode: envelope.securityMode,
-        processingLatencyMs: latency,
-        isOffline: envelope.isOffline || false,
-        nonce: envelope.nonce,
-      })
-      .returning();
+    try {
+      const [inserted] = await db
+        .insert(rfidScanEvents)
+        .values({
+          schoolId: envelope.schoolId,
+          readerId: envelope.readerId,
+          clientEventId: envelope.clientEventId,
+          scanTimestamp: new Date(envelope.readerTimestamp),
+          decision,
+          rejectionCode,
+          captureMethod: envelope.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY',
+          securityMode: envelope.securityMode,
+          processingLatencyMs: latency,
+          isOffline: envelope.isOffline || false,
+          nonce: envelope.nonce,
+        })
+        .onConflictDoNothing()
+        .returning();
 
-    return { decision, rejectionCode, scanEventId: inserted.id, processingLatencyMs: latency };
+      return { decision, rejectionCode, scanEventId: inserted?.id, processingLatencyMs: latency };
+    } catch {
+      return { decision, rejectionCode, processingLatencyMs: latency };
+    }
   };
 
   // 2. Reader auth
@@ -149,7 +154,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   }
 
   // Monotonic sequence number check
-  if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null && process.env.NODE_ENV !== 'test') {
+  if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
     const [lastSeq] = await db
       .select({ maxSeq: max(rfidScanEvents.sequenceNumber) })
       .from(rfidScanEvents)
@@ -233,99 +238,114 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   // 11. Atomic Database Transaction for Accepted Scan
   const captureMethod = envelope.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY';
 
-  const transactionResult = await db.transaction(async (tx: any) => {
-    const [scanEvent] = await tx
-      .insert(rfidScanEvents)
-      .values({
-        schoolId: envelope.schoolId,
-        readerId: envelope.readerId,
-        credentialId: credential.id,
-        attendanceSessionId: sessionId,
-        clientEventId: envelope.clientEventId,
-        sequenceNumber: envelope.sequenceNumber,
-        scanTimestamp: new Date(envelope.readerTimestamp),
-        direction: envelope.direction || 'NONE',
-        decision: 'ACCEPTED',
-        captureMethod,
-        securityMode: envelope.securityMode,
-        processingLatencyMs: Date.now() - startTime,
-        isOffline: envelope.isOffline || false,
-        nonce: envelope.nonce,
-      })
-      .returning();
-
-    await tx
-      .insert(attendanceEvents)
-      .values({
-        schoolId: envelope.schoolId,
-        clientEventId: `rfid_${scanEvent.id}`,
-        attendanceSessionId: sessionId,
-        studentId: credential.studentId,
-        eventType: 'CHECK_IN',
-        statusValue: 'PRESENT',
-        clientTimestamp: new Date(envelope.readerTimestamp),
-        actorId: credential.createdByUserId || session.teacherId,
-        captureMethod,
-        sourceReaderId: envelope.readerId,
-        sourceRfidEventId: scanEvent.id,
-      });
-
-    const [existingRecord] = await tx
-      .select()
-      .from(attendanceRecords)
-      .where(
-        and(
-          eq(attendanceRecords.schoolId, envelope.schoolId),
-          eq(attendanceRecords.attendanceSessionId, sessionId),
-          eq(attendanceRecords.studentId, credential.studentId)
-        )
-      );
-
-    let attRecordId: string;
-    if (existingRecord) {
-      attRecordId = existingRecord.id;
-      await tx
-        .update(attendanceRecords)
-        .set({
-          status: 'PRESENT',
-          lastUpdatedAt: new Date(),
-          captureMethod,
-          direction: envelope.direction || 'NONE',
-        })
-        .where(eq(attendanceRecords.id, existingRecord.id));
-    } else {
-      const [newRecord] = await tx
-        .insert(attendanceRecords)
+  let transactionResult: any;
+  try {
+    transactionResult = await db.transaction(async (tx: any) => {
+      const [scanEvent] = await tx
+        .insert(rfidScanEvents)
         .values({
           schoolId: envelope.schoolId,
+          readerId: envelope.readerId,
+          credentialId: credential.id,
           attendanceSessionId: sessionId,
-          studentId: credential.studentId,
-          status: 'PRESENT',
-          firstScannedAt: new Date(envelope.readerTimestamp),
-          captureMethod,
-          confidenceLevel: envelope.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
+          clientEventId: envelope.clientEventId,
+          sequenceNumber: envelope.sequenceNumber,
+          scanTimestamp: new Date(envelope.readerTimestamp),
           direction: envelope.direction || 'NONE',
+          decision: 'ACCEPTED',
+          captureMethod,
+          securityMode: envelope.securityMode,
+          processingLatencyMs: Date.now() - startTime,
+          isOffline: envelope.isOffline || false,
+          nonce: envelope.nonce,
         })
         .returning();
-      attRecordId = newRecord.id;
+
+      await tx
+        .insert(attendanceEvents)
+        .values({
+          schoolId: envelope.schoolId,
+          clientEventId: `rfid_${scanEvent.id}`,
+          attendanceSessionId: sessionId,
+          studentId: credential.studentId,
+          eventType: 'CHECK_IN',
+          statusValue: 'PRESENT',
+          clientTimestamp: new Date(envelope.readerTimestamp),
+          actorId: credential.createdByUserId || session.teacherId,
+          captureMethod,
+          sourceReaderId: envelope.readerId,
+          sourceRfidEventId: scanEvent.id,
+        });
+
+      const [existingRecord] = await tx
+        .select()
+        .from(attendanceRecords)
+        .where(
+          and(
+            eq(attendanceRecords.schoolId, envelope.schoolId),
+            eq(attendanceRecords.attendanceSessionId, sessionId),
+            eq(attendanceRecords.studentId, credential.studentId)
+          )
+        );
+
+      let attRecordId: string;
+      if (existingRecord) {
+        attRecordId = existingRecord.id;
+        await tx
+          .update(attendanceRecords)
+          .set({
+            status: 'PRESENT',
+            lastUpdatedAt: new Date(),
+            captureMethod,
+            direction: envelope.direction || 'NONE',
+          })
+          .where(eq(attendanceRecords.id, existingRecord.id));
+      } else {
+        const [newRecord] = await tx
+          .insert(attendanceRecords)
+          .values({
+            schoolId: envelope.schoolId,
+            attendanceSessionId: sessionId,
+            studentId: credential.studentId,
+            status: 'PRESENT',
+            firstScannedAt: new Date(envelope.readerTimestamp),
+            captureMethod,
+            confidenceLevel: envelope.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
+            direction: envelope.direction || 'NONE',
+          })
+          .returning();
+        attRecordId = newRecord.id;
+      }
+
+      return { scanEventId: scanEvent.id, attendanceRecordId: attRecordId };
+    });
+  } catch (err: any) {
+    const errMsg = String(err?.message || '') + ' ' + String(err?.cause?.message || '') + ' ' + String(err?.cause?.code || '');
+    if (err?.code === '23505' || err?.cause?.code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('rfid_scan_events_client_event_idx')) {
+      for (let attempt = 0; attempt < 15; attempt++) {
+        const [existing] = await db
+          .select()
+          .from(rfidScanEvents)
+          .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+        if (existing) {
+          return {
+            decision: existing.decision,
+            scanEventId: existing.id,
+            processingLatencyMs: Date.now() - startTime,
+          };
+        }
+        await new Promise((res) => setTimeout(res, 15));
+      }
     }
-
-    return { scanEventId: scanEvent.id, attendanceRecordId: attRecordId };
-  });
-
-  if (redis) {
-    try {
-      await redis.set(dupKey, '1', 'PX', duplicateTapCooldown);
-    } catch {}
+    throw err;
   }
 
-  const latency = Date.now() - startTime;
   return {
     decision: 'ACCEPTED',
     scanEventId: transactionResult.scanEventId,
     attendanceRecordId: transactionResult.attendanceRecordId,
     studentId: credential.studentId,
-    processingLatencyMs: latency,
+    processingLatencyMs: Date.now() - startTime,
   };
 }
 

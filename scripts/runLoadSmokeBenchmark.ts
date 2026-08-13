@@ -6,7 +6,30 @@ import { closeDatabasePools } from '../src/db';
 
 export async function runLoadSmokeBenchmark() {
   console.log('=== Executing Authentic Pull-Request Business Load Smoke Gate ===');
-  const report = await runFullScaleLoadTest(false, 30);
+  const outputDir = path.join(process.cwd(), 'output');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  try {
+    const { runMigrations } = await import('../src/db/migrate');
+    const { seedDatabase } = await import('../src/db/seed');
+    await runMigrations();
+    await seedDatabase();
+  } catch (err: any) {
+    console.warn('Migration/seed setup warning during load smoke benchmark:', err.message);
+  }
+
+  let report: any;
+  try {
+    report = await runFullScaleLoadTest(false, 30);
+  } catch (err: any) {
+    fs.writeFileSync(
+      path.join(outputDir, 'load-smoke-report.json'),
+      JSON.stringify({ error: err.message, timestamp: new Date().toISOString(), compliancePassed: false }, null, 2)
+    );
+    throw err;
+  }
 
   const metrics = {
     totalRequests: report.totalBusinessRequests,
@@ -17,11 +40,6 @@ export async function runLoadSmokeBenchmark() {
     durationSeconds: report.durationSeconds,
     compliancePassed: report.compliancePassed,
   };
-
-  const outputDir = path.join(process.cwd(), 'output');
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
 
   fs.writeFileSync(
     path.join(outputDir, 'load-smoke-report.json'),

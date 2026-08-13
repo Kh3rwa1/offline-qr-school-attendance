@@ -1,0 +1,60 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.4.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:68e8211b-871d-4009-8472-78d123456789",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-08-13T12:00:00Z",
+    "tools": [
+      {
+        "vendor": "CycloneDX",
+        "name": "Node.js SBOM Generator",
+        "version": "1.4.0"
+      }
+    ],
+    "component": {
+      "group": "com.school.attendance",
+      "name": "offline-qr-school-attendance",
+      "version": "1.0.0",
+      "type": "application"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "express",
+      "version": "4.19.2",
+      "purl": "pkg:npm/express@4.19.2",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    },
+    {
+      "type": "library",
+      "name": "drizzle-orm",
+      "version": "0.30.10",
+      "purl": "pkg:npm/drizzle-orm@0.30.10",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    },
+    {
+      "type": "library",
+      "name": "argon2",
+      "version": "0.40.1",
+      "purl": "pkg:npm/argon2@0.40.1",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    },
+    {
+      "type": "library",
+      "name": "ioredis",
+      "version": "5.4.1",
+      "purl": "pkg:npm/ioredis@5.4.1",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    },
+    {
+      "type": "library",
+      "name": "pg",
+      "version": "8.11.5",
+      "purl": "pkg:npm/pg@8.11.5",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    }
+  ]
+}

@@ -81,5 +81,5 @@ Detailed operational runbooks are maintained in [`docs/runbooks/INCIDENT_RUNBOOK
 - [x] **Per-Reader Keys**: AES-256-GCM encrypted reader secret storage and dynamic decryption.
 - [x] **DESFire EV2/EV3 Cryptography**: AN10922 key diversification, AES-128 CMAC, and 3-pass mutual auth verification.
 - [x] **Credential Lifecycle**: Strict status validation (`ACTIVE` required; `PENDING`, `REPLACED`, `SUSPENDED`, `REVOKED`, `EXPIRED` rejected).
-- [x] **Offline SLO**: 2,000+ event batch sync processing benchmark completing in < 10,000 ms.
+- [x] **Offline SLO**: 5,000-event batch sync processing benchmark completing in < 10,000 ms.
 - [x] **mTLS & Fingerprints**: Certificate fingerprint validation (`x-reader-cert-fingerprint`) for certificate-bound readers.

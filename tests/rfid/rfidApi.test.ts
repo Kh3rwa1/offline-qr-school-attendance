@@ -40,6 +40,7 @@ describe('RFID Router & Middleware Integration Suite', () => {
   let sessionId: string;
   let credentialDigest1: string;
   let credentialDigest2: string;
+  let adminUserId: string;
   const hmacSecret = 'test-secret-32-chars-length-environment';
 
   beforeAll(async () => {
@@ -49,6 +50,7 @@ describe('RFID Router & Middleware Integration Suite', () => {
     await runMigrations();
     const seeded = await seedDatabase();
     schoolId = seeded.schoolA.id;
+    adminUserId = seeded.adminUser.id;
 
     // Register & approve RFID reader
     const reader = await readerService.registerReader({
@@ -123,10 +125,12 @@ describe('RFID Router & Middleware Integration Suite', () => {
     credentialDigest2 = enrolled2.credentialDigest;
   });
 
+  let seqCounter = 100;
   function buildSignedEnvelope(digest: string, overrides: Record<string, any> = {}) {
     const timestamp = new Date().toISOString();
     const nonce = overrides.nonce || `nonce_api_${Date.now()}_${Math.random()}`;
     const clientEventId = overrides.clientEventId || `evt_api_${Date.now()}_${Math.random()}`;
+    seqCounter += 1;
     
     // Secure proof MAC
     const proofPayload = `secure-proof-v1:${digest}:${nonce}:${timestamp}`;
@@ -141,7 +145,7 @@ describe('RFID Router & Middleware Integration Suite', () => {
       credentialDigest: digest,
       secureProof,
       readerTimestamp: timestamp,
-      sequenceNumber: 1,
+      sequenceNumber: overrides.sequenceNumber !== undefined ? overrides.sequenceNumber : seqCounter,
       nonce,
       direction: 'NONE',
       attendanceSessionId: sessionId,
@@ -219,8 +223,28 @@ describe('RFID Router & Middleware Integration Suite', () => {
   });
 
   it('POST /:schoolId/rfid/scans rejects duplicate nonce replay', async () => {
+    const [freshStudent] = await db
+      .insert(students)
+      .values({
+        schoolId,
+        studentCode: 'API-STD-NONCE',
+        name: 'API Nonce Test Student',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    const freshCred = await credentialService.enrollCredential({
+      schoolId,
+      studentId: freshStudent.id,
+      credentialDigest: 'digest_api_test_student_nonce',
+      securityMode: 'SECURE',
+      keyVersion: 1,
+      operatorUserId: adminUserId,
+    });
+    await credentialService.activateCredential(freshCred.id, schoolId);
+
     const sharedNonce = `shared_nonce_replay_${Date.now()}`;
-    const envelope1 = buildSignedEnvelope(credentialDigest2, { nonce: sharedNonce, clientEventId: `evt_replay_1_${Date.now()}` });
+    const envelope1 = buildSignedEnvelope(freshCred.credentialDigest, { nonce: sharedNonce, clientEventId: `evt_replay_1_${Date.now()}` });
     
     // First request (accepted)
     const res1 = await invokeScanEndpoint(schoolId, {
@@ -228,10 +252,13 @@ describe('RFID Router & Middleware Integration Suite', () => {
       'x-reader-signature': envelope1.signature,
       'x-reader-timestamp': envelope1.readerTimestamp,
     }, envelope1);
+    if (res1.statusCode !== 200) {
+      console.error('res1 failed unexpectedly:', res1.body);
+    }
     expect(res1.statusCode).toBe(200);
 
     // Replayed request with same nonce
-    const envelope2 = buildSignedEnvelope(credentialDigest2, { nonce: sharedNonce, clientEventId: `evt_replay_2_${Date.now()}` });
+    const envelope2 = buildSignedEnvelope(freshCred.credentialDigest, { nonce: sharedNonce, clientEventId: `evt_replay_2_${Date.now()}` });
     const res2 = await invokeScanEndpoint(schoolId, {
       'x-reader-id': readerId,
       'x-reader-signature': envelope2.signature,

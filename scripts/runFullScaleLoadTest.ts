@@ -184,6 +184,11 @@ export async function runFullScaleLoadTest(
         });
       } else {
         classSectionId = classes[0].id;
+        await db.insert(teacherAssignments).values({
+          schoolId: sch.id,
+          teacherId,
+          classSectionId,
+        }).onConflictDoNothing();
       }
 
       let stList = await db.select().from(students).where(eq(students.schoolId, sch.id)).limit(1);

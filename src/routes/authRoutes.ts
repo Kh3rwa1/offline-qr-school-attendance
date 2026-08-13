@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { db, withSystemContext } from '../db';
 import { users, schoolMemberships, schools } from '../db/schema';
 import { verifyPassword } from '../auth/password';
+import { timingSafeVerifyPassword } from '../db/authFunctions';
 import { createSession, invalidateSession } from '../auth/session';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { createAuditLog } from '../services/auditLogService';
@@ -35,11 +36,9 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     return candidate;
   });
 
-  if (!user || !(await verifyPassword(user.passwordHash, password))) {
-    return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid phone number or password' });
-  }
+  const isValidPassword = await timingSafeVerifyPassword(user?.passwordHash, password);
 
-  if (user.status === 'SUSPENDED') {
+  if (!user || !isValidPassword || user.status === 'SUSPENDED') {
     return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid phone number or password' });
   }
 

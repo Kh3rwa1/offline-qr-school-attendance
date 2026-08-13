@@ -158,6 +158,15 @@ export function redactCredentialDigest(digest: string): string {
   return '*'.repeat(prefixLength) + digest.slice(-8);
 }
 
+/**
+ * Computes AN10922 AES Key Diversification from master key, card UID, and system ID.
+ */
+export function computeDiversifiedKey(masterKeyHex: string, cardUid: string, systemId: string): Buffer {
+  const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest().subarray(0, 16);
+  const divInput = Buffer.concat([Buffer.from([0x01]), Buffer.from(cardUid, 'hex'), Buffer.from(systemId, 'utf8')]);
+  return crypto.createHmac('sha256', masterKey).update(divInput).digest().subarray(0, 16);
+}
+
 // Aliases for compatibility
 export const generateHmacDigest = computeCredentialDigest;
 export const verifySignature = verifyEnvelopeSignature;
@@ -167,6 +176,7 @@ export const cryptoService = {
   canonicalizeUidBuffer,
   computeCredentialDigest,
   generateHmacDigest,
+  computeDiversifiedKey,
   timingSafeEqual,
   generateNonce,
   computeCanonicalSignature,

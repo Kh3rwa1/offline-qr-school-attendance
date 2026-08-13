@@ -192,7 +192,7 @@ jobs:
           npx tsx src/db/migrate.ts
           npx tsx src/db/seed.ts
 
-      - name: Run Expanded Playwright E2E Suite (retries: 0)
+      - name: "Run Expanded Playwright E2E Suite (retries: 0)"
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379

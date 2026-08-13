@@ -1,4 +1,4 @@
-import { db } from '../../db';
+import { withTenantContext } from '../../db';
 import { rfidCredentials, students } from '../../db/schema';
 import { eq, and, inArray, desc, lt, isNotNull } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
@@ -15,59 +15,61 @@ export async function enrollCredential(params: {
 }) {
   const { schoolId, studentId, credentialDigest, securityMode, keyVersion, operatorUserId, expiresAt } = params;
 
-  const [student] = await db
-    .select()
-    .from(students)
-    .where(and(eq(students.id, studentId), eq(students.schoolId, schoolId), eq(students.status, 'ACTIVE')));
-  if (!student) throw new Error('Student not found or inactive');
+  return withTenantContext(schoolId, async (tx) => {
+    const [student] = await tx
+      .select()
+      .from(students)
+      .where(and(eq(students.id, studentId), eq(students.schoolId, schoolId), eq(students.status, 'ACTIVE')));
+    if (!student) throw new Error('Student not found or inactive');
 
-  const [existingActive] = await db
-    .select()
-    .from(rfidCredentials)
-    .where(
-      and(
-        eq(rfidCredentials.studentId, studentId),
-        eq(rfidCredentials.schoolId, schoolId),
-        inArray(rfidCredentials.status, ['PENDING', 'ACTIVE'])
-      )
-    );
-  if (existingActive) throw new Error('Student already has an active or pending credential');
+    const [existingActive] = await tx
+      .select()
+      .from(rfidCredentials)
+      .where(
+        and(
+          eq(rfidCredentials.studentId, studentId),
+          eq(rfidCredentials.schoolId, schoolId),
+          inArray(rfidCredentials.status, ['PENDING', 'ACTIVE'])
+        )
+      );
+    if (existingActive) throw new Error('Student already has an active or pending credential');
 
-  const [duplicate] = await db
-    .select()
-    .from(rfidCredentials)
-    .where(
-      and(
-        eq(rfidCredentials.credentialDigest, credentialDigest),
-        eq(rfidCredentials.schoolId, schoolId),
-        inArray(rfidCredentials.status, ['PENDING', 'ACTIVE', 'SUSPENDED'])
-      )
-    );
-  if (duplicate) throw new Error('Credential digest already enrolled');
+    const [duplicate] = await tx
+      .select()
+      .from(rfidCredentials)
+      .where(
+        and(
+          eq(rfidCredentials.credentialDigest, credentialDigest),
+          eq(rfidCredentials.schoolId, schoolId),
+          inArray(rfidCredentials.status, ['PENDING', 'ACTIVE', 'SUSPENDED'])
+        )
+      );
+    if (duplicate) throw new Error('Credential digest already enrolled');
 
-  const [inserted] = await db
-    .insert(rfidCredentials)
-    .values({
+    const [inserted] = await tx
+      .insert(rfidCredentials)
+      .values({
+        schoolId,
+        studentId,
+        credentialDigest,
+        securityMode,
+        keyVersion,
+        status: 'PENDING',
+        createdByUserId: operatorUserId,
+        expiresAt,
+      })
+      .returning();
+
+    await createAuditLog({
       schoolId,
-      studentId,
-      credentialDigest,
-      securityMode,
-      keyVersion,
-      status: 'PENDING',
-      createdByUserId: operatorUserId,
-      expiresAt,
-    })
-    .returning();
+      actorId: operatorUserId,
+      action: 'RFID_CREDENTIAL_ENROLLED',
+      resourceId: inserted.id,
+      resourceType: 'RFID_CREDENTIAL',
+    }, tx);
 
-  await createAuditLog({
-    schoolId,
-    actorId: operatorUserId,
-    action: 'RFID_CREDENTIAL_ENROLLED',
-    resourceId: inserted.id,
-    resourceType: 'RFID_CREDENTIAL',
+    return inserted;
   });
-
-  return inserted;
 }
 
 function sanitizeActorId(actorId?: string): string | null {
@@ -78,81 +80,89 @@ function sanitizeActorId(actorId?: string): string | null {
 }
 
 export async function activateCredential(credentialId: string, schoolId: string, actorId?: string) {
-  const [credential] = await db
-    .update(rfidCredentials)
-    .set({ status: 'ACTIVE', activatedAt: new Date() })
-    .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'PENDING')))
-    .returning();
+  return withTenantContext(schoolId, async (tx) => {
+    const [credential] = await tx
+      .update(rfidCredentials)
+      .set({ status: 'ACTIVE', activatedAt: new Date() })
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'PENDING')))
+      .returning();
 
-  if (!credential) throw new Error('Credential not found or not PENDING');
+    if (!credential) throw new Error('Credential not found or not PENDING');
 
-  await createAuditLog({
-    schoolId,
-    actorId: sanitizeActorId(actorId),
-    action: 'RFID_CREDENTIAL_ACTIVATED',
-    resourceId: credentialId,
-    resourceType: 'RFID_CREDENTIAL',
+    await createAuditLog({
+      schoolId,
+      actorId: sanitizeActorId(actorId),
+      action: 'RFID_CREDENTIAL_ACTIVATED',
+      resourceId: credentialId,
+      resourceType: 'RFID_CREDENTIAL',
+    }, tx);
+    return credential;
   });
-  return credential;
 }
 
 export async function suspendCredential(credentialId: string, schoolId: string, reason: string, actorId?: string) {
-  const [credential] = await db
-    .update(rfidCredentials)
-    .set({ status: 'SUSPENDED' })
-    .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'ACTIVE')))
-    .returning();
+  return withTenantContext(schoolId, async (tx) => {
+    const [credential] = await tx
+      .update(rfidCredentials)
+      .set({ status: 'SUSPENDED' })
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'ACTIVE')))
+      .returning();
 
-  if (!credential) throw new Error('Credential not found or not ACTIVE');
+    if (!credential) throw new Error('Credential not found or not ACTIVE');
 
-  await createAuditLog({
-    schoolId,
-    actorId: sanitizeActorId(actorId),
-    action: 'RFID_CREDENTIAL_SUSPENDED',
-    resourceId: credentialId,
-    resourceType: 'RFID_CREDENTIAL',
-    metadata: { reason },
+    await createAuditLog({
+      schoolId,
+      actorId: sanitizeActorId(actorId),
+      action: 'RFID_CREDENTIAL_SUSPENDED',
+      resourceId: credentialId,
+      resourceType: 'RFID_CREDENTIAL',
+      metadata: { reason },
+    }, tx);
+    return credential;
   });
-  return credential;
 }
 
 export async function reactivateCredential(credentialId: string, schoolId: string, actorId?: string) {
-  const [credential] = await db
-    .update(rfidCredentials)
-    .set({ status: 'ACTIVE' })
-    .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'SUSPENDED')))
-    .returning();
+  return withTenantContext(schoolId, async (tx) => {
+    const [credential] = await tx
+      .update(rfidCredentials)
+      .set({ status: 'ACTIVE' })
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'SUSPENDED')))
+      .returning();
 
-  if (!credential) throw new Error('Credential not found or not SUSPENDED');
+    if (!credential) throw new Error('Credential not found or not SUSPENDED');
 
-  await createAuditLog({
-    schoolId,
-    actorId: sanitizeActorId(actorId),
-    action: 'RFID_CREDENTIAL_REACTIVATED',
-    resourceId: credentialId,
-    resourceType: 'RFID_CREDENTIAL',
+    await createAuditLog({
+      schoolId,
+      actorId: sanitizeActorId(actorId),
+      action: 'RFID_CREDENTIAL_REACTIVATED',
+      resourceId: credentialId,
+      resourceType: 'RFID_CREDENTIAL',
+    }, tx);
+    return credential;
   });
-  return credential;
 }
 
 export async function revokeCredential(credentialId: string, schoolId: string, reason: string, actorId?: string) {
-  const [credential] = await db
-    .update(rfidCredentials)
-    .set({ status: 'REVOKED', revokedAt: new Date(), revocationReason: reason })
-    .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)))
-    .returning();
+  return withTenantContext(schoolId, async (tx) => {
+    const [credential] = await tx
+      .update(rfidCredentials)
+      .set({ status: 'REVOKED', revokedAt: new Date(), revocationReason: reason })
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)))
+      .returning();
 
-  if (!credential) throw new Error('Credential not found');
+    if (!credential) throw new Error('Credential not found');
 
-  await createAuditLog({
-    schoolId,
-    actorId: sanitizeActorId(actorId),
-    action: 'RFID_CREDENTIAL_REVOKED',
-    resourceId: credentialId,
-    resourceType: 'RFID_CREDENTIAL',
-    metadata: { reason },
+    await createAuditLog({
+      schoolId,
+      actorId: sanitizeActorId(actorId),
+      action: 'RFID_CREDENTIAL_REVOKED',
+      resourceId: credentialId,
+      resourceType: 'RFID_CREDENTIAL',
+      metadata: { reason },
+    }, tx);
+    return credential;
   });
-  return credential;
 }
 
 export async function replaceCredential(params: {
@@ -163,7 +173,7 @@ export async function replaceCredential(params: {
   keyVersion: number;
   operatorUserId: string;
 }) {
-  return await db.transaction(async (tx: any) => {
+  return withTenantContext(params.schoolId, async (tx: any) => {
     const [old] = await tx
       .update(rfidCredentials)
       .set({ status: 'REPLACED', revokedAt: new Date(), revocationReason: 'Replaced' })
@@ -197,61 +207,68 @@ export async function replaceCredential(params: {
 
 export async function expireCredentials(schoolId: string) {
   const now = new Date();
-  const result = await db
-    .update(rfidCredentials)
-    .set({ status: 'EXPIRED' })
-    .where(
-      and(
-        eq(rfidCredentials.schoolId, schoolId),
-        eq(rfidCredentials.status, 'ACTIVE'),
-        isNotNull(rfidCredentials.expiresAt),
-        lt(rfidCredentials.expiresAt, now)
+  return withTenantContext(schoolId, async (tx) => {
+    return await tx
+      .update(rfidCredentials)
+      .set({ status: 'EXPIRED' })
+      .where(
+        and(
+          eq(rfidCredentials.schoolId, schoolId),
+          eq(rfidCredentials.status, 'ACTIVE'),
+          isNotNull(rfidCredentials.expiresAt),
+          lt(rfidCredentials.expiresAt, now)
+        )
       )
-    )
-    .returning();
-  return result;
+      .returning();
+  });
 }
 
 export async function lookupActiveCredential(schoolId: string, credentialDigest: string) {
-  const [record] = await db
-    .select({
-      credential: rfidCredentials,
-      student: students,
-    })
-    .from(rfidCredentials)
-    .innerJoin(students, eq(rfidCredentials.studentId, students.id))
-    .where(
-      and(
-        eq(rfidCredentials.credentialDigest, credentialDigest),
-        eq(rfidCredentials.schoolId, schoolId)
-      )
-    );
+  return withTenantContext(schoolId, async (tx) => {
+    const [record] = await tx
+      .select({
+        credential: rfidCredentials,
+        student: students,
+      })
+      .from(rfidCredentials)
+      .innerJoin(students, eq(rfidCredentials.studentId, students.id))
+      .where(
+        and(
+          eq(rfidCredentials.credentialDigest, credentialDigest),
+          eq(rfidCredentials.schoolId, schoolId)
+        )
+      );
 
-  if (!record) return null;
-  return {
-    ...record.credential,
-    student: record.student,
-  };
+    if (!record) return null;
+    return {
+      ...record.credential,
+      student: record.student,
+    };
+  });
 }
 
 export async function getCredentialHistory(schoolId: string, studentId: string) {
-  const credentials = await db
-    .select()
-    .from(rfidCredentials)
-    .where(and(eq(rfidCredentials.studentId, studentId), eq(rfidCredentials.schoolId, schoolId)))
-    .orderBy(desc(rfidCredentials.createdAt));
+  return withTenantContext(schoolId, async (tx) => {
+    const credentials = await tx
+      .select()
+      .from(rfidCredentials)
+      .where(and(eq(rfidCredentials.studentId, studentId), eq(rfidCredentials.schoolId, schoolId)))
+      .orderBy(desc(rfidCredentials.createdAt));
 
-  return credentials.map((c: any) => ({ ...c, credentialDigest: redactCredentialDigest(c.credentialDigest) }));
+    return credentials.map((c: any) => ({ ...c, credentialDigest: redactCredentialDigest(c.credentialDigest) }));
+  });
 }
 
 export async function getCredentialById(credentialId: string, schoolId: string) {
-  const [credential] = await db
-    .select()
-    .from(rfidCredentials)
-    .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)));
+  return withTenantContext(schoolId, async (tx) => {
+    const [credential] = await tx
+      .select()
+      .from(rfidCredentials)
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)));
 
-  if (!credential) return null;
-  return { ...credential, credentialDigest: redactCredentialDigest(credential.credentialDigest) };
+    if (!credential) return null;
+    return { ...credential, credentialDigest: redactCredentialDigest(credential.credentialDigest) };
+  });
 }
 
 export async function bulkEnroll(params: {

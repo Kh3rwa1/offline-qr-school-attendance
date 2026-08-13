@@ -9,6 +9,7 @@ import {
   teacherProfiles,
   classSections,
   teacherAssignments,
+  students,
 } from './schema';
 import { eq, and } from 'drizzle-orm';
 

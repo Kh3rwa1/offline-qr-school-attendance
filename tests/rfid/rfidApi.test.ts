@@ -108,6 +108,7 @@ describe('RFID Router & Middleware Integration Suite', () => {
       keyVersion: 1,
       operatorUserId: seeded.adminUser.id,
     });
+    await credentialService.activateCredential(enrolled1.id, schoolId);
     credentialDigest1 = enrolled1.credentialDigest;
 
     const enrolled2 = await credentialService.enrollCredential({
@@ -118,6 +119,7 @@ describe('RFID Router & Middleware Integration Suite', () => {
       keyVersion: 1,
       operatorUserId: seeded.adminUser.id,
     });
+    await credentialService.activateCredential(enrolled2.id, schoolId);
     credentialDigest2 = enrolled2.credentialDigest;
   });
 

@@ -31,6 +31,9 @@ export interface ReadOptions {
   securityMode: RfidSecurityMode;
   sessionContext?: string;
   direction?: DirectionMode;
+  signal?: AbortSignal;
+  expectedDigest?: string;
+  attendanceSessionId?: string;
 }
 
 export interface ScanEnvelope {

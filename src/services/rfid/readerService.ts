@@ -154,6 +154,44 @@ export async function retireReader(readerId: string, schoolId: string) {
   return sanitizeReader(reader);
 }
 
+export async function provisionReader(readerId: string, schoolId: string, actorId?: string) {
+  const [reader] = await db
+    .select()
+    .from(rfidReaders)
+    .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)));
+
+  if (!reader) throw new Error('Reader not found');
+  if (reader.status !== 'PENDING' && reader.status !== 'ACTIVE') {
+    throw new Error('Reader is not in a provisionable state');
+  }
+
+  const rawSecret = crypto.randomBytes(32).toString('hex');
+  const encryptedSecret = encryptReaderSecret(rawSecret);
+
+  await db
+    .update(rfidReaders)
+    .set({ sharedSecretEncrypted: encryptedSecret, status: 'ACTIVE', keyVersion: (reader.keyVersion || 1) + 1 })
+    .where(eq(rfidReaders.id, readerId));
+
+  await createAuditLog({
+    schoolId,
+    actorId: sanitizeActorId(actorId),
+    action: 'RFID_READER_PROVISIONED',
+    resourceId: readerId,
+    resourceType: 'RFID_READER',
+  });
+
+  return {
+    readerId,
+    schoolId,
+    deviceId: reader.deviceId,
+    keyVersion: (reader.keyVersion || 1) + 1,
+    provisionedSecret: rawSecret,
+    certificateFingerprint: reader.certificateFingerprint,
+    provisionedAt: new Date().toISOString(),
+  };
+}
+
 export async function updateReaderConfig(
   readerId: string,
   schoolId: string,

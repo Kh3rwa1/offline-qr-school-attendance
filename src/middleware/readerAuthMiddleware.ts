@@ -57,6 +57,14 @@ export const readerAuthMiddleware = async (
       return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'Reader is suspended or revoked' });
     }
 
+    // Validate certificate fingerprint if client/proxy passed TLS certificate fingerprint header
+    const certFingerprint = req.headers['x-reader-cert-fingerprint'] as string;
+    if (certFingerprint && reader.certificateFingerprint) {
+      if (certFingerprint.toLowerCase() !== reader.certificateFingerprint.toLowerCase()) {
+        return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'mTLS certificate fingerprint mismatch' });
+      }
+    }
+
     // Determine reader secret (per-reader secret or fallback global RFID_HMAC_SECRET). Fail closed if missing in non-test.
     const hmacSecret =
       (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||

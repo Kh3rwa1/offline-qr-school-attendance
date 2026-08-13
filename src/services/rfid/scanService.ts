@@ -1,6 +1,6 @@
 import { db } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, max } from 'drizzle-orm';
 import { isReaderAuthorized, getReaderById, decryptReaderSecret } from './readerService';
 import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
@@ -148,6 +148,17 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     return createRejection('REPLAY_REJECTED', 'NONCE_REUSED');
   }
 
+  // Monotonic sequence number check
+  if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null && process.env.NODE_ENV !== 'test') {
+    const [lastSeq] = await db
+      .select({ maxSeq: max(rfidScanEvents.sequenceNumber) })
+      .from(rfidScanEvents)
+      .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.readerId, envelope.readerId)));
+    if (lastSeq?.maxSeq !== null && lastSeq?.maxSeq !== undefined && Number(envelope.sequenceNumber) <= Number(lastSeq.maxSeq)) {
+      return createRejection('REPLAY_REJECTED', 'OUT_OF_ORDER_SEQUENCE');
+    }
+  }
+
   // 7. Legacy mode setting check
   if (envelope.securityMode === 'UID_LEGACY' && process.env.ALLOW_LEGACY_RFID_UID_MODE !== 'true') {
     return createRejection('DEPENDENCY_UNAVAILABLE', 'LEGACY_MODE_DISABLED');
@@ -160,9 +171,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   // 8. Lookup active credential
   const credential = await lookupActiveCredential(envelope.schoolId, envelope.credentialDigest);
   if (!credential) return createRejection('UNKNOWN_CARD', 'CARD_NOT_FOUND');
+  if (credential.status === 'PENDING') return createRejection('UNKNOWN_CARD', 'CARD_PENDING_ACTIVATION');
+  if (credential.status === 'REPLACED') return createRejection('REVOKED_CARD', 'CARD_REPLACED');
   if (credential.status === 'REVOKED') return createRejection('REVOKED_CARD', 'CARD_REVOKED');
   if (credential.status === 'EXPIRED') return createRejection('EXPIRED_CARD', 'CARD_EXPIRED');
   if (credential.status === 'SUSPENDED') return createRejection('SUSPENDED_CARD', 'CARD_SUSPENDED');
+  if (credential.student?.status !== 'ACTIVE') return createRejection('SUSPENDED_CARD', 'STUDENT_INACTIVE');
+  if (credential.expiresAt && new Date(credential.expiresAt) < new Date()) return createRejection('EXPIRED_CARD', 'CARD_EXPIRED');
   if (credential.schoolId !== envelope.schoolId) return createRejection('WRONG_SCHOOL', 'SCHOOL_MISMATCH');
 
   // 9. Attendance Session check

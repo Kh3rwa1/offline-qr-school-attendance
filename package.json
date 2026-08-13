@@ -1,5 +1,6 @@
 {
   "name": "offline-qr-school-attendance",
+  "description": "Hybrid Offline QR + Production RFID/NFC School Attendance Platform",
   "private": true,
   "version": "1.0.0",
   "type": "module",

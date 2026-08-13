@@ -70,7 +70,14 @@ export async function enrollCredential(params: {
   return inserted;
 }
 
-export async function activateCredential(credentialId: string, schoolId: string, actorId: string = 'SYSTEM') {
+function sanitizeActorId(actorId?: string): string | null {
+  if (!actorId || actorId === 'SYSTEM' || !/^[0-9a-fA-F-]{36}$/.test(actorId)) {
+    return null;
+  }
+  return actorId;
+}
+
+export async function activateCredential(credentialId: string, schoolId: string, actorId?: string) {
   const [credential] = await db
     .update(rfidCredentials)
     .set({ status: 'ACTIVE', activatedAt: new Date() })
@@ -81,7 +88,7 @@ export async function activateCredential(credentialId: string, schoolId: string,
 
   await createAuditLog({
     schoolId,
-    actorId,
+    actorId: sanitizeActorId(actorId),
     action: 'RFID_CREDENTIAL_ACTIVATED',
     resourceId: credentialId,
     resourceType: 'RFID_CREDENTIAL',
@@ -89,7 +96,7 @@ export async function activateCredential(credentialId: string, schoolId: string,
   return credential;
 }
 
-export async function suspendCredential(credentialId: string, schoolId: string, reason: string, actorId: string = 'SYSTEM') {
+export async function suspendCredential(credentialId: string, schoolId: string, reason: string, actorId?: string) {
   const [credential] = await db
     .update(rfidCredentials)
     .set({ status: 'SUSPENDED' })
@@ -100,7 +107,7 @@ export async function suspendCredential(credentialId: string, schoolId: string, 
 
   await createAuditLog({
     schoolId,
-    actorId,
+    actorId: sanitizeActorId(actorId),
     action: 'RFID_CREDENTIAL_SUSPENDED',
     resourceId: credentialId,
     resourceType: 'RFID_CREDENTIAL',
@@ -109,7 +116,7 @@ export async function suspendCredential(credentialId: string, schoolId: string, 
   return credential;
 }
 
-export async function reactivateCredential(credentialId: string, schoolId: string, actorId: string = 'SYSTEM') {
+export async function reactivateCredential(credentialId: string, schoolId: string, actorId?: string) {
   const [credential] = await db
     .update(rfidCredentials)
     .set({ status: 'ACTIVE' })
@@ -120,7 +127,7 @@ export async function reactivateCredential(credentialId: string, schoolId: strin
 
   await createAuditLog({
     schoolId,
-    actorId,
+    actorId: sanitizeActorId(actorId),
     action: 'RFID_CREDENTIAL_REACTIVATED',
     resourceId: credentialId,
     resourceType: 'RFID_CREDENTIAL',
@@ -128,7 +135,7 @@ export async function reactivateCredential(credentialId: string, schoolId: strin
   return credential;
 }
 
-export async function revokeCredential(credentialId: string, schoolId: string, reason: string, actorId: string = 'SYSTEM') {
+export async function revokeCredential(credentialId: string, schoolId: string, reason: string, actorId?: string) {
   const [credential] = await db
     .update(rfidCredentials)
     .set({ status: 'REVOKED', revokedAt: new Date(), revocationReason: reason })
@@ -139,7 +146,7 @@ export async function revokeCredential(credentialId: string, schoolId: string, r
 
   await createAuditLog({
     schoolId,
-    actorId,
+    actorId: sanitizeActorId(actorId),
     action: 'RFID_CREDENTIAL_REVOKED',
     resourceId: credentialId,
     resourceType: 'RFID_CREDENTIAL',

@@ -54,9 +54,8 @@ kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-sec
 # 3. Build & Load application docker images into kind cluster
 echo "3. Building Docker images and loading into kind cluster..."
 docker build -t "${IMAGE_TAG}" .
-docker build -t "${IMAGE_TAG_UPDATE}" .
-kind load docker-image "${IMAGE_TAG}" --name "${CLUSTER_NAME}"
-kind load docker-image "${IMAGE_TAG_UPDATE}" --name "${CLUSTER_NAME}"
+docker tag "${IMAGE_TAG}" "${IMAGE_TAG_UPDATE}"
+kind load docker-image "${IMAGE_TAG}" "${IMAGE_TAG_UPDATE}" --name "${CLUSTER_NAME}"
 
 # 4. Deploy PostgreSQL & Redis in cluster for live integration
 echo "4. Deploying PostgreSQL 16 & Redis 7 services in kind..."

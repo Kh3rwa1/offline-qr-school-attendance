@@ -156,7 +156,8 @@ jobs:
 
       - name: Run RLS Schema Integration Suite
         env:
-          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
           AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
@@ -461,7 +462,7 @@ jobs:
   k8s-kind-cluster-drill:
     name: Disposable Kind Cluster Deployment & Rollback Drill
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

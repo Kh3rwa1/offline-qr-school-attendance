@@ -260,10 +260,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -282,7 +282,7 @@ jobs:
 
       - name: Upload Business Load Benchmark Reports
         if: always()
-        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
+        uses: actions/upload-artifact@v4.4.3
         with:
           name: business-load-smoke-reports
           path: output/
@@ -313,10 +313,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -351,7 +351,7 @@ jobs:
 
       - name: Upload Playwright Test Artifacts
         if: always()
-        uses: actions/upload-artifact@b4b15b349d60494173e15e2450ba0b0f0254c000
+        uses: actions/upload-artifact@v4.4.3
         with:
           name: playwright-report
           path: playwright-report/
@@ -362,7 +362,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Install Kubeconform Binary
         run: |
@@ -370,7 +370,7 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39370e3970a6d050c080011e7492c30089e1a8ef
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -389,7 +389,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Execute Disposable Kind Cluster Deployment & Rollback Drill
         run: ./scripts/test-k8s-kind.sh
@@ -399,7 +399,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4.2.2
 
       - name: Verify GitHub Branch Protection Status
         run: ./scripts/verify-branch-protection.sh

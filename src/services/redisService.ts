@@ -202,7 +202,9 @@ export async function checkRateLimit(
 
 export async function closeRedisConnection(): Promise<void> {
   if (redisClient) {
-    await redisClient.quit().catch(() => {});
+    try {
+      redisClient.disconnect();
+    } catch {}
     redisClient = null;
     redisInitPromise = null;
   }

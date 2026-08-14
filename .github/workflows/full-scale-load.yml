@@ -63,6 +63,7 @@ jobs:
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           REDIS_URL: redis://127.0.0.1:6379
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
         run: npm run migrate
 
@@ -71,6 +72,8 @@ jobs:
           NODE_ENV: production
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
           SCALE_SCHOOLS: ${{ inputs.schools }}
           SCALE_STUDENTS_PER_SCHOOL: ${{ inputs.students_per_school }}
@@ -82,6 +85,8 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           REDIS_URL: redis://127.0.0.1:6379
           FULL_500K_BENCHMARK: '1'
           LOAD_TEST_DURATION_SEC: ${{ inputs.duration_seconds }}

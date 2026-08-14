@@ -96,6 +96,9 @@ export async function runFullScaleLoadTest(
   process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'fullscale-load-secret-012345678901234567890123456789';
   process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'fullscale-hmac-secret-012345678901234567890123456789';
   process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'fullscale-metrics-token-012345678901234567890123456789';
+  process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'fullscale-rfid-hmac-secret-012345678901234567890123456789';
+  process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY || 'fullscale-kms-master-key-012345678901234567890123456789';
+  process.env.AUTH_DATABASE_URL = process.env.AUTH_DATABASE_URL || process.env.DATABASE_URL;
   process.env.ALLOW_IN_MEMORY_RATE_LIMITER = process.env.ALLOW_IN_MEMORY_RATE_LIMITER || 'true';
 
   await runMigrations();

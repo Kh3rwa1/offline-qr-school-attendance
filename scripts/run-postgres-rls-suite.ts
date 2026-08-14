@@ -5,6 +5,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'integration-test-ses
 process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'integration-test-metrics-token-01234567890123456789';
 process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'integration-test-redis-hmac-secret-0123456789';
 process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'integration-test-rfid-hmac-secret-0123456789';
+process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY || 'integration-test-kms-master-key-0123456789';
 process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 
 import pg from 'pg';
@@ -243,6 +244,8 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
   process.env.SESSION_SECRET = 'integration-test-session-secret-01234567890123456789';
   process.env.METRICS_AUTH_TOKEN = 'integration-test-metrics-token-01234567890123456789';
   process.env.REDIS_KEY_HMAC_SECRET = 'integration-test-redis-hmac-secret-0123456789';
+  process.env.RFID_HMAC_SECRET = 'integration-test-rfid-hmac-secret-0123456789';
+  process.env.KMS_MASTER_KEY = 'integration-test-kms-master-key-0123456789';
   process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 
   const { createApp } = await import('../server');

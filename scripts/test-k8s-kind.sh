@@ -77,7 +77,9 @@ kubectl create secret generic school-attendance-secrets \
   --from-literal=SMS_PROVIDER="console" \
   --from-literal=ALLOW_FAKE_SMS_IN_PRODUCTION="true" \
   --from-literal=ALLOW_IN_MEMORY_RATE_LIMITER="true" \
-  --from-literal=RFID_HMAC_SECRET="kind-ci-rfid-hmac-secret-012345678901234567890123456789"
+  --from-literal=RFID_HMAC_SECRET="kind-ci-rfid-hmac-secret-012345678901234567890123456789" \
+  --from-literal=AUTH_DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
+  --from-literal=KMS_MASTER_KEY="kind-ci-kms-master-key-012345678901234567890123456789"
 
 # 6. Apply all Kubernetes manifests
 echo "6. Applying Kubernetes manifests from k8s/..."

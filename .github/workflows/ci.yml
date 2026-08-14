@@ -239,10 +239,13 @@ jobs:
       APP_DB_PASSWORD: ci_password
       SYSTEM_DB_USER: attendance_system
       SYSTEM_DB_PASSWORD: ci_password
+      AUTH_DB_USER: attendance_auth
+      AUTH_DB_PASSWORD: ci_password
       REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_01234567890123456789
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
       RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+      KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
       ALLOW_IN_MEMORY_RATE_LIMITER: "true"
       SMS_PROVIDER: console
       ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -325,12 +328,14 @@ jobs:
       - name: Execute Authentic Pull-Request Business Load Smoke Gate
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
@@ -411,12 +416,14 @@ jobs:
       - name: "Run Expanded Playwright E2E Suite (retries: 0)"
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"

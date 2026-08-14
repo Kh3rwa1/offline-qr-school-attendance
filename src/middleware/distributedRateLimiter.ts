@@ -135,4 +135,10 @@ export const rateLimitPolicies = {
     maxRequests: 20,
     windowMs: 60 * 1000,
   }),
+
+  spaFallback: createDistributedRateLimiter({
+    prefix: 'spa',
+    maxRequests: 300,
+    windowMs: 60 * 1000,
+  }),
 };

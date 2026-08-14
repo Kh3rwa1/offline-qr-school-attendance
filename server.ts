@@ -19,6 +19,7 @@ import { dashboardRouter } from './src/routes/dashboardRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
+import { csrfProtection } from './src/middleware/csrfProtection';
 import { initRedis } from './src/services/redisService';
 
 export async function createApp() {
@@ -66,31 +67,8 @@ export async function createApp() {
     next();
   });
 
-  // CSRF Protection for state-changing requests authenticated via cookies
-  app.use((req, res, next) => {
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.cookies?.session) {
-      const origin = req.headers.origin || req.headers.referer;
-      const host = req.headers.host;
-
-      if (origin && host) {
-        try {
-          const originHost = new URL(origin).host;
-          if (originHost !== host) {
-            return res.status(403).json({
-              error: 'CSRF_ORIGIN_MISMATCH',
-              message: 'Cross-site request forgery protection block',
-            });
-          }
-        } catch {
-          return res.status(403).json({
-            error: 'INVALID_ORIGIN_HEADER',
-            message: 'Invalid origin header on mutating request',
-          });
-        }
-      }
-    }
-    next();
-  });
+  // Production-grade CSRF protection for cookie-authenticated mutating requests
+  app.use(csrfProtection);
 
   // 2. Memory-Based API Rate Limiting Middleware with Active Pruning  // Distributed Rate Limiters
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
@@ -108,41 +86,39 @@ export async function createApp() {
   app.get('/metrics', (req, res) => {
     const result = renderPrometheusMetrics(req);
     if (!result.authorized) {
-      return res.status(401).json({ success: false, error: 'UNAUTHORIZED_METRICS_ACCESS' });
+      return res.status(401).json({ error: 'UNAUTHORIZED' });
     }
     res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    res.send(result.content);
+    return res.send(result.content);
   });
 
-  // 3. Liveness and Readiness Probes
-  app.get(['/livez', '/api/v1/livez'], (_req, res) => {
+  // Health and Readiness Probes
+  app.get(['/api/v1/health', '/healthz'], async (_req, res) => {
     res.status(200).json({ status: 'ok', service: 'school-attendance-backend', timestamp: new Date().toISOString() });
   });
 
-  app.get(['/readyz', '/api/v1/readyz', '/api/v1/health'], async (_req, res) => {
+  app.get('/readyz', async (_req, res) => {
     try {
-      await executeSql('SELECT 1;');
+      await executeSql('SELECT 1');
       res.status(200).json({
-        status: 'ok',
+        status: 'ready',
         service: 'school-attendance-backend',
+        db: 'connected',
         timestamp: new Date().toISOString(),
-        database: 'healthy',
-        env: env.NODE_ENV,
       });
-    } catch (err) {
+    } catch {
       res.status(503).json({
-        status: 'error',
+        status: 'unready',
         service: 'school-attendance-backend',
+        db: 'disconnected',
         timestamp: new Date().toISOString(),
-        database: 'unhealthy',
-        env: env.NODE_ENV,
       });
     }
   });
 
   // API Router registration
-  app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/schools', schoolRouter);
   app.use('/api/v1/schools', academicRouter);
   app.use('/api/v1/schools', studentRouter);
@@ -158,6 +134,15 @@ export async function createApp() {
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
+  // 404 Handler for Unknown API Endpoints
+  app.all('/api/*', (_req, res) => {
+    return res.status(404).json({
+      success: false,
+      error: 'API_ENDPOINT_NOT_FOUND',
+      message: 'The requested API endpoint was not found on this server.',
+    });
+  });
+
   // Development: Vite Middleware / Production Static Assets
   if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
     const { createServer: createViteServer } = await import('vite');
@@ -167,11 +152,17 @@ export async function createApp() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.resolve(process.cwd(), 'dist');
+    const indexHtmlPath = path.resolve(distPath, 'index.html');
     app.use(express.static(distPath));
+
+    // Rate-limited bounded SPA fallback
+    app.use(rateLimitPolicies.spaFallback);
     app.use((req, res, next) => {
-      if (req.method === 'GET' && !req.path.startsWith('/api')) {
-        return res.sendFile(path.join(distPath, 'index.html'));
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        if (!req.path.startsWith('/api')) {
+          return res.sendFile(indexHtmlPath);
+        }
       }
       next();
     });

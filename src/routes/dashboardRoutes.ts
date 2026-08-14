@@ -1,9 +1,17 @@
 import { Router, Response } from 'express';
-import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { withSystemContext, withTenantContext } from '../db';
 import { schools, students, schoolMemberships, attendanceSessions, rfidReaders, rfidCredentials } from '../db/schema';
+import {
+  SuperAdminSummarySchema,
+  SchoolAdminSummarySchema,
+  TeacherSummarySchema,
+  ReportViewerSummarySchema,
+  RfidOperatorSummarySchema,
+  DashboardResponseEnvelopeSchema,
+} from '../types/dashboardSchemas';
+import { createAuditLog } from '../services/auditLogService';
 
 export const dashboardRouter = Router();
 
@@ -24,18 +32,36 @@ dashboardRouter.get(
         .where(eq(schoolMemberships.role, 'TEACHER'));
       const totalSessionsRes = await tx.select({ count: sql<number>`count(*)::int` }).from(attendanceSessions);
 
-      return res.json({
+      const summaryData = SuperAdminSummarySchema.parse({
+        systemHealth: 'OPERATIONAL',
+        totalSchools: allSchools.length,
+        totalStudents: totalStudentsRes[0]?.count ?? 0,
+        totalTeachers: totalTeachersRes[0]?.count ?? 0,
+        totalAttendanceSessions: totalSessionsRes[0]?.count ?? 0,
+        schools: allSchools.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          status: s.status,
+        })),
+      });
+
+      // Explicitly audit cross-tenant platform telemetry access
+      await createAuditLog({
+        actorId: req.user!.id,
+        action: 'SUPER_ADMIN_PLATFORM_SUMMARY_VIEWED',
+        resourceType: 'PLATFORM_TELEMETRY',
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+
+      const response = DashboardResponseEnvelopeSchema(SuperAdminSummarySchema).parse({
         success: true,
         generatedAt: new Date().toISOString(),
-        data: {
-          systemHealth: 'OPERATIONAL',
-          totalSchools: allSchools.length,
-          totalStudents: totalStudentsRes[0]?.count ?? 0,
-          totalTeachers: totalTeachersRes[0]?.count ?? 0,
-          totalAttendanceSessions: totalSessionsRes[0]?.count ?? 0,
-          schools: allSchools,
-        },
+        data: summaryData,
       });
+
+      return res.json(response);
     });
   }
 );
@@ -52,11 +78,11 @@ dashboardRouter.get(
       return res.status(400).json({ error: 'MISSING_SCHOOL_ID' });
     }
 
-    const membership = req.sessionContext?.memberships?.find((m: any) => m.schoolId === schoolId);
-    const isSuperAdmin = req.sessionContext?.memberships?.some((m: any) => m.role === 'SUPER_ADMIN');
+    const activeMembership = req.sessionContext?.activeMembership;
+    const isSuperAdmin = req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
 
-    if (!isSuperAdmin && (!membership || (membership.role !== 'SCHOOL_ADMIN' && membership.role !== 'SUPER_ADMIN'))) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: 'School admin access required' });
+    if (!isSuperAdmin && (!activeMembership || activeMembership.schoolId !== schoolId || !['SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(activeMembership.role))) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'School Admin access required for target school' });
     }
 
     return withTenantContext(schoolId, async (tx) => {
@@ -67,19 +93,23 @@ dashboardRouter.get(
         .where(eq(schoolMemberships.schoolId, schoolId));
       const readersCount = await tx.select({ count: sql<number>`count(*)::int` }).from(rfidReaders).where(eq(rfidReaders.schoolId, schoolId));
 
-      return res.json({
+      const summaryData = SchoolAdminSummarySchema.parse({
+        totalStudents: studentsCount[0]?.count ?? 0,
+        totalTeachers: teachersCount[0]?.count ?? 0,
+        totalClasses: 12,
+        totalReaders: readersCount[0]?.count ?? 0,
+        todayAttendancePercentage: 96.2,
+        pendingSmsNotifications: 0,
+      });
+
+      const response = DashboardResponseEnvelopeSchema(SchoolAdminSummarySchema).parse({
         success: true,
         schoolId,
         generatedAt: new Date().toISOString(),
-        data: {
-          totalStudents: studentsCount[0]?.count ?? 0,
-          totalTeachers: teachersCount[0]?.count ?? 0,
-          totalClasses: 12,
-          totalReaders: readersCount[0]?.count ?? 0,
-          todayAttendancePercentage: 96.2,
-          pendingSmsNotifications: 0,
-        },
+        data: summaryData,
       });
+
+      return res.json(response);
     });
   }
 );
@@ -96,17 +126,28 @@ dashboardRouter.get(
       return res.status(400).json({ error: 'MISSING_SCHOOL_ID' });
     }
 
-    return withTenantContext(schoolId, async (tx) => {
-      return res.json({
+    const activeMembership = req.sessionContext?.activeMembership;
+    const isSuperAdmin = req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
+
+    if (!isSuperAdmin && (!activeMembership || activeMembership.schoolId !== schoolId || !['TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(activeMembership.role))) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Teacher access required for target school' });
+    }
+
+    return withTenantContext(schoolId, async () => {
+      const summaryData = TeacherSummarySchema.parse({
+        assignedClassesCount: 3,
+        activeSessionOpen: true,
+        offlineSynced: true,
+      });
+
+      const response = DashboardResponseEnvelopeSchema(TeacherSummarySchema).parse({
         success: true,
         schoolId,
         generatedAt: new Date().toISOString(),
-        data: {
-          assignedClassesCount: 3,
-          activeSessionOpen: true,
-          offlineSynced: true,
-        },
+        data: summaryData,
       });
+
+      return res.json(response);
     });
   }
 );
@@ -123,23 +164,34 @@ dashboardRouter.get(
       return res.status(400).json({ error: 'MISSING_SCHOOL_ID' });
     }
 
+    const activeMembership = req.sessionContext?.activeMembership;
+    const isSuperAdmin = req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
+
+    if (!isSuperAdmin && (!activeMembership || activeMembership.schoolId !== schoolId || !['REPORT_VIEWER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(activeMembership.role))) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Report Viewer access required for target school' });
+    }
+
     return withTenantContext(schoolId, async (tx) => {
       const sessionsCount = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(attendanceSessions)
         .where(eq(attendanceSessions.schoolId, schoolId));
 
-      return res.json({
+      const summaryData = ReportViewerSummarySchema.parse({
+        overallAttendanceRate: 95.8,
+        totalSessionsRecorded: sessionsCount[0]?.count ?? 0,
+        flaggedAbsenceCount: 4,
+        lastReportGeneratedAt: new Date().toISOString(),
+      });
+
+      const response = DashboardResponseEnvelopeSchema(ReportViewerSummarySchema).parse({
         success: true,
         schoolId,
         generatedAt: new Date().toISOString(),
-        data: {
-          overallAttendanceRate: 95.8,
-          totalSessionsRecorded: sessionsCount[0]?.count ?? 0,
-          flaggedAbsenceCount: 4,
-          lastReportGeneratedAt: new Date().toISOString(),
-        },
+        data: summaryData,
       });
+
+      return res.json(response);
     });
   }
 );
@@ -156,21 +208,32 @@ dashboardRouter.get(
       return res.status(400).json({ error: 'MISSING_SCHOOL_ID' });
     }
 
+    const activeMembership = req.sessionContext?.activeMembership;
+    const isSuperAdmin = req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
+
+    if (!isSuperAdmin && (!activeMembership || activeMembership.schoolId !== schoolId || !['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(activeMembership.role))) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'RFID Operator access required for target school' });
+    }
+
     return withTenantContext(schoolId, async (tx) => {
       const readers = await tx.select().from(rfidReaders).where(eq(rfidReaders.schoolId, schoolId));
       const cards = await tx.select({ count: sql<number>`count(*)::int` }).from(rfidCredentials).where(eq(rfidCredentials.schoolId, schoolId));
 
-      return res.json({
+      const summaryData = RfidOperatorSummarySchema.parse({
+        activeReadersCount: readers.length,
+        totalCardsEnrolled: cards[0]?.count ?? 0,
+        gatewayQueueDepth: 0,
+        recentScanRejections: 0,
+      });
+
+      const response = DashboardResponseEnvelopeSchema(RfidOperatorSummarySchema).parse({
         success: true,
         schoolId,
         generatedAt: new Date().toISOString(),
-        data: {
-          activeReadersCount: readers.length,
-          totalCardsEnrolled: cards[0]?.count ?? 0,
-          gatewayQueueDepth: 0,
-          recentScanRejections: 0,
-        },
+        data: summaryData,
       });
+
+      return res.json(response);
     });
   }
 );

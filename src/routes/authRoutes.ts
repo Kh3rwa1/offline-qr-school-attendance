@@ -8,6 +8,7 @@ import { timingSafeVerifyPassword, lookupAuthUserByPhone, getUserSchoolMembershi
 import { createSession, invalidateSession } from '../auth/session';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { createAuditLog } from '../services/auditLogService';
+import { generateCsrfToken, setCsrfCookies, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } from '../middleware/csrfProtection';
 
 export const authRouter = Router();
 
@@ -23,6 +24,13 @@ const sessionCookieOptions = {
   sameSite: 'lax' as const,
   path: '/',
 };
+
+authRouter.get('/csrf', (req: Request, res: Response) => {
+  const sessionCookie = req.cookies?.session;
+  const { token, signature } = generateCsrfToken(sessionCookie);
+  setCsrfCookies(res, token, signature);
+  return res.json({ csrfToken: token });
+});
 
 authRouter.post('/login', async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -64,6 +72,11 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     });
 
     res.cookie('session', session.token, { ...sessionCookieOptions, expires: session.expiresAt });
+
+    // Issue CSRF token bound to new session
+    const { token: csrfToken, signature: csrfSig } = generateCsrfToken(session.token);
+    setCsrfCookies(res, csrfToken, csrfSig);
+
     return res.json({
       user: {
         id: user.id,
@@ -71,6 +84,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         phoneNumber: user.phoneNumber,
       },
       memberships,
+      csrfToken,
     });
   } catch (error: any) {
     if (error?.message === 'SCHOOL_ACCESS_DENIED') {
@@ -99,10 +113,14 @@ authRouter.post('/logout', requireAuth, async (req: AuthenticatedRequest, res: R
   } catch (error) {
     console.error('Logout security operation failed:', error);
     res.clearCookie('session', sessionCookieOptions);
+    res.clearCookie(CSRF_COOKIE_NAME);
+    res.clearCookie(CSRF_SIG_COOKIE_NAME);
     return res.status(500).json({ error: 'LOGOUT_AUDIT_FAILED' });
   }
 
   res.clearCookie('session', sessionCookieOptions);
+  res.clearCookie(CSRF_COOKIE_NAME);
+  res.clearCookie(CSRF_SIG_COOKIE_NAME);
   return res.json({ status: 'ok', message: 'Logged out successfully' });
 });
 
@@ -135,9 +153,14 @@ authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest,
   const session = await createSession(req.user!.id, schoolId);
   res.cookie('session', session.token, { ...sessionCookieOptions, expires: session.expiresAt });
 
+  // Rotate CSRF token on school switch & session creation
+  const { token: csrfToken, signature: csrfSig } = generateCsrfToken(session.token);
+  setCsrfCookies(res, csrfToken, csrfSig);
+
   return res.json({
     success: true,
     activeSchoolId: schoolId,
     activeRole: targetMembership?.role || 'SUPER_ADMIN',
+    csrfToken,
   });
 });

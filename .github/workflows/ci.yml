@@ -82,7 +82,7 @@ jobs:
           trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3.27.9
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem

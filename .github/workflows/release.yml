@@ -84,9 +84,8 @@ jobs:
 
       - name: Install Trivy Security Scanner Binary
         run: |
-          TRIVY_VERSION="0.59.1"
-          curl -sSfL --retry 5 "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
-          sudo tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.deb" -o /tmp/trivy.deb
+          sudo dpkg -i /tmp/trivy.deb
           trivy --version
 
       - name: Run Trivy Container Image Vulnerability Scan

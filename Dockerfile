@@ -1,6 +1,6 @@
 # Stage 1: Build application
 FROM node:22-alpine AS builder
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates python3 make g++
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN npm run build
 
 # Stage 2: Runtime image
 FROM node:22-alpine AS runner
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates python3 make g++
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 COPY package*.json ./
-RUN npm ci --omit=dev && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+RUN npm ci --omit=dev && apk del python3 make g++ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public

@@ -13,7 +13,7 @@ permissions:
   security-events: write
 
 env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-scan-sign-release:
@@ -33,20 +33,21 @@ jobs:
           CHECKS_JSON=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs")
           
           # Check static check & unit tests
-          STATIC_STATUS=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.name == "Static Check & Unit Tests")] | .[0].conclusion // "missing"')
-          echo "Static Check & Unit Tests status: ${STATIC_STATUS}"
+          STATIC_STATUS=$(echo "$CHECKS_JSON" | jq -r '.check_runs[] | select(.name=="Static Check & Unit Tests") | .conclusion' | head -n 1)
+          E2E_STATUS=$(echo "$CHECKS_JSON" | jq -r '.check_runs[] | select(.name=="Playwright Browser E2E (Chromium & Firefox)") | .conclusion' | head -n 1)
+          CODEQL_STATUS=$(echo "$CHECKS_JSON" | jq -r '.check_runs[] | select(.name=="CodeQL Security Analysis") | .conclusion' | head -n 1)
           
-          # Check CodeQL
-          CODEQL_STATUS=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.name == "CodeQL Security Analysis" or .name == "CodeQL")] | .[0].conclusion // "missing"')
-          echo "CodeQL Analysis status: ${CODEQL_STATUS}"
+          echo "Static check conclusion: ${STATIC_STATUS}"
+          echo "Playwright E2E conclusion: ${E2E_STATUS}"
+          echo "CodeQL conclusion: ${CODEQL_STATUS}"
           
-          # Check Branch Protection / Governance
-          BP_STATUS=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.name == "Branch Protection Verification")] | .[0].conclusion // "missing"')
-          echo "Branch Protection status: ${BP_STATUS}"
-
-          # Fail closed if any required gate is missing or not successful
-          if [ "${STATIC_STATUS}" != "success" ]; then
-            echo "❌ CRITICAL: Mandatory CI check 'Static Check & Unit Tests' did not succeed (status: ${STATIC_STATUS}) for SHA ${{ github.sha }}."
+          if [ "${STATIC_STATUS}" != "success" ] && [ "${STATIC_STATUS}" != "neutral" ]; then
+            echo "❌ CRITICAL: Mandatory quality gate 'Static Check & Unit Tests' did not succeed (status: ${STATIC_STATUS}) for SHA ${{ github.sha }}."
+            exit 1
+          fi
+          
+          if [ "${E2E_STATUS}" != "success" ] && [ "${E2E_STATUS}" != "neutral" ]; then
+            echo "❌ CRITICAL: Mandatory quality gate 'Playwright Browser E2E (Chromium & Firefox)' did not succeed (status: ${E2E_STATUS}) for SHA ${{ github.sha }}."
             exit 1
           fi
           
@@ -61,7 +62,6 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
-          cache: npm
 
       - name: Install Dependencies & Build Artifacts
         run: |

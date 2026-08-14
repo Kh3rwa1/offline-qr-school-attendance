@@ -21,7 +21,10 @@ export const UnauthorizedPage: React.FC<{ message?: string }> = ({
           <ShieldAlert className="w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-2xl font-black text-slate-900">403 — Access Denied</h2>
+          <h2 className="text-2xl font-black text-slate-900" id="unauthorized-403-heading">
+            403 — Access Denied
+          </h2>
+          <p className="text-sm font-bold text-red-600 mt-1">403 Forbidden</p>
           <p className="text-xs text-slate-500 mt-2 font-medium">{message}</p>
         </div>
         <div className="pt-2">

@@ -7,28 +7,29 @@ import LoginPage from './LoginPage';
 import AuthenticatedApp from './AuthenticatedApp';
 import UnauthorizedPage from '../auth/UnauthorizedPage';
 
-// Lazy load dashboard pages for code splitting & optimal bundles
-const SuperAdminDashboard = lazy(() => import('../dashboards/super-admin/SuperAdminDashboard'));
+import SuperAdminDashboard from '../dashboards/super-admin/SuperAdminDashboard';
+import SchoolAdminDashboard from '../dashboards/school-admin/SchoolAdminDashboard';
+import TeacherDashboard from '../dashboards/teacher/TeacherDashboard';
+import ReportViewerDashboard from '../dashboards/report-viewer/ReportViewerDashboard';
+import RfidOperatorDashboard from '../dashboards/rfid-operator/RfidOperatorDashboard';
+
+// Lazy load secondary subpages for code splitting
 const SchoolsOverview = lazy(() => import('../dashboards/super-admin/SchoolsOverview'));
 const SecurityOverview = lazy(() => import('../dashboards/super-admin/SecurityOverview'));
 const AuditOverview = lazy(() => import('../dashboards/super-admin/AuditOverview'));
 
-const SchoolAdminDashboard = lazy(() => import('../dashboards/school-admin/SchoolAdminDashboard'));
 const UserManagement = lazy(() => import('../dashboards/school-admin/UserManagement'));
 const AcademicManagement = lazy(() => import('../dashboards/school-admin/AcademicManagement'));
 const AttendanceOperations = lazy(() => import('../dashboards/school-admin/AttendanceOperations'));
 const NotificationOperations = lazy(() => import('../dashboards/school-admin/NotificationOperations'));
 
-const TeacherDashboard = lazy(() => import('../dashboards/teacher/TeacherDashboard'));
 const AssignedClasses = lazy(() => import('../dashboards/teacher/AssignedClasses'));
 const OfflineWorkspace = lazy(() => import('../dashboards/teacher/OfflineWorkspace'));
 
-const ReportViewerDashboard = lazy(() => import('../dashboards/report-viewer/ReportViewerDashboard'));
 const DailyReports = lazy(() => import('../dashboards/report-viewer/DailyReports'));
 const TrendReports = lazy(() => import('../dashboards/report-viewer/TrendReports'));
 const ExportCenter = lazy(() => import('../dashboards/report-viewer/ExportCenter'));
 
-const RfidOperatorDashboard = lazy(() => import('../dashboards/rfid-operator/RfidOperatorDashboard'));
 const ReaderOperations = lazy(() => import('../dashboards/rfid-operator/ReaderOperations'));
 const CardOperations = lazy(() => import('../dashboards/rfid-operator/CardOperations'));
 const EnrollmentOperations = lazy(() => import('../dashboards/rfid-operator/EnrollmentOperations'));

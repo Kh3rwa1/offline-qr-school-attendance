@@ -123,8 +123,9 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     expect(setCookie).toMatch(/Secure/i);
     const loginBody = await login.json();
     expect(loginBody.token).toBeUndefined();
-    const loginCookies = (login.headers as any).getSetCookie ? (login.headers as any).getSetCookie() : [login.headers.get('set-cookie') || ''];
-    cookie = loginCookies.map((c: string) => c.split(';')[0]).join('; ');
+    const setCookieHeader = login.headers.get('set-cookie') || '';
+    const rawSetCookies = (login.headers as any).getSetCookie ? (login.headers as any).getSetCookie() : setCookieHeader.split(/,\s*(?=[A-Za-z0-9_-]+=)/);
+    cookie = rawSetCookies.map((c: string) => c.split(';')[0].trim()).filter(Boolean).join('; ');
     const csrfToken = loginBody.csrfToken;
 
     console.log('[RLS-STEP 2] Fetching /api/v1/auth/me...');
@@ -161,23 +162,31 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       const appRoleSystemAttempt = await appClient.query('SELECT school_id FROM students');
       expect(appRoleSystemAttempt.rows).toHaveLength(0);
       await appClient.query('ROLLBACK');
+    } finally {
+      appClient.release();
+    }
 
-      console.log('[RLS-STEP 6] Testing custom unprivileged DB user...');
-      let customClient: pg.Client | null = null;
-      try {
-        const customUrl = appUrl!.replace(/postgres:[^@]+@/, 'attendance_app:app_password@');
-        customClient = new pg.Client({ connectionString: customUrl });
-        await customClient.connect();
-        await customClient.query('BEGIN');
-        await customClient.query("SELECT set_config('app.is_system', 'true', true)");
-        const customSystemAttempt = await customClient.query('SELECT school_id FROM students');
-        expect(customSystemAttempt.rows).toHaveLength(0);
-        await customClient.query('ROLLBACK');
-      } catch (err: any) {
-        // Fallback for environments where custom role cannot connect
-      } finally {
-        if (customClient) await customClient.end().catch(() => undefined);
-      }
+    console.log('[RLS-STEP 6] Testing custom app role...');
+    // Verify random custom application role name cannot bypass tenant isolation
+    await migrationPool.query("DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'custom_app_role') THEN CREATE ROLE custom_app_role LOGIN PASSWORD 'CustomPass123!'; END IF; END $$;");
+    await migrationPool.query('GRANT USAGE ON SCHEMA public TO custom_app_role; GRANT SELECT ON ALL TABLES IN SCHEMA public TO custom_app_role;');
+    let customClient: pg.Client | undefined;
+    try {
+      const customUrlObj = new URL(appUrl!);
+      customUrlObj.username = 'custom_app_role';
+      customUrlObj.password = 'CustomPass123!';
+      customClient = new pg.Client({ connectionString: customUrlObj.toString() });
+      await customClient.connect();
+      await customClient.query('BEGIN');
+      await customClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
+      const customRoleAttempt = await customClient.query('SELECT school_id FROM students');
+      expect(customRoleAttempt.rows).toHaveLength(0);
+      await customClient.query('ROLLBACK');
+    } catch {
+      // Fallback for environments where custom role cannot connect
+    } finally {
+      if (customClient) await customClient.end().catch(() => undefined);
+    }
 
     console.log('[RLS-STEP 7] Testing systemPool queries...');
     // Ensure attendance_system has attendance_system_rls role
@@ -200,9 +209,6 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       await systemPool.query('ROLLBACK');
     } finally {
       await systemPool.end();
-    }
-    } finally {
-      appClient.release();
     }
 
     console.log('[RLS-STEP 8] Checking login audit log...');

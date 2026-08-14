@@ -107,7 +107,45 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
     }
   }
 
-  if (validEvents.length === 0) {
+  // Intra-batch duplicate clientEventId integrity validation
+  const clientEventGroups = new Map<string, ScanEnvelope[]>();
+  for (const event of validEvents) {
+    const group = clientEventGroups.get(event.clientEventId) || [];
+    group.push(event);
+    clientEventGroups.set(event.clientEventId, group);
+  }
+
+  const dedupedValidEvents: ScanEnvelope[] = [];
+  for (const [clientEventId, group] of clientEventGroups.entries()) {
+    if (group.length === 1) {
+      dedupedValidEvents.push(group[0]);
+    } else {
+      // Multiple items in the same batch share the same clientEventId
+      const firstHash = computePayloadHash(group[0]);
+      let allMatch = true;
+      for (let i = 1; i < group.length; i++) {
+        if (computePayloadHash(group[i]) !== firstHash) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (!allMatch) {
+        // Conflicting payloads within the same batch sharing the same clientEventId
+        resultsMap.set(clientEventId, {
+          decision: 'REPLAY_REJECTED',
+          rejectionCode: 'DUPLICATE_CLIENT_EVENT_CONFLICT',
+          processingLatencyMs: 0,
+        });
+      } else {
+        // Identical duplicate payloads submitted in the same batch
+        dedupedValidEvents.push(group[0]);
+      }
+    }
+  }
+
+  const activeValidEvents = dedupedValidEvents.filter((e) => !resultsMap.has(e.clientEventId));
+
+  if (activeValidEvents.length === 0) {
     return events.map((e) => resultsMap.get(e.clientEventId) || {
       decision: 'REJECTED',
       rejectionCode: 'UNPROCESSED_EVENT',
@@ -117,7 +155,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
   }
 
   // 1. Comprehensive Nonce DB History Check before accepting batch
-  const nonces = Array.from(new Set(validEvents.map((e) => e.nonce).filter(Boolean)));
+  const nonces = Array.from(new Set(activeValidEvents.map((e) => e.nonce).filter(Boolean)));
   if (nonces.length > 0) {
     const existingDbNonces = await withTenantContext(schoolId, async (tx: any) => {
       return tx
@@ -126,7 +164,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
         .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.nonce, nonces)));
     });
     const dbNonceMap = new Map<string, string>(existingDbNonces.map((r: any) => [r.nonce, r.clientEventId]));
-    for (const event of validEvents) {
+    for (const event of activeValidEvents) {
       if (event.nonce && dbNonceMap.has(event.nonce)) {
         const ownerEventId = dbNonceMap.get(event.nonce);
         if (ownerEventId !== event.clientEventId) {
@@ -163,7 +201,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
       .innerJoin(students, eq(students.id, rfidCredentials.studentId))
       .where(eq(rfidCredentials.schoolId, schoolId));
 
-    const clientEventIds = validEvents.map((e) => e.clientEventId);
+    const clientEventIds = activeValidEvents.map((e) => e.clientEventId);
     const eEvents = await tx
       .select({
         clientEventId: rfidScanEvents.clientEventId,
@@ -185,7 +223,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
   const existingEventMap = new Map<string, any>(existingEvents.map((e: any) => [e.clientEventId, e]));
 
   // Pre-fetch open sessions for target school
-  const sessionIds = Array.from(new Set(validEvents.map((e) => e.attendanceSessionId).filter(Boolean))) as string[];
+  const sessionIds = Array.from(new Set(activeValidEvents.map((e) => e.attendanceSessionId).filter(Boolean))) as string[];
   let sessionsList: any[] = [];
   if (sessionIds.length > 0) {
     sessionsList = await withTenantContext(schoolId, async (tx: any) => {
@@ -206,7 +244,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
 
   const seenNonces = new Set<string>();
 
-  for (const event of validEvents) {
+  for (const event of activeValidEvents) {
     if (resultsMap.has(event.clientEventId)) continue;
 
     // Idempotency check with strict payload hash verification

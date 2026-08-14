@@ -630,4 +630,37 @@ describe('RFID Router & Middleware Integration Suite', () => {
     const rejectedResult = resultA.decision === 'REPLAY_REJECTED' ? resultA : resultB;
     expect(rejectedResult.rejectionCode).toBe('PAYLOAD_HASH_MISMATCH');
   });
+
+  it('POST /:schoolId/rfid/offline/sync rejects intra-batch duplicate clientEventIds with conflicting payloads (DUPLICATE_CLIENT_EVENT_CONFLICT)', async () => {
+    const duplicateEventId = `intra_batch_dup_${Date.now()}`;
+    const eventStudent1 = buildSignedEnvelope(credentialDigest1, {
+      isOffline: true,
+      sequenceNumber: 340,
+      clientEventId: duplicateEventId,
+      direction: 'ENTRY',
+    });
+    const eventStudent2 = buildSignedEnvelope(credentialDigest2, {
+      isOffline: true,
+      sequenceNumber: 341,
+      clientEventId: duplicateEventId,
+      direction: 'ENTRY',
+    });
+
+    const timestamp = new Date().toISOString();
+    const batchPayload = JSON.stringify({ events: [eventStudent1, eventStudent2] });
+    const batchSig = crypto.createHmac('sha256', hmacSecret).update(batchPayload).digest('hex');
+
+    const res = await invokeOfflineSyncEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': batchSig,
+      'x-reader-timestamp': timestamp,
+    }, { events: [eventStudent1, eventStudent2] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.results).toHaveLength(2);
+    expect(res.body.results[0].decision).toBe('REPLAY_REJECTED');
+    expect(res.body.results[0].rejectionCode).toBe('DUPLICATE_CLIENT_EVENT_CONFLICT');
+    expect(res.body.results[1].decision).toBe('REPLAY_REJECTED');
+    expect(res.body.results[1].rejectionCode).toBe('DUPLICATE_CLIENT_EVENT_CONFLICT');
+  });
 });

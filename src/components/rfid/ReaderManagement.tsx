@@ -122,7 +122,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 font-display">Physical Gate Readers</h2>
+          <h2 className="text-xl font-extrabold text-slate-900 font-display">Gate Reader Fleet</h2>
           <p className="text-xs text-slate-500 font-medium">Physical hardware terminals bound by mTLS certificates and sequence counters.</p>
         </div>
 

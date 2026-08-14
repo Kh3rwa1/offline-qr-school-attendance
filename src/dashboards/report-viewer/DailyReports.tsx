@@ -98,9 +98,6 @@ export const DailyReports: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (isLoading) return <LoadingState message="Loading official daily roll report…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load report'} onRetry={() => refetch()} />;
-
   return (
     <div className="space-y-8" id="daily-reports-view">
       {/* Header */}
@@ -138,11 +135,17 @@ export const DailyReports: React.FC = () => {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Attendance Rate"
-          value={`${attendanceRate}%`}
+      {isLoading ? (
+        <LoadingState message="Loading official daily roll report…" />
+      ) : error ? (
+        <ErrorState message={(error as any)?.message || 'Failed to load report'} onRetry={() => refetch()} />
+      ) : (
+        <>
+          {/* Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <StatCard
+              title="Attendance Rate"
+              value={`${attendanceRate}%`}
           trend={{ value: `${presentCount + lateCount} / ${totalCount} Enrolled`, isPositive: attendanceRate >= 90 }}
           variant="hero-forest"
         />
@@ -273,6 +276,8 @@ export const DailyReports: React.FC = () => {
           </table>
         </div>
       </div>
+    </>
+  )}
     </div>
   );
 };

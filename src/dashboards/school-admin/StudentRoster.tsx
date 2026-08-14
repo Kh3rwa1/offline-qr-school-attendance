@@ -250,9 +250,6 @@ export const StudentRoster: React.FC = () => {
     );
   });
 
-  if (isLoading) return <LoadingState message="Loading student enrollment roster…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load students'} onRetry={() => refetch()} />;
-
   return (
     <div className="space-y-8" id="student-roster-view">
       {/* Toast Notification */}
@@ -312,14 +309,20 @@ export const StudentRoster: React.FC = () => {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Enrolled Students"
-          value={students.length}
-          trend={{ value: `${students.filter(s => s.status === 'ACTIVE').length} Active Enrolled`, isPositive: true }}
-          variant="hero-forest"
-        />
+      {isLoading ? (
+        <LoadingState message="Loading student enrollment roster…" />
+      ) : error ? (
+        <ErrorState message={(error as any)?.message || 'Failed to load students'} onRetry={() => refetch()} />
+      ) : (
+        <>
+          {/* Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <StatCard
+              title="Enrolled Students"
+              value={students.length}
+              trend={{ value: `${students.filter(s => s.status === 'ACTIVE').length} Active Enrolled`, isPositive: true }}
+              variant="hero-forest"
+            />
         <StatCard
           title="Active Class Sections"
           value={`${classSections.length} Sections`}
@@ -448,6 +451,8 @@ export const StudentRoster: React.FC = () => {
           </table>
         </div>
       </div>
+    </>
+  )}
 
       {/* Enroll Student Modal */}
       <AnimatePresence>

@@ -68,9 +68,6 @@ export const TrendReports: React.FC = () => {
     }
   });
 
-  if (isLoading) return <LoadingState message="Calculating multi-day attendance trends…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load trend analytics'} onRetry={() => refetch()} />;
-
   return (
     <div className="space-y-8" id="trend-reports-view">
       {/* Header */}
@@ -113,25 +110,31 @@ export const TrendReports: React.FC = () => {
             className="btn-forest-primary text-sm font-display cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>Export Reports</span>
+            <span>Export Trend CSV</span>
           </motion.button>
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title={`${trendRange}-Day Average`}
-          value={`${overallAvg}%`}
-          trend={{ value: `${totalPresentStudents} / ${totalRecordedSessions} Attendances`, isPositive: overallAvg >= 75 }}
-          variant="hero-forest"
-        />
-        <StatCard
-          title="Best Turnout Day"
-          value={bestDay}
-          trend={{ value: "Peak Student Turnout", isPositive: true }}
-          variant="default"
-        />
+      {isLoading ? (
+        <LoadingState message="Calculating multi-day attendance trends…" />
+      ) : error ? (
+        <ErrorState message={(error as any)?.message || 'Failed to load trend analytics'} onRetry={() => refetch()} />
+      ) : (
+        <>
+          {/* Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <StatCard
+              title={`${trendRange}-Day Average`}
+              value={`${overallAvg}%`}
+              trend={{ value: `${totalPresentStudents} / ${totalRecordedSessions} Attendances`, isPositive: overallAvg >= 75 }}
+              variant="hero-forest"
+            />
+            <StatCard
+              title="Best Turnout Day"
+              value={bestDay}
+              trend={{ value: "Peak Student Turnout", isPositive: true }}
+              variant="default"
+            />
         <StatCard
           title="Today's Absentees"
           value={`${absentees.length} Students`}
@@ -287,6 +290,8 @@ export const TrendReports: React.FC = () => {
           )}
         </div>
       </div>
+    </>
+  )}
     </div>
   );
 };

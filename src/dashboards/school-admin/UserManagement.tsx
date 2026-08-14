@@ -174,9 +174,6 @@ export const UserManagement: React.FC = () => {
   const rfidCount = members.filter((m) => m.role === 'RFID_OPERATOR').length;
   const viewerCount = members.filter((m) => m.role === 'REPORT_VIEWER').length;
 
-  if (isLoading) return <LoadingState message="Loading staff directory…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load staff roster'} onRetry={() => refetch()} />;
-
   return (
     <div className="space-y-8" id="user-management-view">
       {/* Header */}
@@ -203,6 +200,13 @@ export const UserManagement: React.FC = () => {
           <span>Add Staff Member</span>
         </motion.button>
       </div>
+
+      {isLoading ? (
+        <LoadingState message="Loading staff directory…" />
+      ) : error ? (
+        <ErrorState message={(error as any)?.message || 'Failed to load staff roster'} onRetry={() => refetch()} />
+      ) : (
+        <>
 
       {actionError && (
         <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
@@ -375,6 +379,8 @@ export const UserManagement: React.FC = () => {
           </table>
         </div>
       </div>
+    </>
+  )}
 
       {/* Add Staff Modal */}
       <AnimatePresence>

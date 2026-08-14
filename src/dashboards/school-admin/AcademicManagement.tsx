@@ -208,9 +208,6 @@ export const AcademicManagement: React.FC = () => {
     createYearMutation.mutate(yearForm);
   };
 
-  if (isLoading) return <LoadingState message="Loading academic classes & sections…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load academic classes'} onRetry={() => refetch()} />;
-
   return (
     <div className="space-y-8" id="academic-management-view">
       {/* Header */}
@@ -253,6 +250,13 @@ export const AcademicManagement: React.FC = () => {
           </motion.button>
         </div>
       </div>
+
+      {isLoading ? (
+        <LoadingState message="Loading academic classes & sections…" />
+      ) : error ? (
+        <ErrorState message={(error as any)?.message || 'Failed to load academic classes'} onRetry={() => refetch()} />
+      ) : (
+        <>
 
       {academicYears.length === 0 && (
         <div className="p-5 rounded-3xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -391,6 +395,8 @@ export const AcademicManagement: React.FC = () => {
           </div>
         )}
       </div>
+    </>
+  )}
 
       {/* Add Class Section Modal */}
       <AnimatePresence>

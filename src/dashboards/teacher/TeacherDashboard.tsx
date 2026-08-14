@@ -134,7 +134,7 @@ export const TeacherDashboard: React.FC = () => {
       const deviceId = getDeviceIdentifier();
       await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
       await loadLocalRoster(selectedClassId);
-      showFeedback({ kind: 'success', text: 'Roster downloaded and ready for offline scanning.' });
+      showFeedback({ kind: 'success', text: 'Roster and active QR digests downloaded successfully.' });
     } catch (err: any) {
       showFeedback({ kind: 'error', text: err.message || 'Failed to download roster' });
     }
@@ -381,10 +381,11 @@ export const TeacherDashboard: React.FC = () => {
             whileTap={{ scale: 0.98 }}
             onClick={handleStartSession}
             disabled={!selectedClassId || (!!session && session.status !== 'FINALIZED')}
+            aria-label={session ? 'Session open' : 'Start offline session'}
             className="btn-forest-primary text-sm font-display disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-            <span>{session ? 'Session Active' : 'Start Session'}</span>
+            <span>{session ? 'Session open' : 'Start offline session'}</span>
           </motion.button>
 
           <motion.button

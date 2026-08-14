@@ -85,7 +85,7 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
     <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm max-w-2xl mx-auto text-left">
       <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 font-display">Card Personalization & Key Injection</h2>
+          <h2 className="text-xl font-extrabold text-slate-900 font-display">DESFire Smartcard Enrollment</h2>
           <p className="text-xs text-slate-500 font-medium mt-0.5">Step {step} of 3 • AES-CMAC Key Personalization</p>
         </div>
         <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#144e39]/10 text-[#144e39] font-display">

@@ -329,7 +329,6 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
@@ -380,7 +379,6 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
-          cache: npm
 
       - name: Install Dependencies
         run: npm ci
@@ -396,7 +394,6 @@ jobs:
           ALLOW_SEED_RESET: "true"
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
@@ -418,7 +415,6 @@ jobs:
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long

@@ -86,14 +86,11 @@ export function validateLicensePolicy(): LicenseValidationResult {
     violations,
   };
 
-  console.log(`Checked ${prodDeps.length} production dependencies.`);
-  console.log(`Prohibited licenses: ${prohibitedCount}, Unknown licenses: ${unknownCount}`);
-
-  if (!passed) {
-    console.error('License Policy Violations Found:', violations);
-  } else {
-    console.log('✅ License policy compliance check passed!');
+  const outputDir = path.join(process.cwd(), 'output');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
   }
+  fs.writeFileSync(path.join(outputDir, 'license-policy-report.json'), JSON.stringify(result, null, 2));
 
   return result;
 }

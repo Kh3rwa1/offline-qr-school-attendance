@@ -269,10 +269,17 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
     });
     const loginBody = await login.json();
     assert(login.status === 200, `Login failed with status ${login.status}: ${JSON.stringify(loginBody)}`);
-    const setCookie = login.headers.get('set-cookie') || '';
-    assert(/HttpOnly/i.test(setCookie), 'Session cookie must have HttpOnly');
-    assert(/SameSite=Lax/i.test(setCookie), 'Session cookie must have SameSite=Lax');
-    const cookie = setCookie.split(';')[0];
+    const setCookieHeader = login.headers.get('set-cookie') || '';
+    assert(/HttpOnly/i.test(setCookieHeader), 'Session cookie must have HttpOnly');
+    assert(/SameSite=Lax/i.test(setCookieHeader), 'Session cookie must have SameSite=Lax');
+    const rawSetCookies = (login.headers as any).getSetCookie
+      ? (login.headers as any).getSetCookie()
+      : setCookieHeader.split(/,\s*(?=[A-Za-z0-9_-]+=)/);
+    const cookie = rawSetCookies
+      .map((c: string) => c.split(';')[0].trim())
+      .filter(Boolean)
+      .join('; ');
+    const csrfToken = loginBody.csrfToken;
 
     console.log('[Integration 3.4] Testing GET /api/v1/auth/me session context...');
     const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });
@@ -288,7 +295,7 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
     console.log('[Integration 3.6] Testing attendance session creation...');
     const sessionResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', cookie },
+      headers: { 'content-type': 'application/json', cookie, 'x-csrf-token': csrfToken },
       body: JSON.stringify({ classSectionId, sessionDate: '2026-08-12', sessionType: 'DAILY' }),
     });
     const sessionData = await sessionResponse.json();
@@ -298,7 +305,7 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
     console.log('[Integration 3.7] Finalizing attendance session (auto-marking absent)...');
     const finalizeResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions/${session.id}/status`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json', cookie },
+      headers: { 'content-type': 'application/json', cookie, 'x-csrf-token': csrfToken },
       body: JSON.stringify({ status: 'FINALIZED', autoMarkAbsentForUnmarked: true }),
     });
     const finalizeData = await finalizeResponse.json();
@@ -337,7 +344,10 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
     assert(concurrentResults[0].sent + concurrentResults[1].sent === 1, 'Exactly one concurrent worker must claim and send the job');
 
     console.log('[Integration 3.10] Testing user logout...');
-    const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, { method: 'POST', headers: { cookie } });
+    const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: { cookie, 'x-csrf-token': csrfToken },
+    });
     assert(logout.status === 200, `Logout failed with status ${logout.status}`);
     const afterLogout = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });
     assert(afterLogout.status === 401, `Accessing /me after logout must return 401 (got ${afterLogout.status})`);

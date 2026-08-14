@@ -15,6 +15,7 @@ import reportRouter from './src/routes/reportRoutes';
 import auditRouter from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
+import { dashboardRouter } from './src/routes/dashboardRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -140,6 +141,7 @@ export async function createApp() {
   });
 
   // API Router registration
+  app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/schools', schoolRouter);
   app.use('/api/v1/schools', academicRouter);

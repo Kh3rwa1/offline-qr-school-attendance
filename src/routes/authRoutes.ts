@@ -112,3 +112,32 @@ authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Respon
     sessionContext: req.sessionContext,
   });
 });
+
+const switchSchoolSchema = z.object({
+  schoolId: z.string().uuid(),
+});
+
+authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = switchSchoolSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'INVALID_INPUT', details: parsed.error.format() });
+  }
+
+  const { schoolId } = parsed.data;
+  const memberships = await getUserSchoolMemberships(req.user!.id);
+  const targetMembership = memberships.find((m) => m.schoolId === schoolId);
+  const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
+
+  if (!targetMembership && !isSuperAdmin) {
+    return res.status(403).json({ error: 'MEMBERSHIP_NOT_FOUND', message: 'User does not belong to target school' });
+  }
+
+  const session = await createSession(req.user!.id, schoolId);
+  res.cookie('session', session.token, { ...sessionCookieOptions, expires: session.expiresAt });
+
+  return res.json({
+    success: true,
+    activeSchoolId: schoolId,
+    activeRole: targetMembership?.role || 'SUPER_ADMIN',
+  });
+});

@@ -83,3 +83,38 @@ Detailed operational runbooks are maintained in [`docs/runbooks/INCIDENT_RUNBOOK
 - [x] **Credential Lifecycle**: Strict status validation (`ACTIVE` required; `PENDING`, `REPLACED`, `SUSPENDED`, `REVOKED`, `EXPIRED` rejected).
 - [x] **Offline SLO**: 5,000-event batch sync processing benchmark completing in < 10,000 ms.
 - [x] **mTLS & Fingerprints**: Certificate fingerprint validation (`x-reader-cert-fingerprint`) for certificate-bound readers.
+
+---
+
+## 👥 Five Role-Aware Enterprise Dashboards
+
+The application is structured into five distinct, role-guarded workspaces with bookmarkable URLs, lazy-loaded chunk splitting, and server-enforced RLS isolation:
+
+| Role | Landing Route | Key Capabilities |
+| :--- | :--- | :--- |
+| **`SUPER_ADMIN`** | `/app/super-admin` | Multi-tenant platform overview, tenant provisioning/suspension, global audit log explorer, platform health telemetry |
+| **`SCHOOL_ADMIN`** | `/app/school-admin` | Single-school operations, staff memberships, academic classes & sections, attendance oversight, SMS dispatch queue |
+| **`TEACHER`** | `/app/teacher` | Offline IndexedDB attendance capture, optical camera & USB wedge QR scanner, live roster verification, review & finalize |
+| **`REPORT_VIEWER`** | `/app/reports` | Read-only analytics, daily class reports, longitudinal 7/30-day trends, state MIS CSV export |
+| **`RFID_OPERATOR`** | `/app/rfid` | MIFARE DESFire EV2 smartcard console, reader gateway diagnostics, card enrollment wizard, tap event incident queue |
+
+### Central Permission Model
+
+| Permission Area | Capabilities |
+| :--- | :--- |
+| **Platform** | `platform.schools.read`, `platform.schools.manage`, `platform.security.read`, `platform.audit.read` |
+| **School Admin** | `school.settings.*`, `school.users.*`, `school.academics.*`, `audit.read` |
+| **Attendance** | `attendance.sessions.read`, `attendance.sessions.create`, `attendance.sessions.review`, `attendance.sessions.finalize` |
+| **RFID Operations** | `rfid.dashboard.read`, `rfid.readers.read`, `rfid.readers.manage`, `rfid.cards.read`, `rfid.cards.enroll`, `rfid.cards.revoke`, `rfid.events.read` |
+| **Reports** | `reports.read`, `reports.export` (Strictly read-only) |
+
+---
+
+## 🔒 Security Invariants
+
+- **Zero Client Trust**: User roles, school IDs, and capabilities are derived directly from authenticated server sessions.
+- **Forced Row-Level Security**: Every tenant operation runs inside `withTenantContext(schoolId)`.
+- **Multi-Membership School Switching**: Verified via `POST /api/v1/auth/switch-school` with complete tenant state invalidation.
+- **Bounded Offline Auth**: Bounded local cache with strict prohibition of offline privilege elevation.
+- **Parent Portal Extension Point**: Feature-flagged under `FEATURE_PARENT_PORTAL=false` by default.
+

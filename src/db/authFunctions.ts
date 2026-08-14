@@ -101,20 +101,20 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 }
 
 export async function getUserSchoolMemberships(userId: string): Promise<Array<{
-  userId: string;
   schoolId: string;
-  role: string;
   schoolName: string;
+  role: string;
+  status: string;
 }>> {
   const pool = getAuthPool();
   if (pool) {
     try {
-      const res = await pool.query('SELECT user_id, school_id, role, school_name FROM public.get_user_school_memberships($1::uuid)', [userId]);
+      const res = await pool.query('SELECT school_id, school_name, role, status FROM public.get_user_school_memberships($1::uuid)', [userId]);
       return res.rows.map((row: any) => ({
-        userId: row.user_id,
         schoolId: row.school_id,
-        role: row.role,
         schoolName: row.school_name,
+        role: row.role,
+        status: row.status,
       }));
     } catch (err) {
       if (process.env.NODE_ENV === 'production') {
@@ -124,13 +124,13 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
   }
 
   try {
-    const res = await db.execute(sql`SELECT user_id, school_id, role, school_name FROM public.get_user_school_memberships(${userId})`);
+    const res = await db.execute(sql`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships(${userId})`);
     if (res?.rows && (res.rows as any[]).length > 0) {
       return (res.rows as any[]).map((row: any) => ({
-        userId: row.user_id || row.userId,
         schoolId: row.school_id || row.schoolId,
-        role: row.role,
         schoolName: row.school_name || row.schoolName,
+        role: row.role,
+        status: row.status,
       }));
     }
   } catch {
@@ -138,16 +138,16 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
   }
 
   const result = await db.execute(sql`
-    SELECT sm.user_id, sm.school_id, sm.role, s.name as school_name
+    SELECT sm.school_id, s.name as school_name, sm.role, sm.status
     FROM school_memberships sm
     JOIN schools s ON sm.school_id = s.id
-    WHERE sm.user_id = ${userId}
+    WHERE sm.user_id = ${userId} AND sm.status = 'ACTIVE' AND s.status = 'ACTIVE'
   `);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   return rows.map((r: any) => ({
-    userId: r.user_id || r.userId,
     schoolId: r.school_id || r.schoolId,
-    role: r.role,
     schoolName: r.school_name || r.schoolName,
+    role: r.role,
+    status: r.status,
   }));
 }

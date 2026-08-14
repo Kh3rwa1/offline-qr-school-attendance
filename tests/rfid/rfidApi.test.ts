@@ -47,7 +47,6 @@ describe('RFID Router & Middleware Integration Suite', () => {
     process.env.RFID_HMAC_SECRET = hmacSecret;
     process.env.NODE_ENV = 'test';
 
-    await runMigrations();
     const seeded = await seedDatabase();
     schoolId = seeded.schoolA.id;
     adminUserId = seeded.adminUser.id;
@@ -578,5 +577,57 @@ describe('RFID Router & Middleware Integration Suite', () => {
     } finally {
       process.env = oldEnv;
     }
+  });
+
+  it('Handles concurrent offline sync submissions sharing clientEventId with different payloads without false acceptance', async () => {
+    const sharedClientEventId = `concurrent_race_evt_${Date.now()}`;
+    const envelopeA = buildSignedEnvelope(credentialDigest1, {
+      isOffline: true,
+      sequenceNumber: 330,
+      clientEventId: sharedClientEventId,
+      direction: 'ENTRY',
+    });
+    const envelopeB = buildSignedEnvelope(credentialDigest1, {
+      isOffline: true,
+      sequenceNumber: 331,
+      clientEventId: sharedClientEventId,
+      direction: 'EXIT',
+    });
+
+    const timestampA = new Date().toISOString();
+    const batchPayloadA = JSON.stringify({ events: [envelopeA] });
+    const batchSigA = crypto.createHmac('sha256', hmacSecret).update(batchPayloadA).digest('hex');
+
+    const timestampB = new Date().toISOString();
+    const batchPayloadB = JSON.stringify({ events: [envelopeB] });
+    const batchSigB = crypto.createHmac('sha256', hmacSecret).update(batchPayloadB).digest('hex');
+
+    // Run both requests concurrently
+    const [resA, resB] = await Promise.all([
+      invokeOfflineSyncEndpoint(schoolId, {
+        'x-reader-id': readerId,
+        'x-reader-signature': batchSigA,
+        'x-reader-timestamp': timestampA,
+      }, { events: [envelopeA] }),
+      invokeOfflineSyncEndpoint(schoolId, {
+        'x-reader-id': readerId,
+        'x-reader-signature': batchSigB,
+        'x-reader-timestamp': timestampB,
+      }, { events: [envelopeB] }),
+    ]);
+
+    expect(resA.statusCode).toBe(200);
+    expect(resB.statusCode).toBe(200);
+
+    const resultA = resA.body.results[0];
+    const resultB = resB.body.results[0];
+
+    // One must be ACCEPTED, and the other with conflicting payload MUST be REPLAY_REJECTED / PAYLOAD_HASH_MISMATCH
+    const decisions = [resultA.decision, resultB.decision];
+    expect(decisions).toContain('ACCEPTED');
+    expect(decisions).toContain('REPLAY_REJECTED');
+
+    const rejectedResult = resultA.decision === 'REPLAY_REJECTED' ? resultA : resultB;
+    expect(rejectedResult.rejectionCode).toBe('PAYLOAD_HASH_MISMATCH');
   });
 });

@@ -68,7 +68,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks Full History Secret Scan
-        uses: gitleaks/gitleaks-action@v2.3.8
+        uses: gitleaks/gitleaks-action@f586c14365d4643c6aa59d472ae6e984bf47bb34 # v2.3.8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -84,7 +84,7 @@ jobs:
           trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4.37.6
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem

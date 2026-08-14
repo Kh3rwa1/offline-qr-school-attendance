@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { createAuditLog, sanitizeMetadata } from '../src/services/auditLogService';
 import { db } from '../src/db';
 import { auditLogs, users } from '../src/db/schema';
@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 describe('Audit Logging & Data Privacy Filters', () => {
   let seededData: any;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     seededData = await seedDatabase();
   });
 

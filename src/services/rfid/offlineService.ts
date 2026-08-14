@@ -462,54 +462,113 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
       const insertedScanEvents = await tx
         .insert(rfidScanEvents)
         .values(scanEventValues)
-        .onConflictDoUpdate({
+        .onConflictDoNothing({
           target: [rfidScanEvents.schoolId, rfidScanEvents.clientEventId],
-          set: {
-            processingLatencyMs: 1,
-          },
         })
-        .returning({ id: rfidScanEvents.id, clientEventId: rfidScanEvents.clientEventId });
+        .returning({
+          id: rfidScanEvents.id,
+          clientEventId: rfidScanEvents.clientEventId,
+          payloadHash: rfidScanEvents.payloadHash,
+          decision: rfidScanEvents.decision,
+          rejectionCode: rfidScanEvents.rejectionCode,
+        });
 
-      const insertedMap = new Map<string, string>(insertedScanEvents.map((s: any) => [s.clientEventId, s.id]));
+      const insertedMap = new Map<string, { id: string; decision: string; rejectionCode?: string }>(
+        insertedScanEvents.map((s: any) => [s.clientEventId, { id: s.id, decision: s.decision, rejectionCode: s.rejectionCode }])
+      );
+
+      // Handle any items that hit a concurrent insert conflict
+      const unconfirmedItems = validChunkItems.filter((item) => !insertedMap.has(item.event.clientEventId));
+      if (unconfirmedItems.length > 0) {
+        const conflictedIds = unconfirmedItems.map((item) => item.event.clientEventId);
+        const existingConflicted = await tx
+          .select({
+            id: rfidScanEvents.id,
+            clientEventId: rfidScanEvents.clientEventId,
+            payloadHash: rfidScanEvents.payloadHash,
+            decision: rfidScanEvents.decision,
+            rejectionCode: rfidScanEvents.rejectionCode,
+            readerId: rfidScanEvents.readerId,
+            nonce: rfidScanEvents.nonce,
+          })
+          .from(rfidScanEvents)
+          .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.clientEventId, conflictedIds)));
+
+        const conflictedMap = new Map<string, any>(existingConflicted.map((r: any) => [r.clientEventId, r]));
+
+        for (const item of unconfirmedItems) {
+          const stored = conflictedMap.get(item.event.clientEventId);
+          if (stored) {
+            const incomingHash = computePayloadHash(item.event);
+            if (
+              (stored.payloadHash && stored.payloadHash !== incomingHash) ||
+              (stored.readerId && stored.readerId !== item.event.readerId) ||
+              (stored.nonce && stored.nonce !== item.event.nonce)
+            ) {
+              resultsMap.set(item.event.clientEventId, {
+                decision: 'REPLAY_REJECTED',
+                rejectionCode: 'PAYLOAD_HASH_MISMATCH',
+                scanEventId: stored.id,
+                processingLatencyMs: 0,
+              });
+            } else {
+              insertedMap.set(item.event.clientEventId, {
+                id: stored.id,
+                decision: stored.decision,
+                rejectionCode: stored.rejectionCode,
+              });
+              resultsMap.set(item.event.clientEventId, {
+                decision: stored.decision,
+                rejectionCode: stored.rejectionCode || undefined,
+                scanEventId: stored.id,
+                studentId: item.credential.studentId,
+                processingLatencyMs: 0,
+              });
+            }
+          }
+        }
+      }
+
+      // Filter only verified and ACCEPTED items for attendance events and records
+      const acceptedConfirmedItems = validChunkItems.filter((item) => {
+        const record = insertedMap.get(item.event.clientEventId);
+        return record && record.decision === 'ACCEPTED';
+      });
 
       // 3. Bulk insert attendance_events only for confirmed scan events
-      const attEventsValues = validChunkItems
-        .filter((item) => insertedMap.has(item.event.clientEventId))
-        .map((item) => {
-          const scanId = insertedMap.get(item.event.clientEventId)!;
-          return {
-            schoolId,
-            clientEventId: `rfid_${scanId}`,
-            attendanceSessionId: item.event.attendanceSessionId,
-            studentId: item.credential.studentId,
-            eventType: 'CHECK_IN',
-            statusValue: 'PRESENT',
-            clientTimestamp: new Date(item.event.readerTimestamp),
-            actorId: item.credential.createdByUserId || item.session.teacherId,
-            captureMethod: item.captureMethod,
-            sourceReaderId: item.event.readerId,
-            sourceRfidEventId: scanId,
-          };
-        });
+      const attEventsValues = acceptedConfirmedItems.map((item) => {
+        const scanId = insertedMap.get(item.event.clientEventId)!.id;
+        return {
+          schoolId,
+          clientEventId: `rfid_${scanId}`,
+          attendanceSessionId: item.event.attendanceSessionId,
+          studentId: item.credential.studentId,
+          eventType: 'CHECK_IN',
+          statusValue: 'PRESENT',
+          clientTimestamp: new Date(item.event.readerTimestamp),
+          actorId: item.credential.createdByUserId || item.session.teacherId,
+          captureMethod: item.captureMethod,
+          sourceReaderId: item.event.readerId,
+          sourceRfidEventId: scanId,
+        };
+      });
 
       if (attEventsValues.length > 0) {
         await tx.insert(attendanceEvents).values(attEventsValues).onConflictDoNothing();
       }
 
       // 4. Bulk insert/upsert attendance_records
-      const attRecordValues = validChunkItems
-        .filter((item) => insertedMap.has(item.event.clientEventId))
-        .map((item) => ({
-          schoolId,
-          attendanceSessionId: item.event.attendanceSessionId,
-          studentId: item.credential.studentId,
-          status: 'PRESENT',
-          firstScannedAt: new Date(item.event.readerTimestamp),
-          lastUpdatedAt: new Date(),
-          captureMethod: item.captureMethod,
-          confidenceLevel: item.event.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
-          direction: item.event.direction || 'NONE',
-        }));
+      const attRecordValues = acceptedConfirmedItems.map((item) => ({
+        schoolId,
+        attendanceSessionId: item.event.attendanceSessionId,
+        studentId: item.credential.studentId,
+        status: 'PRESENT',
+        firstScannedAt: new Date(item.event.readerTimestamp),
+        lastUpdatedAt: new Date(),
+        captureMethod: item.captureMethod,
+        confidenceLevel: item.event.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
+        direction: item.event.direction || 'NONE',
+      }));
 
       if (attRecordValues.length > 0) {
         await tx
@@ -525,11 +584,13 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
       }
 
       for (const item of validChunkItems) {
-        const scanId = insertedMap.get(item.event.clientEventId);
-        if (scanId) {
+        if (resultsMap.has(item.event.clientEventId)) continue;
+        const record = insertedMap.get(item.event.clientEventId);
+        if (record) {
           resultsMap.set(item.event.clientEventId, {
-            decision: 'ACCEPTED',
-            scanEventId: scanId,
+            decision: record.decision,
+            rejectionCode: record.rejectionCode || undefined,
+            scanEventId: record.id,
             studentId: item.credential.studentId,
             processingLatencyMs: 1,
           });

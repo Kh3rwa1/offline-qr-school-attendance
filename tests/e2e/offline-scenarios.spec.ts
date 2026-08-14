@@ -111,24 +111,19 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     let validToken = '';
 
     try {
-      const teacherLogin = await adminApi.post('/api/v1/auth/login', {
-        data: { phoneNumber: '+919100000002', password: 'TeacherPassword123!' },
-      });
-      expect(teacherLogin.ok()).toBeTruthy();
-      const me = await (await adminApi.get('/api/v1/auth/me')).json();
-      schoolId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
-
-      const classesRes = await adminApi.get(`/api/v1/schools/${schoolId}/attendance/classes`);
-      expect(classesRes.ok()).toBeTruthy();
-      classSectionId = (await classesRes.json()).data[0].classSectionId;
-
-      // Re-login as Admin for device registration & QR reissue
       const adminLogin = await adminApi.post('/api/v1/auth/login', {
         data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
       });
       expect(adminLogin.ok()).toBeTruthy();
       const adminLoginData = await adminLogin.json();
       const adminHeaders: Record<string, string> = adminLoginData.csrfToken ? { 'x-csrf-token': adminLoginData.csrfToken } : {};
+
+      const me = await (await adminApi.get('/api/v1/auth/me')).json();
+      schoolId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
+
+      const classesRes = await adminApi.get(`/api/v1/schools/${schoolId}/attendance/classes`);
+      expect(classesRes.ok()).toBeTruthy();
+      classSectionId = (await classesRes.json()).data[0].classSectionId;
 
       const workerIdx = testInfo.workerIndex;
       const deviceId = `e2e-device-persistence-${workerIdx}`;

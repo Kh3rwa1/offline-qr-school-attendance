@@ -15,7 +15,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.AUTH_DATABASE_URL) {
 function getAuthPool(): pg.Pool | null {
   if (authPoolInstance) return authPoolInstance;
   const authUrl = process.env.AUTH_DATABASE_URL;
-  if (authUrl) {
+  if (authUrl && (authUrl.startsWith('postgres://') || authUrl.startsWith('postgresql://'))) {
     authPoolInstance = new pg.Pool({
       connectionString: authUrl,
       max: 5,
@@ -52,16 +52,22 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 } | null> {
   const pool = getAuthPool();
   if (pool) {
-    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
-    if (res.rows.length === 0) return null;
-    const row = res.rows[0];
-    return {
-      id: row.id,
-      fullName: row.full_name,
-      phoneNumber: row.phone_number,
-      passwordHash: row.password_hash,
-      status: row.status,
-    };
+    try {
+      const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0];
+      return {
+        id: row.id,
+        fullName: row.full_name,
+        phoneNumber: row.phone_number,
+        passwordHash: row.password_hash,
+        status: row.status,
+      };
+    } catch (err) {
+      if (process.env.NODE_ENV === 'production') {
+        throw err;
+      }
+    }
   }
 
   // Fallback for PGlite / in-memory unit tests
@@ -95,47 +101,53 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 }
 
 export async function getUserSchoolMemberships(userId: string): Promise<Array<{
+  userId: string;
   schoolId: string;
-  schoolName: string;
   role: string;
-  status: string;
+  schoolName: string;
 }>> {
   const pool = getAuthPool();
   if (pool) {
-    const res = await pool.query('SELECT school_id, school_name, role, status FROM public.get_user_school_memberships($1::uuid)', [userId]);
-    return res.rows.map((r) => ({
-      schoolId: r.school_id,
-      schoolName: r.school_name,
-      role: r.role,
-      status: r.status,
-    }));
+    try {
+      const res = await pool.query('SELECT user_id, school_id, role, school_name FROM public.get_user_school_memberships($1::uuid)', [userId]);
+      return res.rows.map((row: any) => ({
+        userId: row.user_id,
+        schoolId: row.school_id,
+        role: row.role,
+        schoolName: row.school_name,
+      }));
+    } catch (err) {
+      if (process.env.NODE_ENV === 'production') {
+        throw err;
+      }
+    }
   }
 
   try {
-    const res = await db.execute(sql`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships(${userId})`);
-    if ((res as any)?.rows) {
-      return (res as any).rows.map((r: any) => ({
-        schoolId: r.school_id,
-        schoolName: r.school_name,
-        role: r.role,
-        status: r.status,
+    const res = await db.execute(sql`SELECT user_id, school_id, role, school_name FROM public.get_user_school_memberships(${userId})`);
+    if (res?.rows && (res.rows as any[]).length > 0) {
+      return (res.rows as any[]).map((row: any) => ({
+        userId: row.user_id || row.userId,
+        schoolId: row.school_id || row.schoolId,
+        role: row.role,
+        schoolName: row.school_name || row.schoolName,
       }));
     }
   } catch {
-    // Fallback
+    // If function is not defined in PGlite mock, fallback to direct join query
   }
 
   const result = await db.execute(sql`
-    SELECT m.school_id, s.name AS school_name, m.role, m.status
-    FROM school_memberships m
-    JOIN schools s ON s.id = m.school_id
-    WHERE m.user_id = ${userId} AND m.status = 'ACTIVE' AND s.status = 'ACTIVE'
+    SELECT sm.user_id, sm.school_id, sm.role, s.name as school_name
+    FROM school_memberships sm
+    JOIN schools s ON sm.school_id = s.id
+    WHERE sm.user_id = ${userId}
   `);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   return rows.map((r: any) => ({
-    schoolId: r.school_id,
-    schoolName: r.school_name,
+    userId: r.user_id || r.userId,
+    schoolId: r.school_id || r.schoolId,
     role: r.role,
-    status: r.status,
+    schoolName: r.school_name || r.schoolName,
   }));
 }

@@ -132,7 +132,20 @@ export const TeacherDashboard: React.FC = () => {
     try {
       showFeedback({ kind: 'success', text: 'Downloading class cryptographic roster…' });
       const deviceId = getDeviceIdentifier();
-      await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
+      try {
+        await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
+      } catch (dlErr: any) {
+        // If device is not yet registered, auto-register and retry download
+        try {
+          await api(`/api/v1/schools/${activeSchoolId}/devices/register`, {
+            method: 'POST',
+            body: JSON.stringify({ deviceIdentifier: deviceId, label: 'Teacher Browser Terminal' }),
+          });
+          await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
+        } catch {
+          throw dlErr;
+        }
+      }
       await loadLocalRoster(selectedClassId);
       showFeedback({ kind: 'success', text: 'Roster and active QR digests downloaded successfully.' });
     } catch (err: any) {

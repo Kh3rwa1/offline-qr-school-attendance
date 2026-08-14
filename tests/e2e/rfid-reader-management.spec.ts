@@ -10,6 +10,8 @@ test.describe('RFID Reader Management E2E Suite', () => {
     await page.getByLabel('Password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
+    await expect(page.getByText('MIFARE DESFire EV2 Operator Console')).toBeVisible();
+
     // 2. Navigate to Readers Console
     await page.goto(`${baseUrl}/app/rfid-operator/readers`);
     await expect(page.getByRole('heading', { name: 'Physical Gate Readers' })).toBeVisible();

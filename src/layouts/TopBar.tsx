@@ -52,6 +52,7 @@ export const TopBar: React.FC = () => {
           whileTap={{ scale: 0.98 }}
           onClick={() => void syncNow()}
           disabled={!isOnline || isSyncing}
+          aria-label="Synchronize outbox"
           className="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition-all text-xs font-bold"
         >
           {isOnline ? (
@@ -59,7 +60,7 @@ export const TopBar: React.FC = () => {
           ) : (
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           )}
-          <span className="text-slate-700 text-[11px] hidden sm:inline">
+          <span className="text-slate-700 text-[11px]">
             {isSyncing ? 'Syncing…' : `${outboxCount} unsynced`}
           </span>
           <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />

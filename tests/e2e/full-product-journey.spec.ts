@@ -36,6 +36,8 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.getByLabel('Password').fill('SchoolAdminPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
+    await expect(page.getByText('School Administration & Operations')).toBeVisible();
+
     // 2. Navigate to Student Roster
     await page.goto(`${baseUrl}/app/school-admin/students`);
     await expect(page.getByRole('heading', { name: 'Student Roster Directory' })).toBeVisible();
@@ -69,6 +71,8 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.getByLabel('Phone number').fill('+919100000004');
     await page.getByLabel('Password').fill('ReportViewerPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page.getByText('Attendance Reports & Analytics')).toBeVisible();
 
     // 2. Daily roll inspection
     await page.goto(`${baseUrl}/app/reports/daily`);

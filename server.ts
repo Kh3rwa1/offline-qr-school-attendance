@@ -68,14 +68,14 @@ export async function createApp() {
     next();
   });
 
-  // Production-grade CSRF protection for cookie-authenticated mutating requests
-  app.use(csrfProtection);
-
-  // 2. Memory-Based API Rate Limiting Middleware with Active Pruning  // Distributed Rate Limiters
+  // 1. API & Login Rate Limiting Middleware
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
   app.use('/api/v1', rateLimitPolicies.generalApi);
+
+  // 2. Production-grade CSRF protection for cookie-authenticated mutating requests
+  app.use(csrfProtection);
 
   // Database migrations and seed data are deployment concerns. Run
   // `npm run migrate` and, only for an explicit development environment,
@@ -84,7 +84,7 @@ export async function createApp() {
   // Metrics middleware & endpoint
   app.use(metricsMiddleware);
 
-  app.get('/metrics', (req, res) => {
+  app.get('/metrics', rateLimitPolicies.generalApi, (req, res) => {
     const result = renderPrometheusMetrics(req);
     if (!result.authorized) {
       return res.status(401).json({ error: 'UNAUTHORIZED' });
@@ -135,9 +135,9 @@ export async function createApp() {
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
-  // 404 Handler for Unknown API Endpoints
+  // Strict 404 handler for unmatched API routes
   app.all('/api/*', (_req, res) => {
-    return res.status(404).json({
+    res.status(404).json({
       success: false,
       error: 'API_ENDPOINT_NOT_FOUND',
       message: 'The requested API endpoint was not found on this server.',
@@ -155,18 +155,16 @@ export async function createApp() {
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     const indexHtmlPath = path.resolve(distPath, 'index.html');
+    const indexHtmlContent = fs.existsSync(indexHtmlPath)
+      ? fs.readFileSync(indexHtmlPath, 'utf8')
+      : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';
+
     app.use(express.static(distPath));
 
-    // Rate-limited bounded SPA fallback
-    app.use(rateLimitPolicies.spaFallback);
-    app.use((req, res, next) => {
-      if (req.method === 'GET' || req.method === 'HEAD') {
-        if (!req.path.startsWith('/api')) {
-          if (fs.existsSync(indexHtmlPath)) {
-            return res.sendFile(indexHtmlPath);
-          }
-          return res.type('html').send('<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>');
-        }
+    // Rate-limited in-memory SPA fallback (zero per-request filesystem I/O)
+    app.get('*', rateLimitPolicies.spaFallback, (req, res, next) => {
+      if (!req.path.startsWith('/api')) {
+        return res.type('html').send(indexHtmlContent);
       }
       next();
     });

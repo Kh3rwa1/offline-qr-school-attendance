@@ -98,7 +98,7 @@ jobs:
 
       - name: Install Cosign for Keyless Image Signing
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bec826aa1317710dab1929c7 # v3.7.0
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
 
       - name: Sign Container Image Digest with Keyless Cosign
         if: github.event_name != 'pull_request'
@@ -115,7 +115,7 @@ jobs:
 
       - name: Attest Build Provenance (SLSA Level 3)
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@c074443f15f8d4a485b8471966b69b1571f91634 # v2.2.3
+        uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v2.2.3
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ env.RAW_DIGEST }}
@@ -129,7 +129,7 @@ jobs:
           sha256sum sbom-npm.cdx.json sbom-container.cdx.json license-policy-report.json > release-artifacts.sha256
 
       - name: Create GitHub Release with Attached Provenance & Manifests
-        uses: softprops/action-gh-release@c92800b6147e7c4f420e6f6630f589c314a3a60a # v2.2.1
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           files: |
             output/sbom-npm.cdx.json

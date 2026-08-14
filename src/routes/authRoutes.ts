@@ -20,7 +20,7 @@ const loginSchema = z.object({
 
 const sessionCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: process.env.COOKIE_SECURE === 'true' || (process.env.NODE_ENV === 'production' && process.env.ALLOW_HTTP_COOKIE !== 'true'),
   sameSite: 'lax' as const,
   path: '/',
 };

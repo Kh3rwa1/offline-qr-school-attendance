@@ -36,6 +36,8 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
         data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
       });
       expect(adminLogin.ok()).toBeTruthy();
+      const adminData = await adminLogin.json();
+      const adminCsrfHeaders: Record<string, string> = adminData.csrfToken ? { 'x-csrf-token': adminData.csrfToken } : {};
       const me = await (await adminApi.get('/api/v1/auth/me')).json();
       schoolAId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
 
@@ -46,6 +48,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       classSectionAId = classesData.data[0].classSectionId;
 
       await adminApi.post(`/api/v1/schools/${schoolAId}/devices/register`, {
+        headers: adminCsrfHeaders,
         data: { deviceIdentifier: 'e2e-device-revoked-test' },
       });
 
@@ -59,6 +62,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
 
       studentAId = students[0].studentId;
       const reissueRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/reissue`, {
+        headers: adminCsrfHeaders,
         data: { studentId: studentAId },
       });
       expect(reissueRes.ok()).toBeTruthy();
@@ -66,6 +70,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       expect(revokedToken).not.toBe('');
 
       const revokeRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/revoke`, {
+        headers: adminCsrfHeaders,
         data: { studentId: studentAId, reason: 'E2E Revocation Test' },
       });
       expect(revokeRes.ok()).toBeTruthy();
@@ -122,10 +127,13 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
         data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
       });
       expect(adminLogin.ok()).toBeTruthy();
+      const adminLoginData = await adminLogin.json();
+      const adminHeaders: Record<string, string> = adminLoginData.csrfToken ? { 'x-csrf-token': adminLoginData.csrfToken } : {};
 
       const workerIdx = testInfo.workerIndex;
       const deviceId = `e2e-device-persistence-${workerIdx}`;
       await adminApi.post(`/api/v1/schools/${schoolId}/devices/register`, {
+        headers: adminHeaders,
         data: { deviceIdentifier: deviceId },
       });
 
@@ -138,6 +146,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
 
       const targetStudent = initialStudents[workerIdx % initialStudents.length];
       const reissueRes = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, {
+        headers: adminHeaders,
         data: { studentId: targetStudent.studentId },
       });
       expect(reissueRes.ok()).toBeTruthy();

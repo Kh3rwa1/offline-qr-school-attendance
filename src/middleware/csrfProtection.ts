@@ -91,12 +91,12 @@ export function verifyCsrfToken(token: string, signature: string, sessionToken?:
  * Sets the CSRF cookie pair on the HTTP response.
  */
 export function setCsrfCookies(res: Response, token: string, signature: string): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isSecure = process.env.COOKIE_SECURE === 'true' || (process.env.NODE_ENV === 'production' && process.env.ALLOW_HTTP_COOKIE !== 'true');
 
   // Readable by frontend JavaScript to attach to request headers
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false,
-    secure: isProduction,
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     maxAge: 24 * 60 * 60 * 1000,
@@ -105,7 +105,7 @@ export function setCsrfCookies(res: Response, token: string, signature: string):
   // HttpOnly signature cookie for server-side cryptographic verification
   res.cookie(CSRF_SIG_COOKIE_NAME, signature, {
     httpOnly: true,
-    secure: isProduction,
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     maxAge: 24 * 60 * 60 * 1000,

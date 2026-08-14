@@ -419,6 +419,7 @@ jobs:
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"

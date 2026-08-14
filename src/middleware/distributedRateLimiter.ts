@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
-import { getRedisClient } from '../services/redisService';
+import Redis from 'ioredis';
 
 export interface RateLimitPolicyOptions {
   prefix: string;
@@ -10,16 +10,31 @@ export interface RateLimitPolicyOptions {
   keyGenerator?: (req: Request) => string;
 }
 
+let redisClientInstance: Redis | null = null;
+
+function getRateLimiterRedisClient(): Redis | null {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) return null;
+  if (!redisClientInstance) {
+    redisClientInstance = new Redis(redisUrl, {
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: true,
+      lazyConnect: false,
+    });
+  }
+  return redisClientInstance;
+}
+
 export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
   const { prefix, maxRequests, windowMs, keyGenerator } = options;
 
   let store: any = undefined;
 
-  // Use RedisStore when REDIS_URL is provided or Redis client is active
+  // Use RedisStore when REDIS_URL is provided
   if (process.env.REDIS_URL) {
     store = new RedisStore({
       sendCommand: async (...args: string[]) => {
-        const client = getRedisClient();
+        const client = getRateLimiterRedisClient();
         if (client) {
           return client.call(args[0], ...args.slice(1)) as any;
         }

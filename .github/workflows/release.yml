@@ -119,7 +119,7 @@ jobs:
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ env.RAW_DIGEST }}
-          push-to-registry: true
+          push-to-registry: false
 
       - name: Generate Complete SHA-256 Release Manifest
         run: |

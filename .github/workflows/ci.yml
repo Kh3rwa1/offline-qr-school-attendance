@@ -73,9 +73,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Trivy Security Scanner Binary
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /tmp
-          sudo mv /tmp/trivy /usr/local/bin/trivy
+        uses: aquasecurity/setup-trivy@v0.2.2
+        with:
+          version: 'latest'
 
       - name: Run Trivy Filesystem Vulnerability Scan
         run: |

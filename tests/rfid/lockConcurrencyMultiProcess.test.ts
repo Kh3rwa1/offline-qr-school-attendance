@@ -176,6 +176,49 @@ describe('Distributed RFID Lock & Concurrency Correctness (Multi-Worker Integrat
     expect(secondResult.rejectionCode).toBe('PAYLOAD_HASH_MISMATCH');
   });
 
+  it('2b. Rejects same clientEventId, readerId and nonce with altered direction or session with PAYLOAD_HASH_MISMATCH', async () => {
+    const [stud3] = await db
+      .insert(students)
+      .values({
+        schoolId,
+        studentCode: `CONCUR-3-${Date.now()}`,
+        name: 'Concurrent MultiWorker Student 3',
+        status: 'ACTIVE',
+      })
+      .returning();
+    const digest3 = crypto.createHash('sha256').update(`card_uid_3_${Date.now()}`).digest('hex');
+    const cred3 = await credentialService.enrollCredential({
+      schoolId,
+      studentId: stud3.id,
+      credentialDigest: digest3,
+      securityMode: 'UID_LEGACY',
+      keyVersion: 1,
+      operatorUserId: adminUserId,
+    });
+    await credentialService.activateCredential(cred3.id, schoolId, adminUserId);
+
+    const clientEventId = `direction-tamper-${crypto.randomUUID()}`;
+    const sharedNonce = 'fixed_nonce_1234567890';
+    const entryEnvelope = {
+      ...createTestEnvelope(clientEventId, sharedNonce, digest3),
+      direction: 'ENTRY' as const,
+    };
+    entryEnvelope.signature = computeCanonicalSignature(entryEnvelope, hmacSecret);
+
+    const exitEnvelope = {
+      ...createTestEnvelope(clientEventId, sharedNonce, digest3),
+      direction: 'EXIT' as const,
+    };
+    exitEnvelope.signature = computeCanonicalSignature(exitEnvelope, hmacSecret);
+
+    const res1 = await scanService.processScan(entryEnvelope);
+    expect(res1.decision).toBe('ACCEPTED');
+
+    const res2 = await scanService.processScan(exitEnvelope);
+    expect(res2.decision).toBe('REPLAY_REJECTED');
+    expect(res2.rejectionCode).toBe('PAYLOAD_HASH_MISMATCH');
+  });
+
   it('3. Lock renewal prevents lock expiry during long transaction processing', async () => {
     const redis = getRedisClient();
     if (!redis) return;

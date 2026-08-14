@@ -19,9 +19,10 @@ export const LoginPage: React.FC = () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(phoneNumber, password);
-      const from = (location.state as any)?.from?.pathname || getDefaultRouteForRole(activeRole || undefined);
-      navigate(from, { replace: true });
+      const role = await login(phoneNumber, password);
+      const from = (location.state as any)?.from?.pathname;
+      const target = from && from !== '/login' ? from : getDefaultRouteForRole(role);
+      navigate(target, { replace: true });
     } catch (err: any) {
       setError(err.message || 'Invalid credentials or login failed');
     } finally {
@@ -36,8 +37,8 @@ export const LoginPage: React.FC = () => {
           <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl mx-auto flex items-center justify-center text-2xl shadow-md mb-3">
             🎓
           </div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Offline QR Attendance</h1>
-          <p className="text-xs text-slate-500 font-medium">Enterprise Role-Aware Authentication</p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">AttendEase Portal Authentication</h1>
+          <p className="text-xs text-slate-500 font-medium">Enterprise Role-Aware Sign In</p>
         </header>
 
         {error && (

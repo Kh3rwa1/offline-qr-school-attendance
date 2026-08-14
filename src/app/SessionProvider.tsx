@@ -28,10 +28,10 @@ export interface SessionContextType {
   activeSchoolId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (phoneNumber: string, password: string) => Promise<void>;
+  login: (phoneNumber: string, password: string) => Promise<UserRole>;
   logout: () => Promise<void>;
   switchSchool: (schoolId: string) => Promise<void>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<{ user: User; role: UserRole } | null>;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -83,7 +83,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return true;
   });
 
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useCallback(async (): Promise<{ user: User; role: UserRole } | null> => {
     try {
       const res = await api<{
         success: boolean;
@@ -128,11 +128,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             expiresAt: Date.now() + 8 * 3600 * 1000,
           })
         );
+        return { user: u, role: activeMem.role };
       } else {
         setUser(null);
         setMemberships([]);
         setActiveMembership(null);
         localStorage.removeItem('attendance.auth');
+        return null;
       }
     } catch {
       // Offline fallback: check cached session
@@ -145,6 +147,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setMemberships(parsed.memberships || []);
             const mem = parsed.memberships?.find((m: any) => m.schoolId === parsed.schoolId) || parsed.memberships?.[0] || null;
             setActiveMembership(mem);
+            return mem ? { user: parsed.user, role: mem.role } : null;
           } else {
             localStorage.removeItem('attendance.auth');
           }
@@ -152,6 +155,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           localStorage.removeItem('attendance.auth');
         }
       }
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -161,7 +165,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     refreshSession();
   }, [refreshSession]);
 
-  const login = async (phoneNumber: string, password: string) => {
+  const login = async (phoneNumber: string, password: string): Promise<UserRole> => {
     setIsLoading(true);
     try {
       await api('/api/v1/auth/login', {
@@ -169,7 +173,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         body: JSON.stringify({ phoneNumber, password }),
       });
       localStorage.removeItem('attendance.loggedOut');
-      await refreshSession();
+      const result = await refreshSession();
+      return result?.role || 'TEACHER';
     } finally {
       setIsLoading(false);
     }

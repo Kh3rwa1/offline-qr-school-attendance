@@ -6,8 +6,8 @@ import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
 import { readerService } from '../services/rfid/readerService';
 import { offlineService } from '../services/rfid/offlineService';
-import { db } from '../db';
-import { rfidScanEvents, rfidReaders } from '../db/schema';
+import { db, withTenantContext } from '../db';
+import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
@@ -99,7 +99,8 @@ rfidRouter.get(
         const credentials = await credentialService.getCredentialHistory(schoolId, studentId);
         return { status: 200, body: { success: true, credentials } };
       }
-      return { status: 200, body: { success: true, credentials: [] } };
+      const credentials = await credentialService.listAllCredentials(schoolId);
+      return { status: 200, body: { success: true, credentials } };
     } catch (error: any) {
       return { status: 500, body: { success: false, error: error.message } };
     }
@@ -511,6 +512,81 @@ rfidRouter.get(
 
       const filtered = rejections.filter((r: any) => r.decision !== 'ACCEPTED');
       return { status: 200, body: { success: true, report: filtered } };
+    } catch (error: any) {
+      return { status: 500, body: { success: false, error: error.message } };
+    }
+  })
+);
+
+rfidRouter.get(
+  '/:schoolId/rfid/reports/scans',
+  requireAuth,
+  tenantHandler(async ({ schoolId }) => {
+    try {
+      return await withTenantContext(schoolId, async (tx) => {
+        const scans = await tx
+          .select({
+            id: rfidScanEvents.id,
+            time: rfidScanEvents.scanTimestamp,
+            decision: rfidScanEvents.decision,
+            direction: rfidScanEvents.direction,
+            studentId: rfidCredentials.studentId,
+            studentName: students.name,
+            readerId: rfidScanEvents.readerId,
+            readerName: rfidReaders.name,
+            location: rfidReaders.location,
+            isOffline: rfidScanEvents.isOffline,
+          })
+          .from(rfidScanEvents)
+          .leftJoin(rfidCredentials, eq(rfidScanEvents.credentialId, rfidCredentials.id))
+          .leftJoin(students, eq(rfidCredentials.studentId, students.id))
+          .leftJoin(rfidReaders, eq(rfidScanEvents.readerId, rfidReaders.id))
+          .where(eq(rfidScanEvents.schoolId, schoolId))
+          .orderBy(desc(rfidScanEvents.scanTimestamp))
+          .limit(100);
+
+        const readers = await tx
+          .select({ status: rfidReaders.status })
+          .from(rfidReaders)
+          .where(eq(rfidReaders.schoolId, schoolId));
+
+        const cards = await tx
+          .select({ status: rfidCredentials.status })
+          .from(rfidCredentials)
+          .where(eq(rfidCredentials.schoolId, schoolId));
+
+        const readersOnline = readers.filter((r: any) => r.status === 'ACTIVE').length;
+        const readersOffline = readers.filter((r: any) => r.status === 'SUSPENDED' || r.status === 'REVOKED').length;
+        const readersPending = readers.filter((r: any) => r.status === 'PENDING').length;
+
+        const activeCards = cards.filter((c: any) => c.status === 'ACTIVE').length;
+        const suspendedCards = cards.filter((c: any) => c.status === 'SUSPENDED').length;
+        const revokedCards = cards.filter((c: any) => c.status === 'REVOKED').length;
+
+        return {
+          status: 200,
+          body: {
+            success: true,
+            readersOnline,
+            readersOffline,
+            readersPending,
+            activeCards,
+            suspendedCards,
+            revokedCards,
+            queueDepth: 0,
+            recentScans: scans.map((s: any) => ({
+              id: s.id,
+              time: s.time,
+              student: s.studentName || (s.studentId ? `Student #${s.studentId.slice(0, 6)}` : 'Unknown Tap'),
+              reader: s.readerName || 'Gate Reader',
+              location: s.location || 'Entrance Gate',
+              decision: s.decision,
+              direction: s.direction,
+              method: s.isOffline ? 'OFFLINE_BUFFER' : 'RFID_SECURE',
+            })),
+          },
+        };
+      });
     } catch (error: any) {
       return { status: 500, body: { success: false, error: error.message } };
     }

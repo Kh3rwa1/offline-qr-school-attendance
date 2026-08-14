@@ -7,10 +7,12 @@ export interface SessionContext {
   sessionId: string;
   userId: string;
   schoolId: string | null;
+  platformRole?: string | null;
   user: {
     id: string;
     fullName: string;
     phoneNumber: string;
+    platformRole?: string | null;
     status: string;
   };
   memberships: {
@@ -34,7 +36,7 @@ function hashToken(token: string): string {
 
 export async function createSession(
   userId: string,
-  schoolId?: string
+  schoolId?: string | null
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = crypto.randomBytes(32).toString('hex');
   const hashedToken = hashToken(token);
@@ -96,12 +98,14 @@ export async function getSession(token: string): Promise<SessionContext | null> 
         eq(schools.status, 'ACTIVE'),
       ));
 
-    let activeMembership: SessionContext['activeMembership'];
+    const isPlatformSuperAdmin = userRecord.platformRole === 'SUPER_ADMIN' || memberships.some((m: { role: string }) => m.role === 'SUPER_ADMIN');
+
+    let activeMembership: SessionContext['activeMembership'] | undefined;
     if (sessionRecord.schoolId) {
       activeMembership = memberships.find(
         (m: { schoolId: string; schoolName: string; role: string; status: string }) => m.schoolId === sessionRecord.schoolId
       );
-      if (!activeMembership && memberships.some((membership: SessionContext['memberships'][number]) => membership.role === 'SUPER_ADMIN')) {
+      if (!activeMembership && isPlatformSuperAdmin) {
         const [targetSchool] = await tx
           .select({ id: schools.id })
           .from(schools)
@@ -114,16 +118,21 @@ export async function getSession(token: string): Promise<SessionContext | null> 
       activeMembership = memberships[0];
     }
 
-    if (!activeMembership) return null;
+    // If not a platform super admin and no active membership, reject
+    if (!activeMembership && !isPlatformSuperAdmin) {
+      return null;
+    }
 
     return {
       sessionId: sessionRecord.id,
       userId: userRecord.id,
       schoolId: sessionRecord.schoolId || activeMembership?.schoolId || null,
+      platformRole: userRecord.platformRole || (isPlatformSuperAdmin ? 'SUPER_ADMIN' : null),
       user: {
         id: userRecord.id,
         fullName: userRecord.fullName,
         phoneNumber: userRecord.phoneNumber,
+        platformRole: userRecord.platformRole || (isPlatformSuperAdmin ? 'SUPER_ADMIN' : null),
         status: userRecord.status,
       },
       memberships,

@@ -235,6 +235,13 @@ export function getNavigationForRole(role: UserRole | string | undefined): Navig
       permissions: ['school.users.read'],
     },
     {
+      id: 'school-admin-students',
+      label: 'Student Roster',
+      href: '/app/school-admin/students',
+      icon: '🎒',
+      permissions: ['school.users.read'],
+    },
+    {
       id: 'school-admin-academics',
       label: 'Academic Classes',
       href: '/app/school-admin/academics',

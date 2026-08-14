@@ -51,16 +51,36 @@ export function requireRole(allowedRoles: string[]) {
       return res.status(401).json({ error: 'UNAUTHORIZED' });
     }
 
+    const isPlatformSuperAdmin = req.sessionContext.platformRole === 'SUPER_ADMIN' || req.sessionContext.user?.platformRole === 'SUPER_ADMIN';
     const activeRole = req.userRole || req.sessionContext.activeMembership?.role;
 
     // SUPER_ADMIN has global role permissions
-    if (activeRole === 'SUPER_ADMIN') {
+    if (isPlatformSuperAdmin || activeRole === 'SUPER_ADMIN') {
       return next();
     }
 
     if (!activeRole || !allowedRoles.includes(activeRole)) {
       return res.status(403).json({
         error: 'FORBIDDEN_ROLE',
+        message: translate('unauthorized', 'en'),
+      });
+    }
+
+    next();
+  };
+}
+
+export function requirePlatformRole(allowedPlatformRoles: string[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.sessionContext) {
+      return res.status(401).json({ error: 'UNAUTHORIZED' });
+    }
+
+    const platformRole = req.sessionContext.platformRole || req.sessionContext.user?.platformRole || (req.sessionContext.memberships.some((m) => m.role === 'SUPER_ADMIN') ? 'SUPER_ADMIN' : null);
+
+    if (!platformRole || !allowedPlatformRoles.includes(platformRole)) {
+      return res.status(403).json({
+        error: 'FORBIDDEN_PLATFORM_ROLE',
         message: translate('unauthorized', 'en'),
       });
     }

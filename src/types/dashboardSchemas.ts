@@ -12,7 +12,10 @@ export const SuperAdminSummarySchema = z.object({
       id: z.string().uuid(),
       name: z.string(),
       code: z.string().optional().nullable(),
+      udiseCode: z.string().optional().nullable(),
+      district: z.string().optional().nullable(),
       status: z.string().optional().nullable(),
+      createdAt: z.string().optional().nullable(),
     })
   ).optional().default([]),
 });

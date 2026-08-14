@@ -14,9 +14,9 @@ import {
 import { createAuditLog } from '../services/auditLogService';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
-import { db } from '../db';
-import { enrollments, teacherAssignments } from '../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { db, withTenantContext } from '../db';
+import { enrollments, teacherAssignments, attendanceRecords, attendanceSessions } from '../db/schema';
+import { and, eq, sql } from 'drizzle-orm';
 
 const reportRouter = Router({ mergeParams: true });
 
@@ -48,12 +48,12 @@ async function teacherHasStudentAccess(req: AuthenticatedRequest, schoolId: stri
   return Boolean(assignment);
 }
 
-// 1. Daily School Summary (Admin only)
+// 1. Daily School Summary
 reportRouter.get(
   '/daily-school',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -72,7 +72,7 @@ reportRouter.get(
   '/daily-class',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -102,7 +102,7 @@ reportRouter.get(
   '/monthly-register',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -132,7 +132,7 @@ reportRouter.get(
   '/student-history',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -163,7 +163,7 @@ reportRouter.get(
   '/absentee',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -194,12 +194,12 @@ reportRouter.get(
   }
 );
 
-// 6. Attendance Correction Report (Admin only)
+// 6. Attendance Correction Report (Admin & Report Viewer)
 reportRouter.get(
   '/corrections',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -214,12 +214,12 @@ reportRouter.get(
   }
 );
 
-// 7. Teacher / Session Audit Report (Admin only)
+// 7. Teacher / Session Audit Report (Admin & Report Viewer)
 reportRouter.get(
   '/teacher-sessions',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -239,7 +239,7 @@ reportRouter.get(
   '/export',
   requireAuth,
   requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER']),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
@@ -373,6 +373,58 @@ reportRouter.get(
         res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
         res.send(xlsxBuf);
       }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// 9. Multi-Day Attendance Trends Rollup
+reportRouter.get(
+  '/trends',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER']),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 60);
+
+      const trends = await withTenantContext(schoolId, async (tx) => {
+        const today = new Date();
+        const results = [];
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().slice(0, 10);
+
+          const [stats] = await tx
+            .select({
+              total: sql<number>`count(*)::int`,
+              present: sql<number>`count(case when ${attendanceRecords.status} in ('PRESENT', 'LATE') then 1 end)::int`,
+              absent: sql<number>`count(case when ${attendanceRecords.status} = 'ABSENT' then 1 end)::int`,
+            })
+            .from(attendanceRecords)
+            .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
+            .where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceSessions.sessionDate, dateStr)));
+
+          const pct = stats?.total && stats.total > 0
+            ? Math.round((stats.present / stats.total) * 1000) / 10
+            : 0;
+
+          results.push({
+            date: dateStr,
+            day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+            totalStudents: stats?.total || 0,
+            presentStudents: stats?.present || 0,
+            absentStudents: stats?.absent || 0,
+            percentage: pct,
+          });
+        }
+        return results;
+      });
+
+      res.json({ success: true, days, trends });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

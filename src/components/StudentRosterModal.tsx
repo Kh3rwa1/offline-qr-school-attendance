@@ -192,7 +192,7 @@ export const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
 
             <button
               onClick={() => {
-                alert(`Printing QR Card PDF for ${selectedStudentForQr.name}...`);
+                window.print();
               }}
               className="mt-5 w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-md"
             >

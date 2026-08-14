@@ -48,21 +48,23 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
   try {
     const memberships = await getUserSchoolMemberships(user.id);
-    const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
+    const isSuperAdmin = user.platformRole === 'SUPER_ADMIN' || memberships.some((m) => m.role === 'SUPER_ADMIN');
     let targetSchoolId = schoolId;
 
     if (targetSchoolId) {
       const assigned = memberships.some((m) => m.schoolId === targetSchoolId);
       if (!assigned && !isSuperAdmin) throw new Error('SCHOOL_ACCESS_DENIED');
-    } else {
+    } else if (memberships.length > 0) {
       targetSchoolId = memberships[0]?.schoolId;
+    } else if (isSuperAdmin) {
+      targetSchoolId = undefined;
+    } else {
+      throw new Error('SCHOOL_ACCESS_DENIED');
     }
-
-    if (!targetSchoolId) throw new Error('SCHOOL_ACCESS_DENIED');
 
     const session = await createSession(user.id, targetSchoolId);
     await createAuditLog({
-      schoolId: targetSchoolId,
+      schoolId: targetSchoolId || undefined,
       actorId: user.id,
       action: 'USER_LOGIN',
       resourceType: 'USER',
@@ -82,16 +84,19 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         id: user.id,
         fullName: user.fullName,
         phoneNumber: user.phoneNumber,
+        platformRole: user.platformRole || (isSuperAdmin ? 'SUPER_ADMIN' : null),
       },
+      platformRole: user.platformRole || (isSuperAdmin ? 'SUPER_ADMIN' : null),
+      activeSchoolId: targetSchoolId || null,
       memberships,
       csrfToken,
     });
   } catch (error: any) {
     if (error?.message === 'SCHOOL_ACCESS_DENIED') {
-      return res.status(403).json({ error: 'SCHOOL_ACCESS_DENIED' });
+      return res.status(403).json({ error: 'SCHOOL_ACCESS_DENIED', message: 'You do not have access to any school' });
     }
     console.error('Login transaction failed:', error);
-    return res.status(500).json({ error: 'LOGIN_FAILED' });
+    return res.status(500).json({ error: 'LOGIN_FAILED', message: 'Login operation failed' });
   }
 });
 

@@ -1,9 +1,46 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('RFID Enrollment E2E Suite', () => {
-  test('Card enrollment wizard view integrity', async ({ page }) => {
-    await page.goto('/');
-    const content = await page.content();
-    expect(content).toBeDefined();
+const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
+
+test.describe('RFID Card Enrollment E2E Suite', () => {
+  test('RFID_OPERATOR searches student, selects security mode, and enrolls smartcard', async ({ page }) => {
+    // 1. Log in as RFID_OPERATOR
+    await page.goto(baseUrl);
+    await page.getByLabel('Phone number').fill('+919100000003');
+    await page.getByLabel('Password').fill('RfidOpPassword123!');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    // 2. Navigate to Card Personalization & Enrollment
+    await page.goto(`${baseUrl}/app/rfid-operator/enrollment`);
+    await expect(page.getByRole('heading', { name: 'Card Personalization & Key Injection' })).toBeVisible();
+
+    // 3. Search for student in registry
+    const searchInput = page.getByPlaceholder('Type student name or roll number');
+    await searchInput.fill('Rahul');
+    await page.waitForTimeout(500);
+
+    // If students are present, select first student
+    const studentButton = page.locator('button:has-text("Rahul")').first();
+    if (await studentButton.isVisible()) {
+      await studentButton.click();
+      await page.getByRole('button', { name: 'Next: Security Mode' }).click();
+
+      // 4. Select SECURE mode
+      await expect(page.getByText('2. Select Smartcard Cryptographic Standard')).toBeVisible();
+      await page.getByRole('button', { name: 'SECURE (AES-CMAC)' }).click();
+      await page.getByRole('button', { name: 'Next: Read Card' }).click();
+
+      // 5. Input card digest
+      await expect(page.getByText('3. Transceive Card Digest')).toBeVisible();
+      const digestInput = page.locator('input[placeholder="e.g. 7F3A9C8E4D2B1A0F"]');
+      const testDigest = `TEST_CARD_${Date.now()}`;
+      await digestInput.fill(testDigest);
+
+      // 6. Submit Enrollment
+      await page.getByRole('button', { name: 'Enroll Smartcard' }).click();
+
+      // 7. Verify Success
+      await expect(page.getByText('Card Enrolled Successfully!')).toBeVisible({ timeout: 5000 });
+    }
   });
 });

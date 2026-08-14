@@ -1,8 +1,20 @@
 import { Router, Response } from 'express';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql, gte, notInArray, ne, desc } from 'drizzle-orm';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { withSystemContext, withTenantContext } from '../db';
-import { schools, students, schoolMemberships, attendanceSessions, rfidReaders, rfidCredentials } from '../db/schema';
+import {
+  schools,
+  students,
+  schoolMemberships,
+  attendanceSessions,
+  rfidReaders,
+  rfidCredentials,
+  classSections,
+  notificationJobs,
+  attendanceRecords,
+  teacherAssignments,
+  rfidScanEvents,
+} from '../db/schema';
 import {
   SuperAdminSummarySchema,
   SchoolAdminSummarySchema,
@@ -24,7 +36,7 @@ dashboardRouter.get(
   requireRole(['SUPER_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     return withSystemContext(async (tx) => {
-      const allSchools = await tx.select().from(schools);
+      const allSchools = await tx.select().from(schools).orderBy(desc(schools.createdAt));
       const totalStudentsRes = await tx.select({ count: sql<number>`count(*)::int` }).from(students);
       const totalTeachersRes = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -41,8 +53,11 @@ dashboardRouter.get(
         schools: allSchools.map((s: any) => ({
           id: s.id,
           name: s.name,
-          code: s.code,
+          code: s.udiseCode,
+          udiseCode: s.udiseCode,
+          district: s.district,
           status: s.status,
+          createdAt: s.createdAt ? new Date(s.createdAt).toISOString() : null,
         })),
       });
 
@@ -90,16 +105,36 @@ dashboardRouter.get(
       const teachersCount = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schoolMemberships)
-        .where(eq(schoolMemberships.schoolId, schoolId));
+        .where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.role, 'TEACHER')));
+      const classesCount = await tx.select({ count: sql<number>`count(*)::int` }).from(classSections).where(eq(classSections.schoolId, schoolId));
       const readersCount = await tx.select({ count: sql<number>`count(*)::int` }).from(rfidReaders).where(eq(rfidReaders.schoolId, schoolId));
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const [todayStats] = await tx
+        .select({
+          total: sql<number>`count(*)::int`,
+          present: sql<number>`count(case when ${attendanceRecords.status} in ('PRESENT', 'LATE') then 1 end)::int`,
+        })
+        .from(attendanceRecords)
+        .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
+        .where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceSessions.sessionDate, todayStr)));
+
+      const todayPercentage = todayStats?.total && todayStats.total > 0
+        ? Math.round((todayStats.present / todayStats.total) * 1000) / 10
+        : 0;
+
+      const [pendingSms] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notificationJobs)
+        .where(and(eq(notificationJobs.schoolId, schoolId), eq(notificationJobs.status, 'QUEUED')));
 
       const summaryData = SchoolAdminSummarySchema.parse({
         totalStudents: studentsCount[0]?.count ?? 0,
         totalTeachers: teachersCount[0]?.count ?? 0,
-        totalClasses: 12,
+        totalClasses: classesCount[0]?.count ?? 0,
         totalReaders: readersCount[0]?.count ?? 0,
-        todayAttendancePercentage: 96.2,
-        pendingSmsNotifications: 0,
+        todayAttendancePercentage: todayPercentage,
+        pendingSmsNotifications: pendingSms?.count ?? 0,
       });
 
       const response = DashboardResponseEnvelopeSchema(SchoolAdminSummarySchema).parse({
@@ -133,10 +168,27 @@ dashboardRouter.get(
       return res.status(403).json({ error: 'FORBIDDEN', message: 'Teacher access required for target school' });
     }
 
-    return withTenantContext(schoolId, async () => {
+    return withTenantContext(schoolId, async (tx) => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const [assignedCount] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(teacherAssignments)
+        .where(and(eq(teacherAssignments.schoolId, schoolId), eq(teacherAssignments.teacherId, req.user!.id)));
+
+      const [openSession] = await tx
+        .select({ id: attendanceSessions.id })
+        .from(attendanceSessions)
+        .where(and(
+          eq(attendanceSessions.schoolId, schoolId),
+          eq(attendanceSessions.teacherId, req.user!.id),
+          eq(attendanceSessions.sessionDate, todayStr),
+          eq(attendanceSessions.status, 'OPEN')
+        ))
+        .limit(1);
+
       const summaryData = TeacherSummarySchema.parse({
-        assignedClassesCount: 3,
-        activeSessionOpen: true,
+        assignedClassesCount: assignedCount?.count ?? 0,
+        activeSessionOpen: Boolean(openSession),
         offlineSynced: true,
       });
 
@@ -177,10 +229,23 @@ dashboardRouter.get(
         .from(attendanceSessions)
         .where(eq(attendanceSessions.schoolId, schoolId));
 
+      const [overallStats] = await tx
+        .select({
+          total: sql<number>`count(*)::int`,
+          present: sql<number>`count(case when ${attendanceRecords.status} in ('PRESENT', 'LATE') then 1 end)::int`,
+          absent: sql<number>`count(case when ${attendanceRecords.status} = 'ABSENT' then 1 end)::int`,
+        })
+        .from(attendanceRecords)
+        .where(eq(attendanceRecords.schoolId, schoolId));
+
+      const rate = overallStats?.total && overallStats.total > 0
+        ? Math.round((overallStats.present / overallStats.total) * 1000) / 10
+        : 0;
+
       const summaryData = ReportViewerSummarySchema.parse({
-        overallAttendanceRate: 95.8,
+        overallAttendanceRate: rate,
         totalSessionsRecorded: sessionsCount[0]?.count ?? 0,
-        flaggedAbsenceCount: 4,
+        flaggedAbsenceCount: overallStats?.absent ?? 0,
         lastReportGeneratedAt: new Date().toISOString(),
       });
 
@@ -216,14 +281,24 @@ dashboardRouter.get(
     }
 
     return withTenantContext(schoolId, async (tx) => {
-      const readers = await tx.select().from(rfidReaders).where(eq(rfidReaders.schoolId, schoolId));
-      const cards = await tx.select({ count: sql<number>`count(*)::int` }).from(rfidCredentials).where(eq(rfidCredentials.schoolId, schoolId));
+      const readers = await tx.select().from(rfidReaders).where(and(eq(rfidReaders.schoolId, schoolId), eq(rfidReaders.status, 'ACTIVE')));
+      const cards = await tx.select({ count: sql<number>`count(*)::int` }).from(rfidCredentials).where(and(eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'ACTIVE')));
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 3600 * 1000);
+      const [rejections] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(rfidScanEvents)
+        .where(and(
+          eq(rfidScanEvents.schoolId, schoolId),
+          ne(rfidScanEvents.decision, 'ACCEPTED'),
+          gte(rfidScanEvents.createdAt, twentyFourHoursAgo)
+        ));
 
       const summaryData = RfidOperatorSummarySchema.parse({
         activeReadersCount: readers.length,
         totalCardsEnrolled: cards[0]?.count ?? 0,
         gatewayQueueDepth: 0,
-        recentScanRejections: 0,
+        recentScanRejections: rejections?.count ?? 0,
       });
 
       const response = DashboardResponseEnvelopeSchema(RfidOperatorSummarySchema).parse({

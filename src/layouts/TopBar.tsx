@@ -3,84 +3,101 @@ import { useSession } from '../app/SessionProvider';
 import { useActiveSchool } from '../app/ActiveSchoolProvider';
 import { useOfflineStatus } from '../app/OfflineStatusProvider';
 import { SchoolSwitcher } from './SchoolSwitcher';
-import { LogOut, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Search, Bell, Mail, Wifi, WifiOff, RefreshCw, ChevronDown, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
 
 export const TopBar: React.FC = () => {
-  const { user, logout, activeRole } = useSession();
+  const { user, activeRole } = useSession();
   const { activeSchoolName } = useActiveSchool();
   const { isOnline, outboxCount, isSyncing, syncNow } = useOfflineStatus();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-      {/* Left: Active School & Tenant Switcher */}
-      <div className="flex items-center gap-3">
-        <div>
-          <button
-            onClick={() => setSwitcherOpen(true)}
-            className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
-            id="open-school-switcher-btn"
-          >
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700">
-              🏫
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black text-slate-900 leading-tight">
-                  {activeRole === 'SUPER_ADMIN' ? 'Platform Management Console' : activeSchoolName}
-                </span>
-                <span className="text-[10px] text-slate-400 font-bold">▼</span>
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium">Click to switch school</span>
-            </div>
-          </button>
+    <header className="h-20 bg-transparent px-6 sm:px-8 flex items-center justify-between border-b border-slate-100/80">
+      {/* Left: Rounded Pill Search Input */}
+      <div className="flex items-center gap-4 flex-1 max-w-md">
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search student, class, or roll number…"
+            className="w-full pl-11 pr-14 py-3 bg-slate-50 border border-slate-200/80 rounded-full text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#144e39] focus:ring-2 focus:ring-[#144e39]/10 transition-all outline-none"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-lg shadow-2xs font-mono">
+            ⌘ F
+          </span>
         </div>
       </div>
 
-      {/* Right: Sync telemetry, User badge, Sign Out */}
-      <div className="flex items-center gap-3">
-        {/* Offline sync button indicator */}
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-          {isOnline ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
-              <Wifi className="w-3.5 h-3.5" />
-              Online
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700">
-              <WifiOff className="w-3.5 h-3.5" />
-              Offline
-            </span>
-          )}
-
-          <span className="text-[10px] text-slate-500 font-bold">{outboxCount} unsynced</span>
-
-          <button
-            onClick={() => void syncNow()}
-            disabled={!isOnline || isSyncing}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold transition-colors disabled:opacity-50"
-            id="sync-now-topbar-btn"
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Syncing…' : 'Sync outbox'}
-          </button>
-        </div>
-
-        {/* User profile */}
-        <div className="hidden sm:flex flex-col text-right">
-          <span className="text-xs font-bold text-slate-800">{user?.fullName || 'User'}</span>
-          <span className="text-[10px] font-semibold text-indigo-600">{activeRole || 'TEACHER'}</span>
-        </div>
-
-        {/* Sign out */}
-        <button
-          onClick={() => void logout()}
-          className="p-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
-          title="Sign out"
-          id="logout-btn"
+      {/* Right: Quick School Switcher, Notification Bells, User Profile */}
+      <div className="flex items-center gap-4">
+        {/* School Tenant Switcher Pill */}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setSwitcherOpen(true)}
+          className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-50 border border-slate-200/80 text-xs font-bold text-slate-800 hover:bg-slate-100 transition-all"
         >
-          <LogOut className="w-4 h-4" />
-        </button>
+          <span className="text-sm">🏫</span>
+          <span className="max-w-44 truncate">{activeSchoolName}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+        </motion.button>
+
+        {/* Sync Telemetry Badge */}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => void syncNow()}
+          disabled={!isOnline || isSyncing}
+          className="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100 transition-all text-xs font-bold"
+        >
+          {isOnline ? (
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          ) : (
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+          )}
+          <span className="text-slate-700 text-[11px] hidden sm:inline">
+            {isSyncing ? 'Syncing…' : `${outboxCount} unsynced`}
+          </span>
+          <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
+        </motion.button>
+
+        {/* Icon Action Buttons */}
+        <div className="flex items-center gap-2">
+          <motion.button 
+            whileHover={{ scale: 1.08, y: -1 }}
+            whileTap={{ scale: 0.92 }}
+            className="w-10 h-10 rounded-full bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-2xs"
+          >
+            <Mail className="w-4 h-4" />
+          </motion.button>
+          <motion.button 
+            whileHover={{ scale: 1.08, y: -1 }}
+            whileTap={{ scale: 0.92 }}
+            className="w-10 h-10 rounded-full bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-2xs relative"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 absolute top-2.5 right-2.5 animate-ping"></span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 absolute top-2.5 right-2.5"></span>
+          </motion.button>
+        </div>
+
+        {/* User Profile Info */}
+        <motion.div 
+          whileHover={{ scale: 1.02 }}
+          className="flex items-center gap-3 pl-2 cursor-pointer"
+        >
+          <div className="w-10 h-10 rounded-full bg-[#144e39] text-white flex items-center justify-center text-sm font-bold shadow-md shadow-[#144e39]/20">
+            {user?.fullName?.charAt(0) || 'U'}
+          </div>
+          <div className="hidden xl:flex flex-col text-left">
+            <span className="text-xs font-extrabold text-slate-900 leading-tight font-display">{user?.fullName || 'Administrator'}</span>
+            <span className="text-[11px] font-medium text-slate-400">{user?.phoneNumber || activeRole || 'Active Member'}</span>
+          </div>
+        </motion.div>
       </div>
 
       {/* School Switcher Modal */}

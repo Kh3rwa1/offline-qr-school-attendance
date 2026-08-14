@@ -83,7 +83,24 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
   const totalEnrolled = students.length;
 
   const handleExportXlsx = () => {
-    alert('Generating & Downloading Official Attendance Register XLSX file...');
+    const csvContent = [
+      ['Roll Number', 'Student Name', 'Status', 'Time', 'Method'].join(','),
+      ...students.map((s) => [
+        `"${s.rollNumber}"`,
+        `"${s.name}"`,
+        `"${s.status}"`,
+        `"${(s as any).time || ''}"`,
+        `"${(s as any).method || 'Standard'}"`,
+      ].join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance_register_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Helper to estimate actual message length and segment count for a student

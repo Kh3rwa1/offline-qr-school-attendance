@@ -13,7 +13,7 @@ import { qrRouter } from './src/routes/qrRoutes';
 import attendanceRouter from './src/routes/attendanceRoutes';
 import syncRouter from './src/routes/syncRoutes';
 import reportRouter from './src/routes/reportRoutes';
-import auditRouter from './src/routes/auditRoutes';
+import auditRouter, { platformAuditRouter } from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
 import { dashboardRouter } from './src/routes/dashboardRoutes';
@@ -26,6 +26,13 @@ import { initRedis } from './src/services/redisService';
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
     throw new Error('FATAL: METRICS_AUTH_TOKEN environment variable must be set in production mode.');
+  }
+
+  if (process.env.NODE_ENV !== 'production' && !process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
+    const { runMigrations } = await import('./src/db/migrate');
+    const { seedDatabase } = await import('./src/db/seed');
+    await runMigrations();
+    await seedDatabase();
   }
 
   await initRedis();
@@ -130,6 +137,7 @@ export async function createApp() {
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
+  app.use('/api/v1/audit', platformAuditRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 

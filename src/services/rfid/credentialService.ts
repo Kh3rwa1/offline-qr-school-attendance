@@ -247,6 +247,33 @@ export async function lookupActiveCredential(schoolId: string, credentialDigest:
   });
 }
 
+export async function listAllCredentials(schoolId: string) {
+  return withTenantContext(schoolId, async (tx) => {
+    const records = await tx
+      .select({
+        id: rfidCredentials.id,
+        studentId: rfidCredentials.studentId,
+        studentName: students.name,
+        studentCode: students.studentCode,
+        credentialDigest: rfidCredentials.credentialDigest,
+        securityMode: rfidCredentials.securityMode,
+        keyVersion: rfidCredentials.keyVersion,
+        status: rfidCredentials.status,
+        issuedAt: rfidCredentials.createdAt,
+        expiresAt: rfidCredentials.expiresAt,
+      })
+      .from(rfidCredentials)
+      .leftJoin(students, eq(rfidCredentials.studentId, students.id))
+      .where(eq(rfidCredentials.schoolId, schoolId))
+      .orderBy(desc(rfidCredentials.createdAt));
+
+    return records.map((c: any) => ({
+      ...c,
+      credentialDigest: redactCredentialDigest(c.credentialDigest),
+    }));
+  });
+}
+
 export async function getCredentialHistory(schoolId: string, studentId: string) {
   return withTenantContext(schoolId, async (tx) => {
     const credentials = await tx
@@ -336,6 +363,7 @@ export const credentialService = {
   getCredentialHistory,
   getHistory: (studentId: string, schoolId: string) => getCredentialHistory(schoolId, studentId),
   getCredentialById,
+  listAllCredentials,
   bulkEnroll: async (paramsOrEntries: any, schoolId?: string) => {
     if (Array.isArray(paramsOrEntries) && typeof schoolId === 'string') {
       const formatted = paramsOrEntries.map((e) => ({

@@ -92,6 +92,13 @@
       "when": 1786590000000,
       "tag": "0012_rfid_reader_atomic_sequence",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786600000000,
+      "tag": "0013_platform_role_and_school_provisioning",
+      "breakpoints": true
     }
   ]
 }

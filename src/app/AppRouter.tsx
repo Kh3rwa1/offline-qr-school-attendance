@@ -21,6 +21,7 @@ const SecurityOverview = lazy(() => import('../dashboards/super-admin/SecurityOv
 const AuditOverview = lazy(() => import('../dashboards/super-admin/AuditOverview'));
 
 const UserManagement = lazy(() => import('../dashboards/school-admin/UserManagement'));
+const StudentRoster = lazy(() => import('../dashboards/school-admin/StudentRoster'));
 const AcademicManagement = lazy(() => import('../dashboards/school-admin/AcademicManagement'));
 const AttendanceOperations = lazy(() => import('../dashboards/school-admin/AttendanceOperations'));
 const NotificationOperations = lazy(() => import('../dashboards/school-admin/NotificationOperations'));
@@ -127,6 +128,14 @@ export const AppRouter: React.FC = () => {
             element={
               <RequireRole allowedRoles={['SCHOOL_ADMIN', 'SUPER_ADMIN']}>
                 <UserManagement />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="school-admin/students"
+            element={
+              <RequireRole allowedRoles={['SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <StudentRoster />
               </RequireRole>
             }
           />

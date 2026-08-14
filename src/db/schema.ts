@@ -49,15 +49,22 @@ export const academicYears = pgTable(
 );
 
 // 3. Users (System Users)
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  fullName: varchar('full_name', { length: 255 }).notNull(),
-  phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
-  passwordHash: varchar('password_hash', { length: 255 }).notNull(), // Argon2id
-  status: varchar('status', { length: 20 }).notNull().default('ACTIVE'), // 'ACTIVE' | 'SUSPENDED'
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fullName: varchar('full_name', { length: 255 }).notNull(),
+    phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
+    passwordHash: varchar('password_hash', { length: 255 }).notNull(), // Argon2id
+    platformRole: varchar('platform_role', { length: 30 }), // 'SUPER_ADMIN' | null
+    status: varchar('status', { length: 20 }).notNull().default('ACTIVE'), // 'ACTIVE' | 'SUSPENDED'
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    platformRoleIdx: index('users_platform_role_idx').on(table.platformRole),
+  })
+);
 
 // 4. School Memberships (Links User to School with Role)
 export const schoolMemberships = pgTable(

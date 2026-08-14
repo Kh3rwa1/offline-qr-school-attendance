@@ -51,11 +51,12 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
   fullName: string;
   phoneNumber: string;
   passwordHash: string;
+  platformRole?: string | null;
   status: string;
 } | null> {
   const pool = getAuthPool();
   if (pool) {
-    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
+    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, platform_role, status FROM users WHERE phone_number = $1::text LIMIT 1', [phoneNumber]);
     if (res.rows.length === 0) return null;
     const row = res.rows[0];
     return {
@@ -63,6 +64,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
       fullName: row.full_name,
       phoneNumber: row.phone_number,
       passwordHash: row.password_hash,
+      platformRole: row.platform_role || null,
       status: row.status,
     };
   }
@@ -71,24 +73,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
     throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }
 
-  // Fallback for PGlite / in-memory unit tests
-  try {
-    const res = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone(${phoneNumber})`);
-    if (res?.rows && (res.rows as any[]).length > 0) {
-      const row = (res.rows as any[])[0];
-      return {
-        id: row.id,
-        fullName: row.full_name,
-        phoneNumber: row.phone_number,
-        passwordHash: row.password_hash,
-        status: row.status,
-      };
-    }
-  } catch {
-    // If function is not defined in PGlite mock, fallback to direct query
-  }
-
-  const result = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, status FROM users WHERE phone_number = ${phoneNumber} LIMIT 1`);
+  const result = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, platform_role, status FROM users WHERE phone_number = ${phoneNumber} LIMIT 1`);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   if (rows.length === 0) return null;
   const r = rows[0];
@@ -97,6 +82,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
     fullName: r.full_name || r.fullName,
     phoneNumber: r.phone_number || r.phoneNumber,
     passwordHash: r.password_hash || r.passwordHash,
+    platformRole: r.platform_role || r.platformRole || null,
     status: r.status,
   };
 }

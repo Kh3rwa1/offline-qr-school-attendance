@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db, withSystemContext, withTenantContext } from '../db';
-import { notificationJobs, notificationAttempts } from '../db/schema';
+import { notificationJobs, notificationAttempts, students } from '../db/schema';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
 import { getSmsProvider } from '../services/sms/smsProvider';
@@ -14,6 +14,7 @@ import {
 } from '../services/notificationService';
 import { processNotificationQueue } from '../services/notificationWorker';
 import { redactPhoneNumber } from '../services/sms/smsUtils';
+import { createAuditLog } from '../services/auditLogService';
 
 const router = Router();
 
@@ -63,7 +64,6 @@ router.post('/callback', async (req: Request, res: Response) => {
     });
   }
 
-  // Monotonic State Transition Protection: DELIVERED is terminal. Late FAILED callback must not overwrite DELIVERED.
   if (job.status === 'DELIVERED') {
     return res.status(200).json({
       status: 'ALREADY_DELIVERED',
@@ -98,7 +98,108 @@ router.post('/callback', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// 2. School SMS Settings Endpoints (Authenticated & Tenant Isolated)
+// 2. Notification Queue Listing (School Scoped)
+// ==========================================
+router.get(
+  '/queue',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const schoolId = req.activeSchoolId!;
+
+    try {
+      const jobs = await db
+        .select({
+          id: notificationJobs.id,
+          studentId: notificationJobs.studentId,
+          studentName: students.name,
+          recipientPhone: notificationJobs.recipientPhone,
+          language: notificationJobs.language,
+          messageText: notificationJobs.messageBody,
+          status: notificationJobs.status,
+          attemptCount: notificationJobs.attemptCount,
+          failureReason: notificationJobs.failureReason,
+          queuedAt: notificationJobs.queuedAt,
+          deliveredAt: notificationJobs.deliveredAt,
+        })
+        .from(notificationJobs)
+        .leftJoin(students, eq(notificationJobs.studentId, students.id))
+        .where(eq(notificationJobs.schoolId, schoolId))
+        .orderBy(desc(notificationJobs.queuedAt))
+        .limit(100);
+
+      const sanitizedJobs = jobs.map((j: any) => ({
+        ...j,
+        recipientPhone: redactPhoneNumber(j.recipientPhone),
+      }));
+
+      const totalCount = jobs.length;
+      const deliveredCount = jobs.filter((j: any) => j.status === 'DELIVERED').length;
+      const failedCount = jobs.filter((j: any) => j.status === 'PERMANENT_FAILURE' || j.status === 'FAILED').length;
+      const queuedCount = jobs.filter((j: any) => j.status === 'QUEUED' || j.status === 'PROCESSING').length;
+
+      return res.json({
+        success: true,
+        summary: {
+          total: totalCount,
+          delivered: deliveredCount,
+          failed: failedCount,
+          queued: queuedCount,
+        },
+        jobs: sanitizedJobs,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
+// ==========================================
+// 3. Retry Notification Job
+// ==========================================
+router.post(
+  '/jobs/:jobId/retry',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const schoolId = req.activeSchoolId!;
+    const { jobId } = req.params;
+
+    try {
+      const [updated] = await db
+        .update(notificationJobs)
+        .set({
+          status: 'QUEUED',
+          attemptCount: 0,
+          failureReason: null,
+          nextAttemptAt: new Date(),
+        })
+        .where(and(eq(notificationJobs.id, jobId), eq(notificationJobs.schoolId, schoolId)))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'JOB_NOT_FOUND' });
+      }
+
+      await createAuditLog({
+        schoolId,
+        actorId: req.user!.id,
+        action: 'NOTIFICATION_JOB_RETRIED',
+        resourceType: 'NOTIFICATION_JOB',
+        resourceId: jobId,
+      });
+
+      return res.json({ success: true, job: updated });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
+// ==========================================
+// 4. School SMS Settings Endpoints
 // ==========================================
 router.get(
   '/settings',
@@ -142,119 +243,19 @@ router.put(
 );
 
 // ==========================================
-// 3. Notification Templates Endpoints
-// ==========================================
-router.get(
-  '/templates',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-
-    try {
-      const templates = await getNotificationTemplates(schoolId);
-      return res.json({ templates });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
-);
-
-router.post(
-  '/templates',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const { templateCode, language, content, dltTemplateId } = req.body;
-
-    if (!templateCode || !language || !content) {
-      return res.status(400).json({ error: 'MISSING_REQUIRED_FIELDS' });
-    }
-
-    try {
-      const template = await upsertNotificationTemplate(
-        schoolId,
-        templateCode,
-        language,
-        content,
-        dltTemplateId
-      );
-      return res.json({ template });
-    } catch (err: any) {
-      return res.status(400).json({ error: err.message });
-    }
-  }
-);
-
-// ==========================================
-// 4. SMS Usage Report
-// ==========================================
-router.get(
-  '/usage-report',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const { startDate, endDate } = req.query;
-
-    try {
-      const report = await getSmsUsageReport(schoolId, startDate as string, endDate as string);
-      return res.json(report);
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
-);
-
-// ==========================================
 // 5. Trigger Queue Worker (Admin Only)
 // ==========================================
 router.post(
   '/process-queue',
   requireAuth,
-  requireRole(['SUPER_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { limit, providerName } = req.body;
       const result = await processNotificationQueue({ limit, providerName });
-      return res.json(result);
+      return res.json({ success: true, ...result });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
-);
-
-// ==========================================
-// 6. Student Delivery History
-// ==========================================
-router.get(
-  '/history/:studentId',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const { studentId } = req.params;
-    const schoolId = req.activeSchoolId!;
-
-    try {
-      const jobs = await db
-        .select()
-        .from(notificationJobs)
-        .where(and(eq(notificationJobs.studentId, studentId), eq(notificationJobs.schoolId, schoolId)))
-        .orderBy(desc(notificationJobs.queuedAt));
-
-      const sanitizedJobs = jobs.map((j: any) => ({
-        ...j,
-        recipientPhone: redactPhoneNumber(j.recipientPhone),
-      }));
-
-      return res.json({ jobs: sanitizedJobs });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ success: false, error: err.message });
     }
   }
 );

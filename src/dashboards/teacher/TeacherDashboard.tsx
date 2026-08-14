@@ -18,7 +18,13 @@ export const TeacherDashboard: React.FC = () => {
   const { isOnline, outboxCount, isSyncing, syncNow, refreshOutbox } = useOfflineStatus();
 
   const [classes, setClasses] = useState<any[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('attendance.classSectionId') || '';
+    } catch {
+      return '';
+    }
+  });
   const [roster, setRoster] = useState<OfflineRosterItem[]>([]);
   const [session, setSession] = useState<OfflineSessionItem | null>(null);
   const [sessionRoster, setSessionRoster] = useState<OfflineSessionRosterItem[]>([]);

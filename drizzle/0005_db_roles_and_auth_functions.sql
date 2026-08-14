@@ -18,7 +18,7 @@ BEGIN
     CREATE ROLE attendance_system WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
 EXCEPTION
-  WHEN duplicate_object OR insufficient_privilege OR feature_not_supported OR undefined_object THEN NULL;
+  WHEN duplicate_object THEN NULL;
 END $$;
 --> statement-breakpoint
 
@@ -74,14 +74,10 @@ $$;
 -- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, grant EXECUTE exclusively to attendance_auth role.
 DO $$
 BEGIN
-  BEGIN
-    EXECUTE format('ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO %I', CURRENT_USER);
-    EXECUTE format('ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO %I', CURRENT_USER);
-    REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
-    REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
-  EXCEPTION
-    WHEN duplicate_object OR insufficient_privilege OR feature_not_supported OR undefined_object THEN NULL;
-  END;
+  EXECUTE format('ALTER FUNCTION public.lookup_auth_user_by_phone(text) OWNER TO %I', CURRENT_USER);
+  EXECUTE format('ALTER FUNCTION public.get_user_school_memberships(uuid) OWNER TO %I', CURRENT_USER);
+  REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
+  REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
 
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN
     GRANT USAGE ON SCHEMA public TO attendance_auth;
@@ -101,5 +97,5 @@ BEGIN
     GRANT USAGE ON SCHEMA public TO attendance_migration;
   END IF;
 EXCEPTION
-  WHEN duplicate_object OR insufficient_privilege OR feature_not_supported OR undefined_object THEN NULL;
+  WHEN duplicate_object THEN NULL;
 END $$;

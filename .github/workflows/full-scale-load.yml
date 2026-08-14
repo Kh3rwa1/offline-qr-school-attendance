@@ -92,9 +92,21 @@ jobs:
           LOAD_TEST_DURATION_SEC: ${{ inputs.duration_seconds }}
           LOAD_P95_THRESHOLD_MS: '300'
           LOAD_AUTH_P95_THRESHOLD_MS: '600'
+          GITHUB_SHA: ${{ github.sha }}
         run: npm run test:load-full
 
-      - name: Upload Full-Scale Benchmark Reports
+      - name: Verify Report Commit SHA Matches Workflow Head SHA
+        run: |
+          REPORT_SHA=$(jq -r '.gitCommitSha' output/full-scale-report.json)
+          EXPECTED_SHA="${{ github.sha }}"
+          echo "Report SHA:   ${REPORT_SHA}"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          if [ "${REPORT_SHA}" != "${EXPECTED_SHA}" ]; then
+            echo "ERROR: Report commit SHA (${REPORT_SHA}) does not match workflow head SHA (${EXPECTED_SHA})"
+            exit 1
+          fi
+
+      - name: Upload Full-Scale Benchmark Reports & Checksums
         if: always()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
@@ -104,4 +116,5 @@ jobs:
             output/full-scale-report.json
             output/full-scale-report.md
             output/post-load-integrity-report.json
+            output/load-certification-checksums.sha256
           if-no-files-found: ignore

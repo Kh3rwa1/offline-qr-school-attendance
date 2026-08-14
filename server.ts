@@ -75,7 +75,7 @@ export async function createApp() {
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
 
   // 2. Production-grade CSRF protection for cookie-authenticated mutating requests
-  app.use('/api', csrfProtection);
+  app.use('/api', rateLimitPolicies.generalApi, csrfProtection);
 
   // Database migrations and seed data are deployment concerns. Run
   // `npm run migrate` and, only for an explicit development environment,

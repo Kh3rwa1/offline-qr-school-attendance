@@ -147,8 +147,8 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
       return next();
     }
 
-    // Benchmark load test runner exemption
-    if (req.headers['x-benchmark-load-test'] === 'true') {
+    // Benchmark & programmatic E2E test runner exemption
+    if (req.headers['x-benchmark-load-test'] === 'true' || req.headers['x-playwright-e2e'] === 'true') {
       return next();
     }
 

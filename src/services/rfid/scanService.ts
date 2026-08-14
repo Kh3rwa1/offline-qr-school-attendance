@@ -23,6 +23,17 @@ else
 end
 `;
 
+const LUA_RENEW_LOCK = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("pexpire", KEYS[1], ARGV[2])
+else
+  return 0
+end
+`;
+
+const LOCK_TTL_MS = 10000;
+const LOCK_RENEWAL_INTERVAL_MS = 3000;
+
 export interface ScanEnvelope {
   version: number;
   schoolId: string;
@@ -124,12 +135,41 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   _inProcessLocks.set(inProcessKey, inProcessPromise);
 
   let acquiredRedisLock = false;
+  let renewalHeartbeat: NodeJS.Timeout | null = null;
+
+  const startHeartbeat = () => {
+    if (redis && acquiredRedisLock && !renewalHeartbeat) {
+      renewalHeartbeat = setInterval(async () => {
+        try {
+          const renewed = await redis.eval(LUA_RENEW_LOCK, 1, eventLockKey, lockOwnerToken, String(LOCK_TTL_MS));
+          if (renewed !== 1 && renewalHeartbeat) {
+            clearInterval(renewalHeartbeat);
+            renewalHeartbeat = null;
+          }
+        } catch {
+          // Ignore transient Redis errors during periodic renewal
+        }
+      }, LOCK_RENEWAL_INTERVAL_MS);
+      // Unref timer so it does not keep process alive unnecessarily
+      if (renewalHeartbeat && typeof renewalHeartbeat.unref === 'function') {
+        renewalHeartbeat.unref();
+      }
+    }
+  };
+
+  const stopHeartbeat = () => {
+    if (renewalHeartbeat) {
+      clearInterval(renewalHeartbeat);
+      renewalHeartbeat = null;
+    }
+  };
 
   if (redis) {
     try {
-      const lockRes = await redis.set(eventLockKey, lockOwnerToken, 'EX', 10, 'NX');
+      const lockRes = await redis.set(eventLockKey, lockOwnerToken, 'PX', LOCK_TTL_MS, 'NX');
       if (lockRes === 'OK') {
         acquiredRedisLock = true;
+        startHeartbeat();
       } else {
         // Contender: Poll for result cache or DB record
         for (let i = 0; i < 50; i++) {
@@ -158,9 +198,10 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         }
 
         // Explicit reacquisition attempt after polling timeout
-        const reacquire = await redis.set(eventLockKey, lockOwnerToken, 'EX', 10, 'NX');
+        const reacquire = await redis.set(eventLockKey, lockOwnerToken, 'PX', LOCK_TTL_MS, 'NX');
         if (reacquire === 'OK') {
           acquiredRedisLock = true;
+          startHeartbeat();
         } else {
           const finalStored = await withTenantContext(envelope.schoolId, async (tx) => {
             const [rec] = await tx
@@ -186,10 +227,12 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         throw err;
       }
       acquiredRedisLock = true;
+      startHeartbeat();
     }
   }
 
   const finishProcessing = async (result: ScanResult): Promise<ScanResult> => {
+    stopHeartbeat();
     if (redis && acquiredRedisLock) {
       try {
         await redis.set(eventResultKey, JSON.stringify(result), 'EX', 60);
@@ -525,6 +568,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     _inProcessLocks.delete(inProcessKey);
     throw outerErr;
   } finally {
+    stopHeartbeat();
     if (redis && acquiredRedisLock) {
       try {
         await redis.eval(LUA_RELEASE_LOCK, 1, eventLockKey, lockOwnerToken);

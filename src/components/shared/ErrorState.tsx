@@ -1,0 +1,1 @@
+export function ErrorState({ onRetry }: { onRetry?: () => void }) { return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-800" role="alert"><p className="font-bold">Unable to load this workspace.</p>{onRetry && <button className="mt-3 rounded-lg bg-rose-700 px-3 py-2 text-sm font-bold text-white" onClick={onRetry}>Retry</button>}</div>; }

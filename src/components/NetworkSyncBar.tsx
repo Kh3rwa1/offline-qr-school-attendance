@@ -4,7 +4,7 @@ import { getOutboxStatus, syncOutboxEvents } from '../services/offlineSyncServic
 
 interface NetworkSyncBarProps {
   schoolId?: string;
-  deviceIdentifier: string;
+  deviceIdentifier?: string;
   onSyncComplete?: () => void;
 }
 
@@ -32,7 +32,7 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      if (schoolId) {
+      if (schoolId && deviceIdentifier) {
         handleTriggerSync();
       }
     };
@@ -51,10 +51,10 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [schoolId]);
+  }, [schoolId, deviceIdentifier]);
 
   const handleTriggerSync = async () => {
-    if (!schoolId || isSyncing) return;
+    if (!schoolId || !deviceIdentifier || isSyncing) return;
     setIsSyncing(true);
     setLastSyncStatus(null);
 

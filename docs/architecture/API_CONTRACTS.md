@@ -162,3 +162,22 @@ All REST endpoints return standard JSON responses and enforce Zod validation sch
 ### `POST /api/v1/schools/:schoolId/qr/print-batch`
 - **Description:** Generates bulk PDF/HTML print-ready QR cards for a class section.
 - **Response (200 OK):** Binary PDF or HTML document containing cards with QR codes, Bengali/English student name, roll number, and school logo.
+## Dashboard summary contracts
+
+All dashboard summaries return `{ success: true, data: { ...dto, generatedAt } }`.
+The server derives the school and role from the authenticated session; browser
+`role`, `userId`, and `schoolId` values are not authorization inputs.
+
+| Endpoint | Required active role | Scope |
+| --- | --- | --- |
+| `GET /api/v1/dashboard/super-admin/summary` | `SUPER_ADMIN` | audited platform/system context |
+| `GET /api/v1/dashboard/school-admin/summary` | `SCHOOL_ADMIN` | active school tenant |
+| `GET /api/v1/dashboard/teacher/summary` | `TEACHER` | active school + authenticated teacher assignments |
+| `GET /api/v1/dashboard/report-viewer/summary` | `REPORT_VIEWER` or `SCHOOL_ADMIN` | active school, read-only |
+| `GET /api/v1/dashboard/rfid-operator/summary` | `RFID_OPERATOR` | active school RFID telemetry |
+| `POST /api/v1/auth/switch-school` | authenticated member or Super Admin support flow | authenticated session mutation |
+
+Dashboard responses are DTOs, never raw ORM rows, and do not include password
+hashes, secrets, card keys, reader secrets, session tokens, or guardian phone
+numbers. School-local “today” uses the school timezone, currently defaulting to
+`Asia/Kolkata` where no configured timezone is present.

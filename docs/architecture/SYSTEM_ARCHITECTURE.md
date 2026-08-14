@@ -2,7 +2,22 @@
 
 ## 1. High-Level Architectural Pattern
 
-The application is structured as a **Modular Monolith** designed for high developer velocity, operational simplicity, and deployment on low-cost VPS instances. It cleanly separates concerns without introducing the operational overhead of microservices, Redis, or Kubernetes.
+The application is structured as a **Modular Monolith** designed for high developer velocity and operational simplicity. Redis provides distributed rate limiting/idempotency and the repository includes Docker and Kubernetes deployment paths; PostgreSQL 16 remains the tenant data boundary with forced RLS.
+
+## Role-aware application shell
+
+The React shell is composed from `SessionProvider`, `ActiveSchoolProvider`,
+`OfflineStatusProvider`, and TanStack Query. `AppRouter` lazy-loads five
+dashboard groups under `/app`: platform, school administration, teacher
+offline attendance, read-only reports, and RFID operations. Route guards are
+not authorization boundaries; server routes independently validate the session
+membership, active role, tenant context, and permission.
+
+The active school is held in the authenticated server session. Switching
+schools calls `/api/v1/auth/switch-school`, validates membership server-side,
+audits the change, clears tenant-scoped query state, and reloads session data.
+Offline cached identity is bounded to teacher attendance and cannot authorize
+administrative, RFID, reporting mutation, or cross-school operations.
 
 ```
 +-----------------------------------------------------------------------------------+

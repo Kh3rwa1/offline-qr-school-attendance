@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { db, withSystemContext } from '../db';
-import { users, schoolMemberships, schools } from '../db/schema';
+import { authSessions, users, schoolMemberships, schools } from '../db/schema';
 import { verifyPassword } from '../auth/password';
 import { timingSafeVerifyPassword, lookupAuthUserByPhone, getUserSchoolMemberships } from '../db/authFunctions';
 import { createSession, invalidateSession } from '../auth/session';
@@ -111,4 +111,24 @@ authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Respon
     user: req.user,
     sessionContext: req.sessionContext,
   });
+});
+
+const switchSchoolSchema = z.object({ schoolId: z.string().uuid() });
+authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = switchSchoolSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'INVALID_SCHOOL_ID' });
+  const target = parsed.data.schoolId;
+  const memberships = req.sessionContext?.memberships || [];
+  const membership = memberships.find((item) => item.schoolId === target);
+  const canSupportSwitch = memberships.some((item) => item.role === 'SUPER_ADMIN');
+  if (!membership && !canSupportSwitch) return res.status(403).json({ error: 'SCHOOL_ACCESS_DENIED' });
+  try {
+    await withSystemContext(async (tx) => {
+      const [school] = await tx.select({ id: schools.id }).from(schools).where(and(eq(schools.id, target), eq(schools.status, 'ACTIVE')));
+      if (!school) throw new Error('SCHOOL_ACCESS_DENIED');
+      await tx.update(authSessions).set({ schoolId: target }).where(eq(authSessions.id, req.sessionContext!.sessionId));
+      await createAuditLog({ schoolId: target, actorId: req.user!.id, action: 'ACTIVE_SCHOOL_SWITCHED', resourceType: 'AUTH_SESSION', resourceId: req.sessionContext!.sessionId, metadata: { previousSchoolId: req.sessionContext!.schoolId, role: membership?.role || 'SUPER_ADMIN' } });
+    });
+    return res.json({ success: true });
+  } catch (error: any) { if (error?.message === 'SCHOOL_ACCESS_DENIED') return res.status(403).json({ error: 'SCHOOL_ACCESS_DENIED' }); throw error; }
 });

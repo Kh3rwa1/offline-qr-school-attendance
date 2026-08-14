@@ -1,0 +1,1 @@
+export function UnauthorizedPage() { return <main className="grid min-h-[50vh] place-items-center p-6"><section className="max-w-lg text-center"><h1 className="text-2xl font-black">403 — Not authorized</h1><p className="mt-2 text-slate-600">Your active membership does not permit this workspace.</p></section></main>; }

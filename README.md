@@ -2,6 +2,20 @@
 
 An enterprise-grade hybrid attendance platform supporting school-issued QR credentials, MIFARE DESFire EV2/EV3 RFID cards, and NFC hardware gateways. Features multi-tenant PostgreSQL Row-Level Security (RLS), atomic Redis idempotency, AES-256-GCM encrypted per-reader secrets, and offline outbox synchronization.
 
+## Role-aware dashboards
+
+The application provides five server-authorized dashboard workspaces:
+
+- `SUPER_ADMIN`: `/app/super-admin` platform oversight and audited school operations.
+- `SCHOOL_ADMIN`: `/app/school-admin` tenant-scoped school administration.
+- `TEACHER`: `/app/teacher` assigned-class attendance with QR/USB scanning and bounded offline support.
+- `REPORT_VIEWER`: `/app/reports` read-only reports and exports.
+- `RFID_OPERATOR`: `/app/rfid` RFID reader/card operations without general school administration.
+
+Frontend navigation and route guards improve usability but are not authorization. Dashboard APIs derive active membership and role from the authenticated session, use tenant context for school data, and return `403` for forbidden routes. A multi-school switch calls the server-side `/api/v1/auth/switch-school` endpoint and clears tenant-scoped query state before loading the new school.
+
+The Parent/Guardian portal is not enabled by default. It remains an extension point documented in `docs/architecture/ADR-006-role-aware-dashboards.md` and may only be added behind `FEATURE_PARENT_PORTAL=true` after secure guardian-to-student authorization is modeled.
+
 ---
 
 ## 🚀 Quality Gates & Verification

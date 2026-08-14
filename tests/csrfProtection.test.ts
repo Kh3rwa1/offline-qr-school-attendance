@@ -154,4 +154,32 @@ describe('Production CSRF Protection Test Suite', () => {
     // Webhook route is exempt from cookie CSRF and proceeds directly to signature handler
     expect(res.status).not.toBe(403);
   });
+
+  it('8. Rejects test bypass headers when in production mode without ALLOW_TEST_BYPASS', async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    const oldAllow = process.env.ALLOW_TEST_BYPASS;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.ALLOW_TEST_BYPASS;
+
+      const res = await fetch(`${baseUrl}/api/v1/schools/00000000-0000-0000-0000-000000000000/attendance/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'session=authenticated-cookie-without-csrf',
+          'x-benchmark-load-test': 'true',
+          'x-playwright-e2e': 'true',
+        },
+        body: JSON.stringify({ classSectionId: 'test' }),
+      });
+
+      // In production mode without explicit ALLOW_TEST_BYPASS=true, client headers MUST NOT bypass CSRF
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.error).toContain('CSRF');
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      process.env.ALLOW_TEST_BYPASS = oldAllow;
+    }
+  });
 });

@@ -10,6 +10,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   SYSTEM_DATABASE_URL: z.string().optional(),
   SESSION_SECRET: z.string().min(32).optional(),
+  CSRF_SECRET: z.string().min(32).optional(),
+  ALLOW_TEST_BYPASS: z.string().default('false'),
   APP_URL: z.string().optional(),
   
   // RFID Configuration
@@ -38,6 +40,10 @@ export function validateProductionEnv() {
   if (parsed.NODE_ENV === 'production' && parsed.COMPONENT === 'web') {
     if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
       throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
+    }
+    const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
+    if (!csrfSecret || csrfSecret.length < 32) {
+      throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
     }
     const hmacSecret = process.env.REDIS_KEY_HMAC_SECRET;
     if (!hmacSecret || hmacSecret.length < 32) {

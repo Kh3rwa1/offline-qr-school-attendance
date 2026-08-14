@@ -69,13 +69,13 @@ export async function createApp() {
   });
 
   // 1. API & Login Rate Limiting Middleware
+  app.use(rateLimitPolicies.generalApi);
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
-  app.use('/api/v1', rateLimitPolicies.generalApi);
 
   // 2. Production-grade CSRF protection for cookie-authenticated mutating requests
-  app.use(csrfProtection);
+  app.use('/api', csrfProtection);
 
   // Database migrations and seed data are deployment concerns. Run
   // `npm run migrate` and, only for an explicit development environment,

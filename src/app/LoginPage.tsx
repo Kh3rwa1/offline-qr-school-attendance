@@ -129,14 +129,16 @@ export const LoginPage: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
-                Mobile Number
+              <label htmlFor="login-phone" className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+                Phone Number
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-extrabold text-slate-500">
                   🇮🇳
                 </span>
                 <input
+                  id="login-phone"
+                  aria-label="Phone number"
                   type="text"
                   required
                   value={phoneNumber}
@@ -148,10 +150,12 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
-                Security Password
+              <label htmlFor="login-password" className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+                Password
               </label>
               <input
+                id="login-password"
+                aria-label="Password"
                 type="password"
                 required
                 value={password}
@@ -166,13 +170,14 @@ export const LoginPage: React.FC = () => {
               whileTap={{ scale: 0.99 }}
               type="submit"
               disabled={isSubmitting}
+              aria-label="Sign in"
               className="w-full py-4 px-6 rounded-full bg-[#144e39] hover:bg-[#0f3d2c] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#144e39]/25 transition-all font-display disabled:opacity-50 mt-4"
             >
               {isSubmitting ? (
                 <span>Authenticating…</span>
               ) : (
                 <>
-                  <span>Sign In to Console</span>
+                  <span>Sign In</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

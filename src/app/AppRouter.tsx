@@ -6,6 +6,8 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import LoginPage from './LoginPage';
 import AuthenticatedApp from './AuthenticatedApp';
 import UnauthorizedPage from '../auth/UnauthorizedPage';
+import { useSession } from './SessionProvider';
+import { getDefaultRouteForRole } from '../auth/permissions';
 
 import SuperAdminDashboard from '../dashboards/super-admin/SuperAdminDashboard';
 import SchoolAdminDashboard from '../dashboards/school-admin/SchoolAdminDashboard';
@@ -35,6 +37,22 @@ const CardOperations = lazy(() => import('../dashboards/rfid-operator/CardOperat
 const EnrollmentOperations = lazy(() => import('../dashboards/rfid-operator/EnrollmentOperations'));
 const RfidIncidentQueue = lazy(() => import('../dashboards/rfid-operator/RfidIncidentQueue'));
 
+const RootRedirect: React.FC = () => {
+  const { isAuthenticated, activeRole, isLoading } = useSession();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-600 font-bold text-sm">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p>Verifying secure session…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Navigate to={getDefaultRouteForRole(activeRole || undefined)} replace />;
+};
+
 export const AppRouter: React.FC = () => {
   return (
     <Suspense
@@ -59,7 +77,7 @@ export const AppRouter: React.FC = () => {
             </RequireAuth>
           }
         >
-          <Route index element={<AuthenticatedApp />} />
+          <Route index element={<RootRedirect />} />
 
           {/* Super Admin Routes */}
           <Route
@@ -167,7 +185,7 @@ export const AppRouter: React.FC = () => {
           <Route
             path="reports"
             element={
-              <RequireRole allowedRoles={['REPORT_VIEWER', 'SCHOOL_ADMIN', 'SUPER_ADMIN', 'TEACHER']}>
+              <RequireRole allowedRoles={['REPORT_VIEWER', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
                 <ReportViewerDashboard />
               </RequireRole>
             }
@@ -175,7 +193,7 @@ export const AppRouter: React.FC = () => {
           <Route
             path="reports/daily"
             element={
-              <RequireRole allowedRoles={['REPORT_VIEWER', 'SCHOOL_ADMIN', 'SUPER_ADMIN', 'TEACHER']}>
+              <RequireRole allowedRoles={['REPORT_VIEWER', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
                 <DailyReports />
               </RequireRole>
             }
@@ -244,8 +262,8 @@ export const AppRouter: React.FC = () => {
         </Route>
 
         {/* Root Fallback */}
-        <Route path="/" element={<Navigate to="/app" replace />} />
-        <Route path="*" element={<Navigate to="/app" replace />} />
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );

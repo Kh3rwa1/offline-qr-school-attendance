@@ -18,7 +18,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.getByLabel('Password').fill('SchoolAdminPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page.getByText(/School Administration|Rampur High School/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'School Administration & Operations' })).toBeVisible();
   });
 
   test('TEACHER logs in and lands directly on Offline QR Attendance station', async ({ page }) => {
@@ -59,6 +59,6 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
     await page.goto(`${baseUrl}/app/super-admin`);
-    await expect(page.getByText('403 — Access Denied')).toBeVisible();
+    await expect(page.locator('#unauthorized-403-heading')).toBeVisible();
   });
 });

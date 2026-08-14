@@ -85,6 +85,8 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379
           FULL_500K_BENCHMARK: '1'
           LOAD_TEST_DURATION_SEC: ${{ inputs.duration_seconds }}
+          LOAD_P95_THRESHOLD_MS: '300'
+          LOAD_AUTH_P95_THRESHOLD_MS: '600'
         run: npm run test:load-full
 
       - name: Upload Full-Scale Benchmark Reports

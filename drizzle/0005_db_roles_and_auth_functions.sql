@@ -18,9 +18,7 @@ BEGIN
     CREATE ROLE attendance_system WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
 EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN insufficient_privilege THEN NULL;
-  WHEN OTHERS THEN NULL;
+  WHEN duplicate_object OR insufficient_privilege OR feature_not_supported OR undefined_object THEN NULL;
 END $$;
 --> statement-breakpoint
 
@@ -73,7 +71,7 @@ END;
 $$;
 --> statement-breakpoint
 
--- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, conditionally grant EXECUTE to application & auth roles.
+-- Function security hardening: assign owner, REVOKE ALL FROM PUBLIC, grant EXECUTE exclusively to attendance_auth role.
 DO $$
 BEGIN
   BEGIN
@@ -82,7 +80,7 @@ BEGIN
     REVOKE ALL ON FUNCTION public.lookup_auth_user_by_phone(text) FROM PUBLIC;
     REVOKE ALL ON FUNCTION public.get_user_school_memberships(uuid) FROM PUBLIC;
   EXCEPTION
-    WHEN OTHERS THEN NULL;
+    WHEN duplicate_object OR insufficient_privilege OR feature_not_supported OR undefined_object THEN NULL;
   END;
 
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN
@@ -92,13 +90,9 @@ BEGIN
   END IF;
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
     GRANT USAGE ON SCHEMA public TO attendance_app;
-    GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_app;
-    GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_app;
   END IF;
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
     GRANT USAGE ON SCHEMA public TO attendance_system;
-    GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_system;
-    GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_system;
   END IF;
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN
     GRANT USAGE ON SCHEMA public TO attendance_worker;
@@ -107,5 +101,5 @@ BEGIN
     GRANT USAGE ON SCHEMA public TO attendance_migration;
   END IF;
 EXCEPTION
-  WHEN OTHERS THEN NULL;
+  WHEN duplicate_object OR insufficient_privilege OR feature_not_supported OR undefined_object THEN NULL;
 END $$;

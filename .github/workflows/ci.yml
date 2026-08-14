@@ -152,7 +152,7 @@ jobs:
 
       - name: Create Database Roles (attendance_app, attendance_auth, attendance_system, attendance_worker) & Privileges
         run: |
-          PGPASSWORD=ci_password psql -h 127.0.0.1 -U attendance_migration -d school_attendance -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN CREATE ROLE attendance_app LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN CREATE ROLE attendance_auth LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN CREATE ROLE attendance_system LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN CREATE ROLE attendance_worker LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system_rls') THEN CREATE ROLE attendance_system_rls NOLOGIN; END IF; ALTER ROLE attendance_app WITH PASSWORD 'ci_password'; ALTER ROLE attendance_auth WITH PASSWORD 'ci_password'; ALTER ROLE attendance_system WITH PASSWORD 'ci_password'; ALTER ROLE attendance_worker WITH PASSWORD 'ci_password'; ALTER ROLE attendance_migration WITH PASSWORD 'ci_password'; GRANT attendance_system_rls TO attendance_system, attendance_worker, attendance_migration; GRANT CONNECT ON DATABASE school_attendance TO attendance_app, attendance_auth, attendance_system, attendance_worker; GRANT USAGE ON SCHEMA public TO attendance_app, attendance_auth, attendance_system, attendance_worker; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_app, attendance_system, attendance_worker; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_app, attendance_system, attendance_worker; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO attendance_auth, attendance_app, attendance_system, attendance_worker; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app, attendance_system, attendance_worker; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO attendance_app, attendance_system, attendance_worker; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO attendance_auth, attendance_app, attendance_system, attendance_worker; END \$\$;"
+          PGPASSWORD=ci_password psql -h 127.0.0.1 -U attendance_migration -d school_attendance -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN CREATE ROLE attendance_app LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_auth') THEN CREATE ROLE attendance_auth LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN CREATE ROLE attendance_system LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN CREATE ROLE attendance_worker LOGIN PASSWORD 'ci_password'; END IF; IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system_rls') THEN CREATE ROLE attendance_system_rls NOLOGIN; END IF; ALTER ROLE attendance_app WITH PASSWORD 'ci_password'; ALTER ROLE attendance_auth WITH PASSWORD 'ci_password'; ALTER ROLE attendance_system WITH PASSWORD 'ci_password'; ALTER ROLE attendance_worker WITH PASSWORD 'ci_password'; ALTER ROLE attendance_migration WITH PASSWORD 'ci_password'; GRANT attendance_system_rls TO attendance_system, attendance_worker, attendance_migration; GRANT CONNECT ON DATABASE school_attendance TO attendance_app, attendance_auth, attendance_system, attendance_worker; GRANT USAGE ON SCHEMA public TO attendance_app, attendance_auth, attendance_system, attendance_worker; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO attendance_app, attendance_system, attendance_worker; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO attendance_app, attendance_system, attendance_worker; GRANT EXECUTE ON FUNCTION public.lookup_auth_user_by_phone(text) TO attendance_auth; GRANT EXECUTE ON FUNCTION public.get_user_school_memberships(uuid) TO attendance_auth; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO attendance_app, attendance_system, attendance_worker; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO attendance_app, attendance_system, attendance_worker; ALTER DEFAULT PRIVILEGES FOR ROLE attendance_migration IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO attendance_auth; END \$\$;"
 
       - name: Run RLS Schema Integration Suite
         env:
@@ -331,11 +331,8 @@ jobs:
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
-          # CI runners share compute and have cold container startup overhead.
-          # argon2id hashing can take 200-800ms on shared runners vs <100ms on dedicated.
-          # These thresholds still enforce zero unexpected errors and DB integrity.
-          LOAD_P95_THRESHOLD_MS: "2000"
-          LOAD_AUTH_P95_THRESHOLD_MS: "2000"
+          LOAD_P95_THRESHOLD_MS: "400"
+          LOAD_AUTH_P95_THRESHOLD_MS: "700"
         run: npm run test:load-smoke
 
       - name: Upload Business Load Benchmark Reports
@@ -481,8 +478,5 @@ jobs:
       - name: Verify GitHub Branch Protection Status
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Branch protection is an admin-UI concern, not a CI-enforced one.
-          # Set STRICT=false so this reporter never blocks the overall CI run
-          # when the token lacks admin:repo permission (e.g. fork PRs).
-          REQUIRE_STRICT_BRANCH_PROTECTION: "false"
+          REQUIRE_STRICT_BRANCH_PROTECTION: "true"
         run: ./scripts/verify-branch-protection.sh

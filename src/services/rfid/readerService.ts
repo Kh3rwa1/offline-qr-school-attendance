@@ -4,15 +4,19 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
 import crypto from 'crypto';
 
-export function encryptReaderSecret(secret: string): string {
-  let masterKeyHex = process.env.RFID_HMAC_SECRET;
-  if (!masterKeyHex) {
+function getReaderEncryptionKey(): Buffer {
+  const masterKey = process.env.KMS_MASTER_KEY || process.env.RFID_HMAC_SECRET;
+  if (!masterKey) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('RFID_HMAC_SECRET is required for reader secret encryption in production.');
+      throw new Error('KMS_MASTER_KEY or RFID_HMAC_SECRET is required for reader secret encryption in production.');
     }
-    masterKeyHex = 'test-secret-32-chars-length-environment';
+    return Buffer.from(crypto.hkdfSync('sha256', 'test-secret-32-chars-length-environment', 'kms-salt', Buffer.from('kms-reader-secret'), 32));
   }
-  const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
+  return Buffer.from(crypto.hkdfSync('sha256', masterKey, 'kms-salt', Buffer.from('kms-reader-secret'), 32));
+}
+
+export function encryptReaderSecret(secret: string): string {
+  const masterKey = getReaderEncryptionKey();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
   const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
@@ -23,14 +27,7 @@ export function encryptReaderSecret(secret: string): string {
 export function decryptReaderSecret(encryptedStr: string): string {
   if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
   try {
-    let masterKeyHex = process.env.RFID_HMAC_SECRET;
-    if (!masterKeyHex) {
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('RFID_HMAC_SECRET is required for reader secret encryption in production.');
-      }
-      masterKeyHex = 'test-secret-32-chars-length-environment';
-    }
-    const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
+    const masterKey = getReaderEncryptionKey();
     const [ivHex, tagHex, cipherHex] = encryptedStr.split(':');
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');

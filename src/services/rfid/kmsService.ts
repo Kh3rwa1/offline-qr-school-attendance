@@ -65,36 +65,62 @@ export class KMSService {
 
     const testMaster = rawMaster || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
 
+    const purposes: CryptoKeyPurpose[] = [
+      'RFID_READER_HMAC_KEY',
+      'RFID_CREDENTIAL_DIGEST_KEY',
+      'RFID_OUTBOX_ENCRYPTION_KEY',
+      'ROSTER_SIGNING_PRIVATE_KEY',
+      'ROSTER_SIGNING_PUBLIC_KEY',
+      'DATABASE_ENCRYPTION_KEK',
+      'REDIS_KEY_HMAC_SECRET',
+      'SESSION_SECRET',
+      'MTLS_PRIVATE_KEY',
+    ];
+
+    const defaultSecrets: Record<string, string> = {};
+    for (const p of purposes) {
+      const custom = config?.purposeSecrets?.[p] || process.env[p];
+      let secretVal = custom;
+      if (!secretVal && testMaster) {
+        // Deterministically derive 32-byte purpose key from master key using HKDF
+        const derived = Buffer.from(crypto.hkdfSync('sha256', testMaster, 'kms-salt', Buffer.from(`kms-purpose-${p}`), 32));
+        secretVal = derived.toString('hex');
+      }
+      if (secretVal) {
+        if (secretVal.length < 32 && process.env.NODE_ENV === 'production') {
+          throw new Error(`KMS_FATAL: Purpose key '${p}' must be at least 32 bytes`);
+        }
+        defaultSecrets[p] = secretVal;
+        this.purposeSecrets.set(p, secretVal);
+      }
+    }
+
     if (config?.kmsProvider) {
       this.provider = config.kmsProvider;
-    } else if (process.env.NODE_ENV === 'production' && !config?.purposeSecrets) {
+    } else if ((process.env.AWS_KMS_KEY_ARN || process.env.GCP_KMS_RESOURCE_ID) && !rawMaster) {
       this.provider = new CloudKmsProviderAdapter();
     } else {
-      const defaultSecrets: Record<string, string> = {};
-      const purposes: CryptoKeyPurpose[] = [
-        'RFID_READER_HMAC_KEY',
-        'RFID_CREDENTIAL_DIGEST_KEY',
-        'RFID_OUTBOX_ENCRYPTION_KEY',
-        'ROSTER_SIGNING_PRIVATE_KEY',
-        'ROSTER_SIGNING_PUBLIC_KEY',
-        'DATABASE_ENCRYPTION_KEK',
-        'REDIS_KEY_HMAC_SECRET',
-        'SESSION_SECRET',
-        'MTLS_PRIVATE_KEY',
-      ];
-      for (const p of purposes) {
-        const custom = config?.purposeSecrets?.[p] || process.env[p];
-        const secretVal = custom || (testMaster ? `${testMaster}-${p}` : undefined);
-        if (secretVal) {
-          if (secretVal.length < 32 && process.env.NODE_ENV === 'production') {
-            throw new Error(`KMS_FATAL: Purpose key '${p}' must be at least 32 bytes`);
-          }
-          defaultSecrets[p] = secretVal;
-          this.purposeSecrets.set(p, secretVal);
-        }
-      }
       this.provider = new LocalKmsProvider(defaultSecrets, this.keyVersion);
     }
+  }
+
+  /**
+   * Derives a dedicated cryptographic key for a specific purpose from KMS master state.
+   */
+  deriveKey(purpose: CryptoKeyPurpose): string {
+    const existing = this.purposeSecrets.get(purpose);
+    if (existing) return existing;
+    const rawMaster = process.env.KMS_MASTER_KEY || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    if (!rawMaster) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`KMS_FATAL: Cannot derive key for purpose '${purpose}' without KMS_MASTER_KEY in production.`);
+      }
+      return 'test-secret-32-chars-length-environment';
+    }
+    const derived = Buffer.from(crypto.hkdfSync('sha256', rawMaster, 'kms-salt', Buffer.from(`kms-purpose-${purpose}`), 32));
+    const derivedHex = derived.toString('hex');
+    this.purposeSecrets.set(purpose, derivedHex);
+    return derivedHex;
   }
 
   /**

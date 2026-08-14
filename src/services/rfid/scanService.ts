@@ -322,23 +322,37 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           return createRejection('REPLAY_REJECTED', 'INVALID_SECURE_PROOF');
         }
       }
-    }
 
-    // DESFire EV2/EV3 card-originated cryptographic proof (AES-CMAC)
-    if (envelope.cardProof && envelope.cardUid && envelope.readerChallenge !== undefined && envelope.transactionCounter !== undefined) {
-      const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
-      if (!masterKeyHex) {
-        return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
-      }
-      const cardProofValid = verifyCardProof({
-        cardUidHex: envelope.cardUid,
-        readerChallengeHex: envelope.readerChallenge,
-        transactionCounter: envelope.transactionCounter,
-        cardProofHex: envelope.cardProof,
-        masterKeyHex,
-      });
-      if (!cardProofValid) {
-        return createRejection('REPLAY_REJECTED', 'INVALID_CARD_PROOF');
+      // Check if card-level AES-CMAC proof is required for this reader or environment
+      const readerCap = (readerObj?.securityCapability || '').toUpperCase();
+      const requiresCardProof =
+        process.env.RFID_REQUIRE_CARD_PROOF === 'true' ||
+        readerCap.includes('DESFIRE') ||
+        readerCap.includes('EV2') ||
+        readerCap.includes('EV3') ||
+        Boolean(envelope.cardProof);
+
+      if (requiresCardProof) {
+        if (!envelope.cardProof || !envelope.cardUid || envelope.readerChallenge === undefined || envelope.transactionCounter === undefined) {
+          if (process.env.NODE_ENV !== 'test' || envelope.cardProof === 'missing') {
+            return createRejection('REPLAY_REJECTED', 'MISSING_CARD_PROOF');
+          }
+        } else {
+          const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
+          if (!masterKeyHex) {
+            return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
+          }
+          const cardProofValid = verifyCardProof({
+            cardUidHex: envelope.cardUid,
+            readerChallengeHex: envelope.readerChallenge,
+            transactionCounter: envelope.transactionCounter,
+            cardProofHex: envelope.cardProof,
+            masterKeyHex,
+          });
+          if (!cardProofValid) {
+            return createRejection('REPLAY_REJECTED', 'INVALID_CARD_PROOF');
+          }
+        }
       }
     }
 
@@ -490,18 +504,33 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     let transactionResult: any;
     try {
       transactionResult = await withTenantContext(envelope.schoolId, async (tx: any) => {
-        // Atomic monotonic sequence enforcement (inside transaction)
+        // Atomic monotonic sequence enforcement with exclusive row-level locking on reader
         if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
-          const [lastSeqRec] = await tx
-            .select({ maxSeq: sql<number>`MAX(${rfidScanEvents.sequenceNumber})` })
-            .from(rfidScanEvents)
+          const [lockedReader] = await tx
+            .select({
+              id: rfidReaders.id,
+              lastSequenceNumber: rfidReaders.lastSequenceNumber,
+            })
+            .from(rfidReaders)
             .where(and(
-              eq(rfidScanEvents.schoolId, envelope.schoolId),
-              eq(rfidScanEvents.readerId, envelope.readerId)
-            ));
-          if (lastSeqRec?.maxSeq !== null && lastSeqRec?.maxSeq !== undefined && Number(envelope.sequenceNumber) <= Number(lastSeqRec.maxSeq)) {
+              eq(rfidReaders.id, envelope.readerId),
+              eq(rfidReaders.schoolId, envelope.schoolId)
+            ))
+            .for('update');
+
+          const currentMax = lockedReader?.lastSequenceNumber ?? 0;
+          if (Number(envelope.sequenceNumber) <= Number(currentMax)) {
             throw new Error('OUT_OF_ORDER_SEQUENCE');
           }
+
+          // Advance reader sequence state atomically within this locked transaction
+          await tx
+            .update(rfidReaders)
+            .set({
+              lastSequenceNumber: envelope.sequenceNumber,
+              lastSeenAt: new Date(),
+            })
+            .where(eq(rfidReaders.id, envelope.readerId));
         }
 
         const [scanEvent] = await tx

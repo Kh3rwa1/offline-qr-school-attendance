@@ -78,6 +78,20 @@
       "when": 1786570000000,
       "tag": "0010_attendance_capture_method",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786580000000,
+      "tag": "0011_rfid_scan_payload_hash",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786590000000,
+      "tag": "0012_rfid_reader_atomic_sequence",
+      "breakpoints": true
     }
   ]
 }

@@ -6,8 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/seed.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/seed.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs && esbuild src/gateway/gatewayDaemon.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/gateway.cjs",
+    "build:gateway": "esbuild src/gateway/gatewayDaemon.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/gateway.cjs",
     "start": "node dist/server.cjs",
+    "start:gateway": "node dist/gateway.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "check": "tsc --noEmit",

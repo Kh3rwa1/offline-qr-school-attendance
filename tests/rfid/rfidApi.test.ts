@@ -270,6 +270,92 @@ describe('RFID Router & Middleware Integration Suite', () => {
     expect(res2.body.rejectionCode).toBe('NONCE_REUSED');
   });
 
+  it('POST /:schoolId/rfid/scans accepts scan with valid card-originated DESFire proof via HTTP route', async () => {
+    const cardUid = '04A1B2C3D4E5F6';
+    const readerChallenge = crypto.randomBytes(16).toString('hex');
+    const transactionCounter = 42;
+    const { computeDiversifiedKey, aesCmac } = await import('../../src/services/rfid/cryptoService');
+    const divKey = computeDiversifiedKey(hmacSecret, cardUid, 'school_attendance');
+    const txBuf = Buffer.alloc(4);
+    txBuf.writeUInt32BE(transactionCounter, 0);
+    const proofData = Buffer.concat([Buffer.from('desfire-ev2-proof-v1', 'utf8'), txBuf, Buffer.from(readerChallenge, 'hex')]);
+    const cardProof = aesCmac(divKey, proofData).toString('hex');
+
+    const [cardStudent] = await db
+      .insert(students)
+      .values({
+        schoolId,
+        studentCode: 'API-STD-CARDPROOF',
+        name: 'API Card Proof Student',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    const cred = await credentialService.enrollCredential({
+      schoolId,
+      studentId: cardStudent.id,
+      credentialDigest: 'digest_api_card_proof_std',
+      securityMode: 'SECURE',
+      keyVersion: 1,
+      operatorUserId: adminUserId,
+    });
+    await credentialService.activateCredential(cred.id, schoolId);
+
+    const envelope = buildSignedEnvelope(cred.credentialDigest, {
+      cardProof,
+      cardUid,
+      readerChallenge,
+      transactionCounter,
+      sequenceNumber: 200,
+    });
+
+    const res = await invokeScanEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': envelope.signature,
+      'x-reader-timestamp': envelope.readerTimestamp,
+    }, envelope);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.decision).toBe('ACCEPTED');
+    expect(res.body.studentId).toBe(cardStudent.id);
+  });
+
+  it('POST /:schoolId/rfid/scans rejects scan with invalid card proof', async () => {
+    const envelope = buildSignedEnvelope(credentialDigest1, {
+      cardProof: '00112233445566778899aabbccddeeff',
+      cardUid: '04A1B2C3D4E5F6',
+      readerChallenge: 'abcdef0123456789abcdef0123456789',
+      transactionCounter: 99,
+      sequenceNumber: 205,
+    });
+
+    const res = await invokeScanEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': envelope.signature,
+      'x-reader-timestamp': envelope.readerTimestamp,
+    }, envelope);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.decision).toBe('REPLAY_REJECTED');
+    expect(res.body.rejectionCode).toBe('INVALID_CARD_PROOF');
+  });
+
+  it('POST /:schoolId/rfid/scans rejects out-of-order sequence number', async () => {
+    const envelope = buildSignedEnvelope(credentialDigest1, {
+      sequenceNumber: 50, // Lower than previous sequence (200)
+    });
+
+    const res = await invokeScanEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': envelope.signature,
+      'x-reader-timestamp': envelope.readerTimestamp,
+    }, envelope);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.decision).toBe('REPLAY_REJECTED');
+    expect(res.body.rejectionCode).toBe('OUT_OF_ORDER_SEQUENCE');
+  });
+
   it('POST /:schoolId/rfid/scans rejects request for wrong school', async () => {
     const envelope = buildSignedEnvelope(credentialDigest1);
     const wrongSchoolId = '00000000-0000-4000-8000-000000000999';

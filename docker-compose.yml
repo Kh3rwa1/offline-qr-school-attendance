@@ -41,7 +41,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      AUTH_DATABASE_URL: postgres://${AUTH_DB_USER:-attendance_auth}:${AUTH_DB_PASSWORD:-ci_password}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      AUTH_DATABASE_URL: postgres://${AUTH_DB_USER:?AUTH_DB_USER is required}:${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       REDIS_URL: redis://redis:6379
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
@@ -49,7 +49,7 @@ services:
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
       RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
-      KMS_MASTER_KEY: ${KMS_MASTER_KEY:-ci_kms_master_key_01234567890123456789}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY:?KMS_MASTER_KEY is required}
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null']
       interval: 10s
@@ -77,6 +77,8 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
       SYSTEM_DB_USER: ${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}
       SYSTEM_DB_PASSWORD: ${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}
+      AUTH_DB_USER: ${AUTH_DB_USER:?AUTH_DB_USER is required}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}
     volumes:
       - ./docker/bootstrap-db.sh:/bootstrap-db.sh:ro
     entrypoint: ['/bin/sh', '/bootstrap-db.sh']
@@ -150,13 +152,13 @@ services:
       PORT: 3001
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
-      AUTH_DATABASE_URL: postgres://${AUTH_DB_USER:-attendance_auth}:${AUTH_DB_PASSWORD:-ci_password}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      AUTH_DATABASE_URL: postgres://${AUTH_DB_USER:?AUTH_DB_USER is required}:${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       REDIS_URL: redis://redis:6379
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
-      KMS_MASTER_KEY: ${KMS_MASTER_KEY:-ci_kms_master_key_01234567890123456789}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY:?KMS_MASTER_KEY is required}
       ALLOW_LEGACY_RFID_UID_MODE: ${ALLOW_LEGACY_RFID_UID_MODE:-false}
     ports:
       - '3001:3001'

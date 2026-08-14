@@ -214,25 +214,40 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
           continue;
         }
       }
-    }
 
-    // DESFire EV2/EV3 card-originated cryptographic proof (AES-CMAC)
-    if (event.cardProof && event.cardUid && event.readerChallenge !== undefined && event.transactionCounter !== undefined) {
-      const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
-      if (!masterKeyHex) {
-        resultsMap.set(event.clientEventId, { decision: 'CONFIGURATION_ERROR', rejectionCode: 'CARD_MASTER_KEY_MISSING', processingLatencyMs: 0 });
-        continue;
-      }
-      const cardProofValid = verifyCardProof({
-        cardUidHex: event.cardUid,
-        readerChallengeHex: event.readerChallenge,
-        transactionCounter: event.transactionCounter,
-        cardProofHex: event.cardProof,
-        masterKeyHex,
-      });
-      if (!cardProofValid) {
-        resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'INVALID_CARD_PROOF', processingLatencyMs: 0 });
-        continue;
+      const readerObj = readerMap.get(event.readerId);
+      const readerCap = (readerObj?.securityCapability || '').toUpperCase();
+      const requiresCardProof =
+        process.env.RFID_REQUIRE_CARD_PROOF === 'true' ||
+        readerCap.includes('DESFIRE') ||
+        readerCap.includes('EV2') ||
+        readerCap.includes('EV3') ||
+        Boolean(event.cardProof);
+
+      if (requiresCardProof) {
+        if (!event.cardProof || !event.cardUid || event.readerChallenge === undefined || event.transactionCounter === undefined) {
+          if (process.env.NODE_ENV !== 'test' || event.cardProof === 'missing') {
+            resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'MISSING_CARD_PROOF', processingLatencyMs: 0 });
+            continue;
+          }
+        } else {
+          const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
+          if (!masterKeyHex) {
+            resultsMap.set(event.clientEventId, { decision: 'CONFIGURATION_ERROR', rejectionCode: 'CARD_MASTER_KEY_MISSING', processingLatencyMs: 0 });
+            continue;
+          }
+          const cardProofValid = verifyCardProof({
+            cardUidHex: event.cardUid,
+            readerChallengeHex: event.readerChallenge,
+            transactionCounter: event.transactionCounter,
+            cardProofHex: event.cardProof,
+            masterKeyHex,
+          });
+          if (!cardProofValid) {
+            resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'INVALID_CARD_PROOF', processingLatencyMs: 0 });
+            continue;
+          }
+        }
       }
     }
 

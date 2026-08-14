@@ -607,6 +607,7 @@ export const rfidReaders = pgTable(
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     keyVersion: integer('key_version').notNull().default(1),
     clockDriftMs: integer('clock_drift_ms'),
+    lastSequenceNumber: bigint('last_sequence_number', { mode: 'number' }).default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

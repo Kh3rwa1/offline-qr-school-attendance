@@ -116,6 +116,10 @@ export const readerAuthMiddleware = async (
       signature: readerSignature,
       clientEventId: body.clientEventId,
       isOffline: body.isOffline || false,
+      cardProof: body.cardProof,
+      cardUid: body.cardUid,
+      readerChallenge: body.readerChallenge,
+      transactionCounter: body.transactionCounter,
     };
 
     const isValidSignature = verifyEnvelopeSignature(normalizedEnvelope, readerSignature, hmacSecret);

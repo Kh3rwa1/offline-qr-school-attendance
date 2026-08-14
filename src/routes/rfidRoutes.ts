@@ -46,6 +46,10 @@ rfidRouter.post(
         signature,
         clientEventId,
         isOffline: req.body.isOffline || false,
+        cardProof: req.body.cardProof,
+        cardUid: req.body.cardUid,
+        readerChallenge: req.body.readerChallenge,
+        transactionCounter: req.body.transactionCounter,
       };
 
       const result = await scanService.processScan(envelope);

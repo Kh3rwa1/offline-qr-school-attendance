@@ -86,38 +86,41 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshSession = useCallback(async (): Promise<{ user: User; role: UserRole } | null> => {
     try {
       const res = await api<{
-        success: boolean;
-        data?: {
-          user: User;
-          memberships: SchoolMembership[];
-          activeSchoolId?: string;
-          activeRole?: UserRole;
-        };
+        user?: User;
         sessionContext?: {
           user: User;
           memberships: SchoolMembership[];
-          activeMembership?: SchoolMembership;
+          activeMembership?: {
+            schoolId: string;
+            role: string;
+            status: string;
+          };
           schoolId?: string;
         };
       }>('/api/v1/auth/me');
 
-      if (res.data?.user || res.sessionContext?.user) {
-        const u = res.data?.user || res.sessionContext!.user;
-        const mems = res.data?.memberships || res.sessionContext?.memberships || [];
-        const primarySchoolId = res.data?.activeSchoolId || res.sessionContext?.schoolId || mems[0]?.schoolId || 'default-school';
-        
-        let activeMem = mems.find((m) => m.schoolId === primarySchoolId) || mems[0] || {
-          schoolId: primarySchoolId,
-          schoolName: 'Primary School',
-          role: (res.data?.activeRole || 'TEACHER') as UserRole,
-          status: 'ACTIVE',
-        };
+      if (res.user || res.sessionContext?.user) {
+        const u = res.user || res.sessionContext!.user;
+        const mems = res.sessionContext?.memberships || [];
+        const rawActive = res.sessionContext?.activeMembership;
+        const activeMem: SchoolMembership = rawActive
+          ? {
+              schoolId: rawActive.schoolId,
+              schoolName: mems.find((m) => m.schoolId === rawActive.schoolId)?.schoolName || 'Active School',
+              role: rawActive.role as UserRole,
+              status: rawActive.status,
+            }
+          : mems[0] || {
+              schoolId: 'default-school',
+              schoolName: 'Primary School',
+              role: 'TEACHER' as UserRole,
+              status: 'ACTIVE',
+            };
 
         setUser(u);
         setMemberships(mems);
         setActiveMembership(activeMem);
 
-        // Store bounded session cache in localStorage
         localStorage.setItem(
           'attendance.auth',
           JSON.stringify({
@@ -128,7 +131,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             expiresAt: Date.now() + 8 * 3600 * 1000,
           })
         );
-        return { user: u, role: activeMem.role };
+        return { user: u, role: activeMem.role as UserRole };
       } else {
         setUser(null);
         setMemberships([]);

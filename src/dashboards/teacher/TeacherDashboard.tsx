@@ -206,9 +206,9 @@ export const TeacherDashboard: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <span className="bg-emerald-500/30 text-emerald-200 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-emerald-400/30">
-              Offline QR Attendance
+              Attendance Station
             </span>
-            <h2 className="text-2xl sm:text-3xl font-black mt-2">Offline QR Attendance</h2>
+            <h1 className="text-2xl sm:text-3xl font-black mt-2">Offline QR Attendance</h1>
             <p className="text-xs text-emerald-200 mt-1">
               Offline IndexedDB optical scanning, instant USB wedge capture, and guaranteed reconciliation
             </p>

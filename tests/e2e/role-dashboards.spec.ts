@@ -5,11 +5,20 @@ const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 test.describe('Role-Aware Dashboards E2E Matrix', () => {
   test('SUPER_ADMIN logs in and accesses multi-tenant platform hub', async ({ page }) => {
     await page.goto(baseUrl);
+    await page.getByLabel('Phone number').fill('+919000000000');
+    await page.getByLabel('Password').fill('SuperSecretAdminPassword123!');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page.getByText('Multi-Tenant Platform Hub')).toBeVisible();
+  });
+
+  test('SCHOOL_ADMIN logs in and accesses school operations console', async ({ page }) => {
+    await page.goto(baseUrl);
     await page.getByLabel('Phone number').fill('+919100000001');
     await page.getByLabel('Password').fill('SchoolAdminPassword123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page.getByText(/Multi-Tenant Platform Hub|School Operations/)).toBeVisible();
+    await expect(page.getByText(/School Administration|Rampur High School/)).toBeVisible();
   });
 
   test('TEACHER logs in and lands directly on Offline QR Attendance station', async ({ page }) => {

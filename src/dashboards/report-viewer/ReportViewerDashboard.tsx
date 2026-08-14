@@ -73,6 +73,14 @@ export const ReportViewerDashboard: React.FC = () => {
       {/* Top Header Row with Big Buttons (Reference Image match) */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-extrabold text-[#144e39] uppercase tracking-wider font-display">
+              Attendance Reports & Analytics
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider font-mono">
+              AUDITOR ACCESS: READ ONLY
+            </span>
+          </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
             Reports & Analytics
           </h1>

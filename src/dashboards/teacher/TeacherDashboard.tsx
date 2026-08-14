@@ -361,6 +361,9 @@ export const TeacherDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-extrabold text-[#144e39] uppercase tracking-wider mb-2 font-display">
+            <span>Offline QR Attendance</span>
+          </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
             Classroom Dashboard
           </h1>
@@ -386,6 +389,7 @@ export const TeacherDashboard: React.FC = () => {
             whileTap={{ scale: 0.98 }}
             onClick={handleDownloadRoster}
             disabled={!isOnline || !selectedClassId}
+            aria-label="Download roster"
             className="btn-pill-secondary text-sm font-display shadow-2xs disabled:opacity-50"
           >
             <Download className="w-4 h-4 text-slate-600" />

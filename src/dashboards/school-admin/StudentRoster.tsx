@@ -274,7 +274,7 @@ export const StudentRoster: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
-            Student Enrollment Roster
+            Student Roster Directory
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-1">
             Manage student registrations, class section assignments, and staged bulk XLSX imports for {activeSchoolName}.

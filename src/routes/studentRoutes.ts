@@ -26,7 +26,7 @@ studentRouter.get(
     const page = req.query.page ? Number(req.query.page) : undefined;
 
     const students = await listStudents({ schoolId, classSectionId, status, search, limit, page });
-    return res.json({ students });
+    return res.json({ success: true, students });
   }
 );
 

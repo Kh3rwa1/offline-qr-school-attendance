@@ -20,7 +20,7 @@ interface StudentRollRecord {
   fullName: string;
   rollNumber: string;
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
-  firstScanTime?: string;
+  firstScannedAt?: string | null;
   source?: string;
 }
 
@@ -67,7 +67,7 @@ export const DailyReports: React.FC = () => {
     fullName: r.studentName || r.fullName || 'Student',
     rollNumber: r.rollNumber !== undefined && r.rollNumber !== null ? String(r.rollNumber) : '—',
     status: r.status || 'UNMARKED',
-    firstScanTime: r.firstScannedAt ? new Date(r.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—',
+    firstScannedAt: r.firstScannedAt || null,
     source: r.firstScannedAt ? 'QR / Barcode' : 'Standard Roll',
   }));
 
@@ -84,7 +84,7 @@ export const DailyReports: React.FC = () => {
         `"${r.rollNumber || ''}"`,
         `"${r.fullName}"`,
         `"${r.status}"`,
-        `"${r.firstScanTime || '—'}"`,
+        `"${r.firstScannedAt ? new Date(r.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}"`,
         `"${r.source || 'Standard Roll'}"`,
       ].join(',')),
     ].join('\n');
@@ -245,8 +245,8 @@ export const DailyReports: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-4 px-6 font-mono text-slate-600">
-                    {student.firstScanTime
-                      ? new Date(student.firstScanTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                    {student.firstScannedAt
+                      ? new Date(student.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                       : '—'}
                   </td>
                   <td className="py-4 px-6">

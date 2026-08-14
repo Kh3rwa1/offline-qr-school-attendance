@@ -145,6 +145,38 @@ export const TeacherDashboard: React.FC = () => {
     }
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
+      let serverSessionId: string | undefined = undefined;
+
+      // If online, initialize / bind server session record
+      if (navigator.onLine) {
+        try {
+          const res = await api<{ success: boolean; data: any }>(
+            `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                classSectionId: selectedClassId,
+                sessionDate: todayStr,
+                sessionType: 'DAILY',
+              }),
+            }
+          );
+          if (res?.data?.id) {
+            serverSessionId = res.data.id;
+          }
+        } catch (serverErr: any) {
+          // If genuine network failure (status === 0 or code === 'NETWORK_UNAVAILABLE'), allow offline creation
+          const isNetworkError = serverErr?.status === 0 || serverErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
+          if (isNetworkError) {
+            console.warn('Network unavailable, creating offline local session:', serverErr);
+          } else {
+            // Re-throw genuine server authorization/validation/conflict error (401, 403, 409, 422)
+            showFeedback({ kind: 'error', text: serverErr.message || 'Server error creating attendance session' });
+            return;
+          }
+        }
+      }
+
       const s = await createOfflineSession({
         schoolId: activeSchoolId,
         classSectionId: selectedClassId,
@@ -152,25 +184,9 @@ export const TeacherDashboard: React.FC = () => {
         sessionDate: todayStr,
       });
 
-      // If online, initialize / bind server session record
-      try {
-        const res = await api<{ success: boolean; data: any }>(
-          `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              classSectionId: selectedClassId,
-              sessionDate: todayStr,
-              sessionType: 'DAILY',
-            }),
-          }
-        );
-        if (res?.data?.id) {
-          s.serverSessionId = res.data.id;
-          await offlineDb.sessions.update(s.id, { serverSessionId: res.data.id });
-        }
-      } catch (e) {
-        // Safe to proceed offline; session will be synchronized upon connection
+      if (serverSessionId) {
+        s.serverSessionId = serverSessionId;
+        await offlineDb.sessions.update(s.id, { serverSessionId });
       }
 
       setSession(s);
@@ -275,8 +291,11 @@ export const TeacherDashboard: React.FC = () => {
             setSession((prev) => prev ? { ...prev, serverSessionId: targetServerSessionId } : null);
           }
         } catch (initErr: any) {
-          // If server error like 401/403/404/409/422, throw and show authentic error
-          if (initErr?.status && initErr.status !== 503) {
+          const isNetworkError = initErr?.status === 0 || initErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
+          if (isNetworkError) {
+            // Degrade to offline finalize path
+          } else {
+            // Re-throw authentic server error (401/403/404/409/422)
             throw initErr;
           }
         }
@@ -293,25 +312,32 @@ export const TeacherDashboard: React.FC = () => {
 
       // Step 3: PATCH server session status
       const effectiveSessionId = targetServerSessionId || session.id;
-      if (navigator.onLine) {
-        const patchRes = await api<{ success: boolean; data: any }>(
-          `/api/v1/schools/${activeSchoolId}/attendance/sessions/${effectiveSessionId}/status`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({
-              status: 'FINALIZED',
-              autoMarkAbsentForUnmarked: true,
-              reason: 'Class teacher finalized roll submission',
-            }),
-          }
-        );
+      if (navigator.onLine && targetServerSessionId) {
+        try {
+          const patchRes = await api<{ success: boolean; data: any }>(
+            `/api/v1/schools/${activeSchoolId}/attendance/sessions/${effectiveSessionId}/status`,
+            {
+              method: 'PATCH',
+              body: JSON.stringify({
+                status: 'FINALIZED',
+                autoMarkAbsentForUnmarked: true,
+                reason: 'Class teacher finalized roll submission',
+              }),
+            }
+          );
 
-        if (patchRes?.data?.status === 'FINALIZED') {
-          await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
-          setSession((prev) => prev ? { ...prev, status: 'FINALIZED' } : null);
-          showFeedback({ kind: 'success', text: 'Attendance finalized and verified on server.' });
-          setViewMode('scanner');
-          return;
+          if (patchRes?.data?.status === 'FINALIZED') {
+            await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
+            setSession((prev) => prev ? { ...prev, status: 'FINALIZED' } : null);
+            showFeedback({ kind: 'success', text: 'Attendance finalized and verified on server.' });
+            setViewMode('scanner');
+            return;
+          }
+        } catch (patchErr: any) {
+          const isNetworkError = patchErr?.status === 0 || patchErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
+          if (!isNetworkError) {
+            throw patchErr;
+          }
         }
       }
 

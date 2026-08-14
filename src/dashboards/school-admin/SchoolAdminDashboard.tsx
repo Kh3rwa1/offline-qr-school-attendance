@@ -106,28 +106,28 @@ export const SchoolAdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Present Today"
-          value={`${summary?.presentCount ?? 924} / ${summary?.totalStudents ?? 1005}`}
-          trend={{ value: `${attendancePct}% Daily Turnout`, isPositive: true }}
+          value={`${summary?.presentCount ?? 0} / ${summary?.totalStudents ?? 0}`}
+          trend={{ value: `${summary?.totalStudents ? Math.round(((summary.presentCount || 0) / summary.totalStudents) * 100) : 0}% Daily Turnout`, isPositive: Boolean(summary?.presentCount) }}
           variant="hero-forest"
           onClick={() => navigate('/app/reports/daily')}
         />
         <StatCard
           title="Enrolled Students"
-          value={summary?.totalStudents ?? 1005}
-          trend={{ value: "12 Class Sections Active", isPositive: true }}
+          value={summary?.totalStudents ?? 0}
+          trend={{ value: `${summary?.activeSectionsCount ?? 0} Class Sections Active`, isPositive: true }}
           variant="default"
           onClick={() => navigate('/app/school-admin/academics')}
         />
         <StatCard
           title="Mid-Day Meals"
-          value="924 Meals"
-          trend={{ value: "Count Certified for Today", isPositive: true }}
+          value={`${summary?.presentCount ?? 0} Meals`}
+          trend={{ value: "Eligible Present Headcount", isPositive: true }}
           variant="default"
           onClick={() => navigate('/app/reports/daily')}
         />
         <StatCard
           title="Absentee SMS Alerts"
-          value={`${summary?.pendingSmsCount ?? 81}`}
+          value={`${summary?.pendingSmsCount ?? 0}`}
           trend={{ value: "Notices Dispatched to Parents", isPositive: true }}
           variant="default"
           onClick={() => navigate('/app/school-admin/notifications')}

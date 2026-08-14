@@ -122,15 +122,31 @@ export async function suspendCredential(credentialId: string, schoolId: string, 
   });
 }
 
-export async function reactivateCredential(credentialId: string, schoolId: string, actorId?: string) {
+export async function reactivateCredential(credentialId: string, schoolId: string, reason?: string, actorId?: string) {
   return withTenantContext(schoolId, async (tx) => {
+    const existing = await tx
+      .select()
+      .from(rfidCredentials)
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)))
+      .limit(1);
+
+    if (existing.length === 0) {
+      const err: any = new Error('CARD_NOT_FOUND: RFID credential not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (existing[0].status !== 'SUSPENDED') {
+      const err: any = new Error(`CARD_NOT_SUSPENDED: Cannot reactivate card with status ${existing[0].status}`);
+      err.statusCode = 409;
+      throw err;
+    }
+
     const [credential] = await tx
       .update(rfidCredentials)
       .set({ status: 'ACTIVE' })
       .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'SUSPENDED')))
       .returning();
-
-    if (!credential) throw new Error('Credential not found or not SUSPENDED');
 
     await createAuditLog({
       schoolId,
@@ -138,6 +154,7 @@ export async function reactivateCredential(credentialId: string, schoolId: strin
       action: 'RFID_CREDENTIAL_REACTIVATED',
       resourceId: credentialId,
       resourceType: 'RFID_CREDENTIAL',
+      metadata: { reason: reason || 'Reactivated by operator/admin' },
     }, tx);
     return credential;
   });

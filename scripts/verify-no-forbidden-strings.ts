@@ -8,6 +8,9 @@ const FORBIDDEN_PATTERNS = [
   { pattern: /actorId:\s*'teacher'/i, label: 'Fabricated actorId fallback' },
   { pattern: /'04:A2:8B:1A:99:40'/, label: 'Fabricated RFID test card UID' },
   { pattern: /\balert\s*\(/, label: 'Prohibited browser alert() popup' },
+  { pattern: /Verification Passed/i, label: 'Fabricated compliance claim: Verification Passed' },
+  { pattern: /Certified\b/i, label: 'Fabricated compliance claim: Certified' },
+  { pattern: /Zero Active/i, label: 'Fabricated status claim: Zero Active' },
 ];
 
 const SCAN_DIR = path.resolve(process.cwd(), 'src');

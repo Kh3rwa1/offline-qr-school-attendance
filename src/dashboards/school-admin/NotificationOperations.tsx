@@ -168,9 +168,12 @@ export const NotificationOperations: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <Languages className="w-4 h-4 text-[#144e39]" />
-            <h3 className="font-extrabold text-sm text-slate-900 font-display">Multi-lingual DLT Message Templates</h3>
+            <h3 className="font-extrabold text-sm text-slate-900 font-display">Multi-lingual DLT Message Templates (Preview)</h3>
           </div>
           <p className="text-xs text-slate-500 mt-1">
+            Preview standard CDAC templates. Live SMS notifications are automatically dispatched in each student's preferred language configured in school registry.
+          </p>
+          <p className="text-xs text-slate-700 font-medium mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
             {selectedLang === 'EN' && 'English: "Dear Parent, [Student Name] (Roll: [Roll]) was marked ABSENT today at [School Name]. Please contact school if unexpected."'}
             {selectedLang === 'BN' && 'বাংলা: "প্রিয় অভিভাবক, [ছাত্র/ছাত্রীর নাম] আজ বিদ্যালয়ে অনুপস্থিত রয়েছে। প্রয়োজনে প্রধান শিক্ষকের সাথে যোগাযোগ করুন।"'}
             {selectedLang === 'HI' && 'हिन्दी: "प्रिय अभिभावक, आपका बच्चा [छात्र का नाम] आज विद्यालय में अनुपस्थित है।"'}

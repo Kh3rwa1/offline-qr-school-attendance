@@ -166,14 +166,17 @@ rfidRouter.post(
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
+      const { reason } = req.body || {};
       const credential = await credentialService.reactivateCredential(
         req.params.credentialId,
         schoolId,
+        reason || 'Reactivated by operator/admin',
         user.id
       );
       return { status: 200, body: { success: true, credential } };
     } catch (error: any) {
-      return { status: 400, body: { success: false, error: error.message } };
+      const statusCode = error.statusCode || 400;
+      return { status: statusCode, body: { success: false, error: error.message } };
     }
   })
 );

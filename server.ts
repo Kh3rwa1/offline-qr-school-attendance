@@ -17,6 +17,7 @@ import auditRouter, { platformAuditRouter } from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
 import { dashboardRouter } from './src/routes/dashboardRoutes';
+import { systemHealthRouter } from './src/routes/systemHealthRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -138,6 +139,7 @@ export async function createApp() {
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
   app.use('/api/v1/audit', platformAuditRouter);
+  app.use('/api/v1/system', systemHealthRouter);
   app.use('/api/v1/schools/:schoolId/notifications', notificationRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);

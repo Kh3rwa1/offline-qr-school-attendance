@@ -342,6 +342,30 @@ reportRouter.get(
           return r;
         });
         defaultFilename = `absentee_report_${startDate}`;
+      } else if (type === 'corrections') {
+        if (userRole === 'TEACHER') {
+          res.status(403).json({ error: 'FORBIDDEN' });
+          return;
+        }
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+        const data = await getCorrectionReport(schoolId, startDate, endDate);
+
+        headers = ['Correction ID', 'Date', 'Class', 'Section', 'Student Code', 'Student Name', 'Previous Status', 'New Status', 'Reason', 'Corrected By', 'Corrected At'];
+        rows = data.corrections.map((c: any) => [
+          c.correctionId,
+          c.sessionDate,
+          c.className,
+          c.sectionName,
+          c.studentCode,
+          c.studentName,
+          c.previousStatus,
+          c.newStatus,
+          c.correctionReason || '—',
+          c.correctedByName || '—',
+          c.correctedAt ? new Date(c.correctedAt).toISOString() : '—',
+        ]);
+        defaultFilename = `corrections_report_${startDate || 'all'}`;
       } else {
         res.status(400).json({ error: 'INVALID_EXPORT_TYPE' });
         return;

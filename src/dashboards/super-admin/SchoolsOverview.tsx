@@ -15,6 +15,8 @@ interface SchoolItem {
   udiseCode: string;
   district: string;
   block?: string;
+  preferredLanguage?: string;
+  timezone?: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
   createdAt: string;
   totalStudents?: number;
@@ -35,6 +37,18 @@ export const SchoolsOverview: React.FC = () => {
   const [confirmName, setConfirmName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+
+  // Edit School State
+  const [editingSchool, setEditingSchool] = useState<SchoolItem | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    udiseCode: '',
+    district: 'Murshidabad',
+    block: '',
+    preferredLanguage: 'bn',
+    timezone: 'Asia/Kolkata',
+  });
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Form State for School Registration
   const [formData, setFormData] = useState({
@@ -124,6 +138,45 @@ export const SchoolsOverview: React.FC = () => {
       setConfirmName('');
     },
   });
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingSchool) return;
+      return api(`/api/v1/schools/${editingSchool.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editFormData.name.trim(),
+          district: editFormData.district.trim(),
+          block: editFormData.block.trim() || undefined,
+          preferredLanguage: editFormData.preferredLanguage,
+          timezone: editFormData.timezone,
+          udiseCode: editFormData.udiseCode.trim() || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
+      setEditingSchool(null);
+      setEditError(null);
+    },
+    onError: (err: any) => {
+      setEditError(err.message || 'Failed to update school metadata');
+    },
+  });
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+    if (!editFormData.name.trim()) {
+      setEditError('School name is required');
+      return;
+    }
+    if (editFormData.udiseCode && !/^\d{11}$/.test(editFormData.udiseCode.trim())) {
+      setEditError('UDISE code must be exactly 11 digits');
+      return;
+    }
+    editMutation.mutate();
+  };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -315,6 +368,25 @@ export const SchoolsOverview: React.FC = () => {
               </button>
 
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSchool(school);
+                    setEditFormData({
+                      name: school.name,
+                      udiseCode: school.udiseCode || '',
+                      district: school.district,
+                      block: school.block || '',
+                      preferredLanguage: school.preferredLanguage || 'bn',
+                      timezone: school.timezone || 'Asia/Kolkata',
+                    });
+                    setEditError(null);
+                  }}
+                  className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer font-display"
+                >
+                  Edit
+                </button>
+
                 {school.status === 'ACTIVE' && (
                   <button
                     type="button"
@@ -672,6 +744,150 @@ export const SchoolsOverview: React.FC = () => {
                     : 'Confirm Suspension'}
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Edit School Modal */}
+        {editingSchool && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900 font-display">
+                    Edit School Institution
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Update school institutional parameters and national portal synchronization.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingSchool(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {editError && (
+                <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    School Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      UDISE+ Code (11 digits)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={11}
+                      value={editFormData.udiseCode}
+                      onChange={(e) => setEditFormData({ ...editFormData, udiseCode: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      District *
+                    </label>
+                    <select
+                      value={editFormData.district}
+                      onChange={(e) => setEditFormData({ ...editFormData, district: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    >
+                      <option value="Murshidabad">Murshidabad</option>
+                      <option value="Nadia">Nadia</option>
+                      <option value="North 24 Parganas">North 24 Parganas</option>
+                      <option value="South 24 Parganas">South 24 Parganas</option>
+                      <option value="Kolkata">Kolkata</option>
+                      <option value="Howrah">Howrah</option>
+                      <option value="Hooghly">Hooghly</option>
+                      <option value="Birbhum">Birbhum</option>
+                      <option value="Malda">Malda</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      Block
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.block}
+                      onChange={(e) => setEditFormData({ ...editFormData, block: e.target.value })}
+                      placeholder="e.g. Domkal"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      Language
+                    </label>
+                    <select
+                      value={editFormData.preferredLanguage}
+                      onChange={(e) => setEditFormData({ ...editFormData, preferredLanguage: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    >
+                      <option value="bn">Bengali (বাংলা)</option>
+                      <option value="en">English</option>
+                      <option value="hi">Hindi (हिन्दी)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      Timezone
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.timezone}
+                      onChange={(e) => setEditFormData({ ...editFormData, timezone: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSchool(null)}
+                    className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editMutation.isPending}
+                    className="btn-forest-primary text-xs font-display shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    {editMutation.isPending ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

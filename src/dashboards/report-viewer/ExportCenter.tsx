@@ -182,27 +182,27 @@ export const ExportCenter: React.FC = () => {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="UDISE+ Compliance"
-          value="100% Ready"
-          trend={{ value: "Format 1.4 Validated", isPositive: true }}
+          title="UDISE+ Alignment"
+          value="National Standard"
+          trend={{ value: "Format 1.4 Schema", isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
           title="Export Engine"
-          value="Direct Blob Stream"
-          trend={{ value: "Encrypted In-Transit", isPositive: true }}
+          value="Direct Stream"
+          trend={{ value: "CSV & XLSX Formats", isPositive: true }}
           variant="default"
         />
         <StatCard
           title="MDM Subsidy Audit"
-          value="Certified"
+          value="Audit Ready"
           trend={{ value: "Headcount Reconciled", isPositive: true }}
           variant="default"
         />
         <StatCard
           title="Audit Ledger"
-          value="All Exports Logged"
-          trend={{ value: "Statutory Compliance", isPositive: true }}
+          value="Export Logging"
+          trend={{ value: "Audit Log Active", isPositive: true }}
           variant="default"
         />
       </div>

@@ -147,7 +147,7 @@ export const CardOperations: React.FC = () => {
         <StatCard
           title="Active Cards"
           value={`${activeCount} Active`}
-          trend={{ value: "DESFire EV2/EV3 Certified", isPositive: true }}
+          trend={{ value: "DESFire EV2/EV3 Standard", isPositive: true }}
           variant="default"
         />
         <StatCard

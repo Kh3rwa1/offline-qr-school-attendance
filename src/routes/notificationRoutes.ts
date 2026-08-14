@@ -269,16 +269,39 @@ router.put(
 );
 
 // ==========================================
-// 5. Trigger Queue Worker (Super Admin Only)
+// 5. Trigger Queue Worker (Super Admin & School Admin)
 // ==========================================
 router.post(
   '/process-queue',
   requireAuth,
-  requireRole(['SUPER_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { limit, providerName } = req.body;
-      const result = await processNotificationQueue({ limit, providerName });
+      const isSuperAdmin = Boolean(
+        req.sessionContext?.platformRole === 'SUPER_ADMIN' ||
+        req.user?.platformRole === 'SUPER_ADMIN' ||
+        req.userRole === 'SUPER_ADMIN' ||
+        req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN')
+      );
+
+      const isSchoolAdmin = Boolean(
+        req.userRole === 'SCHOOL_ADMIN' ||
+        req.sessionContext?.activeMembership?.role === 'SCHOOL_ADMIN' ||
+        req.sessionContext?.memberships?.some((m) => m.role === 'SCHOOL_ADMIN')
+      );
+
+      if (!isSuperAdmin && !isSchoolAdmin) {
+        return res.status(403).json({ error: 'FORBIDDEN_ROLE', message: 'Unauthorized' });
+      }
+
+      const activeSchoolId = req.activeSchoolId || req.sessionContext?.schoolId || req.sessionContext?.activeMembership?.schoolId || req.sessionContext?.memberships?.[0]?.schoolId;
+      const schoolId = isSuperAdmin ? (req.body?.schoolId || activeSchoolId || undefined) : activeSchoolId;
+
+      if (!isSuperAdmin && !schoolId) {
+        return res.status(403).json({ success: false, error: 'SCHOOL_CONTEXT_REQUIRED' });
+      }
+
+      const { limit, providerName } = req.body || {};
+      const result = await processNotificationQueue({ limit, providerName, schoolId: schoolId || undefined });
       return res.json({ success: true, ...result });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });

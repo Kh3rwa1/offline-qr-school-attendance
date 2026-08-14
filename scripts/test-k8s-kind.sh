@@ -130,7 +130,7 @@ echo "HTTP Health Check PASSED (HTTP 200)."
 
 # Seed initial database via container node execution
 WEB_POD=$(kubectl get pods -l app=school-attendance-web -o jsonpath='{.items[0].metadata.name}')
-kubectl exec "${WEB_POD}" -- node -e "const { seedDatabase } = require('./dist/seed.cjs'); seedDatabase().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });" || true
+kubectl exec "${WEB_POD}" -- node -e "const { seedDatabase } = require('./dist/seed.cjs'); seedDatabase().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });"
 
 # Test Authenticated Login & Me Endpoint via HTTP
 COOKIE_JAR=$(mktemp)

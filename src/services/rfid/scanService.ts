@@ -1,19 +1,27 @@
-import { db } from '../../db';
+import { withTenantContext } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
 import { eq, and, gt, max } from 'drizzle-orm';
-import { isReaderAuthorized, getReaderById, decryptReaderSecret } from './readerService';
+import { isReaderAuthorized, decryptReaderSecret } from './readerService';
 import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
 import { getRedisClient } from '../redisService';
+import crypto from 'crypto';
 
 /**
  * Process-local mutex map. When Redis is absent (e.g. unit-test environment),
  * this guarantees that only one caller processes a given (schoolId, clientEventId)
- * pair at a time.  Every other concurrent caller awaits the settled promise and
- * then returns the idempotent result — preventing the DB unique-constraint race
- * that caused "100 concurrent requests" to return only partial ACCEPTED results.
+ * pair at a time. Every other concurrent caller awaits the settled promise and
+ * then returns the idempotent result — preventing the DB unique-constraint race.
  */
 const _inProcessLocks = new Map<string, Promise<ScanResult>>();
+
+const LUA_RELEASE_LOCK = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
 
 export interface ScanEnvelope {
   version: number;
@@ -41,6 +49,20 @@ export interface ScanResult {
   processingLatencyMs: number;
 }
 
+function computePayloadHash(envelope: ScanEnvelope): string {
+  const canonical = [
+    envelope.version,
+    envelope.schoolId,
+    envelope.readerId,
+    envelope.credentialDigest || '',
+    envelope.readerTimestamp,
+    envelope.nonce,
+    envelope.securityMode,
+    envelope.direction || 'NONE',
+  ].join('|');
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
 export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   const startTime = Date.now();
   const redis = getRedisClient();
@@ -49,47 +71,50 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     throw new Error('Invalid envelope: missing mandatory envelope headers or fields');
   }
 
-  // 1. Idempotency check: Return existing record if already stored in DB
-  const [existing] = await db
-    .select()
-    .from(rfidScanEvents)
-    .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+  // 1. Idempotency check with payload hash verification: Return existing record if already stored in DB
+  const existingRecord = await withTenantContext(envelope.schoolId, async (tx) => {
+    const [stored] = await tx
+      .select()
+      .from(rfidScanEvents)
+      .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+    return stored || null;
+  });
 
-  if (existing) {
-    return { decision: existing.decision, scanEventId: existing.id, processingLatencyMs: Date.now() - startTime };
+  if (existingRecord) {
+    if (existingRecord.readerId !== envelope.readerId || existingRecord.nonce !== envelope.nonce) {
+      return {
+        decision: 'REPLAY_REJECTED',
+        rejectionCode: 'PAYLOAD_HASH_MISMATCH',
+        processingLatencyMs: Date.now() - startTime,
+      };
+    }
+    return { decision: existingRecord.decision, scanEventId: existingRecord.id, processingLatencyMs: Date.now() - startTime };
   }
 
-  // 2. Atomic Processor Lock for clientEventId
-  //
-  // Strategy (two-tier):
-  //   Tier-1 (Redis): distributed SET NX lock across multiple processes/replicas.
-  //   Tier-2 (in-process Map): single-process mutex that is always applied first,
-  //     ensuring that no two coroutines inside THIS process even attempt the Redis
-  //     call (or DB transaction) concurrently for the same key. This fixes the
-  //     race that occurred when Redis was absent in unit-test environments.
+  // 2. Atomic Distributed Lock with Unique Owner Token
   const eventLockKey = `rfid:lock:${envelope.schoolId}:${envelope.clientEventId}`;
   const eventResultKey = `rfid:result:${envelope.schoolId}:${envelope.clientEventId}`;
   const inProcessKey = `${envelope.schoolId}:${envelope.clientEventId}`;
+  const lockOwnerToken = crypto.randomUUID();
 
-  // If another coroutine in this process is already working on this exact key,
-  // piggyback on its promise and return the same result (after adjusting latency).
   const existingPromise = _inProcessLocks.get(inProcessKey);
   if (existingPromise) {
     try {
       const result = await existingPromise;
       return { ...result, processingLatencyMs: Date.now() - startTime };
     } catch {
-      // The lock-holder threw — fall through to a fresh DB idempotency check.
-      const [stored] = await db
-        .select()
-        .from(rfidScanEvents)
-        .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+      const stored = await withTenantContext(envelope.schoolId, async (tx) => {
+        const [rec] = await tx
+          .select()
+          .from(rfidScanEvents)
+          .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+        return rec || null;
+      });
       if (stored) return { decision: stored.decision, scanEventId: stored.id, processingLatencyMs: Date.now() - startTime };
       throw new Error('Concurrent scan processing failed; please retry.');
     }
   }
 
-  // We are the designated processor for this key in this process.
   let resolveInProcess!: (r: ScanResult) => void;
   let rejectInProcess!: (e: unknown) => void;
   const inProcessPromise = new Promise<ScanResult>((res, rej) => {
@@ -102,12 +127,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
   if (redis) {
     try {
-      const lockRes = await redis.set(eventLockKey, '1', 'EX', 10, 'NX');
+      const lockRes = await redis.set(eventLockKey, lockOwnerToken, 'EX', 10, 'NX');
       if (lockRes === 'OK') {
         acquiredRedisLock = true;
       } else {
-        // Another PROCESS (not coroutine — those are handled above) holds the lock.
-        // Poll Redis result cache then DB.
+        // Contender: Poll for result cache or DB record
         for (let i = 0; i < 50; i++) {
           const cachedStr = await redis.get(eventResultKey);
           if (cachedStr) {
@@ -117,10 +141,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
             _inProcessLocks.delete(inProcessKey);
             return result;
           }
-          const [stored] = await db
-            .select()
-            .from(rfidScanEvents)
-            .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+          const stored = await withTenantContext(envelope.schoolId, async (tx) => {
+            const [rec] = await tx
+              .select()
+              .from(rfidScanEvents)
+              .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+            return rec || null;
+          });
           if (stored) {
             const result = { decision: stored.decision, scanEventId: stored.id, processingLatencyMs: Date.now() - startTime };
             resolveInProcess(result);
@@ -129,13 +156,38 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           }
           await new Promise((res) => setTimeout(res, 20));
         }
-        acquiredRedisLock = true; // timed-out polling; proceed as lock holder
+
+        // Explicit reacquisition attempt after polling timeout
+        const reacquire = await redis.set(eventLockKey, lockOwnerToken, 'EX', 10, 'NX');
+        if (reacquire === 'OK') {
+          acquiredRedisLock = true;
+        } else {
+          const finalStored = await withTenantContext(envelope.schoolId, async (tx) => {
+            const [rec] = await tx
+              .select()
+              .from(rfidScanEvents)
+              .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+            return rec || null;
+          });
+          if (finalStored) {
+            const result = { decision: finalStored.decision, scanEventId: finalStored.id, processingLatencyMs: Date.now() - startTime };
+            resolveInProcess(result);
+            _inProcessLocks.delete(inProcessKey);
+            return result;
+          }
+          const timeoutErr = new Error('Concurrent scan lock timeout: another worker is actively processing event');
+          rejectInProcess(timeoutErr);
+          _inProcessLocks.delete(inProcessKey);
+          throw timeoutErr;
+        }
       }
-    } catch {
+    } catch (err: any) {
+      if (err?.message?.includes('Concurrent scan lock timeout')) {
+        throw err;
+      }
       acquiredRedisLock = true;
     }
   }
-  // When Redis is absent, this process IS the sole lock holder (in-process map guarantees it).
 
   const finishProcessing = async (result: ScanResult): Promise<ScanResult> => {
     if (redis && acquiredRedisLock) {
@@ -152,23 +204,26 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     const createRejection = async (decision: any, rejectionCode: string): Promise<ScanResult> => {
       const latency = Date.now() - startTime;
       try {
-        const [inserted] = await db
-          .insert(rfidScanEvents)
-          .values({
-            schoolId: envelope.schoolId,
-            readerId: envelope.readerId,
-            clientEventId: envelope.clientEventId,
-            scanTimestamp: new Date(envelope.readerTimestamp),
-            decision,
-            rejectionCode,
-            captureMethod: envelope.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY',
-            securityMode: envelope.securityMode,
-            processingLatencyMs: latency,
-            isOffline: envelope.isOffline || false,
-            nonce: envelope.nonce,
-          })
-          .onConflictDoNothing()
-          .returning();
+        const inserted = await withTenantContext(envelope.schoolId, async (tx) => {
+          const [ins] = await tx
+            .insert(rfidScanEvents)
+            .values({
+              schoolId: envelope.schoolId,
+              readerId: envelope.readerId,
+              clientEventId: envelope.clientEventId,
+              scanTimestamp: new Date(envelope.readerTimestamp),
+              decision,
+              rejectionCode,
+              captureMethod: envelope.securityMode === 'SECURE' ? 'RFID_SECURE' : 'RFID_UID_LEGACY',
+              securityMode: envelope.securityMode,
+              processingLatencyMs: latency,
+              isOffline: envelope.isOffline || false,
+              nonce: envelope.nonce,
+            })
+            .onConflictDoNothing()
+            .returning();
+          return ins;
+        });
 
         return finishProcessing({ decision, rejectionCode, scanEventId: inserted?.id, processingLatencyMs: latency });
       } catch {
@@ -181,7 +236,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       return createRejection('READER_REVOKED', 'READER_REVOKED');
     }
 
-    const [readerObj] = await db.select().from(rfidReaders).where(and(eq(rfidReaders.id, envelope.readerId)));
+    const readerObj = await withTenantContext(envelope.schoolId, async (tx) => {
+      const [r] = await tx.select().from(rfidReaders).where(and(eq(rfidReaders.id, envelope.readerId), eq(rfidReaders.schoolId, envelope.schoolId)));
+      return r;
+    });
+
     const secret =
       (readerObj?.sharedSecretEncrypted ? decryptReaderSecret(readerObj.sharedSecretEncrypted) : null) ||
       process.env.RFID_HMAC_SECRET ||
@@ -233,16 +292,19 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         const setNonce = await redis.set(nonceKey, '1', 'EX', 86400, 'NX');
         if (!setNonce) isNonceReused = true;
         redisUsedSuccessfully = true;
-      } catch (err) {
+      } catch {
         redisUsedSuccessfully = false;
       }
     }
 
     if (!redisUsedSuccessfully || isNonceReused) {
-      const [existingNonce] = await db
-        .select()
-        .from(rfidScanEvents)
-        .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.nonce, envelope.nonce)));
+      const existingNonce = await withTenantContext(envelope.schoolId, async (tx) => {
+        const [rec] = await tx
+          .select()
+          .from(rfidScanEvents)
+          .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.nonce, envelope.nonce)));
+        return rec;
+      });
       if (existingNonce) {
         isNonceReused = true;
       }
@@ -254,10 +316,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
     // Monotonic sequence number check
     if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
-      const [lastSeq] = await db
-        .select({ maxSeq: max(rfidScanEvents.sequenceNumber) })
-        .from(rfidScanEvents)
-        .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.readerId, envelope.readerId)));
+      const lastSeq = await withTenantContext(envelope.schoolId, async (tx) => {
+        const [rec] = await tx
+          .select({ maxSeq: max(rfidScanEvents.sequenceNumber) })
+          .from(rfidScanEvents)
+          .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.readerId, envelope.readerId)));
+        return rec;
+      });
       if (lastSeq?.maxSeq !== null && lastSeq?.maxSeq !== undefined && Number(envelope.sequenceNumber) <= Number(lastSeq.maxSeq)) {
         return createRejection('REPLAY_REJECTED', 'OUT_OF_ORDER_SEQUENCE');
       }
@@ -288,10 +353,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     let sessionId = envelope.attendanceSessionId;
     if (!sessionId) return createRejection('NO_ACTIVE_SESSION', 'NO_SESSION_ID');
 
-    const [session] = await db
-      .select()
-      .from(attendanceSessions)
-      .where(and(eq(attendanceSessions.id, sessionId), eq(attendanceSessions.schoolId, envelope.schoolId)));
+    const session = await withTenantContext(envelope.schoolId, async (tx) => {
+      const [s] = await tx
+        .select()
+        .from(attendanceSessions)
+        .where(and(eq(attendanceSessions.id, sessionId!), eq(attendanceSessions.schoolId, envelope.schoolId)));
+      return s;
+    });
 
     if (!session || session.status === 'FINALIZED') {
       return createRejection('NO_ACTIVE_SESSION', 'SESSION_NOT_OPEN');
@@ -315,18 +383,21 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
     if (!redisDupUsed || isDuplicateTap) {
       const cooldownThreshold = new Date(Date.now() - duplicateTapCooldown);
-      const [recentScan] = await db
-        .select()
-        .from(rfidScanEvents)
-        .where(
-          and(
-            eq(rfidScanEvents.schoolId, envelope.schoolId),
-            eq(rfidScanEvents.credentialId, credential.id),
-            eq(rfidScanEvents.attendanceSessionId, sessionId),
-            eq(rfidScanEvents.decision, 'ACCEPTED'),
-            gt(rfidScanEvents.scanTimestamp, cooldownThreshold)
-          )
-        );
+      const recentScan = await withTenantContext(envelope.schoolId, async (tx) => {
+        const [rec] = await tx
+          .select()
+          .from(rfidScanEvents)
+          .where(
+            and(
+              eq(rfidScanEvents.schoolId, envelope.schoolId),
+              eq(rfidScanEvents.credentialId, credential.id),
+              eq(rfidScanEvents.attendanceSessionId, sessionId!),
+              eq(rfidScanEvents.decision, 'ACCEPTED'),
+              gt(rfidScanEvents.scanTimestamp, cooldownThreshold)
+            )
+          );
+        return rec;
+      });
       if (recentScan) isDuplicateTap = true;
     }
 
@@ -339,7 +410,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
     let transactionResult: any;
     try {
-      transactionResult = await db.transaction(async (tx: any) => {
+      transactionResult = await withTenantContext(envelope.schoolId, async (tx: any) => {
         const [scanEvent] = await tx
           .insert(rfidScanEvents)
           .values({
@@ -382,7 +453,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           .where(
             and(
               eq(attendanceRecords.schoolId, envelope.schoolId),
-              eq(attendanceRecords.attendanceSessionId, sessionId),
+              eq(attendanceRecords.attendanceSessionId, sessionId!),
               eq(attendanceRecords.studentId, credential.studentId)
             )
           );
@@ -422,10 +493,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       const errMsg = String(err?.message || '') + ' ' + String(err?.cause?.message || '') + ' ' + String(err?.cause?.code || '');
       if (err?.code === '23505' || err?.cause?.code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('rfid_scan_events_client_event_idx') || errMsg.includes('attendance_events_client_event_idx')) {
         for (let attempt = 0; attempt < 50; attempt++) {
-          const [existing] = await db
-            .select()
-            .from(rfidScanEvents)
-            .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+          const existing = await withTenantContext(envelope.schoolId, async (tx) => {
+            const [rec] = await tx
+              .select()
+              .from(rfidScanEvents)
+              .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.clientEventId, envelope.clientEventId)));
+            return rec;
+          });
           if (existing) {
             return finishProcessing({
               decision: existing.decision,
@@ -447,15 +521,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       processingLatencyMs: Date.now() - startTime,
     });
   } catch (outerErr) {
-    // If we throw before finishProcessing, we must still clean up the in-process lock
-    // so that future retries are not blocked forever.
     rejectInProcess(outerErr);
     _inProcessLocks.delete(inProcessKey);
     throw outerErr;
   } finally {
     if (redis && acquiredRedisLock) {
       try {
-        await redis.del(eventLockKey);
+        await redis.eval(LUA_RELEASE_LOCK, 1, eventLockKey, lockOwnerToken);
       } catch {}
     }
   }

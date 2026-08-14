@@ -45,8 +45,9 @@ export const SchoolAdminDashboard: React.FC = () => {
             <span className="bg-blue-500/30 text-blue-200 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-blue-400/30">
               School Administration
             </span>
-            <h2 className="text-2xl sm:text-3xl font-black mt-2">{activeSchoolName}</h2>
-            <p className="text-xs text-blue-200 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-black mt-2">School Administration & Operations</h1>
+            <p className="text-sm font-semibold text-blue-200 mt-1">{activeSchoolName}</p>
+            <p className="text-xs text-blue-200/80 mt-0.5">
               Roster management, teacher permissions, academic classes, and credential lifecycle
             </p>
           </div>

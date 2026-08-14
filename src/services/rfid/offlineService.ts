@@ -1,4 +1,4 @@
-import { db } from '../../db';
+import { db, withTenantContext } from '../../db';
 import { rfidCredentials, rfidReaders, attendanceSessions, rfidScanEvents, attendanceEvents, attendanceRecords, students } from '../../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { ScanEnvelope } from './scanService';
@@ -8,22 +8,26 @@ import { verifyEnvelopeSignature, verifySecureProof, verifyCardProof } from './c
 import crypto from 'crypto';
 
 export async function generateOfflineRoster(schoolId: string) {
-  const activeCredentials = await db
-    .select({
-      credentialDigest: rfidCredentials.credentialDigest,
-      studentId: rfidCredentials.studentId,
-      securityMode: rfidCredentials.securityMode,
-      status: rfidCredentials.status,
-    })
-    .from(rfidCredentials)
-    .where(and(eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'ACTIVE')));
+  const activeCredentials = await withTenantContext(schoolId, async (tx: any) => {
+    return tx
+      .select({
+        credentialDigest: rfidCredentials.credentialDigest,
+        studentId: rfidCredentials.studentId,
+        securityMode: rfidCredentials.securityMode,
+        status: rfidCredentials.status,
+      })
+      .from(rfidCredentials)
+      .where(and(eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'ACTIVE')));
+  });
 
-  const revokedCredentials = await db
-    .select({
-      credentialDigest: rfidCredentials.credentialDigest,
-    })
-    .from(rfidCredentials)
-    .where(and(eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'REVOKED')));
+  const revokedCredentials = await withTenantContext(schoolId, async (tx: any) => {
+    return tx
+      .select({
+        credentialDigest: rfidCredentials.credentialDigest,
+      })
+      .from(rfidCredentials)
+      .where(and(eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'REVOKED')));
+  });
 
   const generatedAt = new Date();
   const maxAgeHours = parseInt(process.env.RFID_MAX_ROSTER_AGE_HOURS || '4', 10);
@@ -104,53 +108,86 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
   }
 
   if (validEvents.length === 0) {
-    return events.map((e) => resultsMap.get(e.clientEventId));
+    return events.map((e) => resultsMap.get(e.clientEventId) || {
+      decision: 'REJECTED',
+      rejectionCode: 'UNPROCESSED_EVENT',
+      scanEventId: e.clientEventId,
+      processingLatencyMs: 0,
+    });
   }
 
-  // Pre-fetch readers for target school
-  const readersList = await db
-    .select()
-    .from(rfidReaders)
-    .where(and(eq(rfidReaders.schoolId, schoolId), eq(rfidReaders.status, 'ACTIVE')));
+  // 1. Comprehensive Nonce DB History Check before accepting batch
+  const nonces = Array.from(new Set(validEvents.map((e) => e.nonce).filter(Boolean)));
+  if (nonces.length > 0) {
+    const existingDbNonces = await withTenantContext(schoolId, async (tx: any) => {
+      return tx
+        .select({ nonce: rfidScanEvents.nonce, clientEventId: rfidScanEvents.clientEventId })
+        .from(rfidScanEvents)
+        .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.nonce, nonces)));
+    });
+    const dbNonceMap = new Map<string, string>(existingDbNonces.map((r: any) => [r.nonce, r.clientEventId]));
+    for (const event of validEvents) {
+      if (event.nonce && dbNonceMap.has(event.nonce)) {
+        const ownerEventId = dbNonceMap.get(event.nonce);
+        if (ownerEventId !== event.clientEventId) {
+          resultsMap.set(event.clientEventId, {
+            decision: 'REPLAY_REJECTED',
+            rejectionCode: 'NONCE_REUSED',
+            processingLatencyMs: 0,
+          });
+        }
+      }
+    }
+  }
+
+  // Pre-fetch readers, credentials, and existing scan events under tenant context
+  const [readersList, credsList, existingEvents] = await withTenantContext(schoolId, async (tx: any) => {
+    const rList = await tx
+      .select()
+      .from(rfidReaders)
+      .where(and(eq(rfidReaders.schoolId, schoolId), eq(rfidReaders.status, 'ACTIVE')));
+
+    const cList = await tx
+      .select({
+        id: rfidCredentials.id,
+        schoolId: rfidCredentials.schoolId,
+        studentId: rfidCredentials.studentId,
+        credentialDigest: rfidCredentials.credentialDigest,
+        securityMode: rfidCredentials.securityMode,
+        status: rfidCredentials.status,
+        expiresAt: rfidCredentials.expiresAt,
+        createdByUserId: rfidCredentials.createdByUserId,
+        studentStatus: students.status,
+      })
+      .from(rfidCredentials)
+      .innerJoin(students, eq(students.id, rfidCredentials.studentId))
+      .where(eq(rfidCredentials.schoolId, schoolId));
+
+    const clientEventIds = validEvents.map((e) => e.clientEventId);
+    const eEvents = await tx
+      .select({ clientEventId: rfidScanEvents.clientEventId, id: rfidScanEvents.id, decision: rfidScanEvents.decision })
+      .from(rfidScanEvents)
+      .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.clientEventId, clientEventIds)));
+
+    return [rList, cList, eEvents];
+  });
+
   const readerMap = new Map<string, any>(readersList.map((r: any) => [r.id, r]));
-
-  // Pre-fetch active credentials for target school
-  const credsList = await db
-    .select({
-      id: rfidCredentials.id,
-      schoolId: rfidCredentials.schoolId,
-      studentId: rfidCredentials.studentId,
-      credentialDigest: rfidCredentials.credentialDigest,
-      securityMode: rfidCredentials.securityMode,
-      status: rfidCredentials.status,
-      expiresAt: rfidCredentials.expiresAt,
-      createdByUserId: rfidCredentials.createdByUserId,
-      studentStatus: students.status,
-    })
-    .from(rfidCredentials)
-    .innerJoin(students, eq(students.id, rfidCredentials.studentId))
-    .where(eq(rfidCredentials.schoolId, schoolId));
-
   const credentialMap = new Map<string, any>(credsList.map((c: any) => [c.credentialDigest, c]));
+  const existingEventMap = new Map<string, any>(existingEvents.map((e: any) => [e.clientEventId, e]));
 
   // Pre-fetch open sessions for target school
   const sessionIds = Array.from(new Set(validEvents.map((e) => e.attendanceSessionId).filter(Boolean))) as string[];
   let sessionsList: any[] = [];
   if (sessionIds.length > 0) {
-    sessionsList = await db
-      .select()
-      .from(attendanceSessions)
-      .where(and(eq(attendanceSessions.schoolId, schoolId), inArray(attendanceSessions.id, sessionIds)));
+    sessionsList = await withTenantContext(schoolId, async (tx: any) => {
+      return tx
+        .select()
+        .from(attendanceSessions)
+        .where(and(eq(attendanceSessions.schoolId, schoolId), inArray(attendanceSessions.id, sessionIds)));
+    });
   }
   const sessionMap = new Map<string, any>(sessionsList.map((s) => [s.id, s]));
-
-  // Pre-fetch existing scan event clientEventIds to ensure idempotency
-  const clientEventIds = validEvents.map((e) => e.clientEventId);
-  const existingEvents = await db
-    .select({ clientEventId: rfidScanEvents.clientEventId, id: rfidScanEvents.id, decision: rfidScanEvents.decision })
-    .from(rfidScanEvents)
-    .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.clientEventId, clientEventIds)));
-  const existingEventMap = new Map<string, any>(existingEvents.map((e: any) => [e.clientEventId, e]));
 
   const acceptedScans: Array<{
     event: ScanEnvelope;
@@ -302,72 +339,154 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
     acceptedScans.push({ event, credential, session, captureMethod });
   }
 
-  // Bulk process accepted scans in chunks of 500
+  // Bulk process accepted scans in chunks of 500 under tenant context with row locking
   const chunkSize = 500;
   for (let i = 0; i < acceptedScans.length; i += chunkSize) {
     const chunk = acceptedScans.slice(i, i + chunkSize);
 
-    await db.transaction(async (tx: any) => {
-      // 1. Bulk insert rfid_scan_events
-      const scanEventValues = chunk.map((item) => ({
-        schoolId,
-        readerId: item.event.readerId,
-        credentialId: item.credential.id,
-        attendanceSessionId: item.event.attendanceSessionId,
-        clientEventId: item.event.clientEventId,
-        sequenceNumber: item.event.sequenceNumber,
-        scanTimestamp: new Date(item.event.readerTimestamp),
-        direction: item.event.direction || 'NONE',
-        decision: 'ACCEPTED',
-        captureMethod: item.captureMethod,
-        securityMode: item.event.securityMode,
-        processingLatencyMs: 1,
-        isOffline: true,
-        nonce: item.event.nonce,
-      }));
+    await withTenantContext(schoolId, async (tx: any) => {
+      // 1. Lock reader rows for readers involved in this chunk and verify/advance sequence numbers
+      const chunkReaderIds = Array.from(new Set(chunk.map((c) => c.event.readerId)));
+      const lockedReaders = await tx
+        .select({
+          id: rfidReaders.id,
+          lastSequenceNumber: rfidReaders.lastSequenceNumber,
+        })
+        .from(rfidReaders)
+        .where(and(
+          eq(rfidReaders.schoolId, schoolId),
+          inArray(rfidReaders.id, chunkReaderIds)
+        ))
+        .for('update');
+
+      const lockedReaderMap = new Map<string, number>(lockedReaders.map((r: any) => [r.id, r.lastSequenceNumber ?? 0]));
+
+      // Check sequence numbers against locked database state
+      const validChunkItems: typeof chunk = [];
+      const readerNewMaxSeq = new Map<string, number>();
+
+      for (const item of chunk) {
+        if (item.event.sequenceNumber !== undefined && item.event.sequenceNumber !== null) {
+          const dbMaxSeq = readerNewMaxSeq.get(item.event.readerId) ?? lockedReaderMap.get(item.event.readerId) ?? 0;
+          if (Number(item.event.sequenceNumber) <= Number(dbMaxSeq)) {
+            resultsMap.set(item.event.clientEventId, {
+              decision: 'REPLAY_REJECTED',
+              rejectionCode: 'OUT_OF_ORDER_SEQUENCE',
+              processingLatencyMs: 0,
+            });
+            continue;
+          }
+          readerNewMaxSeq.set(item.event.readerId, Number(item.event.sequenceNumber));
+        }
+        validChunkItems.push(item);
+      }
+
+      if (validChunkItems.length === 0) return;
+
+      // Update reader lastSequenceNumber for all updated readers in this chunk
+      for (const [readerId, maxSeq] of readerNewMaxSeq.entries()) {
+        await tx
+          .update(rfidReaders)
+          .set({
+            lastSequenceNumber: maxSeq,
+            lastSeenAt: new Date(),
+          })
+          .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)));
+      }
+
+      // 2. Bulk insert rfid_scan_events with complete payload hash
+      const scanEventValues = validChunkItems.map((item) => {
+        const canonical = [
+          item.event.version,
+          item.event.schoolId,
+          item.event.readerId,
+          item.event.credentialDigest || '',
+          item.event.secureProof || '',
+          item.event.readerTimestamp,
+          item.event.nonce,
+          item.event.securityMode,
+          item.event.direction || 'NONE',
+          item.event.attendanceSessionId || '',
+          item.event.sequenceNumber ?? '',
+          item.event.clientEventId,
+          '1',
+          item.event.cardProof || '',
+          item.event.cardUid || '',
+          item.event.readerChallenge || '',
+          item.event.transactionCounter ?? '',
+        ].join('|');
+        const payloadHash = crypto.createHash('sha256').update(canonical).digest('hex');
+
+        return {
+          schoolId,
+          readerId: item.event.readerId,
+          credentialId: item.credential.id,
+          attendanceSessionId: item.event.attendanceSessionId,
+          clientEventId: item.event.clientEventId,
+          sequenceNumber: item.event.sequenceNumber,
+          scanTimestamp: new Date(item.event.readerTimestamp),
+          direction: item.event.direction || 'NONE',
+          decision: 'ACCEPTED',
+          captureMethod: item.captureMethod,
+          securityMode: item.event.securityMode,
+          processingLatencyMs: 1,
+          isOffline: true,
+          nonce: item.event.nonce,
+          payloadHash,
+        };
+      });
 
       const insertedScanEvents = await tx
         .insert(rfidScanEvents)
         .values(scanEventValues)
-        .onConflictDoNothing()
+        .onConflictDoUpdate({
+          target: [rfidScanEvents.schoolId, rfidScanEvents.clientEventId],
+          set: {
+            processingLatencyMs: 1,
+          },
+        })
         .returning({ id: rfidScanEvents.id, clientEventId: rfidScanEvents.clientEventId });
 
       const insertedMap = new Map<string, string>(insertedScanEvents.map((s: any) => [s.clientEventId, s.id]));
 
-      // 2. Bulk insert attendance_events
-      const attEventsValues = chunk.map((item) => {
-        const scanId = insertedMap.get(item.event.clientEventId) || crypto.randomUUID();
-        return {
-          schoolId,
-          clientEventId: `rfid_${scanId}`,
-          attendanceSessionId: item.event.attendanceSessionId,
-          studentId: item.credential.studentId,
-          eventType: 'CHECK_IN',
-          statusValue: 'PRESENT',
-          clientTimestamp: new Date(item.event.readerTimestamp),
-          actorId: item.credential.createdByUserId || item.session.teacherId,
-          captureMethod: item.captureMethod,
-          sourceReaderId: item.event.readerId,
-          sourceRfidEventId: scanId,
-        };
-      });
+      // 3. Bulk insert attendance_events only for confirmed scan events
+      const attEventsValues = validChunkItems
+        .filter((item) => insertedMap.has(item.event.clientEventId))
+        .map((item) => {
+          const scanId = insertedMap.get(item.event.clientEventId)!;
+          return {
+            schoolId,
+            clientEventId: `rfid_${scanId}`,
+            attendanceSessionId: item.event.attendanceSessionId,
+            studentId: item.credential.studentId,
+            eventType: 'CHECK_IN',
+            statusValue: 'PRESENT',
+            clientTimestamp: new Date(item.event.readerTimestamp),
+            actorId: item.credential.createdByUserId || item.session.teacherId,
+            captureMethod: item.captureMethod,
+            sourceReaderId: item.event.readerId,
+            sourceRfidEventId: scanId,
+          };
+        });
 
       if (attEventsValues.length > 0) {
         await tx.insert(attendanceEvents).values(attEventsValues).onConflictDoNothing();
       }
 
-      // 3. Bulk insert/upsert attendance_records
-      const attRecordValues = chunk.map((item) => ({
-        schoolId,
-        attendanceSessionId: item.event.attendanceSessionId,
-        studentId: item.credential.studentId,
-        status: 'PRESENT',
-        firstScannedAt: new Date(item.event.readerTimestamp),
-        lastUpdatedAt: new Date(),
-        captureMethod: item.captureMethod,
-        confidenceLevel: item.event.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
-        direction: item.event.direction || 'NONE',
-      }));
+      // 4. Bulk insert/upsert attendance_records
+      const attRecordValues = validChunkItems
+        .filter((item) => insertedMap.has(item.event.clientEventId))
+        .map((item) => ({
+          schoolId,
+          attendanceSessionId: item.event.attendanceSessionId,
+          studentId: item.credential.studentId,
+          status: 'PRESENT',
+          firstScannedAt: new Date(item.event.readerTimestamp),
+          lastUpdatedAt: new Date(),
+          captureMethod: item.captureMethod,
+          confidenceLevel: item.event.securityMode === 'SECURE' ? 'HIGH' : 'MEDIUM',
+          direction: item.event.direction || 'NONE',
+        }));
 
       if (attRecordValues.length > 0) {
         await tx
@@ -379,23 +498,29 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
               status: 'PRESENT',
               lastUpdatedAt: new Date(),
             },
-          })
-          .returning({ id: attendanceRecords.id, studentId: attendanceRecords.studentId });
+          });
       }
 
-      for (const item of chunk) {
-        const scanId = insertedMap.get(item.event.clientEventId) || item.event.clientEventId;
-        resultsMap.set(item.event.clientEventId, {
-          decision: 'ACCEPTED',
-          scanEventId: scanId,
-          studentId: item.credential.studentId,
-          processingLatencyMs: 1,
-        });
+      for (const item of validChunkItems) {
+        const scanId = insertedMap.get(item.event.clientEventId);
+        if (scanId) {
+          resultsMap.set(item.event.clientEventId, {
+            decision: 'ACCEPTED',
+            scanEventId: scanId,
+            studentId: item.credential.studentId,
+            processingLatencyMs: 1,
+          });
+        }
       }
     });
   }
 
-  return events.map((e) => resultsMap.get(e.clientEventId) || { decision: 'ACCEPTED', scanEventId: e.clientEventId });
+  return events.map((e) => resultsMap.get(e.clientEventId) || {
+    decision: 'REJECTED',
+    rejectionCode: 'UNPROCESSED_EVENT',
+    scanEventId: e.clientEventId,
+    processingLatencyMs: 0,
+  });
 }
 
 export async function getOfflineQueueStatus(schoolId: string, readerId: string) {

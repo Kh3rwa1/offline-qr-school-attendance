@@ -356,6 +356,26 @@ describe('RFID Router & Middleware Integration Suite', () => {
     expect(res.body.rejectionCode).toBe('OUT_OF_ORDER_SEQUENCE');
   });
 
+  function invokeOfflineSyncEndpoint(pathSchoolId: string, headers: Record<string, string>, body: any): Promise<MockResponse> {
+    return new Promise((resolve) => {
+      const req: any = {
+        method: 'POST',
+        url: `/${pathSchoolId}/rfid/offline/sync`,
+        originalUrl: `/${pathSchoolId}/rfid/offline/sync`,
+        params: { schoolId: pathSchoolId },
+        headers: headers,
+        body: body,
+      };
+
+      const res = new MockResponse();
+      res.on('finish', () => resolve(res));
+
+      rfidRouter(req, res as any, () => {
+        resolve(res);
+      });
+    });
+  }
+
   it('POST /:schoolId/rfid/scans rejects request for wrong school', async () => {
     const envelope = buildSignedEnvelope(credentialDigest1);
     const wrongSchoolId = '00000000-0000-4000-8000-000000000999';
@@ -368,5 +388,117 @@ describe('RFID Router & Middleware Integration Suite', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toBe('UNAUTHORIZED_READER');
+  });
+
+  it('POST /:schoolId/rfid/offline/sync processes valid batch and returns accepted results with real scan IDs', async () => {
+    const offlineEvent1 = buildSignedEnvelope(credentialDigest1, {
+      isOffline: true,
+      sequenceNumber: 300,
+      clientEventId: `offline_evt_1_${Date.now()}`,
+    });
+    const offlineEvent2 = buildSignedEnvelope(credentialDigest2, {
+      isOffline: true,
+      sequenceNumber: 301,
+      clientEventId: `offline_evt_2_${Date.now()}`,
+    });
+
+    const timestamp = new Date().toISOString();
+    const batchPayload = JSON.stringify({ events: [offlineEvent1, offlineEvent2] });
+    const batchSig = crypto.createHmac('sha256', hmacSecret).update(batchPayload).digest('hex');
+
+    const res = await invokeOfflineSyncEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': batchSig,
+      'x-reader-timestamp': timestamp,
+    }, { events: [offlineEvent1, offlineEvent2] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.results.length).toBe(2);
+    expect(res.body.results[0].decision).toBe('ACCEPTED');
+    expect(res.body.results[0].scanEventId).toBeDefined();
+    expect(res.body.results[1].decision).toBe('ACCEPTED');
+    expect(res.body.results[1].scanEventId).toBeDefined();
+  });
+
+  it('POST /:schoolId/rfid/offline/sync rejects nonces already recorded in database history', async () => {
+    const [freshStudent] = await db
+      .insert(students)
+      .values({
+        schoolId,
+        studentCode: `API-STD-NONCE-${Date.now()}`,
+        name: 'Nonce Test Student',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    const cred = await credentialService.enrollCredential({
+      schoolId,
+      studentId: freshStudent.id,
+      credentialDigest: `digest_nonce_test_${Date.now()}`,
+      securityMode: 'SECURE',
+      keyVersion: 1,
+      operatorUserId: adminUserId,
+    });
+    await credentialService.activateCredential(cred.id, schoolId);
+
+    const historicalNonce = `hist_nonce_${Date.now()}`;
+    const cardUid = '04A1B2C3D4E5F6';
+    const readerChallenge = crypto.randomBytes(16).toString('hex');
+    const transactionCounter = 50;
+    const { computeDiversifiedKey, aesCmac } = await import('../../src/services/rfid/cryptoService');
+    const divKey = computeDiversifiedKey(hmacSecret, cardUid, 'school_attendance');
+    const txBuf = Buffer.alloc(4);
+    txBuf.writeUInt32BE(transactionCounter, 0);
+    const proofData = Buffer.concat([Buffer.from('desfire-ev2-proof-v1', 'utf8'), txBuf, Buffer.from(readerChallenge, 'hex')]);
+    const cardProof = aesCmac(divKey, proofData).toString('hex');
+
+    const liveEnvelope = buildSignedEnvelope(cred.credentialDigest, {
+      nonce: historicalNonce,
+      sequenceNumber: 305,
+      clientEventId: `live_evt_${Date.now()}`,
+      cardProof,
+      cardUid,
+      readerChallenge,
+      transactionCounter,
+    });
+
+    const liveRes = await invokeScanEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': liveEnvelope.signature,
+      'x-reader-timestamp': liveEnvelope.readerTimestamp,
+    }, liveEnvelope);
+    expect(liveRes.statusCode).toBe(200);
+
+    // Attempt offline sync with the same nonce under a different clientEventId
+    const txBuf2 = Buffer.alloc(4);
+    txBuf2.writeUInt32BE(51, 0);
+    const proofData2 = Buffer.concat([Buffer.from('desfire-ev2-proof-v1', 'utf8'), txBuf2, Buffer.from(readerChallenge, 'hex')]);
+    const cardProof2 = aesCmac(divKey, proofData2).toString('hex');
+
+    const offlineReplay = buildSignedEnvelope(credentialDigest2, {
+      isOffline: true,
+      nonce: historicalNonce,
+      sequenceNumber: 306,
+      clientEventId: `offline_replay_${Date.now()}`,
+      cardProof: cardProof2,
+      cardUid,
+      readerChallenge,
+      transactionCounter: 51,
+    });
+
+    const timestamp = new Date().toISOString();
+    const batchPayload = JSON.stringify({ events: [offlineReplay] });
+    const batchSig = crypto.createHmac('sha256', hmacSecret).update(batchPayload).digest('hex');
+
+    const res = await invokeOfflineSyncEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': batchSig,
+      'x-reader-timestamp': timestamp,
+    }, { events: [offlineReplay] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.results[0].decision).toBe('REPLAY_REJECTED');
+    expect(res.body.results[0].rejectionCode).toBe('NONCE_REUSED');
   });
 });

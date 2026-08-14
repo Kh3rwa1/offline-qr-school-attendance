@@ -77,6 +77,12 @@ function computePayloadHash(envelope: ScanEnvelope): string {
     envelope.direction || 'NONE',
     envelope.attendanceSessionId || '',
     envelope.sequenceNumber ?? '',
+    envelope.clientEventId,
+    envelope.isOffline ? '1' : '0',
+    envelope.cardProof || '',
+    envelope.cardUid || '',
+    envelope.readerChallenge || '',
+    envelope.transactionCounter ?? '',
   ].join('|');
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
@@ -90,6 +96,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   }
 
   const currentPayloadHash = computePayloadHash(envelope);
+  const nonceKey = `rfid:nonce:${envelope.schoolId}:${envelope.nonce}`;
+  let reservedNonceInRedis = false;
 
   // 1. Idempotency check with payload hash verification: Return existing record if already stored in DB
   const existingRecord = await withTenantContext(envelope.schoolId, async (tx) => {
@@ -369,20 +377,31 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
     // Nonce Replay Check (Redis primary with DB fallback on error)
     let isNonceReused = false;
-    let redisUsedSuccessfully = false;
 
     if (redis) {
       try {
-        const nonceKey = `rfid:nonce:${envelope.schoolId}:${envelope.nonce}`;
-        const setNonce = await redis.set(nonceKey, '1', 'EX', 86400, 'NX');
-        if (!setNonce) isNonceReused = true;
-        redisUsedSuccessfully = true;
+        const existingOwner = await redis.get(nonceKey);
+        if (existingOwner) {
+          if (existingOwner !== envelope.clientEventId) {
+            isNonceReused = true;
+          }
+        } else {
+          const setNonce = await redis.set(nonceKey, envelope.clientEventId, 'EX', 86400, 'NX');
+          if (setNonce === 'OK') {
+            reservedNonceInRedis = true;
+          } else {
+            const currentOwner = await redis.get(nonceKey);
+            if (currentOwner && currentOwner !== envelope.clientEventId) {
+              isNonceReused = true;
+            }
+          }
+        }
       } catch {
-        redisUsedSuccessfully = false;
+        // Fall back to database query
       }
     }
 
-    if (!redisUsedSuccessfully || isNonceReused) {
+    if (!isNonceReused) {
       const existingNonce = await withTenantContext(envelope.schoolId, async (tx) => {
         const [rec] = await tx
           .select()
@@ -390,7 +409,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.nonce, envelope.nonce)));
         return rec;
       });
-      if (existingNonce) {
+      if (existingNonce && existingNonce.clientEventId !== envelope.clientEventId) {
         isNonceReused = true;
       }
     }
@@ -628,6 +647,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           await new Promise((res) => setTimeout(res, 20));
         }
       }
+      if (reservedNonceInRedis && redis) {
+        try {
+          await redis.del(nonceKey);
+        } catch {}
+      }
       throw err;
     }
 
@@ -639,6 +663,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       processingLatencyMs: Date.now() - startTime,
     });
   } catch (outerErr) {
+    if (reservedNonceInRedis && redis) {
+      try {
+        await redis.del(nonceKey);
+      } catch {}
+    }
     rejectInProcess(outerErr);
     _inProcessLocks.delete(inProcessKey);
     throw outerErr;

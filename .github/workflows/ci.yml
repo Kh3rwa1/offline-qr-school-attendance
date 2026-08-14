@@ -168,6 +168,8 @@ jobs:
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           PRODUCTION_PG_TEST: "1"
           PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
@@ -245,6 +247,7 @@ jobs:
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
       RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+      RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
       KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
       ALLOW_IN_MEMORY_RATE_LIMITER: "true"
       SMS_PROVIDER: console
@@ -335,6 +338,7 @@ jobs:
           CSRF_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
@@ -401,6 +405,8 @@ jobs:
           CSRF_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -423,6 +429,7 @@ jobs:
           CSRF_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"

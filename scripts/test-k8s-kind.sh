@@ -71,6 +71,7 @@ echo "5. Creating school-attendance-secrets Kubernetes Secret..."
 kubectl create secret generic school-attendance-secrets \
   --from-literal=DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
   --from-literal=SESSION_SECRET="kind-ci-session-secret-012345678901234567890123456789" \
+  --from-literal=CSRF_SECRET="kind-ci-session-secret-012345678901234567890123456789" \
   --from-literal=REDIS_URL="redis://redis:6379" \
   --from-literal=REDIS_KEY_HMAC_SECRET="kind-ci-redis-hmac-secret-012345678901234567890123456789" \
   --from-literal=METRICS_AUTH_TOKEN="kind-ci-metrics-token-012345678901234567890123456789" \
@@ -78,6 +79,7 @@ kubectl create secret generic school-attendance-secrets \
   --from-literal=ALLOW_FAKE_SMS_IN_PRODUCTION="true" \
   --from-literal=ALLOW_IN_MEMORY_RATE_LIMITER="true" \
   --from-literal=RFID_HMAC_SECRET="kind-ci-rfid-hmac-secret-012345678901234567890123456789" \
+  --from-literal=RFID_CARD_MASTER_KEY="kind-ci-rfid-card-master-key-012345678901234567890123456789" \
   --from-literal=AUTH_DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
   --from-literal=KMS_MASTER_KEY="kind-ci-kms-master-key-012345678901234567890123456789"
 

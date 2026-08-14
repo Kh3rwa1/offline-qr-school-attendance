@@ -1,11 +1,16 @@
 import { db, executeSql } from './index';
 import { verifyPassword } from '../auth/password';
 import pg from 'pg';
+import { sql } from 'drizzle-orm';
 
 // Pre-computed Argon2id dummy hash for timing-safe password check when user is not found
 const DUMMY_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXlzYWx0MTIzNDU2Nw$8xN4T3nF1zK9W7p0L2m5Q6v8R1y3U5i7O9p4S2a5D8f';
 
 let authPoolInstance: pg.Pool | undefined;
+
+if (process.env.NODE_ENV === 'production' && !process.env.AUTH_DATABASE_URL) {
+  throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
+}
 
 function getAuthPool(): pg.Pool | null {
   if (authPoolInstance) return authPoolInstance;
@@ -61,9 +66,9 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 
   // Fallback for PGlite / in-memory unit tests
   try {
-    const res = await executeSql(`SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone('${phoneNumber.replace(/'/g, "''")}')`);
-    if (res?.rows && res.rows.length > 0) {
-      const row = res.rows[0];
+    const res = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone(${phoneNumber})`);
+    if (res?.rows && (res.rows as any[]).length > 0) {
+      const row = (res.rows as any[])[0];
       return {
         id: row.id,
         fullName: row.full_name,
@@ -76,7 +81,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
     // If function is not defined in PGlite mock, fallback to direct query
   }
 
-  const result = await db.execute(`SELECT id, full_name, phone_number, password_hash, status FROM users WHERE phone_number = '${phoneNumber.replace(/'/g, "''")}' LIMIT 1`);
+  const result = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, status FROM users WHERE phone_number = ${phoneNumber} LIMIT 1`);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   if (rows.length === 0) return null;
   const r = rows[0];
@@ -107,9 +112,9 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
   }
 
   try {
-    const res = await executeSql(`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships('${userId}')`);
-    if (res?.rows) {
-      return res.rows.map((r: any) => ({
+    const res = await db.execute(sql`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships(${userId})`);
+    if ((res as any)?.rows) {
+      return (res as any).rows.map((r: any) => ({
         schoolId: r.school_id,
         schoolName: r.school_name,
         role: r.role,
@@ -120,11 +125,11 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
     // Fallback
   }
 
-  const result = await db.execute(`
+  const result = await db.execute(sql`
     SELECT m.school_id, s.name AS school_name, m.role, m.status
     FROM school_memberships m
     JOIN schools s ON s.id = m.school_id
-    WHERE m.user_id = '${userId}' AND m.status = 'ACTIVE' AND s.status = 'ACTIVE'
+    WHERE m.user_id = ${userId} AND m.status = 'ACTIVE' AND s.status = 'ACTIVE'
   `);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   return rows.map((r: any) => ({

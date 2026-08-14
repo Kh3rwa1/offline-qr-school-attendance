@@ -67,7 +67,7 @@ export interface HardwareExecutionTelemetry {
   rfInterruptionTested: boolean;
   keyRotationTested: boolean;
   offlineQueueRecoveryTested: boolean;
-  status: 'PRODUCTION_HARDWARE_CERTIFIED' | 'SIMULATOR_TESTED' | 'HARDWARE_ABSENT_FAIL_CLOSED';
+  status: 'PHYSICAL_HARDWARE_VERIFIED' | 'SOFTWARE_SIMULATION_ONLY' | 'HARDWARE_ABSENT_FAIL_CLOSED';
   reportDigestSha256: string;
 }
 
@@ -213,7 +213,11 @@ export async function runPhysicalHardwareVerification(): Promise<HardwareExecuti
   const p95 = Number(latencies[Math.floor(latencies.length * 0.95)].toFixed(3));
   const p99 = Number(latencies[Math.floor(latencies.length * 0.99)].toFixed(3));
 
-  const status = pcscReaderFound ? 'PRODUCTION_HARDWARE_CERTIFIED' : 'SIMULATOR_TESTED';
+  // CI runners never have physical readers. Only label as certified
+  // when HARDWARE_RELEASE_GATE=1 AND actual transceive to a real card succeeded.
+  const status: HardwareExecutionTelemetry['status'] = (pcscReaderFound && process.env.HARDWARE_RELEASE_GATE === '1')
+    ? 'PHYSICAL_HARDWARE_VERIFIED'
+    : 'SOFTWARE_SIMULATION_ONLY';
   const telemetryPayload = `${commitSha}|${executionMode}|${readerModel}|${successfulAuth}|${p95}`;
   const reportDigestSha256 = crypto.createHash('sha256').update(telemetryPayload).digest('hex');
 
@@ -244,7 +248,7 @@ export async function runPhysicalHardwareVerification(): Promise<HardwareExecuti
 
   fs.writeFileSync(path.join(outputDir, 'hardware-certification-report.json'), JSON.stringify(telemetry, null, 2));
 
-  const mdReport = `# DESFire EV2/EV3 APDU Protocol & Hardware Verification Report
+  let mdReport = `# DESFire EV2/EV3 APDU Protocol & Hardware Verification Report
 
 - **Timestamp**: ${telemetry.timestamp}
 - **Git Commit SHA**: \`${telemetry.gitCommitSha}\`
@@ -274,6 +278,10 @@ ${telemetry.apduCommandsExecuted.join('\n')}
 - **Monotonic Key Version Rotation**: Verified (Rejects obsolete key credentials)
 - **Offline Scan Reconciliation**: Verified (Bounded skew and replay nonce checks)
 `;
+
+  if (status === 'SOFTWARE_SIMULATION_ONLY') {
+    mdReport += '\n> ⚠️ This run used cryptographic simulation only. Physical hardware certification requires on-site execution with HARDWARE_RELEASE_GATE=1 and a connected DESFire EV2/EV3 reader.\n';
+  }
 
   fs.writeFileSync(path.join(outputDir, 'hardware-certification-report.md'), mdReport);
   console.log(`Hardware Runner Completed: Mode = ${telemetry.executionMode} | Status = ${telemetry.status}`);

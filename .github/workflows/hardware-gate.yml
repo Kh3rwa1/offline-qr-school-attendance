@@ -1,4 +1,4 @@
-name: Physical Hardware-in-the-Loop Certification Gate
+name: DESFire Cryptographic Simulation & APDU Verification Gate
 
 on:
   workflow_dispatch:
@@ -38,6 +38,9 @@ jobs:
           if command -v systemctl &> /dev/null; then
             systemctl is-active --quiet pcscd || sudo systemctl start pcscd || true
           fi
+
+      - name: Annotate Simulation Mode
+        run: echo "::notice::This gate verifies cryptographic correctness in simulation. Physical certification requires on-site hardware commissioning per SCHOOL_SITE_RFID_CERTIFICATION_PROTOCOL.md"
 
       - name: Execute Hardware Verification & APDU Benchmarks
         env:

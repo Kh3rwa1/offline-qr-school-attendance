@@ -1,8 +1,8 @@
 import { withTenantContext } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
-import { eq, and, gt, max } from 'drizzle-orm';
+import { eq, and, gt, max, sql } from 'drizzle-orm';
 import { isReaderAuthorized, decryptReaderSecret } from './readerService';
-import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
+import { verifyEnvelopeSignature, verifySecureProof, verifyCardProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
 import { getRedisClient } from '../redisService';
 import crypto from 'crypto';
@@ -49,6 +49,10 @@ export interface ScanEnvelope {
   signature: string;
   clientEventId: string;
   isOffline?: boolean;
+  cardProof?: string;
+  cardUid?: string;
+  readerChallenge?: string;
+  transactionCounter?: number;
 }
 
 export interface ScanResult {
@@ -320,6 +324,24 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       }
     }
 
+    // DESFire EV2/EV3 card-originated cryptographic proof (AES-CMAC)
+    if (envelope.cardProof && envelope.cardUid && envelope.readerChallenge !== undefined && envelope.transactionCounter !== undefined) {
+      const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
+      if (!masterKeyHex) {
+        return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
+      }
+      const cardProofValid = verifyCardProof({
+        cardUidHex: envelope.cardUid,
+        readerChallengeHex: envelope.readerChallenge,
+        transactionCounter: envelope.transactionCounter,
+        cardProofHex: envelope.cardProof,
+        masterKeyHex,
+      });
+      if (!cardProofValid) {
+        return createRejection('REPLAY_REJECTED', 'INVALID_CARD_PROOF');
+      }
+    }
+
     // Timestamp & Clock Skew vs Offline policy check
     const readerTime = new Date(envelope.readerTimestamp).getTime();
     if (isNaN(readerTime)) {
@@ -371,7 +393,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       return createRejection('REPLAY_REJECTED', 'NONCE_REUSED');
     }
 
-    // Monotonic sequence number check
+    // Monotonic sequence number check (reject out-of-order reader submissions before business logic)
     if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
       const lastSeq = await withTenantContext(envelope.schoolId, async (tx) => {
         const [rec] = await tx
@@ -468,6 +490,20 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     let transactionResult: any;
     try {
       transactionResult = await withTenantContext(envelope.schoolId, async (tx: any) => {
+        // Atomic monotonic sequence enforcement (inside transaction)
+        if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
+          const [lastSeqRec] = await tx
+            .select({ maxSeq: sql<number>`MAX(${rfidScanEvents.sequenceNumber})` })
+            .from(rfidScanEvents)
+            .where(and(
+              eq(rfidScanEvents.schoolId, envelope.schoolId),
+              eq(rfidScanEvents.readerId, envelope.readerId)
+            ));
+          if (lastSeqRec?.maxSeq !== null && lastSeqRec?.maxSeq !== undefined && Number(envelope.sequenceNumber) <= Number(lastSeqRec.maxSeq)) {
+            throw new Error('OUT_OF_ORDER_SEQUENCE');
+          }
+        }
+
         const [scanEvent] = await tx
           .insert(rfidScanEvents)
           .values({
@@ -548,6 +584,9 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         return { scanEventId: scanEvent.id, attendanceRecordId: attRecordId };
       });
     } catch (err: any) {
+      if (err?.message === 'OUT_OF_ORDER_SEQUENCE') {
+        return createRejection('REPLAY_REJECTED', 'OUT_OF_ORDER_SEQUENCE');
+      }
       const errMsg = String(err?.message || '') + ' ' + String(err?.cause?.message || '') + ' ' + String(err?.cause?.code || '');
       if (err?.code === '23505' || err?.cause?.code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('rfid_scan_events_client_event_idx') || errMsg.includes('attendance_events_client_event_idx')) {
         for (let attempt = 0; attempt < 50; attempt++) {

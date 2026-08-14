@@ -14,6 +14,8 @@ const envSchema = z.object({
   ALLOW_TEST_BYPASS: z.string().default('false'),
   APP_URL: z.string().optional(),
   
+  KMS_MASTER_KEY: z.string().optional(),
+  AUTH_DATABASE_URL: z.string().optional(),
   // RFID Configuration
   ALLOW_LEGACY_RFID_UID_MODE: z.string().default('false'),
   RFID_HMAC_SECRET: z.string().optional(),
@@ -56,6 +58,19 @@ export function validateProductionEnv() {
       const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
       if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
         throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+      }
+
+      // KMS configuration: require explicit key management in production
+      const kmsMasterKey = process.env.KMS_MASTER_KEY;
+      const awsKmsArn = process.env.AWS_KMS_KEY_ARN;
+      const gcpKmsId = process.env.GCP_KMS_RESOURCE_ID;
+      if (!kmsMasterKey && !awsKmsArn && !gcpKmsId) {
+        throw new Error('FATAL_KMS_CONFIGURATION: Production mode requires explicit key management. Set KMS_MASTER_KEY, AWS_KMS_KEY_ARN, or GCP_KMS_RESOURCE_ID.');
+      }
+
+      // Auth database isolation: require dedicated auth database in production
+      if (!process.env.AUTH_DATABASE_URL) {
+        throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
       }
     }
   }

@@ -5,7 +5,13 @@ import { createAuditLog } from '../auditLogService';
 import crypto from 'crypto';
 
 export function encryptReaderSecret(secret: string): string {
-  const masterKeyHex = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+  let masterKeyHex = process.env.RFID_HMAC_SECRET;
+  if (!masterKeyHex) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('RFID_HMAC_SECRET is required for reader secret encryption in production.');
+    }
+    masterKeyHex = 'test-secret-32-chars-length-environment';
+  }
   const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
@@ -17,7 +23,13 @@ export function encryptReaderSecret(secret: string): string {
 export function decryptReaderSecret(encryptedStr: string): string {
   if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
   try {
-    const masterKeyHex = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
+    let masterKeyHex = process.env.RFID_HMAC_SECRET;
+    if (!masterKeyHex) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('RFID_HMAC_SECRET is required for reader secret encryption in production.');
+      }
+      masterKeyHex = 'test-secret-32-chars-length-environment';
+    }
     const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
     const [ivHex, tagHex, cipherHex] = encryptedStr.split(':');
     const iv = Buffer.from(ivHex, 'hex');

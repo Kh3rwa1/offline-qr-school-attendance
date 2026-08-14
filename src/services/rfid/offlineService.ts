@@ -4,7 +4,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { ScanEnvelope } from './scanService';
 import { getRedisClient } from '../redisService';
 import { decryptReaderSecret } from './readerService';
-import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
+import { verifyEnvelopeSignature, verifySecureProof, verifyCardProof } from './cryptoService';
 import crypto from 'crypto';
 
 export async function generateOfflineRoster(schoolId: string) {
@@ -73,7 +73,17 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
   const resultsMap = new Map<string, any>();
   const validEvents: ScanEnvelope[] = [];
 
-  for (const event of events) {
+  // Sort events by sequenceNumber before processing
+  const sortedEvents = [...events].sort((a, b) => {
+    if (a.sequenceNumber !== undefined && b.sequenceNumber !== undefined) {
+      return Number(a.sequenceNumber) - Number(b.sequenceNumber);
+    }
+    return new Date(a.readerTimestamp).getTime() - new Date(b.readerTimestamp).getTime();
+  });
+
+  const readerMaxSeq = new Map<string, number>();
+
+  for (const event of sortedEvents) {
     const eventTime = new Date(event.readerTimestamp).getTime();
     if (isNaN(eventTime) || now - eventTime > maxOfflineMs) {
       resultsMap.set(event.clientEventId, {
@@ -204,6 +214,36 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
           continue;
         }
       }
+    }
+
+    // DESFire EV2/EV3 card-originated cryptographic proof (AES-CMAC)
+    if (event.cardProof && event.cardUid && event.readerChallenge !== undefined && event.transactionCounter !== undefined) {
+      const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
+      if (!masterKeyHex) {
+        resultsMap.set(event.clientEventId, { decision: 'CONFIGURATION_ERROR', rejectionCode: 'CARD_MASTER_KEY_MISSING', processingLatencyMs: 0 });
+        continue;
+      }
+      const cardProofValid = verifyCardProof({
+        cardUidHex: event.cardUid,
+        readerChallengeHex: event.readerChallenge,
+        transactionCounter: event.transactionCounter,
+        cardProofHex: event.cardProof,
+        masterKeyHex,
+      });
+      if (!cardProofValid) {
+        resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'INVALID_CARD_PROOF', processingLatencyMs: 0 });
+        continue;
+      }
+    }
+
+    // Out of order sequence validation within the offline batch
+    if (event.sequenceNumber !== undefined && event.sequenceNumber !== null) {
+      const currentMax = readerMaxSeq.get(event.readerId) ?? -1;
+      if (Number(event.sequenceNumber) <= currentMax) {
+        resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'OUT_OF_ORDER_SEQUENCE', processingLatencyMs: 0 });
+        continue;
+      }
+      readerMaxSeq.set(event.readerId, Number(event.sequenceNumber));
     }
 
     // Credential check

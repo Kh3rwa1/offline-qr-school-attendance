@@ -645,6 +645,7 @@ export const rfidScanEvents = pgTable(
   },
   (table) => ({
     clientEventUnique: uniqueIndex('rfid_scan_events_client_event_idx').on(table.schoolId, table.clientEventId),
+    readerSequenceUnique: uniqueIndex('rfid_scan_events_reader_seq_unique').on(table.schoolId, table.readerId, table.sequenceNumber),
     readerIdx: index('rfid_scan_events_reader_idx').on(table.schoolId, table.readerId, table.scanTimestamp),
     decisionIdx: index('rfid_scan_events_decision_idx').on(table.schoolId, table.decision, table.scanTimestamp),
     sessionIdx: index('rfid_scan_events_session_idx').on(table.schoolId, table.attendanceSessionId, table.scanTimestamp),

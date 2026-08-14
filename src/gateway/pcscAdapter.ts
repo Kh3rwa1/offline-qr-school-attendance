@@ -129,52 +129,207 @@ export class SimulatedPcscTransport implements PcscTransport {
   }
 }
 
+/**
+ * NativePcscTransport — Production PC/SC transport using pcsclite FFI bindings.
+ *
+ * Provides real reader enumeration, card-inserted event handling, and APDU exchange
+ * via the system's PC/SC daemon (pcscd). Requires the `pcsclite` npm package and
+ * a running pcscd service with a connected physical reader.
+ *
+ * When the native `pcsclite` module is unavailable (e.g., CI runners without
+ * libpcsclite-dev), all methods throw PCSC_NATIVE_UNAVAILABLE.
+ */
 export class NativePcscTransport implements PcscTransport {
   private connected: boolean = false;
   private selectedReader: string;
+  private pcsc: any = null;
+  private readerHandle: any = null;
+  private cardProtocol: number | null = null;
+  private availableReaders: Map<string, any> = new Map();
+  private cardInserted: boolean = false;
+  private timeoutMs: number;
 
-  constructor(readerName?: string) {
+  constructor(readerName?: string, timeoutMs?: number) {
     this.selectedReader = readerName || 'ACS ACR1252U 0';
+    this.timeoutMs = timeoutMs || 5000;
+  }
+
+  private getPcsclite(): any {
+    try {
+      // Dynamic require to allow optional dependency
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('pcsclite');
+    } catch {
+      return null;
+    }
   }
 
   async connect(): Promise<boolean> {
-    // Check if PC/SC service or physical hardware daemon is running on OS host
-    const isHardwarePresent = process.env.HARDWARE_CONNECTED === 'true';
-    if (!isHardwarePresent) {
-      throw new Error(`PCSC_HARDWARE_UNAVAILABLE: Physical PC/SC reader '${this.selectedReader}' or driver daemon not available on host. Set HARDWARE_CONNECTED=true for live physical hardware tests.`);
+    const pcscliteFactory = this.getPcsclite();
+    if (!pcscliteFactory) {
+      throw new Error(
+        `PCSC_NATIVE_UNAVAILABLE: The 'pcsclite' native module is not installed. ` +
+        `Install it with 'npm install pcsclite' and ensure libpcsclite-dev is available on the host.`
+      );
     }
-    this.connected = true;
-    return true;
+
+    return new Promise<boolean>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`PCSC_CONNECT_TIMEOUT: No reader '${this.selectedReader}' detected within ${this.timeoutMs}ms`));
+      }, this.timeoutMs);
+
+      try {
+        this.pcsc = pcscliteFactory();
+      } catch (err: any) {
+        clearTimeout(timeout);
+        throw new Error(`PCSC_DAEMON_UNAVAILABLE: Failed to connect to PC/SC daemon (pcscd): ${err.message}`);
+      }
+
+      this.pcsc.on('reader', (reader: any) => {
+        this.availableReaders.set(reader.name, reader);
+
+        reader.on('status', (status: any) => {
+          const isPresent = !!(status.state & reader.SCARD_STATE_PRESENT);
+          const wasPresent = this.cardInserted;
+
+          if (isPresent && !wasPresent) {
+            this.cardInserted = true;
+            // Auto-connect to card when it is presented on the selected reader
+            if (reader.name === this.selectedReader || this.selectedReader === '*') {
+              reader.connect(
+                { share_mode: reader.SCARD_SHARE_SHARED },
+                (err: any, protocol: number) => {
+                  if (err) {
+                    this.cardProtocol = null;
+                    return;
+                  }
+                  this.readerHandle = reader;
+                  this.cardProtocol = protocol;
+                  this.connected = true;
+                  clearTimeout(timeout);
+                  resolve(true);
+                }
+              );
+            }
+          } else if (!isPresent && wasPresent) {
+            this.cardInserted = false;
+            this.cardProtocol = null;
+            this.connected = false;
+          }
+        });
+
+        reader.on('error', (err: any) => {
+          if (!this.connected) {
+            clearTimeout(timeout);
+            reject(new Error(`PCSC_READER_ERROR: ${err.message}`));
+          }
+        });
+
+        reader.on('end', () => {
+          this.availableReaders.delete(reader.name);
+          if (reader.name === this.selectedReader) {
+            this.connected = false;
+            this.cardProtocol = null;
+            this.readerHandle = null;
+          }
+        });
+      });
+
+      this.pcsc.on('error', (err: any) => {
+        clearTimeout(timeout);
+        reject(new Error(`PCSC_DAEMON_ERROR: ${err.message}`));
+      });
+    });
   }
 
   async disconnect(): Promise<void> {
+    if (this.readerHandle && this.cardProtocol !== null) {
+      await new Promise<void>((resolve) => {
+        this.readerHandle.disconnect(this.readerHandle.SCARD_LEAVE_CARD, (err: any) => {
+          resolve();
+        });
+      });
+    }
+    if (this.pcsc) {
+      this.pcsc.close();
+      this.pcsc = null;
+    }
     this.connected = false;
+    this.cardProtocol = null;
+    this.readerHandle = null;
+    this.availableReaders.clear();
   }
 
   isConnected(): boolean {
-    return this.connected;
+    return this.connected && this.cardProtocol !== null;
   }
 
   async listReaders(): Promise<string[]> {
-    if (process.env.HARDWARE_CONNECTED === 'true') {
-      return [this.selectedReader];
-    }
-    return [];
+    return Array.from(this.availableReaders.keys());
   }
 
   async isCardPresent(): Promise<boolean> {
-    return this.connected && process.env.HARDWARE_CONNECTED === 'true';
+    return this.connected && this.cardInserted && this.cardProtocol !== null;
   }
 
   async transceiveApdu(cmd: ApduCommand, signal?: AbortSignal): Promise<ApduResponse> {
-    if (!this.connected) {
-      throw new Error('PCSC_NOT_CONNECTED: Native PC/SC reader is disconnected');
+    if (!this.connected || !this.readerHandle || this.cardProtocol === null) {
+      throw new Error('PCSC_NOT_CONNECTED: No active card connection for APDU exchange');
     }
     if (signal?.aborted) {
       throw new Error('READ_CANCELLED: APDU operation cancelled by AbortSignal');
     }
-    // Production native APDU call path
-    throw new Error('PCSC_HARDWARE_UNAVAILABLE: Native PC/SC physical transceive requires connected physical RFID reader');
+
+    // Encode APDU command to buffer
+    const header = Buffer.from([cmd.cla, cmd.ins, cmd.p1, cmd.p2]);
+    let cmdBuf: Buffer;
+    if (cmd.data && cmd.data.length > 0) {
+      const lc = Buffer.from([cmd.data.length]);
+      cmdBuf = cmd.le !== undefined
+        ? Buffer.concat([header, lc, cmd.data, Buffer.from([cmd.le])])
+        : Buffer.concat([header, lc, cmd.data]);
+    } else {
+      cmdBuf = cmd.le !== undefined
+        ? Buffer.concat([header, Buffer.from([cmd.le])])
+        : header;
+    }
+
+    const maxResponseLen = 256 + 2; // max data + SW1 SW2
+    const reader = this.readerHandle;
+    const protocol = this.cardProtocol;
+
+    return new Promise<ApduResponse>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`PCSC_APDU_TIMEOUT: APDU transceive timed out after ${this.timeoutMs}ms`));
+      }, this.timeoutMs);
+
+      const onAbort = () => {
+        clearTimeout(timeout);
+        reject(new Error('READ_CANCELLED: APDU operation cancelled by AbortSignal'));
+      };
+      if (signal) {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+
+      reader.transmit(cmdBuf, maxResponseLen, protocol, (err: any, responseBuf: Buffer) => {
+        clearTimeout(timeout);
+        if (signal) signal.removeEventListener('abort', onAbort);
+
+        if (err) {
+          return reject(new Error(`PCSC_APDU_FAILED: ${err.message}`));
+        }
+        if (!responseBuf || responseBuf.length < 2) {
+          return reject(new Error('PCSC_APDU_FAILED: Response too short (missing status words)'));
+        }
+
+        const sw1 = responseBuf[responseBuf.length - 2];
+        const sw2 = responseBuf[responseBuf.length - 1];
+        const data = responseBuf.subarray(0, responseBuf.length - 2);
+        const isSuccess = (sw1 === 0x91 && sw2 === 0x00) || (sw1 === 0x90 && sw2 === 0x00);
+
+        resolve({ sw1, sw2, data, isSuccess });
+      });
+    });
   }
 }
 

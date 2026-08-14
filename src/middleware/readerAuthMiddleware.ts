@@ -63,28 +63,31 @@ export const readerAuthMiddleware = async (
       const ingressSecret = (req.headers['x-trusted-ingress-secret'] as string) || '';
       const expectedIngressSecret = process.env.TRUSTED_INGRESS_SECRET || '';
 
-      if (process.env.RFID_ENFORCE_INGRESS_MTLS === 'true' && !expectedIngressSecret && process.env.NODE_ENV === 'production') {
-        return res.status(500).json({ error: 'CONFIG_ERROR', message: 'TRUSTED_INGRESS_SECRET is required when RFID_ENFORCE_INGRESS_MTLS is enabled' });
+      // Always require TRUSTED_INGRESS_SECRET when verifying certificate fingerprints
+      if (!expectedIngressSecret && process.env.NODE_ENV === 'production') {
+        return res.status(500).json({ error: 'CONFIG_ERROR', message: 'TRUSTED_INGRESS_SECRET is required for certificate-bound readers in production' });
       }
 
-      if (expectedIngressSecret) {
+      if (!expectedIngressSecret && process.env.NODE_ENV !== 'production') {
+        // Skip mTLS block completely in dev when secret is omitted for convenience
+      } else {
         const bufA = Buffer.from(ingressSecret);
         const bufB = Buffer.from(expectedIngressSecret);
         if (bufA.length !== bufB.length || !crypto.timingSafeEqual(bufA, bufB)) {
           return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'UNTRUSTED_INGRESS_PROXY' });
         }
-      }
 
-      const certFingerprint =
-        (req.headers['x-ingress-verified-reader-fingerprint'] as string) ||
-        (process.env.NODE_ENV === 'test' ? (req.headers['x-client-cert-fingerprint'] as string) : undefined);
+        const certFingerprint =
+          (req.headers['x-ingress-verified-reader-fingerprint'] as string) ||
+          (process.env.NODE_ENV === 'test' ? (req.headers['x-client-cert-fingerprint'] as string) : undefined);
 
-      const normalizeFp = (fp?: string) => (fp ? fp.replace(/[:\s-]/g, '').toLowerCase() : '');
-      const normInput = normalizeFp(certFingerprint);
-      const normReader = normalizeFp(reader.certificateFingerprint || undefined);
+        const normalizeFp = (fp?: string) => (fp ? fp.replace(/[:\s-]/g, '').toLowerCase() : '');
+        const normInput = normalizeFp(certFingerprint);
+        const normReader = normalizeFp(reader.certificateFingerprint || undefined);
 
-      if (!normInput || (normReader && normInput !== normReader)) {
-        return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'READER_MTLS_CERTIFICATE_MISMATCH' });
+        if (!normInput || (normReader && normInput !== normReader)) {
+          return res.status(403).json({ error: 'FORBIDDEN_READER', message: 'READER_MTLS_CERTIFICATE_MISMATCH' });
+        }
       }
     }
 

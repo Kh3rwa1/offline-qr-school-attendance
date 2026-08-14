@@ -61,7 +61,7 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 } | null> {
   const pool = getAuthPool();
   if (pool) {
-    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, platform_role, status FROM users WHERE phone_number = $1::text LIMIT 1', [phoneNumber]);
+    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, platform_role, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
     if (res.rows.length === 0) return null;
     const row = res.rows[0];
     return {

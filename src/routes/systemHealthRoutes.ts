@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 import { executeSql, db } from '../db';
 import { getRedisClient } from '../services/redisService';
 import { notificationJobs } from '../db/schema';
@@ -10,6 +11,7 @@ export const systemHealthRouter = Router();
 // GET /api/v1/system/health (SUPER_ADMIN only)
 systemHealthRouter.get(
   '/health',
+  rateLimitPolicies.generalApi,
   requireAuth,
   requireRole(['SUPER_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {

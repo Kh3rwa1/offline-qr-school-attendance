@@ -138,6 +138,7 @@ export async function createApp() {
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
   app.use('/api/v1/audit', platformAuditRouter);
+  app.use('/api/v1/schools/:schoolId/notifications', notificationRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 

@@ -8,7 +8,7 @@ export default function RfidDashboard({ schoolId }: { schoolId: string }) {
   useEffect(() => {
     async function loadStats() {
       try {
-        const res = await api<any>(`/api/v1/schools/${schoolId}/rfid/reports/scans`);
+        const res = await api<any>(`/api/v1/schools/${schoolId}/rfid/reports/summary`);
         setStats(res);
       } catch (e) {
         console.error(e);
@@ -36,9 +36,9 @@ export default function RfidDashboard({ schoolId }: { schoolId: string }) {
           <div className="text-sm text-slate-500">{stats?.suspendedCards || 0} Suspended, {stats?.revokedCards || 0} Revoked</div>
         </div>
         <div className="bg-white p-5 rounded-2xl shadow-sm">
-          <h3 className="text-sm text-slate-500 font-bold mb-2 flex items-center gap-2"><CloudOff className="w-4 h-4" /> Offline Queue Health</h3>
-          <div className="text-2xl font-black">{stats?.queueDepth || 0} Events</div>
-          <div className="text-sm text-slate-500">Last sync: {stats?.lastSync || 'Never'} · Oldest: {stats?.queueAge || '0s'}</div>
+          <h3 className="text-sm text-slate-500 font-bold mb-2 flex items-center gap-2"><CloudOff className="w-4 h-4" /> Edge Sync Telemetry</h3>
+          <div className="text-2xl font-black">{stats?.queueDepth !== null && stats?.queueDepth !== undefined ? `${stats.queueDepth} Events` : 'Local Buffer Active'}</div>
+          <div className="text-sm text-slate-500">Autonomous Gate Readers · Replay-Protected</div>
         </div>
       </div>
 

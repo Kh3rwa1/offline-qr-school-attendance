@@ -1,25 +1,77 @@
 import React, { useState } from 'react';
-import { Download, FileSpreadsheet, FileText, CheckCircle2, ShieldCheck, Calendar, Layers, AlertCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Download, FileSpreadsheet, FileText, CheckCircle2, ShieldCheck, Calendar, AlertCircle } from 'lucide-react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { api } from '../../services/api';
 import { StatCard } from '../../components/shared/StatCard';
 import { motion } from 'motion/react';
+
+interface ClassItem {
+  id: string;
+  className: string;
+  sectionName: string;
+}
 
 export const ExportCenter: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   const [downloadingType, setDownloadingType] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  const handleExport = async (type: string, format: 'csv' | 'xlsx', filename: string) => {
+  // Selected parameters
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // Query: Classes
+  const { data: classesData } = useQuery({
+    queryKey: ['schools', activeSchoolId, 'class-sections'],
+    queryFn: async () => {
+      if (!activeSchoolId) return [];
+      const res = await api<{ classSections: ClassItem[] }>(`/api/v1/schools/${activeSchoolId}/class-sections`);
+      const list = res.classSections || [];
+      if (list.length > 0 && !selectedClassId) {
+        setSelectedClassId(list[0].id);
+      }
+      return list;
+    },
+    enabled: Boolean(activeSchoolId),
+  });
+
+  const classes = classesData || [];
+
+  const handleExport = async (type: string, format: 'csv' | 'xlsx', fallbackFilename: string) => {
     if (!activeSchoolId) return;
     setDownloadingType(type);
     setExportError(null);
 
     try {
+      const params = new URLSearchParams({
+        type,
+        format,
+      });
+
+      if (type === 'daily-school') {
+        params.append('date', selectedDate);
+      } else if (type === 'monthly-register') {
+        if (!selectedClassId) {
+          throw new Error('Please select a class section for the monthly register export');
+        }
+        params.append('classSectionId', selectedClassId);
+        params.append('year', String(selectedYear));
+        params.append('month', String(selectedMonth));
+      } else if (type === 'absentee') {
+        params.append('startDate', selectedDate);
+        if (selectedClassId) {
+          params.append('classSectionId', selectedClassId);
+        }
+      }
+
       const response = await fetch(
-        `/api/v1/schools/${activeSchoolId}/reports/export?type=${type}&format=${format}`,
+        `/api/v1/schools/${activeSchoolId}/reports/export?${params.toString()}`,
         {
           headers: {
-            'Accept': format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            Accept: format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           },
           credentials: 'include',
         }
@@ -30,11 +82,21 @@ export const ExportCenter: React.FC = () => {
         throw new Error(errJson.error || errJson.message || `Export failed with status ${response.status}`);
       }
 
+      // Check Content-Disposition header for filename
+      let filename = `${fallbackFilename}-${new Date().toISOString().split('T')[0]}.${format}`;
+      const disposition = response.headers.get('content-disposition');
+      if (disposition) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${filename}-${new Date().toISOString().split('T')[0]}.${format}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -66,6 +128,56 @@ export const ExportCenter: React.FC = () => {
           <span>{exportError}</span>
         </div>
       )}
+
+      {/* Parameter Controls Bar */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs flex flex-wrap items-center gap-4 text-xs font-bold text-slate-700">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500 font-display">Class Section:</span>
+          <select
+            value={selectedClassId}
+            onChange={(e) => setSelectedClassId(e.target.value)}
+            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+          >
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.className} – {c.sectionName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500 font-display">Date:</span>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500 font-display">Month/Year:</span>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+          >
+            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, idx) => (
+              <option key={idx + 1} value={idx + 1}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+          >
+            <option value={2025}>2025</option>
+            <option value={2026}>2026</option>
+            <option value={2027}>2027</option>
+          </select>
+        </div>
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -156,7 +268,7 @@ export const ExportCenter: React.FC = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleExport('monthly-register', 'csv', 'monthly-class-register')}
-              disabled={downloadingType === 'monthly-register'}
+              disabled={downloadingType === 'monthly-register' || !selectedClassId}
               className="btn-forest-primary text-xs font-display cursor-pointer disabled:opacity-50"
             >
               <Download className="w-4 h-4" />

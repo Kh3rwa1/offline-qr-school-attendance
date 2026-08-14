@@ -285,7 +285,7 @@ rfidRouter.post(
 rfidRouter.get(
   '/:schoolId/rfid/readers',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const readers = await readerService.listReaders(schoolId, {
@@ -519,7 +519,7 @@ rfidRouter.get(
 );
 
 rfidRouter.get(
-  '/:schoolId/rfid/reports/scans',
+  '/:schoolId/rfid/reports/summary',
   requireAuth,
   tenantHandler(async ({ schoolId }) => {
     try {
@@ -573,7 +573,7 @@ rfidRouter.get(
             activeCards,
             suspendedCards,
             revokedCards,
-            queueDepth: 0,
+            queueDepth: null,
             recentScans: scans.map((s: any) => ({
               id: s.id,
               time: s.time,

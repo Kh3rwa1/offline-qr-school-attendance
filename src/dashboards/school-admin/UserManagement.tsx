@@ -6,7 +6,7 @@ import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, UserPlus, Phone, ShieldCheck, Mail, CheckCircle2, X, AlertCircle, UserX, Shield, ShieldAlert } from 'lucide-react';
+import { Plus, Search, UserPlus, Phone, ShieldCheck, Mail, CheckCircle2, X, AlertCircle, UserX, Shield, ShieldAlert, Edit, RefreshCw } from 'lucide-react';
 import { UserRole } from '../../auth/permissions';
 
 interface MemberItem {
@@ -26,13 +26,26 @@ export const UserManagement: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Modals state
+  const [suspendModalUser, setSuspendModalUser] = useState<MemberItem | null>(null);
+  const [suspendReason, setSuspendReason] = useState('');
+
+  const [reactivateModalUser, setReactivateModalUser] = useState<MemberItem | null>(null);
+  const [reactivateReason, setReactivateReason] = useState('');
+
+  const [roleModalUser, setRoleModalUser] = useState<MemberItem | null>(null);
+  const [selectedNewRole, setSelectedNewRole] = useState<UserRole>('TEACHER');
+  const [roleChangeReason, setRoleChangeReason] = useState('');
 
   const [formData, setFormData] = useState({
     fullName: '',
     phoneNumber: '',
     role: 'TEACHER' as UserRole,
     designation: 'Assistant Teacher',
-    temporaryPassword: 'StaffInitialPass2026!',
+    temporaryPassword: '',
+    reactivateExisting: false,
   });
 
   // Query: Real members
@@ -62,7 +75,8 @@ export const UserManagement: React.FC = () => {
         phoneNumber: '',
         role: 'TEACHER',
         designation: 'Assistant Teacher',
-        temporaryPassword: 'StaffInitialPass2026!',
+        temporaryPassword: '',
+        reactivateExisting: false,
       });
       setFormError(null);
     },
@@ -70,10 +84,6 @@ export const UserManagement: React.FC = () => {
       setFormError(err.message || 'Failed to add staff member');
     },
   });
-
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [suspendModalUser, setSuspendModalUser] = useState<MemberItem | null>(null);
-  const [suspendReason, setSuspendReason] = useState('');
 
   // Mutation: Suspend Member
   const suspendMutation = useMutation({
@@ -94,6 +104,44 @@ export const UserManagement: React.FC = () => {
     },
   });
 
+  // Mutation: Reactivate Member
+  const reactivateMutation = useMutation({
+    mutationFn: async ({ userId, reason }: { userId: string; reason?: string }) => {
+      return api(`/api/v1/schools/${activeSchoolId}/members/${userId}/reactivate`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
+      setReactivateModalUser(null);
+      setReactivateReason('');
+      setActionError(null);
+    },
+    onError: (err: any) => {
+      setActionError(err.message || 'Failed to reactivate staff member');
+    },
+  });
+
+  // Mutation: Change Role
+  const roleMutation = useMutation({
+    mutationFn: async ({ userId, newRole, reason }: { userId: string; newRole: UserRole; reason?: string }) => {
+      return api(`/api/v1/schools/${activeSchoolId}/members/${userId}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ newRole, reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
+      setRoleModalUser(null);
+      setRoleChangeReason('');
+      setActionError(null);
+    },
+    onError: (err: any) => {
+      setActionError(err.message || 'Failed to change staff role');
+    },
+  });
+
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -103,6 +151,10 @@ export const UserManagement: React.FC = () => {
     }
     if (!formData.phoneNumber.trim()) {
       setFormError('Phone number is required');
+      return;
+    }
+    if (!formData.temporaryPassword || formData.temporaryPassword.length < 8) {
+      setFormError('Temporary password must be at least 8 characters long');
       return;
     }
     inviteMutation.mutate(formData);
@@ -118,7 +170,7 @@ export const UserManagement: React.FC = () => {
   });
 
   const teacherCount = members.filter((m) => m.role === 'TEACHER').length;
-  const adminCount = members.filter((m) => m.role === 'SCHOOL_ADMIN').length;
+  const adminCount = members.filter((m) => m.role === 'SCHOOL_ADMIN' && m.status === 'ACTIVE').length;
   const rfidCount = members.filter((m) => m.role === 'RFID_OPERATOR').length;
   const viewerCount = members.filter((m) => m.role === 'REPORT_VIEWER').length;
 
@@ -141,7 +193,10 @@ export const UserManagement: React.FC = () => {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => setIsInviteOpen(true)}
+          onClick={() => {
+            setIsInviteOpen(true);
+            setFormError(null);
+          }}
           className="btn-forest-primary text-sm font-display shadow-md cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
@@ -149,12 +204,21 @@ export const UserManagement: React.FC = () => {
         </motion.button>
       </div>
 
+      {actionError && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="text-rose-500 hover:text-rose-700 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Total Staff"
           value={`${members.length} Members`}
-          trend={{ value: `${members.filter(m => m.status === 'ACTIVE').length} Active`, isPositive: true }}
+          trend={{ value: `${members.filter((m) => m.status === 'ACTIVE').length} Active`, isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
@@ -202,7 +266,7 @@ export const UserManagement: React.FC = () => {
             <option value="SCHOOL_ADMIN">Headmaster / Admin</option>
             <option value="TEACHER">Teacher</option>
             <option value="RFID_OPERATOR">Gate Operator</option>
-            <option value="REPORT_VIEWER">Auditor / Inspector</option>
+            <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
           </select>
         </div>
       </div>
@@ -253,23 +317,49 @@ export const UserManagement: React.FC = () => {
                     {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
                   <td className="py-4 px-6 text-right">
-                    {user.status === 'ACTIVE' ? (
-                      <button
-                        type="button"
-                        disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
-                        onClick={() => {
-                          setSuspendModalUser(user);
-                          setSuspendReason('');
-                          setActionError(null);
-                        }}
-                        className="px-3 py-1 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer disabled:opacity-30"
-                        title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
-                      >
-                        Suspend
-                      </button>
-                    ) : (
-                      <span className="text-[11px] font-bold text-slate-400">Suspended</span>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      {user.status === 'ACTIVE' ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRoleModalUser(user);
+                              setSelectedNewRole(user.role);
+                              setRoleChangeReason('');
+                              setActionError(null);
+                            }}
+                            className="px-2.5 py-1 rounded-full text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer font-display"
+                          >
+                            Change Role
+                          </button>
+                          <button
+                            type="button"
+                            disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
+                            onClick={() => {
+                              setSuspendModalUser(user);
+                              setSuspendReason('');
+                              setActionError(null);
+                            }}
+                            className="px-2.5 py-1 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer disabled:opacity-30 font-display"
+                            title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
+                          >
+                            Suspend
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReactivateModalUser(user);
+                            setReactivateReason('');
+                            setActionError(null);
+                          }}
+                          className="px-2.5 py-1 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
+                        >
+                          Reactivate
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -374,6 +464,34 @@ export const UserManagement: React.FC = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    Initial Password (min 8 chars) *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={formData.temporaryPassword}
+                    onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
+                    placeholder="••••••••••••"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="reactivateExisting"
+                    checked={formData.reactivateExisting}
+                    onChange={(e) => setFormData({ ...formData, reactivateExisting: e.target.checked })}
+                    className="w-4 h-4 rounded text-[#144e39] focus:ring-[#144e39] border-slate-300"
+                  />
+                  <label htmlFor="reactivateExisting" className="text-xs font-medium text-slate-600 cursor-pointer">
+                    Explicitly reactivate if user was previously suspended in this school
+                  </label>
+                </div>
+
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
@@ -391,6 +509,150 @@ export const UserManagement: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Change Role Modal */}
+        {roleModalUser && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-slate-900">
+                  <ShieldCheck className="w-5 h-5 text-[#144e39]" />
+                  <h3 className="text-lg font-extrabold font-display">
+                    Change Faculty Role
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRoleModalUser(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-600 mb-4">
+                Update permissions and responsibilities for <strong>{roleModalUser.fullName}</strong>.
+              </p>
+
+              <div className="space-y-4 mb-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    New Role *
+                  </label>
+                  <select
+                    value={selectedNewRole}
+                    onChange={(e) => setSelectedNewRole(e.target.value as UserRole)}
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                  >
+                    <option value="TEACHER">Classroom Teacher</option>
+                    <option value="SCHOOL_ADMIN">Headmaster / School Admin</option>
+                    <option value="RFID_OPERATOR">Gate RFID Operator</option>
+                    <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    Reason for Role Change
+                  </label>
+                  <input
+                    type="text"
+                    value={roleChangeReason}
+                    onChange={(e) => setRoleChangeReason(e.target.value)}
+                    placeholder="e.g. Promoted to administrator or reassigned to gate duty"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRoleModalUser(null)}
+                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={roleMutation.isPending}
+                  onClick={() => roleMutation.mutate({ userId: roleModalUser.userId, newRole: selectedNewRole, reason: roleChangeReason.trim() })}
+                  className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {roleMutation.isPending ? 'Updating…' : 'Confirm Role Change'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Reactivate Confirmation Modal */}
+        {reactivateModalUser && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-emerald-700">
+                  <RefreshCw className="w-5 h-5" />
+                  <h3 className="text-lg font-extrabold font-display">
+                    Reactivate Faculty Member
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReactivateModalUser(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-600 mb-4">
+                Reactivate attendance scanning and console access for <strong>{reactivateModalUser.fullName}</strong>.
+              </p>
+
+              <div className="mb-5">
+                <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  Reason for Reactivation
+                </label>
+                <input
+                  type="text"
+                  value={reactivateReason}
+                  onChange={(e) => setReactivateReason(e.target.value)}
+                  placeholder="e.g. Returned from leave or re-instated"
+                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReactivateModalUser(null)}
+                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={reactivateMutation.isPending}
+                  onClick={() => reactivateMutation.mutate({ userId: reactivateModalUser.userId, reason: reactivateReason.trim() })}
+                  className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {reactivateMutation.isPending ? 'Reactivating…' : 'Confirm Reactivation'}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -419,12 +681,6 @@ export const UserManagement: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
-              {actionError && (
-                <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
-                  {actionError}
-                </div>
-              )}
 
               <p className="text-xs text-slate-600 mb-4">
                 Are you sure you want to suspend attendance scanning and console access for <strong>{suspendModalUser.fullName}</strong> ({suspendModalUser.phoneNumber})?

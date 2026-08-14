@@ -89,7 +89,7 @@ export async function runFullScaleLoadTest(
   console.log(`=== Starting 10/10 Enterprise Multi-Tenant Load Benchmark ===`);
   console.log(`Mode: ${isFullScale ? 'FULL-SCALE 100-School 500k-Student' : 'CI Business Load Gate'} | Duration Target: ${targetDurationSeconds}s`);
 
-  process.env.NODE_ENV = 'production';
+  process.env.NODE_ENV = isFullScale || (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) ? 'production' : 'test';
   process.env.TEST_SERVER_STATIC = 'true';
   process.env.RUN_SERVER = 'false';
   process.env.PORT = '0';
@@ -240,6 +240,8 @@ export async function runFullScaleLoadTest(
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
+  const { generateCsrfToken, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } = await import('../src/middleware/csrfProtection');
+
   // Pre-authenticate teacher sessions across multi-tenant context
   for (const t of tenants) {
     const res = await fetch(`${baseUrl}/api/v1/auth/login`, {
@@ -248,12 +250,13 @@ export async function runFullScaleLoadTest(
       body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
     });
     if (res.ok) {
-      const setCookies = (res.headers as any).getSetCookie
-        ? (res.headers as any).getSetCookie()
-        : [res.headers.get('set-cookie') || ''];
-      t.authCookie = setCookies.map((c: string) => c.split(';')[0]).join('; ');
-      const data = await res.json();
-      t.csrfToken = data.csrfToken;
+      const cookieHeader = res.headers.get('set-cookie') || '';
+      const sessionMatch = cookieHeader.match(/session=([^;]+)/);
+      const sessionToken = sessionMatch ? sessionMatch[1] : '';
+
+      const { token, signature } = generateCsrfToken(sessionToken);
+      t.csrfToken = token;
+      t.authCookie = `session=${sessionToken}; ${CSRF_COOKIE_NAME}=${token}; ${CSRF_SIG_COOKIE_NAME}=${signature}`;
     }
   }
 
@@ -505,6 +508,7 @@ export async function runFullScaleLoadTest(
         ],
       };
 
+      console.log(`  -> Scenario Result: ${successful}/${totalReq} successful (${unexpectedFailed} failed). Status counts:`, statusCounts);
       scenarioResults.push(result);
       grandTotalRequests += totalReq;
       grandTotalSuccessful += successful;

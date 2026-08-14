@@ -97,7 +97,12 @@ router.post(
         userRole,
       });
 
-      res.status(201).json({ success: true, data: sessionResult });
+      res.status(201).json({
+        success: true,
+        data: sessionResult.session || sessionResult,
+        session: sessionResult.session,
+        details: sessionResult,
+      });
     } catch (error: any) {
       console.error('Error creating attendance session:', error);
       if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {

@@ -97,6 +97,15 @@ export async function registerReader(params: {
     const rawSecret = params.sharedSecret || crypto.randomBytes(32).toString('hex');
     const encryptedSecret = encryptReaderSecret(rawSecret);
 
+    let normalizedDirection: 'ENTRY' | 'EXIT' | 'BIDIRECTIONAL' | 'NONE' = 'NONE';
+    if ((params.directionMode as any) === 'IN' || params.directionMode === 'ENTRY') {
+      normalizedDirection = 'ENTRY';
+    } else if ((params.directionMode as any) === 'OUT' || params.directionMode === 'EXIT') {
+      normalizedDirection = 'EXIT';
+    } else if (params.directionMode === 'BIDIRECTIONAL') {
+      normalizedDirection = 'BIDIRECTIONAL';
+    }
+
     const [inserted] = await tx
       .insert(rfidReaders)
       .values({
@@ -104,7 +113,7 @@ export async function registerReader(params: {
         deviceId: params.deviceId,
         name: params.name,
         location: params.location,
-        directionMode: params.directionMode || 'NONE',
+        directionMode: normalizedDirection,
         readerModel: params.readerModel,
         firmwareVersion: params.firmwareVersion,
         adapterType: params.adapterType,

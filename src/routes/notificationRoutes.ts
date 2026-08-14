@@ -156,6 +156,32 @@ router.get(
 );
 
 // ==========================================
+// 2.5. Student Notification History
+// ==========================================
+router.get(
+  '/history/:studentId',
+  requireAuth,
+  requireTenant,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const schoolId = req.activeSchoolId!;
+    const { studentId } = req.params;
+
+    try {
+      const jobs = await db
+        .select()
+        .from(notificationJobs)
+        .where(and(eq(notificationJobs.schoolId, schoolId), eq(notificationJobs.studentId, studentId)))
+        .orderBy(desc(notificationJobs.queuedAt))
+        .limit(50);
+
+      return res.json({ success: true, history: jobs });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
+// ==========================================
 // 3. Retry Notification Job
 // ==========================================
 router.post(
@@ -172,7 +198,7 @@ router.post(
         .update(notificationJobs)
         .set({
           status: 'QUEUED',
-          attemptCount: 0,
+          attemptCount: sql`${notificationJobs.attemptCount} + 1`,
           failureReason: null,
           nextAttemptAt: new Date(),
         })
@@ -243,12 +269,12 @@ router.put(
 );
 
 // ==========================================
-// 5. Trigger Queue Worker (Admin Only)
+// 5. Trigger Queue Worker (Super Admin Only)
 // ==========================================
 router.post(
   '/process-queue',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { limit, providerName } = req.body;

@@ -151,10 +151,32 @@ export const TeacherDashboard: React.FC = () => {
         teacherId: user.id,
         sessionDate: todayStr,
       });
+
+      // If online, initialize / bind server session record
+      try {
+        const res = await api<{ success: boolean; data: any }>(
+          `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              classSectionId: selectedClassId,
+              sessionDate: todayStr,
+              sessionType: 'DAILY',
+            }),
+          }
+        );
+        if (res?.data?.id) {
+          s.serverSessionId = res.data.id;
+          await offlineDb.sessions.update(s.id, { serverSessionId: res.data.id });
+        }
+      } catch (e) {
+        // Safe to proceed offline; session will be synchronized upon connection
+      }
+
       setSession(s);
       const sRoster = await offlineDb.sessionRosters.where('sessionId').equals(s.id).toArray();
       setSessionRoster(sRoster);
-      showFeedback({ kind: 'success', text: 'Offline attendance session initialized.' });
+      showFeedback({ kind: 'success', text: 'Attendance session initialized and roster loaded.' });
     } catch (err: any) {
       showFeedback({ kind: 'error', text: err.message || 'Failed to start session' });
     }
@@ -231,19 +253,55 @@ export const TeacherDashboard: React.FC = () => {
     setFinalizing(true);
     try {
       const deviceId = getDeviceIdentifier();
-      // Step A & B: sync all outbox events
-      await syncOutboxEvents({ schoolId: activeSchoolId, deviceIdentifier: deviceId });
-      
-      // Step C & D: PATCH server session status
-      try {
+
+      // Step 1: Ensure server session exists if online
+      let targetServerSessionId = session.serverSessionId;
+      if (!targetServerSessionId && navigator.onLine) {
+        try {
+          const res = await api<{ success: boolean; data: any }>(
+            `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                classSectionId: session.classSectionId,
+                sessionDate: session.sessionDate,
+                sessionType: session.sessionType || 'DAILY',
+              }),
+            }
+          );
+          if (res?.data?.id) {
+            targetServerSessionId = res.data.id;
+            await offlineDb.sessions.update(session.id, { serverSessionId: targetServerSessionId });
+            setSession((prev) => prev ? { ...prev, serverSessionId: targetServerSessionId } : null);
+          }
+        } catch (initErr: any) {
+          // If server error like 401/403/404/409/422, throw and show authentic error
+          if (initErr?.status && initErr.status !== 503) {
+            throw initErr;
+          }
+        }
+      }
+
+      // Step 2: Synchronize all outbox events
+      if (navigator.onLine) {
+        try {
+          await syncOutboxEvents({ schoolId: activeSchoolId, deviceIdentifier: deviceId });
+        } catch (syncErr: any) {
+          console.warn('Outbox synchronization warning:', syncErr);
+        }
+      }
+
+      // Step 3: PATCH server session status
+      const effectiveSessionId = targetServerSessionId || session.id;
+      if (navigator.onLine) {
         const patchRes = await api<{ success: boolean; data: any }>(
-          `/api/v1/schools/${activeSchoolId}/attendance/sessions/${session.id}/status`,
+          `/api/v1/schools/${activeSchoolId}/attendance/sessions/${effectiveSessionId}/status`,
           {
             method: 'PATCH',
             body: JSON.stringify({
               status: 'FINALIZED',
               autoMarkAbsentForUnmarked: true,
-              reason: 'Class teacher finalize roll submission',
+              reason: 'Class teacher finalized roll submission',
             }),
           }
         );
@@ -253,14 +311,16 @@ export const TeacherDashboard: React.FC = () => {
           setSession((prev) => prev ? { ...prev, status: 'FINALIZED' } : null);
           showFeedback({ kind: 'success', text: 'Attendance finalized and verified on server.' });
           setViewMode('scanner');
-        } else {
-          showFeedback({ kind: 'warning', text: 'Attendance outbox synchronized; session queued for server finalization.' });
+          return;
         }
-      } catch (err: any) {
-        showFeedback({ kind: 'warning', text: 'Offline: Recorded attendance saved locally. Will finalize once online.' });
       }
+
+      // Offline fallback: mark FINALIZE_PENDING locally
+      await offlineDb.sessions.update(session.id, { status: 'FINALIZE_PENDING' as any });
+      setSession((prev) => prev ? { ...prev, status: 'FINALIZE_PENDING' as any } : null);
+      showFeedback({ kind: 'warning', text: 'Offline: Attendance stored in outbox. Marked FINALIZE_PENDING until connection is restored.' });
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Finalization sync encountered an error' });
+      showFeedback({ kind: 'error', text: err.message || 'Finalization encountered an error' });
     } finally {
       setFinalizing(false);
       await refreshOutbox();

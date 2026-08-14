@@ -39,8 +39,8 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
   const { data: readersData, isLoading, error, refetch } = useQuery({
     queryKey: ['schools', schoolId, 'rfid', 'readers'],
     queryFn: async () => {
-      const res = await api<{ success: boolean; report: ReaderItem[] }>(`/api/v1/schools/${schoolId}/rfid/reports/readers`);
-      return res.report || [];
+      const res = await api<{ success: boolean; readers?: ReaderItem[]; report?: ReaderItem[] }>(`/api/v1/schools/${schoolId}/rfid/readers`);
+      return res.readers || res.report || [];
     },
     enabled: Boolean(schoolId),
   });
@@ -48,7 +48,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
   // Mutation: Register / Provision Reader
   const registerMutation = useMutation({
     mutationFn: async (payload: typeof provisionForm) => {
-      return api(`/api/v1/schools/${schoolId}/rfid/readers`, {
+      return api(`/api/v1/schools/${schoolId}/rfid/readers/register`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -73,12 +73,13 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Mutation: Status Change (Approve / Revoke)
+  // Mutation: Status Change (Approve / Suspend / Revoke)
   const statusMutation = useMutation({
     mutationFn: async ({ readerId, status }: { readerId: string; status: 'APPROVED' | 'SUSPENDED' | 'REVOKED' }) => {
-      return api(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/status`, {
+      const actionEndpoint = status === 'APPROVED' ? 'approve' : status === 'SUSPENDED' ? 'suspend' : 'revoke';
+      return api(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/${actionEndpoint}`, {
         method: 'POST',
-        body: JSON.stringify({ status, reason: `Status changed to ${status} by operator` }),
+        body: JSON.stringify({ reason: `Status changed to ${status} by administrator` }),
       });
     },
     onSuccess: () => {

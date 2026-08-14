@@ -195,8 +195,8 @@ export const LoginPage: React.FC = () => {
                 {[
                   { role: 'Super Admin', phone: '+919000000000', pass: 'SuperSecretAdminPassword123!' },
                   { role: 'Headmaster', phone: '+919100000001', pass: 'SchoolAdminPassword123!' },
-                  { role: 'Teacher', phone: '+919100000002', pass: 'TeacherSecurePassword123!' },
-                  { role: 'RFID Operator', phone: '+919100000003', pass: 'RfidOperatorPassword123!' },
+                  { role: 'Teacher', phone: '+919100000002', pass: 'TeacherPassword123!' },
+                  { role: 'RFID Operator', phone: '+919100000003', pass: 'RfidOpPassword123!' },
                   { role: 'District Viewer', phone: '+919100000004', pass: 'ReportViewerPassword123!' },
                 ].map((item, idx) => (
                   <button

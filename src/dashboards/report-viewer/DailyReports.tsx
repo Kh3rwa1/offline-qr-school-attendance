@@ -61,7 +61,16 @@ export const DailyReports: React.FC = () => {
   });
 
   const classes = classesData || [];
-  const records: StudentRollRecord[] = reportData?.records || reportData?.roster || [];
+  const rawRecords = reportData?.roster || reportData?.records || [];
+  const records: StudentRollRecord[] = rawRecords.map((r: any) => ({
+    studentId: r.studentId,
+    fullName: r.studentName || r.fullName || 'Student',
+    rollNumber: r.rollNumber !== undefined && r.rollNumber !== null ? String(r.rollNumber) : '—',
+    status: r.status || 'UNMARKED',
+    firstScanTime: r.firstScannedAt ? new Date(r.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—',
+    source: r.firstScannedAt ? 'QR / Barcode' : 'Standard Roll',
+  }));
+
   const presentCount = records.filter((s) => s.status === 'PRESENT').length;
   const lateCount = records.filter((s) => s.status === 'LATE').length;
   const absentCount = records.filter((s) => s.status === 'ABSENT').length;

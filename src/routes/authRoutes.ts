@@ -145,12 +145,23 @@ authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest,
   }
 
   const { schoolId } = parsed.data;
+  const isSuperAdmin = req.user?.platformRole === 'SUPER_ADMIN' || req.sessionContext?.platformRole === 'SUPER_ADMIN' || req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
+
   const memberships = await getUserSchoolMemberships(req.user!.id);
   const targetMembership = memberships.find((m) => m.schoolId === schoolId);
-  const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
 
   if (!targetMembership && !isSuperAdmin) {
     return res.status(403).json({ error: 'MEMBERSHIP_NOT_FOUND', message: 'User does not belong to target school' });
+  }
+
+  // Check target school active status
+  const [targetSchool] = await db
+    .select({ id: schools.id, status: schools.status })
+    .from(schools)
+    .where(eq(schools.id, schoolId));
+
+  if (!targetSchool || targetSchool.status !== 'ACTIVE') {
+    return res.status(403).json({ error: 'SCHOOL_NOT_ACTIVE', message: 'Target school is not active' });
   }
 
   const session = await createSession(req.user!.id, schoolId);

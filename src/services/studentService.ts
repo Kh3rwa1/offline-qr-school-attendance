@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   students,
@@ -120,13 +120,23 @@ export async function listStudents(params: {
   schoolId: string;
   classSectionId?: string;
   status?: string;
+  search?: string;
+  limit?: number;
+  page?: number;
 }) {
-  let conditions = [eq(students.schoolId, params.schoolId)];
+  let conditions: any[] = [eq(students.schoolId, params.schoolId)];
 
   if (params.status && params.status !== 'ALL') {
     conditions.push(eq(students.status, params.status));
   } else if (!params.status) {
     conditions.push(eq(students.status, 'ACTIVE'));
+  }
+
+  if (params.search && params.search.trim()) {
+    const pattern = `%${params.search.trim()}%`;
+    conditions.push(
+      sql`(${students.name} ILIKE ${pattern} OR ${students.studentCode} ILIKE ${pattern} OR ${students.banglarShikshaId} ILIKE ${pattern})`
+    );
   }
 
   const query = db
@@ -136,6 +146,7 @@ export async function listStudents(params: {
       studentCode: students.studentCode,
       banglarShikshaId: students.banglarShikshaId,
       name: students.name,
+      fullName: students.name,
       nameBn: students.nameBn,
       gender: students.gender,
       dateOfBirth: students.dateOfBirth,
@@ -156,12 +167,18 @@ export async function listStudents(params: {
     )
     .leftJoin(classSections, eq(enrollments.classSectionId, classSections.id))
     .leftJoin(academicYears, eq(enrollments.academicYearId, academicYears.id))
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .orderBy(students.name);
 
-  const rows = await query;
+  let rows = await query;
 
   if (params.classSectionId) {
-    return rows.filter((r: { classSectionId: string | null }) => r.classSectionId === params.classSectionId);
+    rows = rows.filter((r: { classSectionId: string | null }) => r.classSectionId === params.classSectionId);
+  }
+
+  if (params.limit) {
+    const start = params.page && params.page > 1 ? (params.page - 1) * params.limit : 0;
+    rows = rows.slice(start, start + params.limit);
   }
 
   return rows;

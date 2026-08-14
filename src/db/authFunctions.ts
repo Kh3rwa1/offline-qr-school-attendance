@@ -8,7 +8,12 @@ const DUMMY_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXlzYWx0MTIzNDU2
 
 let authPoolInstance: pg.Pool | undefined;
 
-if (process.env.NODE_ENV === 'production' && !process.env.AUTH_DATABASE_URL) {
+if (
+  process.env.NODE_ENV === 'production' &&
+  !process.env.AUTH_DATABASE_URL &&
+  process.env.DATABASE_URL &&
+  (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+) {
   throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
 }
 
@@ -69,16 +74,20 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
     };
   }
 
-  if (process.env.NODE_ENV === 'production') {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.DATABASE_URL &&
+    (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+  ) {
     throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }
 
-  const result = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, platform_role, status FROM users WHERE phone_number = ${phoneNumber} LIMIT 1`);
+  const result = await db.execute(sql`SELECT id, full_name, phone_number, password_hash, platform_role, status FROM users WHERE phone_number = ${phoneNumber}::text LIMIT 1`);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   if (rows.length === 0) return null;
   const r = rows[0];
   return {
-    id: r.id || r.id,
+    id: r.id,
     fullName: r.full_name || r.fullName,
     phoneNumber: r.phone_number || r.phoneNumber,
     passwordHash: r.password_hash || r.passwordHash,
@@ -104,14 +113,19 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
     }));
   }
 
-  if (process.env.NODE_ENV === 'production') {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.DATABASE_URL &&
+    (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+  ) {
     throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }
 
   try {
-    const res = await db.execute(sql`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships(${userId})`);
-    if (res?.rows && (res.rows as any[]).length > 0) {
-      return (res.rows as any[]).map((row: any) => ({
+    const res = await db.execute(sql`SELECT school_id, school_name, role, status FROM public.get_user_school_memberships(${userId}::uuid)`);
+    const rows = (res as any)?.rows || (Array.isArray(res) ? res : []);
+    if (rows && rows.length > 0) {
+      return rows.map((row: any) => ({
         schoolId: row.school_id || row.schoolId,
         schoolName: row.school_name || row.schoolName,
         role: row.role,
@@ -126,7 +140,7 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
     SELECT sm.school_id, s.name as school_name, sm.role, sm.status
     FROM school_memberships sm
     JOIN schools s ON sm.school_id = s.id
-    WHERE sm.user_id = ${userId} AND sm.status = 'ACTIVE' AND s.status = 'ACTIVE'
+    WHERE sm.user_id = ${userId}::uuid AND sm.status = 'ACTIVE' AND s.status = 'ACTIVE'
   `);
   const rows = (result as any)?.rows || (Array.isArray(result) ? result : []);
   return rows.map((r: any) => ({

@@ -23,13 +23,23 @@ const provisionSchoolSchema = z.object({
     fullName: z.string().min(2).max(255),
     phoneNumber: z.string().min(10).max(20),
     email: z.string().email().optional(),
-    password: z.string().min(8).optional(),
+    password: z.string().min(8, 'Password must be at least 8 characters long'),
+    linkExistingUser: z.boolean().optional(),
   }),
   academicYear: z.object({
     name: z.string().min(2).max(50),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }).optional(),
+});
+
+const updateSchoolSchema = z.object({
+  name: z.string().min(2).max(255).optional(),
+  udiseCode: z.string().regex(/^\d{11}$/).optional(),
+  district: z.string().min(2).max(100).optional(),
+  block: z.string().max(100).optional().nullable(),
+  preferredLanguage: z.enum(['bn', 'en', 'hi']).optional(),
+  timezone: z.string().optional(),
 });
 
 const updateSchoolStatusSchema = z.object({
@@ -43,7 +53,13 @@ const inviteMemberSchema = z.object({
   role: z.enum(['SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER', 'RFID_OPERATOR']),
   designation: z.string().max(100).optional(),
   employeeId: z.string().max(50).optional(),
-  temporaryPassword: z.string().min(8).optional(),
+  temporaryPassword: z.string().min(8, 'Password must be at least 8 characters long'),
+  reactivateExisting: z.boolean().optional(),
+});
+
+const changeMemberRoleSchema = z.object({
+  newRole: z.enum(['SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER', 'RFID_OPERATOR']),
+  reason: z.string().optional(),
 });
 
 // GET /api/v1/schools
@@ -99,17 +115,51 @@ schoolRouter.post(
 
       return res.status(201).json({
         success: true,
+        school: result.school,
+        adminUser: result.adminUser,
         data: result,
       });
     } catch (err: any) {
       if (err.code === 'DUPLICATE_UDISE_CODE') {
-        return res.status(409).json({ success: false, error: err.code, message: err.message });
+        return res.status(409).json({ success: false, error: err.code, code: err.code, message: err.message });
+      }
+      if (err.code === 'ADMIN_PHONE_CONFLICT') {
+        return res.status(409).json({ success: false, error: err.code, code: err.code, message: err.message });
+      }
+      if (err.code === 'IDEMPOTENCY_CONFLICT') {
+        return res.status(409).json({ success: false, error: err.code, code: err.code, message: err.message });
       }
       if (err.code === 'INVALID_INPUT') {
-        return res.status(400).json({ success: false, error: err.code, message: err.message });
+        return res.status(400).json({ success: false, error: err.code, code: err.code, message: err.message });
       }
       console.error('School provisioning error:', err);
       return res.status(500).json({ success: false, error: 'SCHOOL_PROVISIONING_FAILED', message: 'Failed to provision school' });
+    }
+  }
+);
+
+// PATCH /api/v1/schools/:schoolId (Update School Attributes)
+schoolRouter.patch(
+  '/:schoolId',
+  requireAuth,
+  requirePlatformRole(['SUPER_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { schoolId } = req.params;
+    const parsed = updateSchoolSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'INVALID_INPUT', details: parsed.error.format() });
+    }
+    try {
+      const updated = await SchoolService.updateSchool(schoolId, parsed.data, req.user!.id);
+      return res.json({ success: true, school: updated });
+    } catch (err: any) {
+      if (err.code === 'DUPLICATE_UDISE_CODE') {
+        return res.status(409).json({ success: false, error: err.code, message: err.message });
+      }
+      if (err.code === 'SCHOOL_NOT_FOUND') {
+        return res.status(404).json({ success: false, error: 'SCHOOL_NOT_FOUND' });
+      }
+      return res.status(500).json({ success: false, error: 'SCHOOL_UPDATE_FAILED', message: err.message });
     }
   }
 );
@@ -200,7 +250,7 @@ schoolRouter.post(
       return res.status(400).json({ success: false, error: 'INVALID_INPUT', details: parsed.error.format() });
     }
 
-    const { fullName, phoneNumber, role, designation, employeeId, temporaryPassword } = parsed.data;
+    const { fullName, phoneNumber, role, designation, employeeId, temporaryPassword, reactivateExisting } = parsed.data;
     const normalizedPhone = phoneNumber.trim().replace(/[\s-]/g, '');
 
     const [existingUser] = await db
@@ -210,8 +260,7 @@ schoolRouter.post(
 
     let targetUser = existingUser;
     if (!targetUser) {
-      const defaultPass = temporaryPassword || 'InitialPassword123!';
-      const passwordHash = await hashPassword(defaultPass);
+      const passwordHash = await hashPassword(temporaryPassword);
       const [newUser] = await db
         .insert(users)
         .values({
@@ -232,14 +281,31 @@ schoolRouter.post(
 
     if (existingMembership) {
       if (existingMembership.status === 'SUSPENDED') {
+        if (!reactivateExisting) {
+          return res.status(409).json({
+            success: false,
+            error: 'MEMBER_SUSPENDED',
+            message: 'User is currently suspended in this school. Please confirm explicit reactivation.',
+          });
+        }
         const [reactivated] = await db
           .update(schoolMemberships)
           .set({ status: 'ACTIVE', role, updatedAt: new Date() })
           .where(eq(schoolMemberships.id, existingMembership.id))
           .returning();
+
+        await createAuditLog({
+          schoolId,
+          actorId: req.user!.id,
+          action: 'REACTIVATE_MEMBERSHIP',
+          resourceType: 'MEMBERSHIP',
+          resourceId: reactivated.id,
+          metadata: { targetUserId: targetUser.id, role, reason: 'Reactivated via invite form' },
+        });
+
         return res.json({ success: true, member: reactivated, message: 'Member reactivated and updated' });
       }
-      return res.status(409).json({ success: false, error: 'MEMBERSHIP_ALREADY_EXISTS', message: 'User is already a member of this school' });
+      return res.status(409).json({ success: false, error: 'MEMBERSHIP_ALREADY_EXISTS', message: 'User is already an active member of this school' });
     }
 
     const [newMembership] = await db
@@ -300,6 +366,7 @@ schoolRouter.post(
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
     const { userId } = req.params;
+    const reason = req.body.reason || 'Administrative suspension';
 
     // Prevent suspending self if last active admin
     const activeAdmins = await db
@@ -334,7 +401,122 @@ schoolRouter.post(
       action: 'SUSPEND_MEMBERSHIP',
       resourceType: 'MEMBERSHIP',
       resourceId: updated.id,
-      metadata: { targetUserId: userId },
+      metadata: { targetUserId: userId, reason },
+    });
+
+    return res.json({ success: true, membership: updated });
+  }
+);
+
+// POST /api/v1/schools/:schoolId/members/:userId/reactivate
+schoolRouter.post(
+  '/:schoolId/members/:userId/reactivate',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const schoolId = req.activeSchoolId!;
+    const { userId } = req.params;
+    const reason = req.body.reason || 'Administrative reactivation';
+
+    const [updated] = await db
+      .update(schoolMemberships)
+      .set({
+        status: 'ACTIVE',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.userId, userId)))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'MEMBERSHIP_NOT_FOUND' });
+    }
+
+    await createAuditLog({
+      schoolId,
+      actorId: req.user!.id,
+      action: 'REACTIVATE_MEMBERSHIP',
+      resourceType: 'MEMBERSHIP',
+      resourceId: updated.id,
+      metadata: { targetUserId: userId, reason },
+    });
+
+    return res.json({ success: true, membership: updated });
+  }
+);
+
+// PATCH /api/v1/schools/:schoolId/members/:userId/role (Change Faculty Role)
+schoolRouter.patch(
+  '/:schoolId/members/:userId/role',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const schoolId = req.activeSchoolId!;
+    const { userId } = req.params;
+    const parsed = changeMemberRoleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'INVALID_INPUT', details: parsed.error.format() });
+    }
+
+    const { newRole, reason } = parsed.data;
+
+    const [existingMem] = await db
+      .select()
+      .from(schoolMemberships)
+      .where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.userId, userId)));
+
+    if (!existingMem) {
+      return res.status(404).json({ success: false, error: 'MEMBERSHIP_NOT_FOUND' });
+    }
+
+    // Last admin protection
+    if (existingMem.role === 'SCHOOL_ADMIN' && newRole !== 'SCHOOL_ADMIN' && existingMem.status === 'ACTIVE') {
+      const activeAdmins = await db
+        .select()
+        .from(schoolMemberships)
+        .where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.role, 'SCHOOL_ADMIN'), eq(schoolMemberships.status, 'ACTIVE')));
+      if (activeAdmins.length <= 1) {
+        return res.status(400).json({
+          success: false,
+          error: 'LAST_ADMIN_PROTECTED',
+          message: 'Cannot demote the last active administrator for this school',
+        });
+      }
+    }
+
+    const [updated] = await db
+      .update(schoolMemberships)
+      .set({
+        role: newRole,
+        updatedAt: new Date(),
+      })
+      .where(eq(schoolMemberships.id, existingMem.id))
+      .returning();
+
+    if (newRole === 'TEACHER') {
+      await db
+        .insert(teacherProfiles)
+        .values({
+          schoolId,
+          userId,
+          designation: 'Assistant Teacher',
+        })
+        .onConflictDoNothing();
+    }
+
+    await createAuditLog({
+      schoolId,
+      actorId: req.user!.id,
+      action: 'MEMBER_ROLE_CHANGED',
+      resourceType: 'MEMBERSHIP',
+      resourceId: updated.id,
+      metadata: {
+        targetUserId: userId,
+        oldRole: existingMem.role,
+        newRole,
+        reason: reason || 'Role updated by administrator',
+      },
     });
 
     return res.json({ success: true, membership: updated });

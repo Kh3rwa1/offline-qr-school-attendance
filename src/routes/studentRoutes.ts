@@ -21,8 +21,11 @@ studentRouter.get(
     const schoolId = req.activeSchoolId!;
     const classSectionId = req.query.classSectionId as string | undefined;
     const status = req.query.status as string | undefined;
+    const search = req.query.search as string | undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const page = req.query.page ? Number(req.query.page) : undefined;
 
-    const students = await listStudents({ schoolId, classSectionId, status });
+    const students = await listStudents({ schoolId, classSectionId, status, search, limit, page });
     return res.json({ students });
   }
 );

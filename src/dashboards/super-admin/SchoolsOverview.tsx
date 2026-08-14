@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
+import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, Building2, MapPin, Users, CheckCircle2, QrCode, Phone, AlertCircle, X, ShieldAlert, Check } from 'lucide-react';
+import { Plus, Search, Building2, MapPin, CheckCircle2, AlertCircle, X, ShieldAlert, ExternalLink, Archive, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface SchoolItem {
@@ -22,13 +23,18 @@ interface SchoolItem {
 
 export const SchoolsOverview: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { switchSchool } = useActiveSchool();
   const [searchTerm, setSearchTerm] = useState('');
   const [districtFilter, setDistrictFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [statusModalSchool, setStatusModalSchool] = useState<SchoolItem | null>(null);
+  const [targetStatus, setTargetStatus] = useState<'ACTIVE' | 'SUSPENDED' | 'ARCHIVED'>('SUSPENDED');
   const [statusReason, setStatusReason] = useState('');
   const [confirmName, setConfirmName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   // Form State for School Registration
   const [formData, setFormData] = useState({
@@ -39,14 +45,20 @@ export const SchoolsOverview: React.FC = () => {
     adminName: '',
     adminPhone: '',
     adminPassword: '',
-    academicYearName: '2026',
+    linkExistingUser: false,
+    academicYearName: '2026-2027',
   });
 
-  // Query: Real school list
+  // Query: Server-filtered school list
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['schools', 'list', districtFilter, searchTerm],
+    queryKey: ['schools', 'list', districtFilter, statusFilter, searchTerm],
     queryFn: async () => {
-      const res = await api<{ success: boolean; schools: SchoolItem[] }>('/api/v1/schools');
+      const params = new URLSearchParams();
+      if (searchTerm.trim()) params.append('search', searchTerm.trim());
+      if (districtFilter !== 'ALL') params.append('district', districtFilter);
+      if (statusFilter !== 'ALL') params.append('status', statusFilter);
+      
+      const res = await api<{ success: boolean; schools: SchoolItem[] }>(`/api/v1/schools?${params.toString()}`);
       return res.schools || [];
     },
   });
@@ -57,19 +69,20 @@ export const SchoolsOverview: React.FC = () => {
       return api('/api/v1/schools', {
         method: 'POST',
         body: JSON.stringify({
-          name: payload.name,
-          udiseCode: payload.udiseCode,
-          district: payload.district,
-          block: payload.block || undefined,
+          name: payload.name.trim(),
+          udiseCode: payload.udiseCode.trim(),
+          district: payload.district.trim(),
+          block: payload.block?.trim() || undefined,
           admin: {
-            fullName: payload.adminName,
-            phoneNumber: payload.adminPhone,
-            password: payload.adminPassword || 'SchoolAdminInitialPass2026!',
+            fullName: payload.adminName.trim(),
+            phoneNumber: payload.adminPhone.trim(),
+            password: payload.adminPassword,
+            linkExistingUser: payload.linkExistingUser,
           },
           academicYear: {
-            name: payload.academicYearName,
-            startDate: `${new Date().getFullYear()}-01-01`,
-            endDate: `${new Date().getFullYear()}-12-31`,
+            name: payload.academicYearName.trim(),
+            startDate: '2026-04-01',
+            endDate: '2027-03-31',
           },
         }),
       });
@@ -86,7 +99,8 @@ export const SchoolsOverview: React.FC = () => {
         adminName: '',
         adminPhone: '',
         adminPassword: '',
-        academicYearName: '2026',
+        linkExistingUser: false,
+        academicYearName: '2026-2027',
       });
       setFormError(null);
     },
@@ -122,20 +136,31 @@ export const SchoolsOverview: React.FC = () => {
       setFormError('Administrator phone number is required');
       return;
     }
+    if (!formData.adminPassword || formData.adminPassword.length < 8) {
+      setFormError('Administrator password must be at least 8 characters long');
+      return;
+    }
     registerMutation.mutate(formData);
   };
 
+  const handleOpenSchool = async (school: SchoolItem) => {
+    setSwitchingId(school.id);
+    try {
+      await switchSchool(school.id);
+      navigate('/app/school-admin');
+    } catch (err: any) {
+      console.error('Failed to switch school:', err);
+    } finally {
+      setSwitchingId(null);
+    }
+  };
+
   const schools = data || [];
-  const filteredSchools = schools.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || (s.udiseCode || '').includes(searchTerm);
-    const matchesDistrict = districtFilter === 'ALL' || s.district === districtFilter;
-    return matchesSearch && matchesDistrict;
-  });
+  const activeCount = schools.filter((s) => s.status === 'ACTIVE').length;
+  const suspendedCount = schools.filter((s) => s.status === 'SUSPENDED').length;
+  const archivedCount = schools.filter((s) => s.status === 'ARCHIVED').length;
 
-  const activeCount = schools.filter(s => s.status === 'ACTIVE').length;
-  const suspendedCount = schools.filter(s => s.status === 'SUSPENDED').length;
-
-  if (isLoading) return <LoadingState message="Loading registered school tenants…" />;
+  if (isLoading && !data) return <LoadingState message="Loading registered school tenants…" />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load school directory'} onRetry={() => refetch()} />;
 
   return (
@@ -172,19 +197,19 @@ export const SchoolsOverview: React.FC = () => {
         />
         <StatCard
           title="West Bengal Districts"
-          value={Array.from(new Set(schools.map(s => s.district))).length || 1}
+          value={Array.from(new Set(schools.map((s) => s.district))).length || 1}
           trend={{ value: "District Coverage", isPositive: true }}
           variant="default"
         />
         <StatCard
           title="UDISE+ Verified"
-          value={schools.filter(s => s.udiseCode).length}
+          value={schools.filter((s) => s.udiseCode).length}
           trend={{ value: "National Portal Synced", isPositive: true }}
           variant="default"
         />
         <StatCard
           title="System Status"
-          value="Healthy"
+          value={archivedCount > 0 ? `${archivedCount} Archived` : "Healthy"}
           trend={{ value: "All Tenants Isolated", isPositive: true }}
           variant="default"
         />
@@ -217,12 +242,23 @@ export const SchoolsOverview: React.FC = () => {
             <option value="Kolkata">Kolkata</option>
             <option value="Howrah">Howrah</option>
           </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-[#144e39] transition-all cursor-pointer"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Suspended</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
         </div>
       </div>
 
       {/* Schools Directory Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSchools.map((school, idx) => (
+        {schools.map((school, idx) => (
           <motion.div
             key={school.id}
             initial={{ opacity: 0, y: 15 }}
@@ -238,7 +274,9 @@ export const SchoolsOverview: React.FC = () => {
                 <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase ${
                   school.status === 'ACTIVE'
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : school.status === 'SUSPENDED'
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : 'bg-slate-100 text-slate-700 border border-slate-300'
                 }`}>
                   {school.status}
                 </span>
@@ -266,28 +304,71 @@ export const SchoolsOverview: React.FC = () => {
             </div>
 
             <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-400 font-medium">
-                Est. {new Date(school.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-              </span>
+              <button
+                type="button"
+                disabled={school.status !== 'ACTIVE' || switchingId === school.id}
+                onClick={() => handleOpenSchool(school)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold text-[#144e39] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display disabled:opacity-40"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{switchingId === school.id ? 'Opening…' : 'Open School'}</span>
+              </button>
 
-              <div className="flex items-center gap-2">
-                {school.status === 'ACTIVE' ? (
+              <div className="flex items-center gap-1.5">
+                {school.status === 'ACTIVE' && (
                   <button
                     type="button"
                     onClick={() => {
                       setStatusModalSchool(school);
+                      setTargetStatus('SUSPENDED');
                       setStatusReason('');
                       setConfirmName('');
                     }}
-                    className="px-3 py-1.5 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer font-display"
+                    className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer font-display"
                   >
                     Suspend
                   </button>
-                ) : (
+                )}
+
+                {school.status === 'SUSPENDED' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusModalSchool(school);
+                        setTargetStatus('ACTIVE');
+                        setStatusReason('');
+                        setConfirmName('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
+                    >
+                      Reactivate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusModalSchool(school);
+                        setTargetStatus('ARCHIVED');
+                        setStatusReason('');
+                        setConfirmName('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer font-display"
+                    >
+                      Archive
+                    </button>
+                  </>
+                )}
+
+                {school.status === 'ARCHIVED' && (
                   <button
                     type="button"
-                    onClick={() => statusMutation.mutate({ schoolId: school.id, status: 'ACTIVE', reason: 'Administrative reactivation' })}
-                    className="px-3 py-1.5 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
+                    onClick={() => {
+                      setStatusModalSchool(school);
+                      setTargetStatus('ACTIVE');
+                      setStatusReason('');
+                      setConfirmName('');
+                    }}
+                    className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
                   >
                     Reactivate
                   </button>
@@ -297,11 +378,11 @@ export const SchoolsOverview: React.FC = () => {
           </motion.div>
         ))}
 
-        {filteredSchools.length === 0 && (
+        {schools.length === 0 && (
           <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-slate-200">
             <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-base font-bold text-slate-800 font-display">No schools match your search</h3>
-            <p className="text-xs text-slate-500 mt-1">Try adjusting your search criteria or register a new institution.</p>
+            <p className="text-xs text-slate-500 mt-1">Try adjusting your search filters or register a new institution.</p>
           </div>
         )}
       </div>
@@ -441,16 +522,31 @@ export const SchoolsOverview: React.FC = () => {
 
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
-                          Initial Password
+                          Initial Password (min 8 chars) *
                         </label>
                         <input
                           type="password"
+                          required
+                          minLength={8}
                           value={formData.adminPassword}
                           onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
                           placeholder="••••••••••••"
                           className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
                         />
                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="linkExistingUser"
+                        checked={formData.linkExistingUser}
+                        onChange={(e) => setFormData({ ...formData, linkExistingUser: e.target.checked })}
+                        className="w-4 h-4 rounded text-[#144e39] focus:ring-[#144e39] border-slate-300"
+                      />
+                      <label htmlFor="linkExistingUser" className="text-xs font-medium text-slate-600 cursor-pointer">
+                        Link existing user if this phone number is already registered in the platform
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -478,7 +574,7 @@ export const SchoolsOverview: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Suspend Confirmation Dialog */}
+      {/* Status Transition Dialog (Suspend / Archive / Reactivate) */}
       <AnimatePresence>
         {statusModalSchool && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -488,43 +584,55 @@ export const SchoolsOverview: React.FC = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
             >
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
-                <ShieldAlert className="w-6 h-6" />
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${
+                targetStatus === 'ACTIVE'
+                  ? 'bg-emerald-50 text-emerald-600'
+                  : targetStatus === 'ARCHIVED'
+                  ? 'bg-slate-100 text-slate-700'
+                  : 'bg-rose-50 text-rose-600'
+              }`}>
+                {targetStatus === 'ACTIVE' ? <RefreshCw className="w-6 h-6" /> : targetStatus === 'ARCHIVED' ? <Archive className="w-6 h-6" /> : <ShieldAlert className="w-6 h-6" />}
               </div>
 
               <h3 className="text-lg font-extrabold text-slate-900 font-display">
-                Suspend School: {statusModalSchool.name}
+                {targetStatus === 'ACTIVE' ? 'Reactivate' : targetStatus === 'ARCHIVED' ? 'Archive' : 'Suspend'} School: {statusModalSchool.name}
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Suspending will immediately lock all school memberships and reject incoming device scans.
+                {targetStatus === 'ACTIVE'
+                  ? 'Reactivating will restore operational status and enable attendance scanning.'
+                  : targetStatus === 'ARCHIVED'
+                  ? 'Archiving locks the school permanently until explicit administrative reactivation.'
+                  : 'Suspending will immediately lock all school memberships and reject incoming device scans.'}
               </p>
 
               <div className="space-y-4 my-5">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
-                    Mandatory Reason for Suspension *
+                    Mandatory Reason (min 5 chars) *
                   </label>
                   <textarea
                     rows={3}
                     required
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
-                    placeholder="Provide compliance or administrative reason (min 5 chars)…"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-rose-500"
+                    placeholder="Provide compliance or administrative reason…"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
-                    Type <span className="font-mono text-rose-600">{statusModalSchool.name}</span> to confirm:
-                  </label>
-                  <input
-                    type="text"
-                    value={confirmName}
-                    onChange={(e) => setConfirmName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-rose-500"
-                  />
-                </div>
+                {(targetStatus === 'SUSPENDED' || targetStatus === 'ARCHIVED') && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      Type <span className="font-mono text-rose-600">{statusModalSchool.name}</span> to confirm:
+                    </label>
+                    <input
+                      type="text"
+                      value={confirmName}
+                      onChange={(e) => setConfirmName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-rose-500"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -537,15 +645,31 @@ export const SchoolsOverview: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  disabled={statusMutation.isPending || statusReason.trim().length < 5 || confirmName !== statusModalSchool.name}
+                  disabled={
+                    statusMutation.isPending ||
+                    statusReason.trim().length < 5 ||
+                    ((targetStatus === 'SUSPENDED' || targetStatus === 'ARCHIVED') && confirmName !== statusModalSchool.name)
+                  }
                   onClick={() => statusMutation.mutate({
                     schoolId: statusModalSchool.id,
-                    status: 'SUSPENDED',
-                    reason: statusReason,
+                    status: targetStatus,
+                    reason: statusReason.trim(),
                   })}
-                  className="px-5 py-2 rounded-full text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 font-display cursor-pointer shadow-md"
+                  className={`px-5 py-2 rounded-full text-xs font-bold text-white disabled:opacity-40 font-display cursor-pointer shadow-md ${
+                    targetStatus === 'ACTIVE'
+                      ? 'bg-[#144e39] hover:bg-[#0f3d2c]'
+                      : targetStatus === 'ARCHIVED'
+                      ? 'bg-slate-800 hover:bg-slate-900'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
                 >
-                  {statusMutation.isPending ? 'Suspending…' : 'Confirm Suspension'}
+                  {statusMutation.isPending
+                    ? 'Updating…'
+                    : targetStatus === 'ACTIVE'
+                    ? 'Confirm Reactivation'
+                    : targetStatus === 'ARCHIVED'
+                    ? 'Confirm Archive'
+                    : 'Confirm Suspension'}
                 </button>
               </div>
             </motion.div>

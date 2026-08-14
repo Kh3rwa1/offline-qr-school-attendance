@@ -16,13 +16,19 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
     max: maxRequests,
     standardHeaders: true,
     legacyHeaders: true,
+    validate: { xForwardedForHeader: false, default: false },
     skip: (req: Request) => {
-      return (
-        process.env.DISABLE_RATE_LIMITING === 'true' ||
-        process.env.TEST_SERVER_STATIC === 'true' ||
-        req.headers['x-benchmark-load-test'] === 'true' ||
-        req.headers['x-playwright-e2e'] === 'true'
-      );
+      if (process.env.DISABLE_RATE_LIMITING === 'true' || process.env.TEST_SERVER_STATIC === 'true') {
+        return true;
+      }
+      const isTestBypassAllowed = process.env.NODE_ENV !== 'production' || process.env.ALLOW_TEST_BYPASS === 'true';
+      if (isTestBypassAllowed) {
+        return (
+          req.headers['x-benchmark-load-test'] === 'true' ||
+          req.headers['x-playwright-e2e'] === 'true'
+        );
+      }
+      return false;
     },
     keyGenerator: (req: Request) => {
       if (keyGenerator) return keyGenerator(req);

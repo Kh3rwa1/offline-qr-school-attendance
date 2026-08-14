@@ -3,12 +3,19 @@ import crypto from 'crypto';
 
 /**
  * CSRF Protection Secret
- * In production, must be provided via CSRF_SECRET or SESSION_SECRET environment variable.
+ * In production, must be provided via CSRF_SECRET or SESSION_SECRET environment variable (>= 32 chars).
+ * Fails closed in production if secret is missing or insecure.
  */
-const CSRF_SECRET =
-  process.env.CSRF_SECRET ||
-  process.env.SESSION_SECRET ||
-  'attendance-production-csrf-hmac-master-secret-key-32b-min';
+export function getCsrfSecret(): string {
+  const secret = process.env.CSRF_SECRET || process.env.SESSION_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret || secret.length < 32) {
+      throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be explicitly provided in production mode');
+    }
+    return secret;
+  }
+  return secret || 'attendance-dev-csrf-hmac-master-secret-key-32b-min';
+}
 
 export const CSRF_COOKIE_NAME = 'XSRF-TOKEN';
 export const CSRF_SIG_COOKIE_NAME = '_csrf_sig';
@@ -40,9 +47,10 @@ export const EXEMPT_ROUTES: Array<{ path: string; exact?: boolean }> = [
  * Generates a signed CSRF token pair bound to an optional session token.
  */
 export function generateCsrfToken(sessionToken?: string): { token: string; signature: string } {
+  const secret = getCsrfSecret();
   const token = crypto.randomBytes(32).toString('hex');
   const payload = sessionToken ? `${token}:${sessionToken}` : token;
-  const signature = crypto.createHmac('sha256', CSRF_SECRET).update(payload).digest('hex');
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   return { token, signature };
 }
 
@@ -52,12 +60,13 @@ export function generateCsrfToken(sessionToken?: string): { token: string; signa
 export function verifyCsrfToken(token: string, signature: string, sessionToken?: string): boolean {
   if (!token || !signature) return false;
 
+  const secret = getCsrfSecret();
   const sigBuffer = Buffer.from(signature, 'utf8');
 
   // 1. Try session-bound signature
   if (sessionToken) {
     const expectedSigWithSession = crypto
-      .createHmac('sha256', CSRF_SECRET)
+      .createHmac('sha256', secret)
       .update(`${token}:${sessionToken}`)
       .digest('hex');
     const expectedBufferWithSession = Buffer.from(expectedSigWithSession, 'utf8');
@@ -70,7 +79,7 @@ export function verifyCsrfToken(token: string, signature: string, sessionToken?:
   }
 
   // 2. Try raw token signature
-  const expectedSigRaw = crypto.createHmac('sha256', CSRF_SECRET).update(token).digest('hex');
+  const expectedSigRaw = crypto.createHmac('sha256', secret).update(token).digest('hex');
   const expectedBufferRaw = Buffer.from(expectedSigRaw, 'utf8');
   if (
     sigBuffer.length === expectedBufferRaw.length &&
@@ -147,9 +156,12 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
       return next();
     }
 
-    // Benchmark & programmatic E2E test runner exemption
-    if (req.headers['x-benchmark-load-test'] === 'true' || req.headers['x-playwright-e2e'] === 'true') {
-      return next();
+    // Test runner header exemptions: Available strictly only when ALLOW_TEST_BYPASS is explicitly enabled in non-production environments
+    const isTestBypassAllowed = process.env.NODE_ENV !== 'production' || process.env.ALLOW_TEST_BYPASS === 'true';
+    if (isTestBypassAllowed) {
+      if (req.headers['x-benchmark-load-test'] === 'true' || req.headers['x-playwright-e2e'] === 'true') {
+        return next();
+      }
     }
 
     // If request is authenticated via Bearer token (non-browser API client), CSRF does not apply

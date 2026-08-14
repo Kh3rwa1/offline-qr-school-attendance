@@ -22,6 +22,9 @@ export const OfflineWorkspace: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-extrabold text-[#144e39] uppercase tracking-wider mb-2 font-display">
+            <span>Offline Synchronization Ledger</span>
+          </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
             Offline Outbox & Local Storage
           </h1>

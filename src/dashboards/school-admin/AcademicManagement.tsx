@@ -217,7 +217,7 @@ export const AcademicManagement: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
-            Academic Classes & Sections
+            Academic Structure & Class Sections
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-1">
             Active grades, assigned class teachers, and session configurations at {activeSchoolName}.

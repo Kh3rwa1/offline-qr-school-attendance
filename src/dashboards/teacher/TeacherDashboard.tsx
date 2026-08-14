@@ -62,24 +62,27 @@ export const TeacherDashboard: React.FC = () => {
   const loadClasses = useCallback(async () => {
     if (!activeSchoolId) return;
     try {
-      const res = await api<{ success: boolean; classes: any[] }>(
-        `/api/v1/schools/${activeSchoolId}/academics/classes`
+      const res = await api<{ success: boolean; data?: any[]; classes?: any[] }>(
+        `/api/v1/schools/${activeSchoolId}/attendance/classes`
       );
-      if (res.success && res.classes) {
-        setClasses(res.classes);
-        if (!selectedClassId && res.classes.length > 0) {
-          setSelectedClassId(res.classes[0].id);
-          localStorage.setItem('attendance.classSectionId', res.classes[0].id);
+      const classList = res.data || res.classes || [];
+      if (classList.length > 0) {
+        setClasses(classList);
+        if (!selectedClassId) {
+          const firstId = classList[0].classSectionId || classList[0].id;
+          setSelectedClassId(firstId);
+          localStorage.setItem('attendance.classSectionId', firstId);
         }
       }
     } catch {
       // Offline fallback: load unique classes from cached roster
       const cached = await offlineDb.rosters.toArray();
-      const uniqueMap = new Map<string, { id: string; className: string; sectionName: string }>();
+      const uniqueMap = new Map<string, { id: string; classSectionId: string; className: string; sectionName: string }>();
       cached.forEach((r) => {
         if (!uniqueMap.has(r.classSectionId)) {
           uniqueMap.set(r.classSectionId, {
             id: r.classSectionId,
+            classSectionId: r.classSectionId,
             className: 'Class',
             sectionName: 'Section',
           });
@@ -456,11 +459,14 @@ export const TeacherDashboard: React.FC = () => {
             className="flex-1 max-w-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-full text-xs font-bold text-slate-800 focus:bg-white focus:border-[#144e39] outline-none"
           >
             <option value="">Select class section</option>
-            {classes.map((item) => (
-              <option key={item.classSectionId} value={item.classSectionId}>
-                {item.className} - {item.sectionName}
-              </option>
-            ))}
+            {classes.map((item) => {
+              const id = item.classSectionId || item.id;
+              return (
+                <option key={id} value={id}>
+                  {item.className} - {item.sectionName}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -528,7 +534,7 @@ export const TeacherDashboard: React.FC = () => {
                 <input
                   value={scanInput}
                   onChange={(e) => setScanInput(e.target.value)}
-                  placeholder="USB Scanner input stream (scan student card or press Enter)…"
+                  placeholder="USB scanner token (press Enter)"
                   className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-full text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#144e39] outline-none"
                 />
               </div>

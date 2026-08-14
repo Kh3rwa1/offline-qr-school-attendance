@@ -122,7 +122,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 font-display">Gate Reader Terminals</h2>
+          <h2 className="text-xl font-extrabold text-slate-900 font-display">Physical Gate Readers</h2>
           <p className="text-xs text-slate-500 font-medium">Physical hardware terminals bound by mTLS certificates and sequence counters.</p>
         </div>
 
@@ -132,7 +132,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
           className="btn-forest-primary text-xs font-display flex items-center gap-2 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Reader Terminal</span>
+          <span>Provision New Reader</span>
         </button>
       </div>
 
@@ -235,7 +235,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
             >
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-extrabold text-slate-900 font-display">
-                  Provision Gate Reader Terminal
+                  Register Gate Reader Terminal
                 </h3>
                 <button
                   type="button"
@@ -263,7 +263,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                     required
                     value={provisionForm.deviceId}
                     onChange={(e) => setProvisionForm({ ...provisionForm, deviceId: e.target.value })}
-                    placeholder="e.g. ESP32-GATE-01-A"
+                    placeholder="e.g. ESP32-GATE-01"
                     className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 font-mono focus:bg-white focus:border-[#144e39] outline-none"
                   />
                 </div>
@@ -308,7 +308,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                     disabled={registerMutation.isPending}
                     className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
                   >
-                    {registerMutation.isPending ? 'Registering…' : 'Register Terminal'}
+                    {registerMutation.isPending ? 'Registering…' : 'Register Reader'}
                   </button>
                 </div>
               </form>

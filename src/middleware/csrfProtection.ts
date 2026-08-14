@@ -51,17 +51,35 @@ export function generateCsrfToken(sessionToken?: string): { token: string; signa
  */
 export function verifyCsrfToken(token: string, signature: string, sessionToken?: string): boolean {
   if (!token || !signature) return false;
-  const payload = sessionToken ? `${token}:${sessionToken}` : token;
-  const expectedSig = crypto.createHmac('sha256', CSRF_SECRET).update(payload).digest('hex');
 
   const sigBuffer = Buffer.from(signature, 'utf8');
-  const expectedBuffer = Buffer.from(expectedSig, 'utf8');
 
-  if (sigBuffer.length !== expectedBuffer.length) {
-    return false;
+  // 1. Try session-bound signature
+  if (sessionToken) {
+    const expectedSigWithSession = crypto
+      .createHmac('sha256', CSRF_SECRET)
+      .update(`${token}:${sessionToken}`)
+      .digest('hex');
+    const expectedBufferWithSession = Buffer.from(expectedSigWithSession, 'utf8');
+    if (
+      sigBuffer.length === expectedBufferWithSession.length &&
+      crypto.timingSafeEqual(sigBuffer, expectedBufferWithSession)
+    ) {
+      return true;
+    }
   }
 
-  return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
+  // 2. Try raw token signature
+  const expectedSigRaw = crypto.createHmac('sha256', CSRF_SECRET).update(token).digest('hex');
+  const expectedBufferRaw = Buffer.from(expectedSigRaw, 'utf8');
+  if (
+    sigBuffer.length === expectedBufferRaw.length &&
+    crypto.timingSafeEqual(sigBuffer, expectedBufferRaw)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

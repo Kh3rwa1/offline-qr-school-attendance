@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import fs from 'node:fs';
 import { env } from './src/env';
 import { authRouter } from './src/routes/authRoutes';
 import { schoolRouter } from './src/routes/schoolRoutes';
@@ -161,7 +162,10 @@ export async function createApp() {
     app.use((req, res, next) => {
       if (req.method === 'GET' || req.method === 'HEAD') {
         if (!req.path.startsWith('/api')) {
-          return res.sendFile(indexHtmlPath);
+          if (fs.existsSync(indexHtmlPath)) {
+            return res.sendFile(indexHtmlPath);
+          }
+          return res.type('html').send('<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>');
         }
       }
       next();

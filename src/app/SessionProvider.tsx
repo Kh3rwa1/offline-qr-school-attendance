@@ -37,10 +37,51 @@ export interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [memberships, setMemberships] = useState<SchoolMembership[]>([]);
-  const [activeMembership, setActiveMembership] = useState<SchoolMembership | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('attendance.auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.expiresAt && parsed.expiresAt > Date.now()) return parsed.user;
+      }
+    } catch {}
+    return null;
+  });
+
+  const [memberships, setMemberships] = useState<SchoolMembership[]>(() => {
+    try {
+      const stored = localStorage.getItem('attendance.auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.expiresAt && parsed.expiresAt > Date.now()) return parsed.memberships || [];
+      }
+    } catch {}
+    return [];
+  });
+
+  const [activeMembership, setActiveMembership] = useState<SchoolMembership | null>(() => {
+    try {
+      const stored = localStorage.getItem('attendance.auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.expiresAt && parsed.expiresAt > Date.now()) {
+          return parsed.memberships?.find((m: any) => m.schoolId === parsed.schoolId) || parsed.memberships?.[0] || null;
+        }
+      }
+    } catch {}
+    return null;
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('attendance.auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.expiresAt && parsed.expiresAt > Date.now()) return false;
+      }
+    } catch {}
+    return true;
+  });
 
   const refreshSession = useCallback(async () => {
     try {

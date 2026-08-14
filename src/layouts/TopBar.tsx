@@ -62,7 +62,7 @@ export const TopBar: React.FC = () => {
             id="sync-now-topbar-btn"
           >
             <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Synchronizing…' : 'Synchronize now'}
+            {isSyncing ? 'Syncing…' : 'Sync outbox'}
           </button>
         </div>
 

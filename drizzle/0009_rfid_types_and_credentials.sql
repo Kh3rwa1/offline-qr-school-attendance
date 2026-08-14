@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS rfid_scan_events (
   processing_latency_ms INTEGER,
   is_offline BOOLEAN NOT NULL DEFAULT false,
   nonce VARCHAR(255),
+  payload_hash VARCHAR(64),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 --> statement-breakpoint

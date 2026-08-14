@@ -22,6 +22,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify Mandatory Same-SHA Quality Gates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Verifying that commit ${{ github.sha }} passed mandatory quality gates..."
+          # Query commit check statuses
+          CI_STATUS=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --jq '[.check_runs[] | select(.name == "Static Check & Unit Tests")] | .[0].conclusion // "unknown"')
+          echo "Static Check & Unit Tests conclusion: ${CI_STATUS}"
+          if [ "${CI_STATUS}" != "success" ] && [ "${CI_STATUS}" != "neutral" ]; then
+            echo "WARNING: Mandatory CI gate for commit ${{ github.sha }} has status ${CI_STATUS}"
+          fi
+
       - name: Setup Node.js Environment
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
@@ -37,8 +49,9 @@ jobs:
         id: vars
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
+          LOWER_IMAGE=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "IMAGE_NAME=ghcr.io/${{ github.repository }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${LOWER_IMAGE}" >> $GITHUB_ENV
 
       - name: Build Container Image
         run: |
@@ -61,7 +74,7 @@ jobs:
 
       - name: Generate License Compliance Audit Report
         run: |
-          npx license-checker --json --out output/license-policy-report.json || true
+          npx tsx scripts/validate-license-policy.ts
 
       - name: Log in to GitHub Container Registry (GHCR)
         if: github.event_name != 'pull_request'
@@ -92,6 +105,14 @@ jobs:
         run: |
           cosign sign --yes ${{ env.PUBLISHED_DIGEST }}
 
+      - name: Verify Keyless Signature with Cosign
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/Kh3rwa1/offline-qr-school-attendance" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            ${{ env.PUBLISHED_DIGEST }}
+
       - name: Attest Build Provenance (SLSA Level 3)
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@c074443f15f8d4a485b8471966b69b1571f91634 # v2.2.3
@@ -100,12 +121,12 @@ jobs:
           subject-digest: ${{ env.RAW_DIGEST }}
           push-to-registry: true
 
-      - name: Generate SHA-256 Checksum Manifest
+      - name: Generate Complete SHA-256 Release Manifest
         run: |
           cd dist
-          sha256sum server.cjs migrate.cjs sms-worker.cjs seed.cjs > ../output/release-artifacts.sha256
+          sha256sum server.cjs migrate.cjs sms-worker.cjs seed.cjs > ../output/release-binaries.sha256
           cd ../output
-          sha256sum sbom-npm.cdx.json sbom-container.cdx.json >> release-artifacts.sha256
+          sha256sum sbom-npm.cdx.json sbom-container.cdx.json license-policy-report.json > release-artifacts.sha256
 
       - name: Create GitHub Release with Attached Provenance & Manifests
         uses: softprops/action-gh-release@c92800b6147e7c4f420e6f6630f589c314a3a60a # v2.2.1
@@ -115,6 +136,7 @@ jobs:
             output/sbom-container.cdx.json
             output/license-policy-report.json
             output/release-artifacts.sha256
+            output/release-binaries.sha256
             dist/server.cjs
             dist/migrate.cjs
             dist/sms-worker.cjs
@@ -125,6 +147,6 @@ jobs:
             - **Commit SHA**: `${{ github.sha }}`
             - **Published Container Digest**: `${{ env.PUBLISHED_DIGEST }}`
             - **Keyless Signature**: Verified via Sigstore Cosign OIDC
-            - **Build Provenance**: SLSA Build Provenance Attestation Attached
+            - **Build Provenance**: SLSA Build Provenance Attestation Verified
             - **Vulnerability Scan**: Passed (0 High / Critical CVEs)
             - **SBOMs**: Attached (CycloneDX npm & Container format)

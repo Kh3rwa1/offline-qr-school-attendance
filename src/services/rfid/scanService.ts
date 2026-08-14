@@ -66,10 +66,13 @@ function computePayloadHash(envelope: ScanEnvelope): string {
     envelope.schoolId,
     envelope.readerId,
     envelope.credentialDigest || '',
+    envelope.secureProof || '',
     envelope.readerTimestamp,
     envelope.nonce,
     envelope.securityMode,
     envelope.direction || 'NONE',
+    envelope.attendanceSessionId || '',
+    envelope.sequenceNumber ?? '',
   ].join('|');
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
@@ -82,6 +85,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     throw new Error('Invalid envelope: missing mandatory envelope headers or fields');
   }
 
+  const currentPayloadHash = computePayloadHash(envelope);
+
   // 1. Idempotency check with payload hash verification: Return existing record if already stored in DB
   const existingRecord = await withTenantContext(envelope.schoolId, async (tx) => {
     const [stored] = await tx
@@ -92,7 +97,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   });
 
   if (existingRecord) {
-    if (existingRecord.readerId !== envelope.readerId || existingRecord.nonce !== envelope.nonce) {
+    if (
+      (existingRecord.payloadHash && existingRecord.payloadHash !== currentPayloadHash) ||
+      existingRecord.readerId !== envelope.readerId ||
+      existingRecord.nonce !== envelope.nonce
+    ) {
       return {
         decision: 'REPLAY_REJECTED',
         rejectionCode: 'PAYLOAD_HASH_MISMATCH',
@@ -147,7 +156,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
             renewalHeartbeat = null;
           }
         } catch {
-          // Ignore transient Redis errors during periodic renewal
+          // Redis lost or renewal failed - terminate heartbeat immediately
+          if (renewalHeartbeat) {
+            clearInterval(renewalHeartbeat);
+            renewalHeartbeat = null;
+          }
         }
       }, LOCK_RENEWAL_INTERVAL_MS);
       // Unref timer so it does not keep process alive unnecessarily
@@ -226,8 +239,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       if (err?.message?.includes('Concurrent scan lock timeout')) {
         throw err;
       }
-      acquiredRedisLock = true;
-      startHeartbeat();
+      // Redis threw exception: do NOT set acquiredRedisLock = true. Fallback to DB transaction mutex cleanly.
+      acquiredRedisLock = false;
     }
   }
 
@@ -262,6 +275,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
               processingLatencyMs: latency,
               isOffline: envelope.isOffline || false,
               nonce: envelope.nonce,
+              payloadHash: currentPayloadHash,
             })
             .onConflictDoNothing()
             .returning();
@@ -471,6 +485,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
             processingLatencyMs: Date.now() - startTime,
             isOffline: envelope.isOffline || false,
             nonce: envelope.nonce,
+            payloadHash: currentPayloadHash,
           })
           .returning();
 

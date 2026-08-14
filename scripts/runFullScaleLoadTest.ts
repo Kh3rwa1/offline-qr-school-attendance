@@ -21,6 +21,7 @@ import {
 import { runMigrations } from '../src/db/migrate';
 import { sql, count, eq, inArray } from 'drizzle-orm';
 import { hashPassword } from '../src/auth/password';
+import { getRedisClient } from '../src/services/redisService';
 
 export interface EndpointMetric {
   endpoint: string;
@@ -598,6 +599,24 @@ export async function runFullScaleLoadTest(
     }
   }
 
+  let measuredPostgresVersion = 'PostgreSQL (unable to query)';
+  try {
+    const pgRes = await db.execute(sql`SELECT version() AS ver;`);
+    measuredPostgresVersion = String((pgRes.rows[0] as any)?.ver || 'PostgreSQL');
+  } catch {}
+
+  let measuredRedisVersion = 'Redis (not connected)';
+  try {
+    const r = getRedisClient();
+    if (r) {
+      const info = await r.info('server');
+      const match = info.match(/redis_version:([^\r\n]+)/);
+      measuredRedisVersion = match ? `Redis ${match[1]}` : 'Redis';
+    }
+  } catch {}
+
+  const measuredContainerDigest = process.env.CONTAINER_IMAGE_DIGEST || null;
+
   const report: any = {
     timestamp: new Date().toISOString(),
     gitCommitSha: commitSha,
@@ -605,9 +624,9 @@ export async function runFullScaleLoadTest(
     repository: process.env.GITHUB_REPOSITORY || 'Kh3rwa1/offline-qr-school-attendance',
     runnerType: process.env.RUNNER_OS ? `${process.env.RUNNER_OS}-${process.env.RUNNER_ARCH || 'x64'}` : 'local',
     nodeVersion: process.version,
-    postgresVersion: 'PostgreSQL 16.x',
-    redisVersion: 'Redis 7.x',
-    containerImageDigest: process.env.CONTAINER_IMAGE_DIGEST || 'ghcr.io/kh3rwa1/offline-qr-school-attendance@sha256:immutable-digest',
+    postgresVersion: measuredPostgresVersion,
+    redisVersion: measuredRedisVersion,
+    containerImageDigest: measuredContainerDigest,
     targetEnvironment: process.env.NODE_ENV || 'production',
     verifiedSchools,
     verifiedStudents,

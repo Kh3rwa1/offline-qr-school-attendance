@@ -640,6 +640,7 @@ export const rfidScanEvents = pgTable(
     processingLatencyMs: integer('processing_latency_ms'),
     isOffline: boolean('is_offline').notNull().default(false),
     nonce: varchar('nonce', { length: 255 }),
+    payloadHash: varchar('payload_hash', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

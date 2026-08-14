@@ -15,19 +15,29 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
       data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
     });
     expect(adminLogin.ok()).toBeTruthy();
+    const adminLoginBody = await adminLogin.json();
+    const csrfToken = adminLoginBody.csrfToken;
+    const csrfHeaders: Record<string, string> = csrfToken ? { 'x-csrf-token': String(csrfToken) } : {};
+
     const adminMe = await (await adminApi.get('/api/v1/auth/me')).json();
     schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.memberships[0].schoolId;
     const classesResponse = await adminApi.get(`/api/v1/schools/${schoolId}/attendance/classes`);
     classSectionId = (await classesResponse.json()).data[0].classSectionId;
     const deviceIdentifier = `e2e-scanner-${testInfo.workerIndex}`;
-    const deviceRegistration = await adminApi.post(`/api/v1/schools/${schoolId}/devices/register`, { data: { deviceIdentifier } });
+    const deviceRegistration = await adminApi.post(`/api/v1/schools/${schoolId}/devices/register`, {
+      data: { deviceIdentifier },
+      headers: csrfHeaders,
+    });
     expect(deviceRegistration.ok()).toBeTruthy();
     const rosterResponse = await adminApi.get(`/api/v1/schools/${schoolId}/sync/classes/${classSectionId}/offline-roster`, { headers: { 'x-device-identifier': deviceIdentifier } });
     const allStudents = (await rosterResponse.json()).data.students;
     const startIdx = (testInfo.workerIndex * 2) % (allStudents.length - 1);
     const students = allStudents.slice(startIdx, startIdx + 2);
     for (const student of students) {
-      const response = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, { data: { studentId: student.studentId } });
+      const response = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, {
+        data: { studentId: student.studentId },
+        headers: csrfHeaders,
+      });
       expect(response.ok()).toBeTruthy();
       tokens.push((await response.json()).rawToken);
     }

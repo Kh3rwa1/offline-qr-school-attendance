@@ -26,13 +26,33 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Verifying that commit ${{ github.sha }} passed mandatory quality gates..."
-          # Query commit check statuses
-          CI_STATUS=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --jq '[.check_runs[] | select(.name == "Static Check & Unit Tests")] | .[0].conclusion // "unknown"')
-          echo "Static Check & Unit Tests conclusion: ${CI_STATUS}"
-          if [ "${CI_STATUS}" != "success" ] && [ "${CI_STATUS}" != "neutral" ]; then
-            echo "WARNING: Mandatory CI gate for commit ${{ github.sha }} has status ${CI_STATUS}"
+          echo "Verifying that commit ${{ github.sha }} passed all mandatory quality gates..."
+          CHECKS_JSON=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs")
+          
+          # Check static check & unit tests
+          STATIC_STATUS=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.name == "Static Check & Unit Tests")] | .[0].conclusion // "missing"')
+          echo "Static Check & Unit Tests status: ${STATIC_STATUS}"
+          
+          # Check CodeQL
+          CODEQL_STATUS=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.name == "CodeQL Security Analysis" or .name == "CodeQL")] | .[0].conclusion // "missing"')
+          echo "CodeQL Analysis status: ${CODEQL_STATUS}"
+          
+          # Check Branch Protection / Governance
+          BP_STATUS=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.name == "Branch Protection Verification")] | .[0].conclusion // "missing"')
+          echo "Branch Protection status: ${BP_STATUS}"
+
+          # Fail closed if any required gate is missing or not successful
+          if [ "${STATIC_STATUS}" != "success" ]; then
+            echo "❌ CRITICAL: Mandatory CI check 'Static Check & Unit Tests' did not succeed (status: ${STATIC_STATUS}) for SHA ${{ github.sha }}."
+            exit 1
           fi
+          
+          if [ "${CODEQL_STATUS}" != "success" ] && [ "${CODEQL_STATUS}" != "neutral" ]; then
+            echo "❌ CRITICAL: Mandatory security check 'CodeQL Security Analysis' did not succeed (status: ${CODEQL_STATUS}) for SHA ${{ github.sha }}."
+            exit 1
+          fi
+          
+          echo "✅ All mandatory same-SHA quality gates verified successfully for commit ${{ github.sha }}."
 
       - name: Setup Node.js Environment
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0

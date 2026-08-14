@@ -9,13 +9,33 @@ export class ApiError extends Error {
   }
 }
 
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init.headers as Record<string, string>) || {}),
+  };
+
+  // Attach CSRF token on state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrfToken = getCookie('XSRF-TOKEN') || getCookie('csrfToken');
+    if (csrfToken && !headers['x-csrf-token'] && !headers['X-CSRF-Token']) {
+      headers['x-csrf-token'] = csrfToken;
+    }
+  }
+
   let response: Response;
   try {
     response = await fetch(path, {
       credentials: 'include',
       ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+      headers,
     });
   } catch {
     throw new ApiError('NETWORK_UNAVAILABLE', 0, 'NETWORK_UNAVAILABLE');

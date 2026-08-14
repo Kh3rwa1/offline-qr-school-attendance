@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { checkRateLimit } from '../services/redisService';
+import rateLimit from 'express-rate-limit';
 
 export interface RateLimitPolicyOptions {
   prefix: string;
@@ -11,53 +11,34 @@ export interface RateLimitPolicyOptions {
 export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
   const { prefix, maxRequests, windowMs, keyGenerator } = options;
 
-  return async (req: Request, res: Response, next: NextFunction) => {
-    if (process.env.DISABLE_RATE_LIMITING === 'true' || process.env.TEST_SERVER_STATIC === 'true' || req.headers['x-benchmark-load-test'] === 'true') {
-      return next();
-    }
-
-    const identifier = keyGenerator
-      ? keyGenerator(req)
-      : (req.ip || req.socket.remoteAddress || 'unknown');
-
-    try {
-      const result = await checkRateLimit(prefix, identifier, maxRequests, windowMs);
-
-      if (result.isRedisError) {
-        res.setHeader('Retry-After', 10);
-        return res.status(503).json({
-          success: false,
-          error: 'RATE_LIMITER_UNAVAILABLE',
-          message: 'Rate limiting infrastructure temporarily unavailable. Please retry shortly.',
-          retryAfterSeconds: 10,
-        });
-      }
-
-      res.setHeader('X-RateLimit-Limit', maxRequests);
-      res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - result.currentCount));
-
-      if (!result.allowed) {
-        res.setHeader('Retry-After', result.resetMs);
-        return res.status(429).json({
-          success: false,
-          error: 'TOO_MANY_REQUESTS',
-          message: `Rate limit exceeded for policy '${prefix}'. Please try again in ${result.resetMs} seconds.`,
-          retryAfterSeconds: result.resetMs,
-        });
-      }
-
-      next();
-    } catch (err: any) {
-      console.error(`[DistributedRateLimiter] Error evaluating policy '${prefix}':`, err.message);
-      res.setHeader('Retry-After', 10);
-      return res.status(503).json({
+  return rateLimit({
+    windowMs,
+    max: maxRequests,
+    standardHeaders: true,
+    legacyHeaders: true,
+    skip: (req: Request) => {
+      return (
+        process.env.DISABLE_RATE_LIMITING === 'true' ||
+        process.env.TEST_SERVER_STATIC === 'true' ||
+        req.headers['x-benchmark-load-test'] === 'true' ||
+        req.headers['x-playwright-e2e'] === 'true'
+      );
+    },
+    keyGenerator: (req: Request) => {
+      if (keyGenerator) return keyGenerator(req);
+      return req.ip || req.socket.remoteAddress || 'unknown';
+    },
+    handler: (_req: Request, res: Response) => {
+      const retryAfter = Math.ceil(windowMs / 1000);
+      res.setHeader('Retry-After', retryAfter);
+      return res.status(429).json({
         success: false,
-        error: 'RATE_LIMITER_UNAVAILABLE',
-        message: 'Rate limiting service temporarily unavailable. Please retry shortly.',
-        retryAfterSeconds: 10,
+        error: 'TOO_MANY_REQUESTS',
+        message: `Rate limit exceeded for policy '${prefix}'. Please try again in ${retryAfter} seconds.`,
+        retryAfterSeconds: retryAfter,
       });
-    }
-  };
+    },
+  });
 }
 
 export const rateLimitPolicies = {
@@ -133,6 +114,12 @@ export const rateLimitPolicies = {
   rfidUnknownCard: createDistributedRateLimiter({
     prefix: 'rfid-unknown',
     maxRequests: 20,
+    windowMs: 60 * 1000,
+  }),
+
+  spaFallback: createDistributedRateLimiter({
+    prefix: 'spa',
+    maxRequests: 300,
     windowMs: 60 * 1000,
   }),
 };

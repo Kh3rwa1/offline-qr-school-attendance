@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import fs from 'node:fs';
 import { env } from './src/env';
 import { authRouter } from './src/routes/authRoutes';
 import { schoolRouter } from './src/routes/schoolRoutes';
@@ -15,9 +16,11 @@ import reportRouter from './src/routes/reportRoutes';
 import auditRouter from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
+import { dashboardRouter } from './src/routes/dashboardRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
+import { csrfProtection } from './src/middleware/csrfProtection';
 import { initRedis } from './src/services/redisService';
 
 export async function createApp() {
@@ -65,37 +68,14 @@ export async function createApp() {
     next();
   });
 
-  // CSRF Protection for state-changing requests authenticated via cookies
-  app.use((req, res, next) => {
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.cookies?.session) {
-      const origin = req.headers.origin || req.headers.referer;
-      const host = req.headers.host;
-
-      if (origin && host) {
-        try {
-          const originHost = new URL(origin).host;
-          if (originHost !== host) {
-            return res.status(403).json({
-              error: 'CSRF_ORIGIN_MISMATCH',
-              message: 'Cross-site request forgery protection block',
-            });
-          }
-        } catch {
-          return res.status(403).json({
-            error: 'INVALID_ORIGIN_HEADER',
-            message: 'Invalid origin header on mutating request',
-          });
-        }
-      }
-    }
-    next();
-  });
-
-  // 2. Memory-Based API Rate Limiting Middleware with Active Pruning  // Distributed Rate Limiters
+  // 1. API & Login Rate Limiting Middleware
+  app.use(rateLimitPolicies.generalApi);
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
-  app.use('/api/v1', rateLimitPolicies.generalApi);
+
+  // 2. Production-grade CSRF protection for cookie-authenticated mutating requests
+  app.use('/api', rateLimitPolicies.generalApi, csrfProtection);
 
   // Database migrations and seed data are deployment concerns. Run
   // `npm run migrate` and, only for an explicit development environment,
@@ -104,43 +84,42 @@ export async function createApp() {
   // Metrics middleware & endpoint
   app.use(metricsMiddleware);
 
-  app.get('/metrics', (req, res) => {
+  app.get('/metrics', rateLimitPolicies.generalApi, (req, res) => {
     const result = renderPrometheusMetrics(req);
     if (!result.authorized) {
-      return res.status(401).json({ success: false, error: 'UNAUTHORIZED_METRICS_ACCESS' });
+      return res.status(401).json({ error: 'UNAUTHORIZED' });
     }
     res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    res.send(result.content);
+    return res.send(result.content);
   });
 
-  // 3. Liveness and Readiness Probes
-  app.get(['/livez', '/api/v1/livez'], (_req, res) => {
+  // Health and Readiness Probes
+  app.get(['/api/v1/health', '/healthz'], async (_req, res) => {
     res.status(200).json({ status: 'ok', service: 'school-attendance-backend', timestamp: new Date().toISOString() });
   });
 
-  app.get(['/readyz', '/api/v1/readyz', '/api/v1/health'], async (_req, res) => {
+  app.get('/readyz', async (_req, res) => {
     try {
-      await executeSql('SELECT 1;');
+      await executeSql('SELECT 1');
       res.status(200).json({
-        status: 'ok',
+        status: 'ready',
         service: 'school-attendance-backend',
+        db: 'connected',
         timestamp: new Date().toISOString(),
-        database: 'healthy',
-        env: env.NODE_ENV,
       });
-    } catch (err) {
+    } catch {
       res.status(503).json({
-        status: 'error',
+        status: 'unready',
         service: 'school-attendance-backend',
+        db: 'disconnected',
         timestamp: new Date().toISOString(),
-        database: 'unhealthy',
-        env: env.NODE_ENV,
       });
     }
   });
 
   // API Router registration
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/schools', schoolRouter);
   app.use('/api/v1/schools', academicRouter);
   app.use('/api/v1/schools', studentRouter);
@@ -156,6 +135,15 @@ export async function createApp() {
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
+  // Strict 404 handler for unmatched API routes
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({
+      success: false,
+      error: 'API_ENDPOINT_NOT_FOUND',
+      message: 'The requested API endpoint was not found on this server.',
+    });
+  });
+
   // Development: Vite Middleware / Production Static Assets
   if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
     const { createServer: createViteServer } = await import('vite');
@@ -165,10 +153,20 @@ export async function createApp() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.resolve(process.cwd(), 'dist');
+    const indexHtmlPath = path.resolve(distPath, 'index.html');
+    const indexHtmlContent = fs.existsSync(indexHtmlPath)
+      ? fs.readFileSync(indexHtmlPath, 'utf8')
+      : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';
+
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+
+    // Rate-limited in-memory SPA fallback (zero per-request filesystem I/O)
+    app.get('*', rateLimitPolicies.spaFallback, (req, res, next) => {
+      if (!req.path.startsWith('/api')) {
+        return res.type('html').send(indexHtmlContent);
+      }
+      next();
     });
   }
 

@@ -123,7 +123,10 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     expect(setCookie).toMatch(/Secure/i);
     const loginBody = await login.json();
     expect(loginBody.token).toBeUndefined();
-    cookie = setCookie.split(';')[0];
+    const setCookieHeader = login.headers.get('set-cookie') || '';
+    const rawSetCookies = (login.headers as any).getSetCookie ? (login.headers as any).getSetCookie() : setCookieHeader.split(/,\s*(?=[A-Za-z0-9_-]+=)/);
+    cookie = rawSetCookies.map((c: string) => c.split(';')[0].trim()).filter(Boolean).join('; ');
+    const csrfToken = loginBody.csrfToken;
 
     console.log('[RLS-STEP 2] Fetching /api/v1/auth/me...');
     const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });
@@ -159,28 +162,31 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
       const appRoleSystemAttempt = await appClient.query('SELECT school_id FROM students');
       expect(appRoleSystemAttempt.rows).toHaveLength(0);
       await appClient.query('ROLLBACK');
+    } finally {
+      appClient.release();
+    }
 
-      console.log('[RLS-STEP 6] Testing custom app role...');
-      // Verify random custom application role name cannot bypass tenant isolation
-      await migrationPool.query('DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = \'custom_app_role\') THEN CREATE ROLE custom_app_role LOGIN PASSWORD \'CustomPass123!\'; END IF; END $$;');
-      await migrationPool.query('GRANT USAGE ON SCHEMA public TO custom_app_role; GRANT SELECT ON ALL TABLES IN SCHEMA public TO custom_app_role;');
-      let customClient: pg.Client | undefined;
-      try {
-        const customUrlObj = new URL(appUrl!);
-        customUrlObj.username = 'custom_app_role';
-        customUrlObj.password = 'CustomPass123!';
-        customClient = new pg.Client({ connectionString: customUrlObj.toString() });
-        await customClient.connect();
-        await customClient.query('BEGIN');
-        await customClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
-        const customRoleAttempt = await customClient.query('SELECT school_id FROM students');
-        expect(customRoleAttempt.rows).toHaveLength(0);
-        await customClient.query('ROLLBACK');
-      } catch {
-        // Fallback for environments where custom role cannot connect
-      } finally {
-        if (customClient) await customClient.end().catch(() => undefined);
-      }
+    console.log('[RLS-STEP 6] Testing custom app role...');
+    // Verify random custom application role name cannot bypass tenant isolation
+    await migrationPool.query("DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'custom_app_role') THEN CREATE ROLE custom_app_role LOGIN PASSWORD 'CustomPass123!'; END IF; END $$;");
+    await migrationPool.query('GRANT USAGE ON SCHEMA public TO custom_app_role; GRANT SELECT ON ALL TABLES IN SCHEMA public TO custom_app_role;');
+    let customClient: pg.Client | undefined;
+    try {
+      const customUrlObj = new URL(appUrl!);
+      customUrlObj.username = 'custom_app_role';
+      customUrlObj.password = 'CustomPass123!';
+      customClient = new pg.Client({ connectionString: customUrlObj.toString() });
+      await customClient.connect();
+      await customClient.query('BEGIN');
+      await customClient.query("SELECT set_config('app.is_system', 'true', true), set_config('app.current_school_id', '', true)");
+      const customRoleAttempt = await customClient.query('SELECT school_id FROM students');
+      expect(customRoleAttempt.rows).toHaveLength(0);
+      await customClient.query('ROLLBACK');
+    } catch {
+      // Fallback for environments where custom role cannot connect
+    } finally {
+      if (customClient) await customClient.end().catch(() => undefined);
+    }
 
     console.log('[RLS-STEP 7] Testing systemPool queries...');
     // Ensure attendance_system has attendance_system_rls role
@@ -204,9 +210,6 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     } finally {
       await systemPool.end();
     }
-    } finally {
-      appClient.release();
-    }
 
     console.log('[RLS-STEP 8] Checking login audit log...');
     const loginAudit = await migrationPool.query('SELECT id FROM audit_logs WHERE school_id = $1 AND actor_id = $2 AND action = $3', [schoolA, teacherId, 'USER_LOGIN']);
@@ -214,7 +217,12 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
 
     console.log('[RLS-STEP 9] Creating attendance session...');
     const sessionResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions`, {
-      method: 'POST', headers: { 'content-type': 'application/json', cookie },
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie,
+        'x-csrf-token': csrfToken,
+      },
       body: JSON.stringify({ classSectionId, sessionDate: '2026-08-12', sessionType: 'DAILY' }),
     });
     expect(sessionResponse.status).toBe(201);
@@ -222,7 +230,12 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
 
     console.log('[RLS-STEP 10] Finalizing attendance session...');
     const finalizeResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions/${session.id}/status`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json', cookie },
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        cookie,
+        'x-csrf-token': csrfToken,
+      },
       body: JSON.stringify({ status: 'FINALIZED', autoMarkAbsentForUnmarked: true }),
     });
     expect(finalizeResponse.status).toBe(200);
@@ -255,7 +268,13 @@ describe.skipIf(!enabled)('Production PostgreSQL authentication, RLS and SMS int
     expect(schoolBSettings.rows[0].count).toBe(1);
 
     console.log('[RLS-STEP 14] Testing user logout...');
-    const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, { method: 'POST', headers: { cookie } });
+    const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: {
+        cookie,
+        'x-csrf-token': csrfToken,
+      },
+    });
     expect(logout.status).toBe(200);
     expect(logout.headers.get('set-cookie')).toMatch(/Expires=/i);
     const afterLogout = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { cookie } });

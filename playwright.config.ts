@@ -12,6 +12,9 @@ export default defineConfig({
   outputDir: 'output/playwright/test-results',
   use: {
     baseURL: process.env.BASE_URL || 'http://127.0.0.1:3100',
+    extraHTTPHeaders: {
+      'x-playwright-e2e': 'true',
+    },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

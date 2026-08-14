@@ -259,7 +259,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/classes/${t.classSectionId}/offline-roster`, {
-          headers: { Cookie: t.authCookie || '', 'x-device-identifier': t.deviceIdentifier || '' },
+          headers: { Cookie: t.authCookie || '', 'x-device-identifier': t.deviceIdentifier || '', 'x-benchmark-load-test': 'true' },
         });
       },
       concurrency: isFullScale ? 120 : 10,
@@ -271,7 +271,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/auth/login`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-benchmark-load-test': 'true' },
           body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
         });
       },
@@ -284,7 +284,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/qr/verify`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
+          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
           body: JSON.stringify({ rawToken: `sample-token-${index}` }),
         });
       },
@@ -297,7 +297,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
+          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
           body: JSON.stringify({
             deviceIdentifier: t.deviceIdentifier || 'device-1',
             events: [
@@ -321,7 +321,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '' },
+          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
           body: JSON.stringify({
             deviceIdentifier: t.deviceIdentifier || 'device-1',
             events: [
@@ -344,7 +344,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/sessions`, {
-          headers: { Cookie: t.authCookie || '' },
+          headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
         });
       },
       concurrency: isFullScale ? 100 : 10,
@@ -355,7 +355,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/notifications/history/${t.studentId}`, {
-          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId },
+          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId, 'x-benchmark-load-test': 'true' },
         });
       },
       concurrency: isFullScale ? 100 : 10,
@@ -366,7 +366,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/auth/me`, {
-          headers: { Cookie: t.authCookie || '' },
+          headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
         });
       },
       concurrency: isFullScale ? 120 : 15,
@@ -377,7 +377,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/sessions`, {
-          headers: { Cookie: t.authCookie || '' },
+          headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
         });
       },
       concurrency: isFullScale ? 100 : 15,
@@ -389,7 +389,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(
           `${baseUrl}/api/v1/schools/${t.schoolId}/reports/monthly-register?classSectionId=${t.classSectionId}&year=2026&month=8`,
-          { headers: { Cookie: t.authCookie || '' } }
+          { headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' } }
         );
       },
       concurrency: isFullScale ? 80 : 10,

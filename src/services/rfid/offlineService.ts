@@ -1,7 +1,7 @@
 import { db, withTenantContext } from '../../db';
 import { rfidCredentials, rfidReaders, attendanceSessions, rfidScanEvents, attendanceEvents, attendanceRecords, students } from '../../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
-import { ScanEnvelope } from './scanService';
+import { ScanEnvelope, computePayloadHash } from './scanService';
 import { getRedisClient } from '../redisService';
 import { decryptReaderSecret } from './readerService';
 import { verifyEnvelopeSignature, verifySecureProof, verifyCardProof } from './cryptoService';
@@ -165,7 +165,15 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
 
     const clientEventIds = validEvents.map((e) => e.clientEventId);
     const eEvents = await tx
-      .select({ clientEventId: rfidScanEvents.clientEventId, id: rfidScanEvents.id, decision: rfidScanEvents.decision })
+      .select({
+        clientEventId: rfidScanEvents.clientEventId,
+        id: rfidScanEvents.id,
+        decision: rfidScanEvents.decision,
+        payloadHash: rfidScanEvents.payloadHash,
+        readerId: rfidScanEvents.readerId,
+        nonce: rfidScanEvents.nonce,
+        rejectionCode: rfidScanEvents.rejectionCode,
+      })
       .from(rfidScanEvents)
       .where(and(eq(rfidScanEvents.schoolId, schoolId), inArray(rfidScanEvents.clientEventId, clientEventIds)));
 
@@ -201,11 +209,26 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
   for (const event of validEvents) {
     if (resultsMap.has(event.clientEventId)) continue;
 
-    // Idempotency check
+    // Idempotency check with strict payload hash verification
     const existing = existingEventMap.get(event.clientEventId);
     if (existing) {
+      const incomingHash = computePayloadHash(event);
+      if (
+        (existing.payloadHash && existing.payloadHash !== incomingHash) ||
+        (existing.readerId && existing.readerId !== event.readerId) ||
+        (existing.nonce && existing.nonce !== event.nonce)
+      ) {
+        resultsMap.set(event.clientEventId, {
+          decision: 'REPLAY_REJECTED',
+          rejectionCode: 'PAYLOAD_HASH_MISMATCH',
+          scanEventId: existing.id,
+          processingLatencyMs: 0,
+        });
+        continue;
+      }
       resultsMap.set(event.clientEventId, {
         decision: existing.decision,
+        rejectionCode: existing.rejectionCode || undefined,
         scanEventId: existing.id,
         processingLatencyMs: 0,
       });

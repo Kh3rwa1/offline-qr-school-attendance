@@ -75,6 +75,7 @@ jobs:
       - name: Install Trivy Security Scanner Binary
         run: |
           curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.deb" -o /tmp/trivy.deb
+          echo "cf1e32ec8d4d8823e023096a28cadb14f5b5123ce03f201fb633c5b76aa712dd  /tmp/trivy.deb" | sha256sum --check --status
           sudo dpkg -i /tmp/trivy.deb
           trivy --version
 
@@ -83,7 +84,7 @@ jobs:
           trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3.27.9
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem

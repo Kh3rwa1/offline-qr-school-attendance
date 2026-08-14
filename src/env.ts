@@ -75,8 +75,17 @@ export function validateProductionEnv() {
       }
 
       // Auth database isolation: require dedicated auth database in production
-      if (!process.env.AUTH_DATABASE_URL) {
+      const authDbUrl = process.env.AUTH_DATABASE_URL;
+      if (!authDbUrl) {
         throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
+      }
+      try {
+        const parsedAuthUrl = new URL(authDbUrl);
+        if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
+          throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
+        }
+      } catch (err: any) {
+        throw new Error(`FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${err.message}`);
       }
     }
   }

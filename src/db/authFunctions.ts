@@ -23,6 +23,9 @@ function getAuthPool(): pg.Pool | null {
     });
     return authPoolInstance;
   }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL_AUTH_DATABASE_CONFIG: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL.');
+  }
   return null;
 }
 
@@ -52,22 +55,20 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
 } | null> {
   const pool = getAuthPool();
   if (pool) {
-    try {
-      const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
-      if (res.rows.length === 0) return null;
-      const row = res.rows[0];
-      return {
-        id: row.id,
-        fullName: row.full_name,
-        phoneNumber: row.phone_number,
-        passwordHash: row.password_hash,
-        status: row.status,
-      };
-    } catch (err) {
-      if (process.env.NODE_ENV === 'production') {
-        throw err;
-      }
-    }
+    const res = await pool.query('SELECT id, full_name, phone_number, password_hash, status FROM public.lookup_auth_user_by_phone($1::text)', [phoneNumber]);
+    if (res.rows.length === 0) return null;
+    const row = res.rows[0];
+    return {
+      id: row.id,
+      fullName: row.full_name,
+      phoneNumber: row.phone_number,
+      passwordHash: row.password_hash,
+      status: row.status,
+    };
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }
 
   // Fallback for PGlite / in-memory unit tests
@@ -108,19 +109,17 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
 }>> {
   const pool = getAuthPool();
   if (pool) {
-    try {
-      const res = await pool.query('SELECT school_id, school_name, role, status FROM public.get_user_school_memberships($1::uuid)', [userId]);
-      return res.rows.map((row: any) => ({
-        schoolId: row.school_id,
-        schoolName: row.school_name,
-        role: row.role,
-        status: row.status,
-      }));
-    } catch (err) {
-      if (process.env.NODE_ENV === 'production') {
-        throw err;
-      }
-    }
+    const res = await pool.query('SELECT school_id, school_name, role, status FROM public.get_user_school_memberships($1::uuid)', [userId]);
+    return res.rows.map((row: any) => ({
+      schoolId: row.school_id,
+      schoolName: row.school_name,
+      role: row.role,
+      status: row.status,
+    }));
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }
 
   try {

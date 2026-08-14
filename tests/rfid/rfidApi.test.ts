@@ -501,4 +501,82 @@ describe('RFID Router & Middleware Integration Suite', () => {
     expect(res.body.results[0].decision).toBe('REPLAY_REJECTED');
     expect(res.body.results[0].rejectionCode).toBe('NONCE_REUSED');
   });
+
+  it('POST /:schoolId/rfid/offline/sync rejects resubmission of clientEventId with modified payload (PAYLOAD_HASH_MISMATCH)', async () => {
+    const fixedEventId = `idempotent_mismatch_evt_${Date.now()}`;
+    const initialEnvelope = buildSignedEnvelope(credentialDigest1, {
+      isOffline: true,
+      sequenceNumber: 320,
+      clientEventId: fixedEventId,
+    });
+
+    const timestamp1 = new Date().toISOString();
+    const batchPayload1 = JSON.stringify({ events: [initialEnvelope] });
+    const batchSig1 = crypto.createHmac('sha256', hmacSecret).update(batchPayload1).digest('hex');
+
+    const res1 = await invokeOfflineSyncEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': batchSig1,
+      'x-reader-timestamp': timestamp1,
+    }, { events: [initialEnvelope] });
+
+    expect(res1.statusCode).toBe(200);
+    expect(res1.body.results[0].decision).toBe('ACCEPTED');
+
+    // Resubmit same clientEventId but with different direction or timestamp (tampered/altered payload)
+    const tamperedEnvelope = buildSignedEnvelope(credentialDigest1, {
+      isOffline: true,
+      sequenceNumber: 320,
+      clientEventId: fixedEventId,
+      direction: 'EXIT',
+    });
+
+    const timestamp2 = new Date().toISOString();
+    const batchPayload2 = JSON.stringify({ events: [tamperedEnvelope] });
+    const batchSig2 = crypto.createHmac('sha256', hmacSecret).update(batchPayload2).digest('hex');
+
+    const res2 = await invokeOfflineSyncEndpoint(schoolId, {
+      'x-reader-id': readerId,
+      'x-reader-signature': batchSig2,
+      'x-reader-timestamp': timestamp2,
+    }, { events: [tamperedEnvelope] });
+
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.results[0].decision).toBe('REPLAY_REJECTED');
+    expect(res2.body.results[0].rejectionCode).toBe('PAYLOAD_HASH_MISMATCH');
+  });
+
+  it('Strictly throws when AUTH_DATABASE_URL is malformed in production env validation', async () => {
+    const { validateProductionEnv } = await import('../../src/env');
+    const oldEnv = { ...process.env };
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.COMPONENT = 'web';
+      process.env.SESSION_SECRET = 'a'.repeat(32);
+      process.env.CSRF_SECRET = 'a'.repeat(32);
+      process.env.REDIS_KEY_HMAC_SECRET = 'a'.repeat(32);
+      process.env.RFID_HMAC_SECRET = 'a'.repeat(32);
+      process.env.RFID_CARD_MASTER_KEY = 'a'.repeat(32);
+      process.env.KMS_MASTER_KEY = 'a'.repeat(32);
+      process.env.AUTH_DATABASE_URL = 'invalid-malformed-database-url';
+
+      expect(() => validateProductionEnv()).toThrow('FATAL_AUTH_DATABASE_URL_MALFORMED');
+    } finally {
+      process.env = oldEnv;
+    }
+  });
+
+  it('Strictly throws in production mode when auth database pool is unavailable instead of falling back', async () => {
+    const { lookupAuthUserByPhone, getUserSchoolMemberships } = await import('../../src/db/authFunctions');
+    const oldEnv = { ...process.env };
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.AUTH_DATABASE_URL = '';
+
+      await expect(lookupAuthUserByPhone('9999999999')).rejects.toThrow('FATAL_AUTH_DATABASE_CONFIG');
+      await expect(getUserSchoolMemberships('00000000-0000-4000-8000-000000000001')).rejects.toThrow('FATAL_AUTH_DATABASE_CONFIG');
+    } finally {
+      process.env = oldEnv;
+    }
+  });
 });

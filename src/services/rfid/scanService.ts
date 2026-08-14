@@ -64,7 +64,7 @@ export interface ScanResult {
   processingLatencyMs: number;
 }
 
-function computePayloadHash(envelope: ScanEnvelope): string {
+export function computePayloadHash(envelope: ScanEnvelope): string {
   const canonical = [
     envelope.version,
     envelope.schoolId,

@@ -323,35 +323,27 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         }
       }
 
-      // Check if card-level AES-CMAC proof is required for this reader or environment
-      const readerCap = (readerObj?.securityCapability || '').toUpperCase();
-      const requiresCardProof =
-        process.env.RFID_REQUIRE_CARD_PROOF === 'true' ||
-        readerCap.includes('DESFIRE') ||
-        readerCap.includes('EV2') ||
-        readerCap.includes('EV3') ||
-        Boolean(envelope.cardProof);
-
-      if (requiresCardProof) {
-        if (!envelope.cardProof || !envelope.cardUid || envelope.readerChallenge === undefined || envelope.transactionCounter === undefined) {
-          if (process.env.NODE_ENV !== 'test' || envelope.cardProof === 'missing') {
-            return createRejection('REPLAY_REJECTED', 'MISSING_CARD_PROOF');
-          }
-        } else {
-          const masterKeyHex = process.env.RFID_CARD_MASTER_KEY || process.env.RFID_HMAC_SECRET || '';
-          if (!masterKeyHex) {
-            return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
-          }
-          const cardProofValid = verifyCardProof({
-            cardUidHex: envelope.cardUid,
-            readerChallengeHex: envelope.readerChallenge,
-            transactionCounter: envelope.transactionCounter,
-            cardProofHex: envelope.cardProof,
-            masterKeyHex,
-          });
-          if (!cardProofValid) {
-            return createRejection('REPLAY_REJECTED', 'INVALID_CARD_PROOF');
-          }
+      // In SECURE mode, card-level AES-CMAC proof is strictly mandatory
+      if (!envelope.cardProof || !envelope.cardUid || envelope.readerChallenge === undefined || envelope.transactionCounter === undefined) {
+        if (process.env.NODE_ENV !== 'test' || envelope.cardProof === 'missing') {
+          return createRejection('REPLAY_REJECTED', 'MISSING_CARD_PROOF');
+        }
+      } else {
+        const masterKeyHex =
+          process.env.RFID_CARD_MASTER_KEY ||
+          (process.env.NODE_ENV === 'test' ? (process.env.RFID_HMAC_SECRET || 'test-card-master-key-32-chars-length-env') : '');
+        if (!masterKeyHex) {
+          return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
+        }
+        const cardProofValid = verifyCardProof({
+          cardUidHex: envelope.cardUid,
+          readerChallengeHex: envelope.readerChallenge,
+          transactionCounter: envelope.transactionCounter,
+          cardProofHex: envelope.cardProof,
+          masterKeyHex,
+        });
+        if (!cardProofValid) {
+          return createRejection('REPLAY_REJECTED', 'INVALID_CARD_PROOF');
         }
       }
     }

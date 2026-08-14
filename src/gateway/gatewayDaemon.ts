@@ -1,6 +1,7 @@
 import http from 'http';
 import { GatewayAdapter } from '../services/rfid/adapters/gatewayAdapter';
 import { OutboxQueue } from './outboxQueue';
+import { computeCanonicalSignature } from '../services/rfid/cryptoService';
 import path from 'path';
 
 export interface GatewayDaemonOptions {
@@ -9,6 +10,7 @@ export interface GatewayDaemonOptions {
   serverBaseUrl: string;
   sharedSecret: string;
   cardMasterKey?: string;
+  storageKey?: string;
   readerName?: string;
   storageDir?: string;
   port?: number;
@@ -24,11 +26,23 @@ export class GatewayDaemon {
 
   constructor(options: GatewayDaemonOptions) {
     this.config = options;
+
+    if (process.env.NODE_ENV === 'production') {
+      if (!options.sharedSecret || options.sharedSecret.length < 32) {
+        throw new Error('GATEWAY_FATAL: sharedSecret must be at least 32 bytes in production');
+      }
+      if (!options.cardMasterKey || options.cardMasterKey.length < 32) {
+        throw new Error('GATEWAY_FATAL: cardMasterKey must be at least 32 bytes in production');
+      }
+    }
+
     const storageDir = options.storageDir || path.join(process.cwd(), 'gateway-data');
+    const storageKey = options.storageKey || process.env.GATEWAY_STORAGE_KEY || process.env.RFID_OUTBOX_ENCRYPTION_KEY || options.sharedSecret;
     this.queue = new OutboxQueue({
       storageDir,
-      deviceEncryptionKey: options.sharedSecret,
+      deviceEncryptionKey: storageKey,
     });
+
     this.adapter = new GatewayAdapter({
       schoolId: options.schoolId,
       readerId: options.readerId,
@@ -36,6 +50,7 @@ export class GatewayDaemon {
       cardMasterKey: options.cardMasterKey,
       readerName: options.readerName,
       useSimulator: options.useSimulator,
+      outboxQueue: this.queue,
     });
   }
 
@@ -85,6 +100,7 @@ export class GatewayDaemon {
       securityMode: 'SECURE',
       attendanceSessionId: options.attendanceSessionId,
     });
+
     try {
       // Attempt immediate online scan submission
       const response = await fetch(`${this.config.serverBaseUrl}/api/v1/${this.config.schoolId}/rfid/scans`, {
@@ -97,11 +113,14 @@ export class GatewayDaemon {
         },
         body: JSON.stringify(envelope),
       });
+
       if (response.ok) {
         return await response.json();
       }
+      // Server returned 4xx or 5xx — preserve in durable outbox for reconciliation
+      this.queue.enqueue({ ...envelope, isOffline: true });
     } catch {
-      // Network failure — enqueue to durable local SQLite outbox
+      // Network unreachable — enqueue to durable local SQLite outbox
       this.queue.enqueue({ ...envelope, isOffline: true });
     }
     return { decision: 'ENQUEUED_OFFLINE', envelope };
@@ -118,18 +137,24 @@ export class GatewayDaemon {
       const items = this.queue.reserveBatch(25);
       if (items.length === 0) return;
 
+      const timestamp = new Date().toISOString();
+      const payload = {
+        batchId: `batch_${Date.now()}`,
+        readerId: this.config.readerId,
+        schoolId: this.config.schoolId,
+        events: items.map((i) => i.envelope),
+      };
+
+      const signature = computeCanonicalSignature(payload, this.config.sharedSecret);
+
       try {
-        const payload = {
-          batchId: `batch_${Date.now()}`,
-          readerId: this.config.readerId,
-          schoolId: this.config.schoolId,
-          events: items.map((i) => i.envelope),
-        };
-        const res = await fetch(`${this.config.serverBaseUrl}/api/v1/${this.config.schoolId}/rfid/offline-sync`, {
+        const res = await fetch(`${this.config.serverBaseUrl}/api/v1/${this.config.schoolId}/rfid/offline/sync`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-reader-id': this.config.readerId,
+            'x-reader-timestamp': timestamp,
+            'x-reader-signature': signature,
           },
           body: JSON.stringify(payload),
         });
@@ -147,20 +172,34 @@ export class GatewayDaemon {
 
 // Runnable CLI entrypoint
 if (process.argv[1]?.includes('gatewayDaemon') || process.argv[1]?.includes('gateway.cjs')) {
-  const schoolId = process.env.SCHOOL_ID || '00000000-0000-0000-0000-000000000001';
-  const readerId = process.env.RFID_READER_ID || 'gateway_reader_01';
+  const schoolId = process.env.SCHOOL_ID || (process.env.NODE_ENV === 'production' ? '' : '00000000-0000-0000-0000-000000000001');
+  const readerId = process.env.RFID_READER_ID || (process.env.NODE_ENV === 'production' ? '' : 'gateway_reader_01');
   const serverBaseUrl = process.env.APP_URL || 'http://localhost:3000';
-  const sharedSecret = process.env.RFID_HMAC_SECRET || 'gateway-hmac-secret-32-chars-long-env';
+  const sharedSecret = process.env.RFID_HMAC_SECRET;
   const cardMasterKey = process.env.RFID_CARD_MASTER_KEY;
+  const storageKey = process.env.GATEWAY_STORAGE_KEY || process.env.RFID_OUTBOX_ENCRYPTION_KEY;
   const port = parseInt(process.env.GATEWAY_PORT || '4000', 10);
   const useSimulator = process.env.USE_SIMULATOR === 'true' || process.env.NODE_ENV !== 'production';
+
+  if (!schoolId || !readerId) {
+    console.error('Fatal: SCHOOL_ID and RFID_READER_ID environment variables are required.');
+    process.exit(1);
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!sharedSecret || !cardMasterKey) {
+      console.error('Fatal: RFID_HMAC_SECRET and RFID_CARD_MASTER_KEY are required in production mode.');
+      process.exit(1);
+    }
+  }
 
   const daemon = new GatewayDaemon({
     schoolId,
     readerId,
     serverBaseUrl,
-    sharedSecret,
-    cardMasterKey,
+    sharedSecret: sharedSecret || 'test-secret-32-chars-length-environment',
+    cardMasterKey: cardMasterKey || 'test-card-master-key-32-chars-long-env',
+    storageKey,
     port,
     useSimulator,
   });

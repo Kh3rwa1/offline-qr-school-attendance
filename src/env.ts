@@ -16,6 +16,8 @@ const envSchema = z.object({
   
   KMS_MASTER_KEY: z.string().optional(),
   AUTH_DATABASE_URL: z.string().optional(),
+  RFID_CARD_MASTER_KEY: z.string().optional(),
+  RFID_REQUIRE_CARD_PROOF: z.string().default('true'),
   // RFID Configuration
   ALLOW_LEGACY_RFID_UID_MODE: z.string().default('false'),
   RFID_HMAC_SECRET: z.string().optional(),
@@ -43,10 +45,10 @@ export function validateProductionEnv() {
     if (process.env.ALLOW_TEST_BYPASS === 'true') {
       throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_TEST_BYPASS is strictly prohibited in production mode');
     }
+    if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
+      throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
+    }
     if (parsed.COMPONENT === 'web') {
-      if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
-        throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
-      }
       const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
       if (!csrfSecret || csrfSecret.length < 32) {
         throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
@@ -58,6 +60,10 @@ export function validateProductionEnv() {
       const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
       if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
         throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+      }
+      const rfidCardMasterKey = process.env.RFID_CARD_MASTER_KEY;
+      if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
+        throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode for DESFire card proof validation');
       }
 
       // KMS configuration: require explicit key management in production

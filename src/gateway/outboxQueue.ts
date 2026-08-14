@@ -108,6 +108,11 @@ export class OutboxQueue {
       );
       CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
       CREATE INDEX IF NOT EXISTS idx_outbox_next_attempt ON outbox_events(status, next_attempt_at);
+
+      CREATE TABLE IF NOT EXISTS gateway_counters (
+        counter_name TEXT PRIMARY KEY NOT NULL,
+        counter_value INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // Prepare statements for performance
@@ -368,6 +373,43 @@ export class OutboxQueue {
   clear(): void {
     this.isQuarantined = false;
     this.stmtCache.deleteAll.run();
+  }
+
+  /**
+   * Transactionally reads and increments a named counter in the SQLite database.
+   * Provides durable monotonic sequence numbers that survive process restarts.
+   */
+  getNextCounter(counterName: string): number {
+    if (this.isQuarantined || !this.db) return 1;
+    const transaction = this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO gateway_counters (counter_name, counter_value)
+        VALUES (?, 1)
+        ON CONFLICT(counter_name) DO UPDATE SET counter_value = counter_value + 1
+      `).run(counterName);
+      const row = this.db.prepare(`
+        SELECT counter_value FROM gateway_counters WHERE counter_name = ?
+      `).get(counterName);
+      return row ? Number(row.counter_value) : 1;
+    });
+    return transaction();
+  }
+
+  getCounter(counterName: string): number {
+    if (this.isQuarantined || !this.db) return 0;
+    const row = this.db.prepare(`
+      SELECT counter_value FROM gateway_counters WHERE counter_name = ?
+    `).get(counterName);
+    return row ? Number(row.counter_value) : 0;
+  }
+
+  setCounter(counterName: string, value: number): void {
+    if (this.isQuarantined || !this.db) return;
+    this.db.prepare(`
+      INSERT INTO gateway_counters (counter_name, counter_value)
+      VALUES (?, ?)
+      ON CONFLICT(counter_name) DO UPDATE SET counter_value = ?
+    `).run(counterName, value, value);
   }
 
   /**

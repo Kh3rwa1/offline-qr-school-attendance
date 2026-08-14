@@ -25,18 +25,27 @@ export function encryptReaderSecret(secret: string): string {
 }
 
 export function decryptReaderSecret(encryptedStr: string): string {
-  if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
+  if (!encryptedStr || !encryptedStr.includes(':')) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('READER_SECRET_DECRYPT_FAILED: Plaintext or malformed reader secret in production database');
+    }
+    return encryptedStr;
+  }
   try {
     const masterKey = getReaderEncryptionKey();
-    const [ivHex, tagHex, cipherHex] = encryptedStr.split(':');
+    const parts = encryptedStr.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid ciphertext structure (expected iv:tag:ciphertext)');
+    }
+    const [ivHex, tagHex, cipherHex] = parts;
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const cipherText = Buffer.from(cipherHex, 'hex');
     const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
     decipher.setAuthTag(tag);
     return decipher.update(cipherText).toString('utf8') + decipher.final('utf8');
-  } catch {
-    return encryptedStr;
+  } catch (err: any) {
+    throw new Error(`READER_SECRET_DECRYPT_FAILED: Authentication tag mismatch or corrupted reader secret: ${err.message}`);
   }
 }
 

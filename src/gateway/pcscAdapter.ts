@@ -30,6 +30,8 @@ export interface PcscTransport {
   transceiveApdu(cmd: ApduCommand, signal?: AbortSignal): Promise<ApduResponse>;
   listReaders(): Promise<string[]>;
   isCardPresent(): Promise<boolean>;
+  getCardAtr(): Promise<string | null>;
+  getReaderName(): string;
 }
 
 export class SimulatedPcscTransport implements PcscTransport {
@@ -40,6 +42,8 @@ export class SimulatedPcscTransport implements PcscTransport {
   private simulatedSw1: number = 0x91;
   private simulatedSw2: number = 0x00;
   private shouldFailApdu: boolean = false;
+  private currentRndB: Buffer | null = null;
+  private currentCardUid: string = '04A1B2C3D4E5F6';
 
   constructor(readerNames?: string[]) {
     this.readers = readerNames || ['ACS ACR1252U 0', 'Omnikey 5422 1'];
@@ -47,6 +51,10 @@ export class SimulatedPcscTransport implements PcscTransport {
 
   setCardPresent(present: boolean) {
     this.cardPresent = present;
+  }
+
+  setSimulatedCardUid(uid: string) {
+    this.currentCardUid = uid;
   }
 
   setSimulatedResponse(data: Buffer, sw1: number = 0x91, sw2: number = 0x00) {
@@ -79,8 +87,16 @@ export class SimulatedPcscTransport implements PcscTransport {
     return [...this.readers];
   }
 
+  getReaderName(): string {
+    return this.readers[0] || 'Simulated DESFire EV2 Reader';
+  }
+
   async isCardPresent(): Promise<boolean> {
     return this.connected && this.cardPresent;
+  }
+
+  async getCardAtr(): Promise<string | null> {
+    return this.cardPresent ? '3B 81 80 01 80 80' : null;
   }
 
   async transceiveApdu(cmd: ApduCommand, signal?: AbortSignal): Promise<ApduResponse> {
@@ -108,14 +124,34 @@ export class SimulatedPcscTransport implements PcscTransport {
         let data = this.activeSimulatedResponse || Buffer.from([0x00, 0x00, 0x00, 0x00]);
 
         if (cmd.ins === 0xa4) {
+          // Select Application (AID)
           sw1 = 0x90;
           sw2 = 0x00;
+          data = Buffer.alloc(0);
+        } else if (cmd.ins === 0xca) {
+          // ISO Get Card UID
+          sw1 = 0x90;
+          sw2 = 0x00;
+          data = Buffer.from(this.currentCardUid, 'hex');
+        } else if (cmd.ins === 0x71) {
+          // AuthenticateEV2First: card generates RndB and returns e(RndB)
+          this.currentRndB = crypto.randomBytes(16);
+          sw1 = 0x91;
+          sw2 = 0xaf; // Additional frame expected (DESFire AF)
+          data = this.currentRndB; // Card challenge
+        } else if (cmd.ins === 0xaf) {
+          // AuthenticateEV2NonFirst: card verifies RndB' and returns e(RndA' || TI)
+          const ti = crypto.randomBytes(4);
+          const rndAPrime = crypto.randomBytes(16);
+          sw1 = 0x91;
+          sw2 = 0x00; // Success
+          data = Buffer.concat([rndAPrime, ti]);
         } else if (cmd.ins === 0xaa) {
           sw1 = 0x91;
           sw2 = 0x7e;
         }
 
-        const isSuccess = (sw1 === 0x91 && sw2 === 0x00) || (sw1 === 0x90 && sw2 === 0x00);
+        const isSuccess = (sw1 === 0x91 && sw2 === 0x00) || (sw1 === 0x90 && sw2 === 0x00) || (sw1 === 0x91 && sw2 === 0xaf);
         resolve({ sw1, sw2, data, isSuccess });
       }, 10);
 
@@ -268,6 +304,17 @@ export class NativePcscTransport implements PcscTransport {
     return Array.from(this.availableReaders.keys());
   }
 
+  getReaderName(): string {
+    return this.selectedReader || (Array.from(this.availableReaders.keys())[0]) || 'Native PC/SC Reader';
+  }
+
+  async getCardAtr(): Promise<string | null> {
+    if (!this.readerHandle || !this.readerHandle.atr) return null;
+    return Buffer.isBuffer(this.readerHandle.atr)
+      ? this.readerHandle.atr.toString('hex').toUpperCase().match(/../g)?.join(' ') || null
+      : String(this.readerHandle.atr);
+  }
+
   async isCardPresent(): Promise<boolean> {
     return this.connected && this.cardInserted && this.cardProtocol !== null;
   }
@@ -378,6 +425,22 @@ export class PcscAdapter {
 
   isConnected(): boolean {
     return this.transport.isConnected();
+  }
+
+  async isCardPresent(): Promise<boolean> {
+    return this.transport.isCardPresent();
+  }
+
+  getReaderName(): string {
+    return this.transport.getReaderName();
+  }
+
+  async getCardAtr(): Promise<string | null> {
+    return this.transport.getCardAtr();
+  }
+
+  getTransport(): PcscTransport {
+    return this.transport;
   }
 
   async transceiveApdu(cmd: ApduCommand, signal?: AbortSignal): Promise<ApduResponse> {

@@ -77,8 +77,11 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
           docker push ${{ env.IMAGE_NAME }}:latest
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }})
+          RAW_DIGEST=$(docker inspect --format='{{index .Id}}' ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }})
           echo "PUBLISHED_DIGEST=${DIGEST}" >> $GITHUB_ENV
-          echo "Published digest: ${DIGEST}"
+          echo "RAW_DIGEST=${RAW_DIGEST}" >> $GITHUB_ENV
+          echo "Published image ref: ${DIGEST}"
+          echo "Raw digest: ${RAW_DIGEST}"
 
       - name: Install Cosign for Keyless Image Signing
         if: github.event_name != 'pull_request'
@@ -94,7 +97,7 @@ jobs:
         uses: actions/attest-build-provenance@c074443f15f8d4a485b8471966b69b1571f91634 # v2.2.3
         with:
           subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ env.PUBLISHED_DIGEST }}
+          subject-digest: ${{ env.RAW_DIGEST }}
           push-to-registry: true
 
       - name: Generate SHA-256 Checksum Manifest

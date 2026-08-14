@@ -37,21 +37,26 @@ if (parsedEnv.NODE_ENV === 'production' && parsedEnv.COMPONENT === 'web' && !par
 
 export function validateProductionEnv() {
   const parsed = envSchema.parse(process.env);
-  if (parsed.NODE_ENV === 'production' && parsed.COMPONENT === 'web') {
-    if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
-      throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
+  if (parsed.NODE_ENV === 'production') {
+    if (process.env.ALLOW_TEST_BYPASS === 'true') {
+      throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_TEST_BYPASS is strictly prohibited in production mode');
     }
-    const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
-    if (!csrfSecret || csrfSecret.length < 32) {
-      throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
-    }
-    const hmacSecret = process.env.REDIS_KEY_HMAC_SECRET;
-    if (!hmacSecret || hmacSecret.length < 32) {
-      throw new Error('REDIS_KEY_HMAC_SECRET must be at least 32 characters in production mode');
-    }
-    const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
-    if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
-      throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+    if (parsed.COMPONENT === 'web') {
+      if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
+        throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
+      }
+      const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
+      if (!csrfSecret || csrfSecret.length < 32) {
+        throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
+      }
+      const hmacSecret = process.env.REDIS_KEY_HMAC_SECRET;
+      if (!hmacSecret || hmacSecret.length < 32) {
+        throw new Error('REDIS_KEY_HMAC_SECRET must be at least 32 characters in production mode');
+      }
+      const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
+      if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
+        throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+      }
     }
   }
   return parsed;

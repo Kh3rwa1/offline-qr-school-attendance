@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
+import { getRedisClient } from '../services/redisService';
 
 export interface RateLimitPolicyOptions {
   prefix: string;
@@ -11,17 +13,40 @@ export interface RateLimitPolicyOptions {
 export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
   const { prefix, maxRequests, windowMs, keyGenerator } = options;
 
+  let store: any = undefined;
+
+  // Use RedisStore when REDIS_URL is provided or Redis client is active
+  if (process.env.REDIS_URL) {
+    store = new RedisStore({
+      sendCommand: async (...args: string[]) => {
+        const client = getRedisClient();
+        if (client) {
+          return client.call(args[0], ...args.slice(1)) as any;
+        }
+        if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+          throw new Error(`REDIS_RATE_LIMITER_UNAVAILABLE: Active Redis client is mandatory for production rate limit policy '${prefix}'.`);
+        }
+        return 1 as any;
+      },
+      prefix: `rl:${prefix}:`,
+    });
+  } else if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+    throw new Error(`REDIS_RATE_LIMITER_REQUIRED: REDIS_URL is mandatory for distributed policy '${prefix}' in production mode.`);
+  }
+
   return rateLimit({
     windowMs,
     max: maxRequests,
     standardHeaders: true,
     legacyHeaders: true,
+    store,
     validate: { xForwardedForHeader: false, default: false },
     skip: (req: Request) => {
       if (process.env.DISABLE_RATE_LIMITING === 'true' || process.env.TEST_SERVER_STATIC === 'true') {
         return true;
       }
-      const isTestBypassAllowed = process.env.NODE_ENV !== 'production' || process.env.ALLOW_TEST_BYPASS === 'true';
+      // Strictly require non-production mode AND explicit ALLOW_TEST_BYPASS flag
+      const isTestBypassAllowed = process.env.NODE_ENV !== 'production' && process.env.ALLOW_TEST_BYPASS === 'true';
       if (isTestBypassAllowed) {
         return (
           req.headers['x-benchmark-load-test'] === 'true' ||
@@ -100,7 +125,9 @@ export const rateLimitPolicies = {
     maxRequests: 120,
     windowMs: 60 * 1000,
     keyGenerator: (req) => {
-      const readerId = req.headers['x-reader-id'] as string || req.ip || 'unknown';
+      // Do not trust unverified client header alone; use authenticated reader context if present or client IP
+      const readerContext = (req as any).readerContext;
+      const readerId = readerContext?.readerId || req.ip || req.socket.remoteAddress || 'unknown';
       return `reader:${readerId}`;
     },
   }),

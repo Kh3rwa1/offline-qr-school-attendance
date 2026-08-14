@@ -8,7 +8,7 @@ import { timingSafeVerifyPassword, lookupAuthUserByPhone, getUserSchoolMembershi
 import { createSession, invalidateSession } from '../auth/session';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { createAuditLog } from '../services/auditLogService';
-import { generateCsrfToken, setCsrfCookies, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } from '../middleware/csrfProtection';
+import { generateCsrfToken, setCsrfCookies, clearCsrfCookies, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } from '../middleware/csrfProtection';
 
 export const authRouter = Router();
 
@@ -113,14 +113,12 @@ authRouter.post('/logout', requireAuth, async (req: AuthenticatedRequest, res: R
   } catch (error) {
     console.error('Logout security operation failed:', error);
     res.clearCookie('session', sessionCookieOptions);
-    res.clearCookie(CSRF_COOKIE_NAME);
-    res.clearCookie(CSRF_SIG_COOKIE_NAME);
+    clearCsrfCookies(res);
     return res.status(500).json({ error: 'LOGOUT_AUDIT_FAILED' });
   }
 
   res.clearCookie('session', sessionCookieOptions);
-  res.clearCookie(CSRF_COOKIE_NAME);
-  res.clearCookie(CSRF_SIG_COOKIE_NAME);
+  clearCsrfCookies(res);
   return res.json({ status: 'ok', message: 'Logged out successfully' });
 });
 

@@ -8,6 +8,7 @@ import {
   executeTransactionalImport,
 } from '../services/importService';
 import { createAuditLog } from '../services/auditLogService';
+import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 
@@ -29,6 +30,7 @@ importRouter.get(
 // POST /api/v1/schools/:schoolId/students/import-xlsx
 importRouter.post(
   '/:schoolId/students/import-xlsx',
+  rateLimitPolicies.import,
   requireAuth,
   requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
@@ -72,6 +74,7 @@ importRouter.post(
 // POST /api/v1/schools/:schoolId/students/import-confirm
 importRouter.post(
   '/:schoolId/students/import-confirm',
+  rateLimitPolicies.import,
   requireAuth,
   requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),

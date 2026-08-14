@@ -182,4 +182,30 @@ describe('Production CSRF Protection Test Suite', () => {
       process.env.ALLOW_TEST_BYPASS = oldAllow;
     }
   });
+
+  it('9. Rejects pre-login unauthenticated raw token once session cookie is present', async () => {
+    const sessionToken = 'authenticated-session-123';
+    // Generate raw token without session binding (simulating pre-login token)
+    const { token: rawToken, signature: rawSignature } = generateCsrfToken();
+
+    const address = server.address() as any;
+    const hostStr = `127.0.0.1:${address.port}`;
+
+    const res = await fetch(`${baseUrl}/api/v1/schools/00000000-0000-0000-0000-000000000000/attendance/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Host: hostStr,
+        Origin: `http://${hostStr}`,
+        Cookie: `session=${sessionToken}; ${CSRF_COOKIE_NAME}=${rawToken}; ${CSRF_SIG_COOKIE_NAME}=${rawSignature}`,
+        [CSRF_HEADER_NAME]: rawToken,
+      },
+      body: JSON.stringify({ classSectionId: '00000000-0000-0000-0000-000000000001' }),
+    });
+
+    // Fails closed because pre-login token lacks session binding
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('CSRF_TOKEN_INVALID');
+  });
 });

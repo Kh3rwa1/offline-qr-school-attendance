@@ -9,6 +9,7 @@ import { offlineService } from '../services/rfid/offlineService';
 import { db } from '../db';
 import { rfidScanEvents, rfidReaders } from '../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 export const rfidRouter = Router();
 
@@ -18,6 +19,7 @@ export const rfidRouter = Router();
 rfidRouter.post(
   '/:schoolId/rfid/scans',
   readerAuthMiddleware,
+  rateLimitPolicies.rfidScan,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
     try {
       const clientEventId = req.body.clientEventId;
@@ -60,6 +62,7 @@ rfidRouter.post(
 // ============================================================================
 rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll',
+  rateLimitPolicies.rfidEnrollment,
   requireAuth,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {

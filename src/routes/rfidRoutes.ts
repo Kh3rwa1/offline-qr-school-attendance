@@ -262,7 +262,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/register',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.registerReader({
@@ -304,7 +304,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const reader = await readerService.getReaderById(req.params.readerId, schoolId);
@@ -319,7 +319,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/approve',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.approveReader(req.params.readerId, schoolId, user.id);
@@ -333,7 +333,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/suspend',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.suspendReader(
@@ -352,7 +352,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/revoke',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.revokeReader(
@@ -371,7 +371,7 @@ rfidRouter.post(
 rfidRouter.patch(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const reader = await readerService.updateReaderConfig(req.params.readerId, schoolId, req.body);
@@ -385,7 +385,7 @@ rfidRouter.patch(
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId/health',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
@@ -477,7 +477,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/provision',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const provisioning = await readerService.provisionReader(req.params.readerId, schoolId, user.id);

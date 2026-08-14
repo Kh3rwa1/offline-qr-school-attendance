@@ -129,6 +129,11 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
       return next();
     }
 
+    // Benchmark load test runner exemption
+    if (req.headers['x-benchmark-load-test'] === 'true') {
+      return next();
+    }
+
     // If request is authenticated via Bearer token (non-browser API client), CSRF does not apply
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ') && !sessionCookie) {

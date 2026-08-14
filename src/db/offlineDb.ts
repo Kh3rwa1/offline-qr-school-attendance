@@ -91,6 +91,12 @@ export class AttendanceOfflineDatabase extends Dexie {
       sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
       syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp, failureClass',
     });
+    this.version(4).stores({
+      rosters: 'studentId, [schoolId+classSectionId], sha256TokenHash, schoolId, classSectionId',
+      sessions: 'id, clientSessionId, [schoolId+classSectionId], [classSectionId+sessionDate], sessionDate, status',
+      sessionRosters: '++id, [sessionId+studentId], sessionId, studentId, status',
+      syncOutbox: 'clientEventId, [schoolId+sessionId], syncStatus, clientTimestamp, failureClass',
+    });
   }
 }
 

@@ -97,8 +97,9 @@ export const TeacherDashboard: React.FC = () => {
 
       const todayStr = new Date().toISOString().slice(0, 10);
       const activeSession = await offlineDb.sessions
-        .where('[classSectionId+sessionDate]')
-        .equals([selectedClassId, todayStr])
+        .where('[schoolId+classSectionId]')
+        .equals([activeSchoolId, selectedClassId])
+        .filter((s) => s.sessionDate === todayStr && s.status !== 'FINALIZED')
         .first();
 
       if (activeSession) {

@@ -157,7 +157,7 @@ export const TeacherDashboard: React.FC = () => {
       });
 
       if (result.success && result.student) {
-        showFeedback({ kind: 'success', text: `Recorded PRESENT for ${result.student.name} (Roll ${result.student.rollNumber})` });
+        showFeedback({ kind: 'success', text: `${result.student.name} (Roll ${result.student.rollNumber}) marked PRESENT` });
         const updated = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
         setSessionRoster(updated);
         await refreshOutbox();
@@ -208,7 +208,7 @@ export const TeacherDashboard: React.FC = () => {
             <span className="bg-emerald-500/30 text-emerald-200 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-emerald-400/30">
               Offline QR Attendance
             </span>
-            <h2 className="text-2xl sm:text-3xl font-black mt-2">Classroom Attendance Station</h2>
+            <h2 className="text-2xl sm:text-3xl font-black mt-2">Offline QR Attendance</h2>
             <p className="text-xs text-emerald-200 mt-1">
               Offline IndexedDB optical scanning, instant USB wedge capture, and guaranteed reconciliation
             </p>
@@ -315,7 +315,7 @@ export const TeacherDashboard: React.FC = () => {
               <input
                 value={scanInput}
                 onChange={(e) => setScanInput(e.target.value)}
-                placeholder="Scan student QR token via USB wedge (or press Enter)…"
+                placeholder="USB scanner token (press Enter)"
                 className="flex-1 rounded-xl bg-slate-800 border border-slate-700 p-3 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               />
               <button className="px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-md transition-colors">

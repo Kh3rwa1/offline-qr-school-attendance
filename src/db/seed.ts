@@ -147,6 +147,8 @@ export async function seedDatabase() {
   // Standard passwords for seed
   const adminPassHash = await hashPassword('SchoolAdminPassword123!');
   const teacherPassHash = await hashPassword('TeacherPassword123!');
+  const rfidOpPassHash = await hashPassword('RfidOpPassword123!');
+  const reportViewerPassHash = await hashPassword('ReportViewerPassword123!');
 
   // --- SCHOOL A STAFF ---
   // School A Admin
@@ -226,32 +228,74 @@ export async function seedDatabase() {
     }).onConflictDoNothing();
   }
 
-  // School A Teacher 2
-  const [teacherA2] = await db
+  // School A RFID Operator
+  let [rfidOpA] = await db
     .insert(users)
     .values({
-      fullName: 'Prabir Roy',
+      fullName: 'Prabir Roy (RFID Station)',
       phoneNumber: '+919100000003',
-      passwordHash: teacherPassHash,
+      passwordHash: rfidOpPassHash,
       status: 'ACTIVE',
     })
     .onConflictDoNothing()
     .returning();
 
-  if (teacherA2) {
+  if (!rfidOpA) {
+    [rfidOpA] = await db.select().from(users).where(eq(users.phoneNumber, '+919100000003'));
+  }
+
+  if (rfidOpA) {
+    await db
+      .update(users)
+      .set({ status: 'ACTIVE', passwordHash: rfidOpPassHash })
+      .where(eq(users.id, rfidOpA.id));
+
     await db.insert(schoolMemberships).values({
       schoolId: schoolA.id,
-      userId: teacherA2.id,
-      role: 'TEACHER',
+      userId: rfidOpA.id,
+      role: 'RFID_OPERATOR',
       status: 'ACTIVE',
     }).onConflictDoNothing();
 
-    await db.insert(teacherProfiles).values({
+    await db
+      .update(schoolMemberships)
+      .set({ role: 'RFID_OPERATOR', status: 'ACTIVE' })
+      .where(and(eq(schoolMemberships.schoolId, schoolA.id), eq(schoolMemberships.userId, rfidOpA.id)));
+  }
+
+  // School A Report Viewer / Auditor
+  let [viewerA] = await db
+    .insert(users)
+    .values({
+      fullName: 'District Inspector (Audit)',
+      phoneNumber: '+919100000004',
+      passwordHash: reportViewerPassHash,
+      status: 'ACTIVE',
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (!viewerA) {
+    [viewerA] = await db.select().from(users).where(eq(users.phoneNumber, '+919100000004'));
+  }
+
+  if (viewerA) {
+    await db
+      .update(users)
+      .set({ status: 'ACTIVE', passwordHash: reportViewerPassHash })
+      .where(eq(users.id, viewerA.id));
+
+    await db.insert(schoolMemberships).values({
       schoolId: schoolA.id,
-      userId: teacherA2.id,
-      employeeId: 'EMP-A-02',
-      designation: 'Assistant Teacher (English)',
+      userId: viewerA.id,
+      role: 'REPORT_VIEWER',
+      status: 'ACTIVE',
     }).onConflictDoNothing();
+
+    await db
+      .update(schoolMemberships)
+      .set({ role: 'REPORT_VIEWER', status: 'ACTIVE' })
+      .where(and(eq(schoolMemberships.schoolId, schoolA.id), eq(schoolMemberships.userId, viewerA.id)));
   }
 
   // --- SCHOOL B STAFF ---

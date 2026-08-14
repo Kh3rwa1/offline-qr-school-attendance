@@ -53,17 +53,17 @@ export const TopBar: React.FC = () => {
             </span>
           )}
 
-          {outboxCount > 0 && (
-            <button
-              onClick={() => void syncNow()}
-              disabled={!isOnline || isSyncing}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold transition-colors disabled:opacity-50"
-              id="sync-now-topbar-btn"
-            >
-              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Syncing…' : `Sync ${outboxCount}`}
-            </button>
-          )}
+          <span className="text-[10px] text-slate-500 font-bold">{outboxCount} unsynced</span>
+
+          <button
+            onClick={() => void syncNow()}
+            disabled={!isOnline || isSyncing}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold transition-colors disabled:opacity-50"
+            id="sync-now-topbar-btn"
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Synchronizing…' : 'Synchronize now'}
+          </button>
         </div>
 
         {/* User profile */}

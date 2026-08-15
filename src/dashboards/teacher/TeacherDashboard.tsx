@@ -771,7 +771,9 @@ export const TeacherDashboard: React.FC = () => {
               {cameraError && (
                 <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
                   <AlertCircle className="w-10 h-10 text-amber-400" />
-                  <p className="text-sm font-semibold max-w-xs">{cameraError}</p>
+                  <p className="text-sm font-semibold max-w-xs">
+                    {cameraStatus === 'permission_denied' ? t('cameraDenied') : cameraError}
+                  </p>
                   <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)}>
                     {t('retryCamera')}
                   </Button>

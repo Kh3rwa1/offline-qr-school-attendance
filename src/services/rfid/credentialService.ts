@@ -1,6 +1,6 @@
 import { withTenantContext } from '../../db';
 import { rfidCredentials, students } from '../../db/schema';
-import { eq, and, inArray, desc, lt, isNotNull } from 'drizzle-orm';
+import { eq, and, inArray, desc, lt, isNotNull, sql } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
 import { redactCredentialDigest } from './cryptoService';
 
@@ -122,15 +122,31 @@ export async function suspendCredential(credentialId: string, schoolId: string, 
   });
 }
 
-export async function reactivateCredential(credentialId: string, schoolId: string, actorId?: string) {
+export async function reactivateCredential(credentialId: string, schoolId: string, reason?: string, actorId?: string) {
   return withTenantContext(schoolId, async (tx) => {
+    const existing = await tx
+      .select()
+      .from(rfidCredentials)
+      .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)))
+      .limit(1);
+
+    if (existing.length === 0) {
+      const err: any = new Error('CARD_NOT_FOUND: RFID credential not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (existing[0].status !== 'SUSPENDED') {
+      const err: any = new Error(`CARD_NOT_SUSPENDED: Cannot reactivate card with status ${existing[0].status}`);
+      err.statusCode = 409;
+      throw err;
+    }
+
     const [credential] = await tx
       .update(rfidCredentials)
       .set({ status: 'ACTIVE' })
       .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId), eq(rfidCredentials.status, 'SUSPENDED')))
       .returning();
-
-    if (!credential) throw new Error('Credential not found or not SUSPENDED');
 
     await createAuditLog({
       schoolId,
@@ -138,6 +154,7 @@ export async function reactivateCredential(credentialId: string, schoolId: strin
       action: 'RFID_CREDENTIAL_REACTIVATED',
       resourceId: credentialId,
       resourceType: 'RFID_CREDENTIAL',
+      metadata: { reason: reason || 'Reactivated by operator/admin' },
     }, tx);
     return credential;
   });
@@ -247,6 +264,71 @@ export async function lookupActiveCredential(schoolId: string, credentialDigest:
   });
 }
 
+import { encodeCursor, decodeCursor, parseLimit } from '../paginationHelper';
+
+export async function listAllCredentials(
+  schoolId: string,
+  options?: { limit?: number | string | null; cursor?: string | null }
+) {
+  const limit = parseLimit(options?.limit, 50, 200);
+  const decoded = decodeCursor(options?.cursor);
+
+  return withTenantContext(schoolId, async (tx) => {
+    let conditions: any[] = [eq(rfidCredentials.schoolId, schoolId)];
+
+    if (decoded) {
+      const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+      conditions.push(
+        sql`(${rfidCredentials.createdAt} < ${cursorTime} OR (${rfidCredentials.createdAt} = ${cursorTime} AND ${rfidCredentials.id} < ${decoded.id}))`
+      );
+    }
+
+    const query = tx
+      .select({
+        id: rfidCredentials.id,
+        studentId: rfidCredentials.studentId,
+        studentName: students.name,
+        studentCode: students.studentCode,
+        credentialDigest: rfidCredentials.credentialDigest,
+        securityMode: rfidCredentials.securityMode,
+        keyVersion: rfidCredentials.keyVersion,
+        status: rfidCredentials.status,
+        issuedAt: rfidCredentials.createdAt,
+        expiresAt: rfidCredentials.expiresAt,
+      })
+      .from(rfidCredentials)
+      .leftJoin(students, eq(rfidCredentials.studentId, students.id))
+      .where(and(...conditions))
+      .orderBy(desc(rfidCredentials.createdAt), desc(rfidCredentials.id))
+      .limit(limit + 1);
+
+    const rows = await query;
+    const hasMore = rows.length > limit;
+    const records = hasMore ? rows.slice(0, limit) : rows;
+
+    let nextCursor: string | null = null;
+    if (hasMore && records.length > 0) {
+      const last = records[records.length - 1];
+      nextCursor = encodeCursor({
+        id: last.id,
+        timestamp: last.issuedAt ? new Date(last.issuedAt).toISOString() : undefined,
+      });
+    }
+
+    const sanitized = records.map((c: any) => ({
+      ...c,
+      credentialDigest: redactCredentialDigest(c.credentialDigest),
+    }));
+
+    return Object.assign(sanitized, {
+      items: sanitized,
+      nextCursor,
+      hasMore,
+      limit,
+    });
+  });
+}
+
 export async function getCredentialHistory(schoolId: string, studentId: string) {
   return withTenantContext(schoolId, async (tx) => {
     const credentials = await tx
@@ -336,6 +418,7 @@ export const credentialService = {
   getCredentialHistory,
   getHistory: (studentId: string, schoolId: string) => getCredentialHistory(schoolId, studentId),
   getCredentialById,
+  listAllCredentials,
   bulkEnroll: async (paramsOrEntries: any, schoolId?: string) => {
     if (Array.isArray(paramsOrEntries) && typeof schoolId === 'string') {
       const formatted = paramsOrEntries.map((e) => ({

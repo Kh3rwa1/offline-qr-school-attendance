@@ -65,7 +65,6 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           CSRF_SECRET: ci-session-secret-012345678901234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           REDIS_URL: redis://127.0.0.1:6379
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
@@ -78,7 +77,6 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           CSRF_SECRET: ci-session-secret-012345678901234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
@@ -92,7 +90,6 @@ jobs:
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           CSRF_SECRET: ci-session-secret-012345678901234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long

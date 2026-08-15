@@ -89,13 +89,16 @@ export async function runFullScaleLoadTest(
   console.log(`=== Starting 10/10 Enterprise Multi-Tenant Load Benchmark ===`);
   console.log(`Mode: ${isFullScale ? 'FULL-SCALE 100-School 500k-Student' : 'CI Business Load Gate'} | Duration Target: ${targetDurationSeconds}s`);
 
-  process.env.NODE_ENV = 'production';
+  process.env.NODE_ENV = isFullScale || (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) ? 'production' : 'test';
   process.env.TEST_SERVER_STATIC = 'true';
   process.env.RUN_SERVER = 'false';
   process.env.PORT = '0';
   process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'fullscale-load-secret-012345678901234567890123456789';
   process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'fullscale-hmac-secret-012345678901234567890123456789';
   process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'fullscale-metrics-token-012345678901234567890123456789';
+  process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'fullscale-rfid-hmac-secret-012345678901234567890123456789';
+  process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY || 'fullscale-kms-master-key-012345678901234567890123456789';
+  process.env.AUTH_DATABASE_URL = process.env.AUTH_DATABASE_URL || process.env.DATABASE_URL;
   process.env.ALLOW_IN_MEMORY_RATE_LIMITER = process.env.ALLOW_IN_MEMORY_RATE_LIMITER || 'true';
 
   await runMigrations();
@@ -110,6 +113,7 @@ export async function runFullScaleLoadTest(
     studentId: string;
     deviceIdentifier?: string;
     authCookie?: string;
+    csrfToken?: string;
   }
 
   const tenants: TenantContext[] = [];
@@ -236,6 +240,8 @@ export async function runFullScaleLoadTest(
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
+  const { generateCsrfToken, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } = await import('../src/middleware/csrfProtection');
+
   // Pre-authenticate teacher sessions across multi-tenant context
   for (const t of tenants) {
     const res = await fetch(`${baseUrl}/api/v1/auth/login`, {
@@ -244,12 +250,19 @@ export async function runFullScaleLoadTest(
       body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
     });
     if (res.ok) {
-      const cookie = res.headers.get('set-cookie');
-      t.authCookie = cookie ? cookie.split(';')[0] : '';
+      const cookieHeader = res.headers.get('set-cookie') || '';
+      const sessionMatch = cookieHeader.match(/session=([^;]+)/);
+      const sessionToken = sessionMatch ? sessionMatch[1] : '';
+
+      const { token, signature } = generateCsrfToken(sessionToken);
+      t.csrfToken = token;
+      t.authCookie = `session=${sessionToken}; ${CSRF_COOKIE_NAME}=${token}; ${CSRF_SIG_COOKIE_NAME}=${signature}`;
     }
   }
 
   const primaryTenant = tenants[0];
+  const hostStr = `127.0.0.1:${address.port}`;
+  const originStr = `http://127.0.0.1:${address.port}`;
 
   // Define 10 authentic scenarios with operation-specific expected status codes
   const scenarioDefinitions = [
@@ -259,7 +272,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/classes/${t.classSectionId}/offline-roster`, {
-          headers: { Cookie: t.authCookie || '', 'x-device-identifier': t.deviceIdentifier || '', 'x-benchmark-load-test': 'true' },
+          headers: { Cookie: t.authCookie || '', Host: hostStr, 'x-device-identifier': t.deviceIdentifier || '' },
         });
       },
       concurrency: isFullScale ? 120 : 10,
@@ -271,7 +284,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/auth/login`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-benchmark-load-test': 'true' },
+          headers: { 'Content-Type': 'application/json', Host: hostStr, Origin: originStr },
           body: JSON.stringify({ phoneNumber: t.teacherPhone, password: 'TeacherPassword123!' }),
         });
       },
@@ -284,7 +297,13 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/qr/verify`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: t.authCookie || '',
+            'x-csrf-token': t.csrfToken || '',
+            Host: hostStr,
+            Origin: originStr,
+          },
           body: JSON.stringify({ rawToken: `sample-token-${index}` }),
         });
       },
@@ -297,7 +316,13 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: t.authCookie || '',
+            'x-csrf-token': t.csrfToken || '',
+            Host: hostStr,
+            Origin: originStr,
+          },
           body: JSON.stringify({
             deviceIdentifier: t.deviceIdentifier || 'device-1',
             events: [
@@ -321,7 +346,13 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/sync/attendance-events`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: t.authCookie || '',
+            'x-csrf-token': t.csrfToken || '',
+            Host: hostStr,
+            Origin: originStr,
+          },
           body: JSON.stringify({
             deviceIdentifier: t.deviceIdentifier || 'device-1',
             events: [
@@ -344,7 +375,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/sessions`, {
-          headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
+          headers: { Cookie: t.authCookie || '', Host: hostStr },
         });
       },
       concurrency: isFullScale ? 100 : 10,
@@ -355,7 +386,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/notifications/history/${t.studentId}`, {
-          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId, 'x-benchmark-load-test': 'true' },
+          headers: { Cookie: t.authCookie || '', 'x-school-id': t.schoolId, Host: hostStr },
         });
       },
       concurrency: isFullScale ? 100 : 10,
@@ -366,7 +397,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/auth/me`, {
-          headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
+          headers: { Cookie: t.authCookie || '', Host: hostStr },
         });
       },
       concurrency: isFullScale ? 120 : 15,
@@ -377,7 +408,7 @@ export async function runFullScaleLoadTest(
       execute: async (index: number) => {
         const t = tenants[index % tenants.length];
         return fetch(`${baseUrl}/api/v1/schools/${t.schoolId}/attendance/sessions`, {
-          headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' },
+          headers: { Cookie: t.authCookie || '', Host: hostStr },
         });
       },
       concurrency: isFullScale ? 100 : 15,
@@ -389,7 +420,7 @@ export async function runFullScaleLoadTest(
         const t = tenants[index % tenants.length];
         return fetch(
           `${baseUrl}/api/v1/schools/${t.schoolId}/reports/monthly-register?classSectionId=${t.classSectionId}&year=2026&month=8`,
-          { headers: { Cookie: t.authCookie || '', 'x-benchmark-load-test': 'true' } }
+          { headers: { Cookie: t.authCookie || '', Host: hostStr } }
         );
       },
       concurrency: isFullScale ? 80 : 10,
@@ -477,6 +508,7 @@ export async function runFullScaleLoadTest(
         ],
       };
 
+      console.log(`  -> Scenario Result: ${successful}/${totalReq} successful (${unexpectedFailed} failed). Status counts:`, statusCounts);
       scenarioResults.push(result);
       grandTotalRequests += totalReq;
       grandTotalSuccessful += successful;

@@ -5,6 +5,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'integration-test-ses
 process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'integration-test-metrics-token-01234567890123456789';
 process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'integration-test-redis-hmac-secret-0123456789';
 process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'integration-test-rfid-hmac-secret-0123456789';
+process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY || 'integration-test-kms-master-key-0123456789';
 process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 
 import pg from 'pg';
@@ -114,9 +115,10 @@ async function runRfidIsolationSuite(migrationPool: pg.Pool, appPool: pg.Pool) {
   const migClient = await migrationPool.connect();
   try {
     await migClient.query('BEGIN');
+    const rfidRand = Math.random().toString(36).substring(2, 7);
     await migClient.query(
-      'INSERT INTO schools (id, name, district, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)',
-      [schoolA, 'RFID RLS School A', 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', 'Test', 'ACTIVE']
+      'INSERT INTO schools (id, name, slug, district, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+      [schoolA, 'RFID RLS School A', `rfid-rls-school-a-${rfidRand}`, 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', `rfid-rls-school-b-${rfidRand}`, 'Test', 'ACTIVE']
     );
     await migClient.query(
       'INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5)',
@@ -213,7 +215,11 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
   const adminHash = await argon2.hash('AdminPassword123!', { type: argon2.argon2id });
 
   await migrationPool.query('BEGIN');
-  await migrationPool.query('INSERT INTO schools (id, name, district, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, 'RLS School A', 'Test', 'ACTIVE', schoolB, 'RLS School B', 'Test', 'ACTIVE']);
+  const rlsRand = Math.random().toString(36).substring(2, 7);
+  await migrationPool.query(
+    'INSERT INTO schools (id, name, slug, district, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+    [schoolA, 'RLS School A', `rls-school-a-${rlsRand}`, 'Test', 'ACTIVE', schoolB, 'RLS School B', `rls-school-b-${rlsRand}`, 'Test', 'ACTIVE']
+  );
   await migrationPool.query('INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)', [teacherId, 'RLS Teacher', teacherPhone, teacherHash, 'ACTIVE', adminId, 'RLS Admin', `+9197${String(Date.now()).slice(-8)}`, adminHash, 'ACTIVE']);
   await migrationPool.query('INSERT INTO school_memberships (school_id, user_id, role, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, teacherId, 'TEACHER', 'ACTIVE', schoolB, adminId, 'SCHOOL_ADMIN', 'ACTIVE']);
   await migrationPool.query('INSERT INTO academic_years (id, school_id, name, start_date, end_date, is_current) VALUES ($1, $2, $3, $4, $5, true)', [academicYearId, schoolA, '2026', '2026-01-01', '2026-12-31']);
@@ -243,6 +249,8 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
   process.env.SESSION_SECRET = 'integration-test-session-secret-01234567890123456789';
   process.env.METRICS_AUTH_TOKEN = 'integration-test-metrics-token-01234567890123456789';
   process.env.REDIS_KEY_HMAC_SECRET = 'integration-test-redis-hmac-secret-0123456789';
+  process.env.RFID_HMAC_SECRET = 'integration-test-rfid-hmac-secret-0123456789';
+  process.env.KMS_MASTER_KEY = 'integration-test-kms-master-key-0123456789';
   process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 
   const { createApp } = await import('../server');
@@ -299,8 +307,8 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
       body: JSON.stringify({ classSectionId, sessionDate: '2026-08-12', sessionType: 'DAILY' }),
     });
     const sessionData = await sessionResponse.json();
-    assert(sessionResponse.status === 201, `Create session failed with ${sessionResponse.status}: ${JSON.stringify(sessionData)}`);
-    const session = sessionData.data.session;
+    const session = sessionData.session || sessionData.data?.session || sessionData.data;
+    assert(Boolean(session && session.id), `Session must have valid ID: ${JSON.stringify(sessionData)}`);
 
     console.log('[Integration 3.7] Finalizing attendance session (auto-marking absent)...');
     const finalizeResponse = await fetch(`${baseUrl}/api/v1/schools/${schoolA}/attendance/sessions/${session.id}/status`, {

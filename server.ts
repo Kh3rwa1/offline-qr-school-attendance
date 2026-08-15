@@ -13,10 +13,12 @@ import { qrRouter } from './src/routes/qrRoutes';
 import attendanceRouter from './src/routes/attendanceRoutes';
 import syncRouter from './src/routes/syncRoutes';
 import reportRouter from './src/routes/reportRoutes';
-import auditRouter from './src/routes/auditRoutes';
+import auditRouter, { platformAuditRouter } from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
 import { dashboardRouter } from './src/routes/dashboardRoutes';
+import { systemHealthRouter } from './src/routes/systemHealthRoutes';
+import { publicRouter } from './src/routes/publicRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -26,6 +28,13 @@ import { initRedis } from './src/services/redisService';
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
     throw new Error('FATAL: METRICS_AUTH_TOKEN environment variable must be set in production mode.');
+  }
+
+  if (process.env.NODE_ENV !== 'production' && !process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
+    const { runMigrations } = await import('./src/db/migrate');
+    const { seedDatabase } = await import('./src/db/seed');
+    await runMigrations();
+    await seedDatabase();
   }
 
   await initRedis();
@@ -48,8 +57,8 @@ export async function createApp() {
   app.use((req, res, next) => {
     const cspScriptSrc =
       process.env.NODE_ENV === 'production'
-        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data:; frame-ancestors 'self';"
-        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data:; frame-ancestors 'self';";
+        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'self';"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'self';";
 
     res.setHeader('Content-Security-Policy', cspScriptSrc);
     // HSTS (Strict-Transport-Security) - 1 year
@@ -69,12 +78,11 @@ export async function createApp() {
   });
 
   // 1. API & Login Rate Limiting Middleware
-  app.use(rateLimitPolicies.generalApi);
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
 
-  // 2. Production-grade CSRF protection for cookie-authenticated mutating requests
+  // 2. Production-grade CSRF protection & general API rate limiting (strictly single execution under /api)
   app.use('/api', rateLimitPolicies.generalApi, csrfProtection);
 
   // Database migrations and seed data are deployment concerns. Run
@@ -84,7 +92,7 @@ export async function createApp() {
   // Metrics middleware & endpoint
   app.use(metricsMiddleware);
 
-  app.get('/metrics', rateLimitPolicies.generalApi, (req, res) => {
+  app.get('/metrics', (req, res) => {
     const result = renderPrometheusMetrics(req);
     if (!result.authorized) {
       return res.status(401).json({ error: 'UNAUTHORIZED' });
@@ -93,8 +101,8 @@ export async function createApp() {
     return res.send(result.content);
   });
 
-  // Health and Readiness Probes
-  app.get(['/api/v1/health', '/healthz'], async (_req, res) => {
+  // Health, Liveness, and Readiness Probes
+  app.get(['/api/v1/health', '/healthz', '/livez'], async (_req, res) => {
     res.status(200).json({ status: 'ok', service: 'school-attendance-backend', timestamp: new Date().toISOString() });
   });
 
@@ -118,6 +126,7 @@ export async function createApp() {
   });
 
   // API Router registration
+  app.use('/api/v1/public', publicRouter);
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/schools', schoolRouter);
@@ -125,13 +134,15 @@ export async function createApp() {
   app.use('/api/v1/schools', studentRouter);
   app.use('/api/v1/schools', importRouter);
   app.use('/api/v1/schools', qrRouter);
-  app.use('/api/v1/schools', rateLimitPolicies.rfidScan ?? rateLimitPolicies.generalApi);
   app.use('/api/v1/schools', rfidRouter);
   app.use('/api/v1/schools/:schoolId/attendance', attendanceRouter);
-  app.use('/api/v1/schools/:schoolId/sync', syncRouter);
+  app.use('/api/v1/schools/:schoolId/sync', rateLimitPolicies.sync, syncRouter);
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);
-  app.use('/api/v1/schools/:schoolId/reports', reportRouter);
+  app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
+  app.use('/api/v1/audit', platformAuditRouter);
+  app.use('/api/v1/system', rateLimitPolicies.generalApi, systemHealthRouter);
+  app.use('/api/v1/schools/:schoolId/notifications', notificationRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
@@ -155,6 +166,14 @@ export async function createApp() {
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     const indexHtmlPath = path.resolve(distPath, 'index.html');
+    if (!fs.existsSync(indexHtmlPath)) {
+      if (process.env.NODE_ENV === 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
+        throw new Error(
+          'FATAL_PRODUCTION_ASSET_MISSING: dist/index.html was not found. Build the frontend production bundle before starting the server.'
+        );
+      }
+    }
+
     const indexHtmlContent = fs.existsSync(indexHtmlPath)
       ? fs.readFileSync(indexHtmlPath, 'utf8')
       : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';

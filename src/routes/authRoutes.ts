@@ -8,7 +8,7 @@ import { timingSafeVerifyPassword, lookupAuthUserByPhone, getUserSchoolMembershi
 import { createSession, invalidateSession } from '../auth/session';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { createAuditLog } from '../services/auditLogService';
-import { generateCsrfToken, setCsrfCookies, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } from '../middleware/csrfProtection';
+import { generateCsrfToken, setCsrfCookies, clearCsrfCookies, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } from '../middleware/csrfProtection';
 
 export const authRouter = Router();
 
@@ -20,7 +20,7 @@ const loginSchema = z.object({
 
 const sessionCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: process.env.COOKIE_SECURE === 'true' || (process.env.NODE_ENV === 'production' && process.env.ALLOW_HTTP_COOKIE !== 'true'),
   sameSite: 'lax' as const,
   path: '/',
 };
@@ -38,7 +38,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'INVALID_INPUT', details: parsed.error.format() });
   }
 
-  const { phoneNumber, password, schoolId } = parsed.data;
+  const { phoneNumber: rawPhone, password, schoolId } = parsed.data;
+  const phoneNumber = rawPhone.trim().startsWith('+') ? rawPhone.trim() : `+91${rawPhone.trim().replace(/\D/g, '')}`;
   const user = await lookupAuthUserByPhone(phoneNumber);
   const isValidPassword = await timingSafeVerifyPassword(user?.passwordHash, password);
 
@@ -48,21 +49,23 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
   try {
     const memberships = await getUserSchoolMemberships(user.id);
-    const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
+    const isSuperAdmin = user.platformRole === 'SUPER_ADMIN' || memberships.some((m) => m.role === 'SUPER_ADMIN');
     let targetSchoolId = schoolId;
 
     if (targetSchoolId) {
       const assigned = memberships.some((m) => m.schoolId === targetSchoolId);
       if (!assigned && !isSuperAdmin) throw new Error('SCHOOL_ACCESS_DENIED');
-    } else {
+    } else if (memberships.length > 0) {
       targetSchoolId = memberships[0]?.schoolId;
+    } else if (isSuperAdmin) {
+      targetSchoolId = undefined;
+    } else {
+      throw new Error('SCHOOL_ACCESS_DENIED');
     }
-
-    if (!targetSchoolId) throw new Error('SCHOOL_ACCESS_DENIED');
 
     const session = await createSession(user.id, targetSchoolId);
     await createAuditLog({
-      schoolId: targetSchoolId,
+      schoolId: targetSchoolId || undefined,
       actorId: user.id,
       action: 'USER_LOGIN',
       resourceType: 'USER',
@@ -82,16 +85,19 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         id: user.id,
         fullName: user.fullName,
         phoneNumber: user.phoneNumber,
+        platformRole: user.platformRole || (isSuperAdmin ? 'SUPER_ADMIN' : null),
       },
+      platformRole: user.platformRole || (isSuperAdmin ? 'SUPER_ADMIN' : null),
+      activeSchoolId: targetSchoolId || null,
       memberships,
       csrfToken,
     });
   } catch (error: any) {
     if (error?.message === 'SCHOOL_ACCESS_DENIED') {
-      return res.status(403).json({ error: 'SCHOOL_ACCESS_DENIED' });
+      return res.status(403).json({ error: 'SCHOOL_ACCESS_DENIED', message: 'You do not have access to any school' });
     }
     console.error('Login transaction failed:', error);
-    return res.status(500).json({ error: 'LOGIN_FAILED' });
+    return res.status(500).json({ error: 'LOGIN_FAILED', message: 'Login operation failed' });
   }
 });
 
@@ -113,14 +119,12 @@ authRouter.post('/logout', requireAuth, async (req: AuthenticatedRequest, res: R
   } catch (error) {
     console.error('Logout security operation failed:', error);
     res.clearCookie('session', sessionCookieOptions);
-    res.clearCookie(CSRF_COOKIE_NAME);
-    res.clearCookie(CSRF_SIG_COOKIE_NAME);
+    clearCsrfCookies(res);
     return res.status(500).json({ error: 'LOGOUT_AUDIT_FAILED' });
   }
 
   res.clearCookie('session', sessionCookieOptions);
-  res.clearCookie(CSRF_COOKIE_NAME);
-  res.clearCookie(CSRF_SIG_COOKIE_NAME);
+  clearCsrfCookies(res);
   return res.json({ status: 'ok', message: 'Logged out successfully' });
 });
 
@@ -142,12 +146,23 @@ authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest,
   }
 
   const { schoolId } = parsed.data;
+  const isSuperAdmin = req.user?.platformRole === 'SUPER_ADMIN' || req.sessionContext?.platformRole === 'SUPER_ADMIN' || req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
+
   const memberships = await getUserSchoolMemberships(req.user!.id);
   const targetMembership = memberships.find((m) => m.schoolId === schoolId);
-  const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
 
   if (!targetMembership && !isSuperAdmin) {
     return res.status(403).json({ error: 'MEMBERSHIP_NOT_FOUND', message: 'User does not belong to target school' });
+  }
+
+  // Check target school active status
+  const [targetSchool] = await db
+    .select({ id: schools.id, status: schools.status })
+    .from(schools)
+    .where(eq(schools.id, schoolId));
+
+  if (!targetSchool || targetSchool.status !== 'ACTIVE') {
+    return res.status(403).json({ error: 'SCHOOL_NOT_ACTIVE', message: 'Target school is not active' });
   }
 
   const session = await createSession(req.user!.id, schoolId);

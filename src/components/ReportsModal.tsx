@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Student, Language } from '../types';
 import {
   Download,
@@ -16,9 +16,9 @@ import {
   Check,
   Info,
   Layers,
-  Sparkle
 } from 'lucide-react';
 import { estimateSmsSegments } from '../services/sms/smsUtils';
+import { Button } from './shared/Button';
 
 interface ReportsModalProps {
   students: Student[];
@@ -83,7 +83,24 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
   const totalEnrolled = students.length;
 
   const handleExportXlsx = () => {
-    alert('Generating & Downloading Official Attendance Register XLSX file...');
+    const csvContent = [
+      ['Roll Number', 'Student Name', 'Status', 'Time', 'Method'].join(','),
+      ...students.map((s) => [
+        `"${s.rollNumber}"`,
+        `"${s.name}"`,
+        `"${s.status}"`,
+        `"${(s as any).time || ''}"`,
+        `"${(s as any).method || 'Standard'}"`,
+      ].join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance_register_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Helper to estimate actual message length and segment count for a student
@@ -106,7 +123,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
     return { text, charCount, isUnicode, segments: segmentCount };
   };
 
-  // Calculate segment progress for template character limits (70 for Bengali, 160 for English)
+  // Calculate segment progress for template character limits
   const getTemplateProgress = (text: string) => {
     const { charCount, isUnicode, segmentCount } = estimateSmsSegments(text);
     
@@ -160,45 +177,46 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
   const estSegmentPerMsg = customLanguage === 'bn' ? 2 : 1;
   const estMonthlySegments = estMonthlyAbsences * estSegmentPerMsg;
 
-  // Standard pricing estimation in INR (₹0.12 per segment)
+  // Standard pricing estimation in INR
   const segmentCost = 0.12;
   const estMonthlyCost = estMonthlySegments * segmentCost;
   const extrapolatedMonthlyCost = monthlyExtrapolatedSegments * segmentCost;
 
   return (
-    <div id="reports-modal" className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex-1 flex flex-col gap-6">
+    <div id="reports-modal" className="app-card p-6 flex-1 flex flex-col gap-6 text-left">
       {/* Header and Download Button */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+          <h2 className="text-2xl font-extrabold text-ink tracking-tight font-display">
             {language === 'bn' ? 'স্কুল অ্যাডমিন রিপোর্ট ও SMS নোটিফিকেশন' : 'School Admin Reports & SMS Queue'}
           </h2>
-          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+          <p className="t-body text-xs text-ink-soft mt-0.5">
             {language === 'bn'
               ? 'অষ্টম শ্রেণী-ক | আজকের উপস্থিতির সারসংক্ষেপ ও অভিভাবক মেসেজ কিউ'
               : 'Class VIII-A | Daily Register, Attendance Performance, & SMS Analytics'}
           </p>
         </div>
 
-        <button
+        <Button
           id="export-xlsx-btn"
+          variant="primary"
+          size="md"
           onClick={handleExportXlsx}
-          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md hover:shadow-lg transition-all"
+          leftIcon={<Download className="w-4 h-4" />}
         >
-          <Download className="w-4 h-4" />
-          <span>Export XLSX Register</span>
-        </button>
+          Export XLSX Register
+        </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-100">
+      <div className="flex border-b border-line">
         <button
           id="tab-dispatches"
           onClick={() => setActiveTab('dispatches')}
-          className={`px-5 py-3 text-sm font-bold tracking-tight border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-5 py-3 text-sm font-bold tracking-tight border-b-2 transition-all flex items-center gap-2 cursor-pointer font-display ${
             activeTab === 'dispatches'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
+              ? 'border-forest-700 text-forest-700 dark:text-forest-600'
+              : 'border-transparent text-ink-muted hover:text-ink'
           }`}
         >
           <Send className="w-4 h-4" />
@@ -208,15 +226,15 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
         <button
           id="tab-sms-usage"
           onClick={() => setActiveTab('sms-usage')}
-          className={`px-5 py-3 text-sm font-bold tracking-tight border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-5 py-3 text-sm font-bold tracking-tight border-b-2 transition-all flex items-center gap-2 cursor-pointer font-display ${
             activeTab === 'sms-usage'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
+              ? 'border-forest-700 text-forest-700 dark:text-forest-600'
+              : 'border-transparent text-ink-muted hover:text-ink'
           }`}
         >
           <MessageSquare className="w-4 h-4" />
           <span>{language === 'bn' ? 'SMS ব্যবহার ও প্রাক্কলন' : 'SMS Usage & Metrics'}</span>
-          <span className="bg-indigo-100 text-indigo-800 text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">
+          <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 text-xs px-2 py-0.5 rounded-full font-bold">
             LIVE
           </span>
         </button>
@@ -224,10 +242,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
         <button
           id="tab-estimator"
           onClick={() => setActiveTab('estimator')}
-          className={`px-5 py-3 text-sm font-bold tracking-tight border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-5 py-3 text-sm font-bold tracking-tight border-b-2 transition-all flex items-center gap-2 cursor-pointer font-display ${
             activeTab === 'estimator'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
+              ? 'border-forest-700 text-forest-700 dark:text-forest-600'
+              : 'border-transparent text-ink-muted hover:text-ink'
           }`}
         >
           <BarChart3 className="w-4 h-4" />
@@ -239,30 +257,30 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
         <div className="flex flex-col gap-6">
           {/* Overview Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div id="card-total-enrolled" className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+            <div id="card-total-enrolled" className="bg-surface-soft rounded-2xl p-5 border border-line">
+              <div className="t-label text-ink-muted mb-1">
                 Total Enrolled
               </div>
-              <div className="text-3xl font-black text-slate-800">{totalEnrolled}</div>
-              <div className="text-[10px] text-slate-500 font-medium mt-1">Active class size roster</div>
+              <div className="text-3xl font-extrabold text-ink font-display t-data">{totalEnrolled}</div>
+              <div className="text-xs text-ink-soft mt-1">Active class size roster</div>
             </div>
 
-            <div id="card-confirmed-present" className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100">
-              <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">
+            <div id="card-confirmed-present" className="bg-success-50 rounded-2xl p-5 border border-success-100 dark:border-success-600/30">
+              <div className="t-label text-success-600 mb-1">
                 Confirmed Present
               </div>
-              <div className="text-3xl font-black text-emerald-800">{presentStudents.length}</div>
-              <div className="text-[10px] text-emerald-600 font-semibold mt-1">
+              <div className="text-3xl font-extrabold text-success-800 font-display t-data">{presentStudents.length}</div>
+              <div className="text-xs text-success-800 font-semibold mt-1">
                 {totalEnrolled > 0 ? Math.round((presentStudents.length / totalEnrolled) * 100) : 0}% Attendance rate today
               </div>
             </div>
 
-            <div id="card-confirmed-absent" className="bg-rose-50 rounded-2xl p-5 border border-rose-100">
-              <div className="text-[10px] font-bold text-rose-700 uppercase tracking-widest mb-1">
+            <div id="card-confirmed-absent" className="bg-danger-50 rounded-2xl p-5 border border-danger-100 dark:border-danger-600/30">
+              <div className="t-label text-danger-600 mb-1">
                 Confirmed Absent
               </div>
-              <div className="text-3xl font-black text-rose-800">{absentStudents.length}</div>
-              <div className="text-[10px] text-rose-600 font-semibold mt-1">
+              <div className="text-3xl font-extrabold text-danger-800 font-display t-data">{absentStudents.length}</div>
+              <div className="text-xs text-danger-800 font-semibold mt-1">
                 Pending parent alerts in queue
               </div>
             </div>
@@ -270,14 +288,14 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
 
           {/* SMS Queue Table */}
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
-              <Send className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-bold text-ink flex items-center gap-2 font-display">
+              <Send className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               <span>Automated Parent SMS Job Dispatch Log (DLT Approved Templates)</span>
             </h3>
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">
+            <div className="overflow-x-auto rounded-2xl border border-line shadow-2xs">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
+                <thead className="bg-surface-soft text-ink-muted font-bold uppercase tracking-wider font-display">
                   <tr>
                     <th className="p-3">Student Name</th>
                     <th className="p-3">Guardian Recipient</th>
@@ -286,10 +304,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                     <th className="p-3">DLT Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
                   {absentStudents.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400 italic font-medium bg-slate-50/50">
+                      <td colSpan={5} className="p-8 text-center text-ink-muted italic font-medium bg-surface-soft/50">
                         No absent students confirmed yet. Session must be finalized to trigger SMS jobs.
                       </td>
                     </tr>
@@ -297,23 +315,23 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                     absentStudents.map((stu) => {
                       const { text, charCount, isUnicode, segments } = getStudentSmsDetails(stu);
                       return (
-                        <tr key={stu.id} className="hover:bg-slate-50 transition-colors">
+                        <tr key={stu.id} className="table-row-hover">
                           <td className="p-3">
-                            <div className="font-bold text-slate-800">{stu.name}</div>
-                            <div className="text-[10px] text-slate-500">{stu.nameBn}</div>
+                            <div className="font-bold text-ink font-display">{stu.name}</div>
+                            <div className="text-xs text-ink-soft">{stu.nameBn}</div>
                           </td>
-                          <td className="p-3 font-mono text-slate-600">+91 ******4321</td>
-                          <td className="p-3 text-slate-600 max-w-xs">
-                            <div className="text-[11px] italic bg-slate-50 p-2 rounded-lg border border-slate-100 leading-relaxed">
+                          <td className="p-3 font-mono text-ink-soft">+91 ******4321</td>
+                          <td className="p-3 text-ink-soft max-w-xs">
+                            <div className="text-xs italic bg-surface-soft p-2 rounded-xl border border-line leading-relaxed">
                               "{text}"
                             </div>
                           </td>
                           <td className="p-3 font-mono">
-                            <div className="font-semibold text-slate-700">{segments} Seg</div>
-                            <div className="text-[9px] text-slate-400">{charCount} Chars ({isUnicode ? 'Unicode' : 'GSM'})</div>
+                            <div className="font-semibold text-ink">{segments} Seg</div>
+                            <div className="text-xs text-ink-muted">{charCount} Chars ({isUnicode ? 'Unicode' : 'GSM'})</div>
                           </td>
                           <td className="p-3">
-                            <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-1 rounded-lg text-[9px] flex items-center gap-1 w-max">
+                            <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2 py-1 rounded-full text-xs flex items-center gap-1 w-max font-display">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               QUEUED_FOR_DISPATCH
                             </span>
@@ -332,16 +350,16 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
       {activeTab === 'sms-usage' && (
         <div className="flex flex-col gap-6">
           {/* Active School Selection */}
-          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="bg-surface-soft rounded-2xl p-5 border border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="bg-indigo-600 text-white p-2.5 rounded-xl shadow-sm">
+              <div className="bg-forest-700 text-white p-2.5 rounded-xl shadow-xs">
                 <SchoolIcon className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800">
+                <h3 className="text-sm font-bold text-ink font-display">
                   {language === 'bn' ? 'স্কুল-নির্দিষ্ট সেটিংস ও টেমপ্লেট নির্বাচন' : 'School Profile & Template Configuration'}
                 </h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                <p className="t-body text-xs text-ink-soft mt-0.5">
                   Select a school profile to load custom SMS templates and view official historical dispatches.
                 </p>
               </div>
@@ -351,10 +369,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
               <button
                 id="btn-school-primary"
                 onClick={() => handleSchoolChange('primary')}
-                className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-full border transition-all cursor-pointer font-display ${
                   selectedSchool === 'primary'
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'bg-forest-700 border-forest-700 text-white shadow-2xs'
+                    : 'bg-surface border-line text-ink-soft hover:bg-surface-soft'
                 }`}
               >
                 Primary School
@@ -362,10 +380,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
               <button
                 id="btn-school-high"
                 onClick={() => handleSchoolChange('high')}
-                className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-full border transition-all cursor-pointer font-display ${
                   selectedSchool === 'high'
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'bg-forest-700 border-forest-700 text-white shadow-2xs'
+                    : 'bg-surface border-line text-ink-soft hover:bg-surface-soft'
                 }`}
               >
                 Girls High School
@@ -374,27 +392,27 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
           </div>
 
           {/* Historical Baseline Analytics Card */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-5 flex flex-col gap-4">
+          <div className="bg-surface rounded-2xl border border-line shadow-2xs p-5 flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-bold text-ink flex items-center gap-1.5 font-display">
+                  <TrendingUp className="w-4 h-4 text-forest-700 dark:text-forest-600" />
                   <span>Official Monthly Segment Usage History</span>
                 </h3>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="t-body text-xs text-ink-soft">
                   Verified historic dispatches and billing parameters for {SCHOOLS_METRICS[selectedSchool].name}
                 </p>
               </div>
-              <span className="bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-0.5 rounded-full text-[10px]">
+              <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2.5 py-0.5 rounded-full text-xs font-display">
                 DLT Audited
               </span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Table Metrics */}
-              <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <div className="overflow-x-auto rounded-xl border border-line">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100">
+                  <thead className="bg-surface-soft text-ink-muted font-bold uppercase tracking-wider border-b border-line font-display">
                     <tr>
                       <th className="p-3">Academic Month</th>
                       <th className="p-3 text-center">School Days</th>
@@ -403,14 +421,14 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                       <th className="p-3 text-right">Billable (INR)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  <tbody className="divide-y divide-line font-medium text-ink bg-surface">
                     {SCHOOLS_METRICS[selectedSchool].history.map((hist, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50">
-                        <td className="p-3 font-bold text-slate-800">{hist.month}</td>
+                      <tr key={idx} className="table-row-hover">
+                        <td className="p-3 font-bold text-ink font-display">{hist.month}</td>
                         <td className="p-3 text-center font-mono">{hist.days} Days</td>
                         <td className="p-3 text-center font-mono">{hist.avgAbsenceRate}%</td>
-                        <td className="p-3 text-center font-mono text-indigo-600 font-bold">{hist.totalSegments} Seg</td>
-                        <td className="p-3 text-right font-mono font-bold text-emerald-700">₹{hist.cost.toFixed(2)}</td>
+                        <td className="p-3 text-center font-mono text-forest-700 dark:text-forest-600 font-bold">{hist.totalSegments} Seg</td>
+                        <td className="p-3 text-right font-mono font-bold text-success-800">₹{hist.cost.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -418,9 +436,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
               </div>
 
               {/* Graphical Segment Representation */}
-              <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100/50 flex flex-col justify-between">
+              <div className="bg-surface-soft rounded-xl p-4 border border-line flex flex-col justify-between">
                 <div>
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Segment Distribution Comparison</h4>
+                  <h4 className="t-label text-ink-muted mb-3">Segment Distribution Comparison</h4>
                   <div className="flex flex-col gap-3.5">
                     {SCHOOLS_METRICS[selectedSchool].history.map((hist, idx) => {
                       const maxSeg = 6000;
@@ -428,12 +446,12 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                       return (
                         <div key={idx} className="flex flex-col gap-1">
                           <div className="flex justify-between text-xs font-semibold">
-                            <span className="text-slate-600">{hist.month}</span>
-                            <span className="text-indigo-700 font-mono font-bold">{hist.totalSegments} billable segments</span>
+                            <span className="text-ink">{hist.month}</span>
+                            <span className="text-forest-700 dark:text-forest-600 font-mono font-bold">{hist.totalSegments} billable segments</span>
                           </div>
-                          <div className="w-full bg-slate-200/60 h-2.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-surface h-2 rounded-full overflow-hidden border border-line">
                             <div 
-                              className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                              className="bg-forest-700 h-full rounded-full transition-all duration-500"
                               style={{ width: `${pct}%` }}
                             />
                           </div>
@@ -443,8 +461,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-start gap-2 bg-indigo-50/50 border border-indigo-100/50 p-2.5 rounded-lg text-[10px] text-indigo-800 font-semibold leading-normal">
-                  <Info className="w-4 h-4 shrink-0 text-indigo-600" />
+                <div className="mt-4 flex items-start gap-2 bg-info-50 border border-info-100 dark:border-info-600/30 p-2.5 rounded-xl text-xs text-info-800 font-medium leading-normal">
+                  <Info className="w-4 h-4 shrink-0 text-info-600 mt-0.5" />
                   <span>Billing parameters estimate at a base rate of ₹0.12 per DLT segment. Bengali unicode requires multi-segment billing.</span>
                 </div>
               </div>
@@ -453,21 +471,20 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
 
           {/* Interactive Template Previewer & Live Meter */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Editor Area (7 columns) */}
-            <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-100 p-5 flex flex-col gap-4">
+            <div className="lg:col-span-7 bg-surface rounded-2xl border border-line p-5 flex flex-col gap-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                    <MessageSquare className="w-4 h-4 text-indigo-600" />
+                  <h3 className="text-sm font-bold text-ink flex items-center gap-1.5 font-display">
+                    <MessageSquare className="w-4 h-4 text-forest-700 dark:text-forest-600" />
                     <span>Live SMS Template Customization</span>
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="t-body text-xs text-ink-soft">
                     Modify school templates using standard placeholders: {"{studentNameBn}"}, {"{rollNumber}"}, {"{schoolName}"}
                   </p>
                 </div>
                 <button
                   onClick={() => setCustomTemplate(SCHOOLS_METRICS[selectedSchool].defaultTemplate)}
-                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-surface-soft rounded-xl text-ink-muted hover:text-ink transition-colors cursor-pointer"
                   title="Reset Template"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -477,127 +494,85 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
               <textarea
                 value={customTemplate}
                 onChange={(e) => setCustomTemplate(e.target.value)}
-                className="w-full h-32 p-3 text-xs border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50 placeholder-slate-400 leading-relaxed"
+                className="w-full h-32 p-3 text-xs border border-line rounded-2xl font-mono focus:border-forest-700 bg-surface-soft text-ink placeholder:text-slate-500 leading-relaxed outline-none"
                 placeholder="Type customized absence SMS here..."
               />
 
               {/* Dynamic Segment Progress Bar */}
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-slate-500 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-ink-soft flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-ink-muted" />
                     <span>Segment {progress.segmentCount}</span>
                   </span>
-                  <span className="font-mono text-slate-700">
+                  <span className="font-mono text-ink font-bold">
                     {progress.charCount} Chars (Limit: {progress.segmentMax})
                   </span>
                 </div>
                 
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/50">
+                <div className="w-full bg-surface-soft h-2 rounded-full overflow-hidden border border-line">
                   <div 
                     className={`h-full rounded-full transition-all duration-300 ${
                       progress.segmentCount > 2 
-                        ? 'bg-rose-500' 
+                        ? 'bg-danger-600' 
                         : progress.segmentCount > 1 
-                          ? 'bg-amber-500' 
-                          : 'bg-indigo-600'
+                          ? 'bg-warning-600' 
+                          : 'bg-forest-700'
                     }`}
                     style={{ width: `${progress.progressPercent}%` }}
                   />
                 </div>
 
-                <div className="flex justify-between text-[10px] text-slate-400 font-bold">
+                <div className="flex justify-between text-xs text-ink-muted font-bold">
                   <span>0 Chars</span>
-                  <span className="text-indigo-600">{progress.isUnicode ? 'Bengali Unicode (70/67 limits)' : 'English GSM (160/153 limits)'}</span>
+                  <span className="text-forest-700 dark:text-forest-600">{progress.isUnicode ? 'Bengali Unicode (70/67 limits)' : 'English GSM (160/153 limits)'}</span>
                   <span>{progress.segmentMax} Limit</span>
                 </div>
               </div>
             </div>
 
-            {/* Calculations & Summary Area (5 columns) */}
-            <div className="lg:col-span-5 bg-slate-50/50 rounded-2xl border border-slate-100 p-5 flex flex-col justify-between gap-5">
+            {/* Calculations & Summary Area */}
+            <div className="lg:col-span-5 bg-surface-soft rounded-2xl border border-line p-5 flex flex-col justify-between gap-5">
               <div>
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Live Roster Projection</h4>
+                <h4 className="t-label text-ink-muted mb-3">Live Roster Projection</h4>
 
-                <div className="divide-y divide-slate-200/60 text-xs font-medium text-slate-700">
+                <div className="divide-y divide-line text-xs font-medium text-ink">
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-slate-500">Absent Students Today</span>
-                    <span className="font-bold font-mono text-slate-800">{absentStudents.length} Students</span>
+                    <span className="text-ink-soft">Absent Students Today</span>
+                    <span className="font-bold font-mono text-ink">{absentStudents.length} Students</span>
                   </div>
 
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-slate-500">Estimated Segments per SMS</span>
-                    <span className="font-bold font-mono text-slate-800">{progress.segmentCount} Seg</span>
+                    <span className="text-ink-soft">Estimated Segments per SMS</span>
+                    <span className="font-bold font-mono text-ink">{progress.segmentCount} Seg</span>
                   </div>
 
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-slate-500 font-bold text-indigo-600">Today's Class Segment Total</span>
-                    <span className="font-black font-mono text-indigo-800">{todayTotalSegments} Segments</span>
+                    <span className="text-forest-700 dark:text-forest-600 font-bold">Today's Class Segment Total</span>
+                    <span className="font-bold font-mono text-forest-700 dark:text-forest-600">{todayTotalSegments} Segments</span>
                   </div>
 
-                  <div className="py-2.5 flex justify-between border-t-2 border-slate-200">
-                    <span className="text-slate-500 font-bold">Estimated Monthly Segments</span>
-                    <span className="font-black font-mono text-indigo-800">{monthlyExtrapolatedSegments} Segments</span>
+                  <div className="py-2.5 flex justify-between border-t border-line">
+                    <span className="text-ink font-bold">Estimated Monthly Segments</span>
+                    <span className="font-bold font-mono text-ink">{monthlyExtrapolatedSegments} Segments</span>
                   </div>
 
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-emerald-700 font-extrabold flex items-center gap-1">
-                      <Sparkle className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                    <span className="text-success-800 font-bold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-success-600" />
                       <span>Est. Class Monthly Cost</span>
                     </span>
-                    <span className="font-black font-mono text-emerald-800 text-sm">₹{extrapolatedMonthlyCost.toFixed(2)}</span>
+                    <span className="font-black font-mono text-success-800 text-sm">₹{extrapolatedMonthlyCost.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Warn / Info block */}
-              <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-[10px] text-amber-800 font-medium leading-relaxed">
+              <div className="bg-warning-50 rounded-xl p-3 border border-warning-100 dark:border-warning-600/30 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-warning-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-warning-800 font-medium leading-relaxed">
                   <strong>Unicode Segment Counting:</strong> Since templates use Bengali Unicode letters, each individual message character reduces the standard 160-char SMS limit to 70 for the first segment and 67 thereafter. Keeping names short and templates efficient avoids costly third-segment splits!
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Rendered Live Roster Preview */}
-          <div className="flex flex-col gap-3">
-            <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-600" />
-              <span>Preview of Rendered Student SMS Dispatches</span>
-            </h4>
-
-            <div className="overflow-x-auto rounded-xl border border-slate-100 shadow-xs">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="p-3">Student</th>
-                    <th className="p-3">Guardian No.</th>
-                    <th className="p-3">Rendered Template Content Preview</th>
-                    <th className="p-3 text-center">Chars</th>
-                    <th className="p-3 text-center">Segments</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {students.slice(0, 3).map((stu) => {
-                    const { text, charCount, segments } = getStudentSmsDetails(stu, customTemplate);
-                    return (
-                      <tr key={stu.id} className="hover:bg-slate-50/50">
-                        <td className="p-3">
-                          <div className="font-bold text-slate-800">{stu.name}</div>
-                          <div className="text-[10px] text-slate-400">{stu.nameBn}</div>
-                        </td>
-                        <td className="p-3 font-mono text-slate-600">+91 ******4321</td>
-                        <td className="p-3 max-w-sm font-sans italic text-slate-600 text-[11px] bg-slate-50/30">
-                          "{text}"
-                        </td>
-                        <td className="p-3 text-center font-mono">{charCount}</td>
-                        <td className="p-3 text-center font-mono font-bold text-indigo-600">{segments} Seg</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
@@ -605,220 +580,66 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
 
       {activeTab === 'estimator' && (
         <div className="flex flex-col gap-6">
-          {/* Daily Extrapolation Banner (Real Data Based) */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="bg-surface-soft rounded-2xl p-5 border border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-start gap-3">
-              <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow-sm mt-0.5">
+              <div className="bg-forest-700 text-white p-2.5 rounded-xl shadow-xs mt-0.5">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800">
+                <h3 className="text-sm font-bold text-ink font-display">
                   {language === 'bn' ? 'সরাসরি সেশনের তথ্যের ভিত্তিতে প্রাক্কলন' : 'Active Session Extrapolation'}
                 </h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                <p className="t-body text-xs text-ink-soft mt-0.5">
                   Extrapolating monthly segment metrics directly from today's active school register state.
                 </p>
               </div>
             </div>
 
-            <div className="flex gap-4 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-blue-100/80 shadow-xs self-stretch md:self-auto justify-around">
+            <div className="flex gap-4 bg-surface px-4 py-2.5 rounded-2xl border border-line shadow-2xs self-stretch md:self-auto justify-around">
               <div className="text-center px-1">
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Today's Segments</div>
-                <div className="text-xl font-black text-blue-700 font-mono mt-0.5">{todayTotalSegments}</div>
+                <div className="t-label text-ink-muted">Today's Segments</div>
+                <div className="text-xl font-extrabold text-forest-700 dark:text-forest-600 font-mono mt-0.5">{todayTotalSegments}</div>
               </div>
-              <div className="w-px bg-slate-200" />
+              <div className="w-px bg-line" />
               <div className="text-center px-1">
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estimated Monthly</div>
-                <div className="text-xl font-black text-indigo-700 font-mono mt-0.5">{monthlyExtrapolatedSegments}</div>
+                <div className="t-label text-ink-muted">Estimated Monthly</div>
+                <div className="text-xl font-extrabold text-ink font-mono mt-0.5">{monthlyExtrapolatedSegments}</div>
               </div>
             </div>
           </div>
 
-          {/* Extrapolation Metrics Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100/80 flex flex-col justify-between">
+            <div className="bg-surface-soft rounded-2xl p-5 border border-line flex flex-col justify-between">
               <div>
-                <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <div className="t-label text-ink-muted flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-ink-muted" />
                   <span>Standard School Month</span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium mt-1">Estimated academic days in standard period</p>
+                <p className="t-body text-xs text-ink-soft mt-1">Estimated academic days in standard period</p>
               </div>
-              <div className="text-2xl font-black text-slate-800 mt-4">22 Days</div>
+              <div className="text-2xl font-extrabold text-ink font-display mt-4">22 Days</div>
             </div>
 
-            <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100/80 flex flex-col justify-between">
+            <div className="bg-surface-soft rounded-2xl p-5 border border-line flex flex-col justify-between">
               <div>
-                <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                <div className="t-label text-ink-muted flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-ink-muted" />
                   <span>Projected Absentee Alerts</span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium mt-1">Based on today's localized attendance trend</p>
+                <p className="t-body text-xs text-ink-soft mt-1">Based on today's localized attendance trend</p>
               </div>
-              <div className="text-2xl font-black text-slate-800 mt-4">{monthlyExtrapolatedAbsences} SMS</div>
+              <div className="text-2xl font-extrabold text-ink font-display mt-4">{monthlyExtrapolatedAbsences} SMS</div>
             </div>
 
-            <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100/80 flex flex-col justify-between">
+            <div className="bg-surface-soft rounded-2xl p-5 border border-line flex flex-col justify-between">
               <div>
-                <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                <div className="t-label text-ink-muted flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-ink-muted" />
                   <span>Estimated Monthly Cost</span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium mt-1">Calculated at standard premium segment rates</p>
+                <p className="t-body text-xs text-ink-soft mt-1">Calculated at standard premium segment rates</p>
               </div>
-              <div className="text-2xl font-black text-slate-800 mt-4">₹{extrapolatedMonthlyCost.toFixed(2)}</div>
-            </div>
-          </div>
-
-          {/* Interactive Historical Scenario Modeling Simulator */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xs flex flex-col gap-5">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-600" />
-                <span>Historical Custom Scenario Modeling & Plan Simulator</span>
-              </h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Model diverse administrative assumptions, class parameters, and linguistic profiles to map future quota envelopes.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Sliders and Inputs */}
-              <div className="flex flex-col gap-4">
-                {/* Total Class Size / School Enrollment */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-slate-400" />
-                      Roster Size (Students)
-                    </span>
-                    <span className="font-mono text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{customTotalStudents}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="1000"
-                    step="5"
-                    value={customTotalStudents}
-                    onChange={(e) => setCustomTotalStudents(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                </div>
-
-                {/* Monthly Session Days */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      Academic Days Per Month
-                    </span>
-                    <span className="font-mono text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{customSchoolDays} Days</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="31"
-                    step="1"
-                    value={customSchoolDays}
-                    onChange={(e) => setCustomSchoolDays(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                </div>
-
-                {/* Average Absence Rate Slider */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-slate-400" />
-                      Expected Absence Rate (%)
-                    </span>
-                    <span className="font-mono text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{customAbsenceRate}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="50"
-                    step="1"
-                    value={customAbsenceRate}
-                    onChange={(e) => setCustomAbsenceRate(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                </div>
-
-                {/* SMS Language Toggle */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-600">SMS Language Profile (Character Set)</label>
-                  <div className="grid grid-cols-2 gap-2 mt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setCustomLanguage('bn')}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                        customLanguage === 'bn'
-                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      Bengali Unicode (2 Segments)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomLanguage('en')}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                        customLanguage === 'en'
-                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      English GSM 7-bit (1 Segment)
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dynamic Projection Results Panel */}
-              <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100 flex flex-col justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Model Outcomes</h4>
-
-                  <div className="divide-y divide-slate-100">
-                    <div className="py-2.5 flex justify-between items-center text-xs font-medium">
-                      <span className="text-slate-500">Projected Absences Per Month</span>
-                      <span className="font-bold font-mono text-slate-800">{estMonthlyAbsences}</span>
-                    </div>
-
-                    <div className="py-2.5 flex justify-between items-center text-xs font-medium">
-                      <span className="text-slate-500 font-medium">Segments Per Dispatch</span>
-                      <span className="font-bold font-mono text-slate-800">{estSegmentPerMsg} Segment{estSegmentPerMsg > 1 ? 's' : ''}</span>
-                    </div>
-
-                    <div className="py-2.5 flex justify-between items-center text-xs font-medium">
-                      <span className="text-indigo-600 font-bold">Total Estimated Segments</span>
-                      <span className="font-black font-mono text-indigo-800 text-sm">{estMonthlySegments}</span>
-                    </div>
-
-                    <div className="py-2.5 flex justify-between items-center text-xs font-medium">
-                      <span className="text-emerald-700 font-bold">Estimated Cost (INR)</span>
-                      <span className="font-black font-mono text-emerald-800 text-sm">₹{estMonthlyCost.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Alert/Tip Box */}
-                <div className="mt-4 bg-amber-50 rounded-xl p-3 border border-amber-100 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-[10px] text-amber-800 font-medium leading-normal">
-                    {customLanguage === 'bn' ? (
-                      <span>
-                        <strong>Bengali Unicode:</strong> Messages containing Unicode characters are limited to 70 characters for the first segment, and 67 characters per segment for multi-part dispatches. Optimizing placeholders keeps costs down!
-                      </span>
-                    ) : (
-                      <span>
-                        <strong>English GSM:</strong> Traditional standard GSM character templates fit up to 160 characters in a single billing segment. Highly economical for simple messaging workflows.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <div className="text-2xl font-extrabold text-success-800 font-display mt-4">₹{extrapolatedMonthlyCost.toFixed(2)}</div>
             </div>
           </div>
         </div>
@@ -826,3 +647,5 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
     </div>
   );
 };
+
+export default ReportsModal;

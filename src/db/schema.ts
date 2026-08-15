@@ -20,6 +20,7 @@ import { sql } from 'drizzle-orm';
 export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 80 }).notNull().unique(),
   udiseCode: varchar('udise_code', { length: 50 }).unique(),
   district: varchar('district', { length: 100 }).notNull(),
   block: varchar('block', { length: 100 }),
@@ -49,15 +50,22 @@ export const academicYears = pgTable(
 );
 
 // 3. Users (System Users)
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  fullName: varchar('full_name', { length: 255 }).notNull(),
-  phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
-  passwordHash: varchar('password_hash', { length: 255 }).notNull(), // Argon2id
-  status: varchar('status', { length: 20 }).notNull().default('ACTIVE'), // 'ACTIVE' | 'SUSPENDED'
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fullName: varchar('full_name', { length: 255 }).notNull(),
+    phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
+    passwordHash: varchar('password_hash', { length: 255 }).notNull(), // Argon2id
+    platformRole: varchar('platform_role', { length: 30 }), // 'SUPER_ADMIN' | null
+    status: varchar('status', { length: 20 }).notNull().default('ACTIVE'), // 'ACTIVE' | 'SUSPENDED'
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    platformRoleIdx: index('users_platform_role_idx').on(table.platformRole),
+  })
+);
 
 // 4. School Memberships (Links User to School with Role)
 export const schoolMemberships = pgTable(
@@ -607,6 +615,7 @@ export const rfidReaders = pgTable(
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     keyVersion: integer('key_version').notNull().default(1),
     clockDriftMs: integer('clock_drift_ms'),
+    lastSequenceNumber: bigint('last_sequence_number', { mode: 'number' }).default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -645,8 +654,30 @@ export const rfidScanEvents = pgTable(
   },
   (table) => ({
     clientEventUnique: uniqueIndex('rfid_scan_events_client_event_idx').on(table.schoolId, table.clientEventId),
+    readerSequenceUnique: uniqueIndex('rfid_scan_events_reader_seq_unique').on(table.schoolId, table.readerId, table.sequenceNumber),
     readerIdx: index('rfid_scan_events_reader_idx').on(table.schoolId, table.readerId, table.scanTimestamp),
     decisionIdx: index('rfid_scan_events_decision_idx').on(table.schoolId, table.decision, table.scanTimestamp),
     sessionIdx: index('rfid_scan_events_session_idx').on(table.schoolId, table.attendanceSessionId, table.scanTimestamp),
+  })
+);
+
+// 34. Demo Requests (Public landing lead capture)
+export const demoRequests = pgTable(
+  'demo_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    phone: varchar('phone', { length: 30 }).notNull(),
+    email: varchar('email', { length: 255 }),
+    schoolName: varchar('school_name', { length: 255 }).notNull(),
+    district: varchar('district', { length: 100 }).notNull(),
+    studentCount: varchar('student_count', { length: 50 }).notNull(),
+    source: varchar('source', { length: 50 }).notNull().default('landing'),
+    status: varchar('status', { length: 30 }).notNull().default('NEW'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    createdAtIdx: index('demo_requests_created_at_idx').on(table.createdAt),
+    statusIdx: index('demo_requests_status_idx').on(table.status),
   })
 );

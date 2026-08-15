@@ -16,7 +16,7 @@ import {
 } from '../services/attendanceService';
 import { db } from '../db';
 import { attendanceSessions, classSections } from '../db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql, desc } from 'drizzle-orm';
 
 const router = Router({ mergeParams: true });
 
@@ -97,7 +97,12 @@ router.post(
         userRole,
       });
 
-      res.status(201).json({ success: true, data: sessionResult });
+      res.status(201).json({
+        success: true,
+        data: sessionResult.session || sessionResult,
+        session: sessionResult.session,
+        details: sessionResult,
+      });
     } catch (error: any) {
       console.error('Error creating attendance session:', error);
       if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
@@ -109,7 +114,9 @@ router.post(
   }
 );
 
-// 3. List Attendance Sessions
+import { encodeCursor, decodeCursor, parseLimit } from '../services/paginationHelper';
+
+// 3. List Attendance Sessions (Deterministic Cursor Pagination)
 router.get(
   '/sessions',
   requireAuth,
@@ -119,7 +126,9 @@ router.get(
       const schoolId = req.activeSchoolId!;
       const user = req.user!;
       const userRole = req.userRole!;
-      const { classSectionId, sessionDate } = req.query;
+      const { classSectionId, sessionDate, cursor } = req.query;
+      const limit = parseLimit(req.query.limit as string | undefined, 50, 200);
+      const decoded = decodeCursor(cursor as string);
 
       const conditions: any[] = [eq(attendanceSessions.schoolId, schoolId)];
       if (classSectionId) {
@@ -127,6 +136,13 @@ router.get(
       }
       if (sessionDate) {
         conditions.push(eq(attendanceSessions.sessionDate, sessionDate as string));
+      }
+
+      if (decoded) {
+        const cursorDate = decoded.timestamp || '';
+        conditions.push(
+          sql`(${attendanceSessions.sessionDate} < ${cursorDate} OR (${attendanceSessions.sessionDate} = ${cursorDate} AND ${attendanceSessions.id} < ${decoded.id}))`
+        );
       }
 
       if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
@@ -138,14 +154,14 @@ router.get(
         }
         if (!classSectionId) {
           if (assignedIds.length === 0) {
-            res.json({ success: true, data: [] });
+            res.json({ success: true, data: [], nextCursor: null, hasMore: false, limit });
             return;
           }
           conditions.push(inArray(attendanceSessions.classSectionId, assignedIds));
         }
       }
 
-      const sessions = await db
+      const query = db
         .select({
           id: attendanceSessions.id,
           schoolId: attendanceSessions.schoolId,
@@ -160,10 +176,40 @@ router.get(
         })
         .from(attendanceSessions)
         .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
-        .where(and(...conditions));
+        .where(and(...conditions))
+        .orderBy(desc(attendanceSessions.sessionDate), desc(attendanceSessions.id))
+        .limit(limit + 1);
 
-      res.json({ success: true, data: sessions });
+      if (!decoded && req.query.page && Number(req.query.page) > 1) {
+        query.offset((Number(req.query.page) - 1) * limit);
+      }
+
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const sessions = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && sessions.length > 0) {
+        const last = sessions[sessions.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.sessionDate,
+        });
+      }
+
+      res.json({
+        success: true,
+        data: sessions,
+        sessions,
+        nextCursor,
+        hasMore,
+        limit,
+      });
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        res.status(400).json({ success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+        return;
+      }
       console.error('Error listing attendance sessions:', error);
       res.status(500).json({ success: false, error: error.message || 'FAILED_TO_LIST_SESSIONS' });
     }

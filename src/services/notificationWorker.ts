@@ -16,6 +16,7 @@ export interface WorkerProcessOptions {
   providerName?: string;
   maxRetries?: number;
   backoffBaseMs?: number;
+  schoolId?: string;
 }
 
 type ClaimedJob = typeof notificationJobs.$inferSelect;
@@ -44,34 +45,60 @@ function mapRowToJob(row: any): ClaimedJob {
   };
 }
 
-async function claimEligibleJobs(limit: number, maxRetries: number, workerId: string): Promise<ClaimedJob[]> {
+async function claimEligibleJobs(limit: number, maxRetries: number, workerId: string, schoolId?: string): Promise<ClaimedJob[]> {
   return withSystemContext(async (tx: any) => {
     const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
 
     // Clean up stale claims (older than 10 minutes) inside system context transaction
+    const staleConditions = [
+      eq(notificationJobs.status, 'SENDING'),
+      lt(notificationJobs.claimedAt, staleBefore),
+    ];
+    if (schoolId) {
+      staleConditions.push(eq(notificationJobs.schoolId, schoolId));
+    }
+
     await tx.update(notificationJobs)
       .set({ status: 'QUEUED', claimedAt: null, claimedBy: null })
-      .where(and(eq(notificationJobs.status, 'SENDING'), lt(notificationJobs.claimedAt, staleBefore)));
+      .where(and(...staleConditions));
 
     if (process.env.DATABASE_URL) {
       try {
         // Atomic FOR UPDATE SKIP LOCKED claim query for multi-replica concurrency safety
-        const claimedRows = await tx.execute(sql`
-          WITH eligible AS (
-            SELECT id FROM notification_jobs
-            WHERE status IN ('QUEUED', 'FAILED')
-              AND attempt_count < ${maxRetries}
-              AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
-            ORDER BY queued_at ASC
-            LIMIT ${limit}
-            FOR UPDATE SKIP LOCKED
-          )
-          UPDATE notification_jobs
-          SET status = 'SENDING', claimed_at = NOW(), claimed_by = ${workerId}
-          FROM eligible
-          WHERE notification_jobs.id = eligible.id
-          RETURNING notification_jobs.*;
-        `);
+        const claimedRows = schoolId
+          ? await tx.execute(sql`
+              WITH eligible AS (
+                SELECT id FROM notification_jobs
+                WHERE status IN ('QUEUED', 'FAILED')
+                  AND school_id = ${schoolId}::uuid
+                  AND attempt_count < ${maxRetries}
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+                ORDER BY queued_at ASC
+                LIMIT ${limit}
+                FOR UPDATE SKIP LOCKED
+              )
+              UPDATE notification_jobs
+              SET status = 'SENDING', claimed_at = NOW(), claimed_by = ${workerId}
+              FROM eligible
+              WHERE notification_jobs.id = eligible.id
+              RETURNING notification_jobs.*;
+            `)
+          : await tx.execute(sql`
+              WITH eligible AS (
+                SELECT id FROM notification_jobs
+                WHERE status IN ('QUEUED', 'FAILED')
+                  AND attempt_count < ${maxRetries}
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+                ORDER BY queued_at ASC
+                LIMIT ${limit}
+                FOR UPDATE SKIP LOCKED
+              )
+              UPDATE notification_jobs
+              SET status = 'SENDING', claimed_at = NOW(), claimed_by = ${workerId}
+              FROM eligible
+              WHERE notification_jobs.id = eligible.id
+              RETURNING notification_jobs.*;
+            `);
 
         const rawRows = Array.isArray(claimedRows) ? claimedRows : (claimedRows?.rows || []);
         if (rawRows.length > 0) {
@@ -85,14 +112,19 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
       }
     }
 
+    const whereConditions = [
+      inArray(notificationJobs.status, ['QUEUED', 'FAILED']),
+      lt(notificationJobs.attemptCount, maxRetries),
+      or(isNull(notificationJobs.nextAttemptAt), lte(notificationJobs.nextAttemptAt, new Date())),
+    ];
+    if (schoolId) {
+      whereConditions.push(eq(notificationJobs.schoolId, schoolId));
+    }
+
     const candidates = await tx
       .select()
       .from(notificationJobs)
-      .where(and(
-        inArray(notificationJobs.status, ['QUEUED', 'FAILED']),
-        lt(notificationJobs.attemptCount, maxRetries),
-        or(isNull(notificationJobs.nextAttemptAt), lte(notificationJobs.nextAttemptAt, new Date())),
-      ))
+      .where(and(...whereConditions))
       .orderBy(notificationJobs.queuedAt)
       .limit(limit);
 
@@ -262,7 +294,7 @@ export async function processNotificationQueue(options: WorkerProcessOptions = {
   const maxRetries = options.maxRetries || 3;
   const provider = getSmsProvider(options.providerName);
   const workerId = `sms-worker-${process.pid}-${crypto.randomUUID()}`;
-  const jobs = await claimEligibleJobs(limit, maxRetries, workerId);
+  const jobs = await claimEligibleJobs(limit, maxRetries, workerId, options.schoolId);
   let sent = 0;
   let failed = 0;
   let permanentFailures = 0;

@@ -39,7 +39,8 @@ describe('Negative Authorization & Cross-Tenant Security Suite', () => {
         .insert(schools)
         .values({
           name: 'Primary School Alpha',
-          udiseCode: `UDISE-A-${Date.now()}`,
+          slug: `school-alpha-${Date.now()}`,
+          udiseCode: `190101${Math.floor(10000 + Math.random() * 90000)}`,
           district: 'Kolkata',
           block: 'Central',
         })
@@ -51,7 +52,8 @@ describe('Negative Authorization & Cross-Tenant Security Suite', () => {
         .insert(schools)
         .values({
           name: 'Secondary School Beta',
-          udiseCode: `UDISE-B-${Date.now()}`,
+          slug: `school-beta-${Date.now()}`,
+          udiseCode: `190102${Math.floor(10000 + Math.random() * 90000)}`,
           district: 'Howrah',
           block: 'North',
         })

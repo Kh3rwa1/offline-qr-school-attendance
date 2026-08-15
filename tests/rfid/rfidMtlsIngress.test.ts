@@ -17,11 +17,15 @@ describe('mTLS Ingress Peer Certificate Enforcement Suite', () => {
   let sessionId: string;
   const certFingerprint = 'aa:bb:cc:dd:ee:ff:11:22:33:44:55:66:77:88:99:00:11:22:33:44';
   const secret = 'mtls-ingress-test-secret-32-chars-long';
+  const ingressSecret = 'trusted-ingress-test-secret-32chars';
   let origMtls: string | undefined;
+  let origIngressSecret: string | undefined;
 
   beforeAll(async () => {
     origMtls = process.env.RFID_ENFORCE_INGRESS_MTLS;
+    origIngressSecret = process.env.TRUSTED_INGRESS_SECRET;
     process.env.RFID_ENFORCE_INGRESS_MTLS = 'true';
+    process.env.TRUSTED_INGRESS_SECRET = ingressSecret;
     process.env.RFID_HMAC_SECRET = secret;
     process.env.NODE_ENV = 'test';
 
@@ -80,6 +84,11 @@ describe('mTLS Ingress Peer Certificate Enforcement Suite', () => {
 
   afterAll(() => {
     process.env.RFID_ENFORCE_INGRESS_MTLS = origMtls;
+    if (origIngressSecret !== undefined) {
+      process.env.TRUSTED_INGRESS_SECRET = origIngressSecret;
+    } else {
+      delete process.env.TRUSTED_INGRESS_SECRET;
+    }
   });
 
   function createMockReqRes(headers: Record<string, string>, body: Record<string, any>) {
@@ -145,6 +154,7 @@ describe('mTLS Ingress Peer Certificate Enforcement Suite', () => {
         'x-reader-signature': envelope.signature,
         'x-reader-timestamp': envelope.readerTimestamp,
         'x-client-cert-fingerprint': certFingerprint,
+        'x-trusted-ingress-secret': ingressSecret,
       },
       envelope
     );
@@ -165,6 +175,7 @@ describe('mTLS Ingress Peer Certificate Enforcement Suite', () => {
         'x-reader-id': readerId,
         'x-reader-signature': envelope.signature,
         'x-reader-timestamp': envelope.readerTimestamp,
+        'x-trusted-ingress-secret': ingressSecret,
       },
       envelope
     );
@@ -187,6 +198,7 @@ describe('mTLS Ingress Peer Certificate Enforcement Suite', () => {
         'x-reader-signature': envelope.signature,
         'x-reader-timestamp': envelope.readerTimestamp,
         'x-client-cert-fingerprint': 'ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff',
+        'x-trusted-ingress-secret': ingressSecret,
       },
       envelope
     );

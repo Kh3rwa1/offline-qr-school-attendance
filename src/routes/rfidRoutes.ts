@@ -6,9 +6,10 @@ import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
 import { readerService } from '../services/rfid/readerService';
 import { offlineService } from '../services/rfid/offlineService';
-import { db } from '../db';
-import { rfidScanEvents, rfidReaders } from '../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { db, withTenantContext } from '../db';
+import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/schema';
+import { eq, and, desc, ne, sql } from 'drizzle-orm';
+import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 export const rfidRouter = Router();
 
@@ -18,6 +19,7 @@ export const rfidRouter = Router();
 rfidRouter.post(
   '/:schoolId/rfid/scans',
   readerAuthMiddleware,
+  rateLimitPolicies.rfidScan,
   async (req: ReaderAuthenticatedRequest, res: Response) => {
     try {
       const clientEventId = req.body.clientEventId;
@@ -44,6 +46,10 @@ rfidRouter.post(
         signature,
         clientEventId,
         isOffline: req.body.isOffline || false,
+        cardProof: req.body.cardProof,
+        cardUid: req.body.cardUid,
+        readerChallenge: req.body.readerChallenge,
+        transactionCounter: req.body.transactionCounter,
       };
 
       const result = await scanService.processScan(envelope);
@@ -60,6 +66,7 @@ rfidRouter.post(
 // ============================================================================
 rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll',
+  rateLimitPolicies.rfidEnrollment,
   requireAuth,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
@@ -81,6 +88,8 @@ rfidRouter.post(
   })
 );
 
+import { encodeCursor, decodeCursor, parseLimit } from '../services/paginationHelper';
+
 rfidRouter.get(
   '/:schoolId/rfid/credentials',
   requireAuth,
@@ -92,8 +101,23 @@ rfidRouter.get(
         const credentials = await credentialService.getCredentialHistory(schoolId, studentId);
         return { status: 200, body: { success: true, credentials } };
       }
-      return { status: 200, body: { success: true, credentials: [] } };
+      const limit = parseLimit(req.query.limit as string, 50, 200);
+      const cursor = req.query.cursor as string | undefined;
+      const result = await credentialService.listAllCredentials(schoolId, { limit, cursor });
+      return {
+        status: 200,
+        body: {
+          success: true,
+          credentials: (result as any).items || result,
+          nextCursor: (result as any).nextCursor || null,
+          hasMore: !!(result as any).hasMore,
+          limit,
+        },
+      };
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      }
       return { status: 500, body: { success: false, error: error.message } };
     }
   })
@@ -158,14 +182,17 @@ rfidRouter.post(
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
+      const { reason } = req.body || {};
       const credential = await credentialService.reactivateCredential(
         req.params.credentialId,
         schoolId,
+        reason || 'Reactivated by operator/admin',
         user.id
       );
       return { status: 200, body: { success: true, credential } };
     } catch (error: any) {
-      return { status: 400, body: { success: false, error: error.message } };
+      const statusCode = error.statusCode || 400;
+      return { status: statusCode, body: { success: false, error: error.message } };
     }
   })
 );
@@ -251,7 +278,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/register',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.registerReader({
@@ -277,7 +304,7 @@ rfidRouter.post(
 rfidRouter.get(
   '/:schoolId/rfid/readers',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const readers = await readerService.listReaders(schoolId, {
@@ -293,7 +320,7 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const reader = await readerService.getReaderById(req.params.readerId, schoolId);
@@ -308,7 +335,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/approve',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.approveReader(req.params.readerId, schoolId, user.id);
@@ -322,7 +349,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/suspend',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.suspendReader(
@@ -341,7 +368,7 @@ rfidRouter.post(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/revoke',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.revokeReader(
@@ -360,7 +387,7 @@ rfidRouter.post(
 rfidRouter.patch(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const reader = await readerService.updateReaderConfig(req.params.readerId, schoolId, req.body);
@@ -374,7 +401,7 @@ rfidRouter.patch(
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId/health',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId }) => {
     try {
       const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
@@ -447,17 +474,54 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/scans',
   requireAuth,
-  tenantHandler(async ({ schoolId }) => {
+  tenantHandler(async ({ req, schoolId }) => {
     try {
-      const scans = await db
+      const limit = parseLimit(req.query.limit as string, 50, 200);
+      const cursor = req.query.cursor as string | undefined;
+      const decoded = decodeCursor(cursor);
+
+      const conditions: any[] = [eq(rfidScanEvents.schoolId, schoolId)];
+      if (decoded) {
+        const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+        conditions.push(
+          sql`(${rfidScanEvents.scanTimestamp} < ${cursorTime} OR (${rfidScanEvents.scanTimestamp} = ${cursorTime} AND ${rfidScanEvents.id} < ${decoded.id}))`
+        );
+      }
+
+      const query = db
         .select()
         .from(rfidScanEvents)
-        .where(eq(rfidScanEvents.schoolId, schoolId))
-        .orderBy(desc(rfidScanEvents.scanTimestamp))
-        .limit(100);
+        .where(and(...conditions))
+        .orderBy(desc(rfidScanEvents.scanTimestamp), desc(rfidScanEvents.id))
+        .limit(limit + 1);
 
-      return { status: 200, body: { success: true, report: scans } };
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const scans = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && scans.length > 0) {
+        const last = scans[scans.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.scanTimestamp ? new Date(last.scanTimestamp).toISOString() : undefined,
+        });
+      }
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          report: scans,
+          nextCursor,
+          hasMore,
+          limit,
+        },
+      };
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      }
       return { status: 500, body: { success: false, error: error.message } };
     }
   })
@@ -466,7 +530,7 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/provision',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
       const provisioning = await readerService.provisionReader(req.params.readerId, schoolId, user.id);
@@ -493,17 +557,132 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/rejections',
   requireAuth,
-  tenantHandler(async ({ schoolId }) => {
+  tenantHandler(async ({ req, schoolId }) => {
     try {
-      const rejections = await db
+      const limit = parseLimit(req.query.limit as string, 50, 200);
+      const cursor = req.query.cursor as string | undefined;
+      const decoded = decodeCursor(cursor);
+
+      const conditions: any[] = [
+        eq(rfidScanEvents.schoolId, schoolId),
+        ne(rfidScanEvents.decision, 'ACCEPTED'),
+      ];
+
+      if (decoded) {
+        const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+        conditions.push(
+          sql`(${rfidScanEvents.scanTimestamp} < ${cursorTime} OR (${rfidScanEvents.scanTimestamp} = ${cursorTime} AND ${rfidScanEvents.id} < ${decoded.id}))`
+        );
+      }
+
+      const query = db
         .select()
         .from(rfidScanEvents)
-        .where(and(eq(rfidScanEvents.schoolId, schoolId)))
-        .orderBy(desc(rfidScanEvents.scanTimestamp))
-        .limit(100);
+        .where(and(...conditions))
+        .orderBy(desc(rfidScanEvents.scanTimestamp), desc(rfidScanEvents.id))
+        .limit(limit + 1);
 
-      const filtered = rejections.filter((r: any) => r.decision !== 'ACCEPTED');
-      return { status: 200, body: { success: true, report: filtered } };
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const rejections = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && rejections.length > 0) {
+        const last = rejections[rejections.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.scanTimestamp ? new Date(last.scanTimestamp).toISOString() : undefined,
+        });
+      }
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          report: rejections,
+          nextCursor,
+          hasMore,
+          limit,
+        },
+      };
+    } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      }
+      return { status: 500, body: { success: false, error: error.message } };
+    }
+  })
+);
+
+rfidRouter.get(
+  '/:schoolId/rfid/reports/summary',
+  requireAuth,
+  tenantHandler(async ({ schoolId }) => {
+    try {
+      return await withTenantContext(schoolId, async (tx) => {
+        const scans = await tx
+          .select({
+            id: rfidScanEvents.id,
+            time: rfidScanEvents.scanTimestamp,
+            decision: rfidScanEvents.decision,
+            direction: rfidScanEvents.direction,
+            studentId: rfidCredentials.studentId,
+            studentName: students.name,
+            readerId: rfidScanEvents.readerId,
+            readerName: rfidReaders.name,
+            location: rfidReaders.location,
+            isOffline: rfidScanEvents.isOffline,
+          })
+          .from(rfidScanEvents)
+          .leftJoin(rfidCredentials, eq(rfidScanEvents.credentialId, rfidCredentials.id))
+          .leftJoin(students, eq(rfidCredentials.studentId, students.id))
+          .leftJoin(rfidReaders, eq(rfidScanEvents.readerId, rfidReaders.id))
+          .where(eq(rfidScanEvents.schoolId, schoolId))
+          .orderBy(desc(rfidScanEvents.scanTimestamp))
+          .limit(100);
+
+        const readers = await tx
+          .select({ status: rfidReaders.status })
+          .from(rfidReaders)
+          .where(eq(rfidReaders.schoolId, schoolId));
+
+        const cards = await tx
+          .select({ status: rfidCredentials.status })
+          .from(rfidCredentials)
+          .where(eq(rfidCredentials.schoolId, schoolId));
+
+        const readersOnline = readers.filter((r: any) => r.status === 'ACTIVE').length;
+        const readersOffline = readers.filter((r: any) => r.status === 'SUSPENDED' || r.status === 'REVOKED').length;
+        const readersPending = readers.filter((r: any) => r.status === 'PENDING').length;
+
+        const activeCards = cards.filter((c: any) => c.status === 'ACTIVE').length;
+        const suspendedCards = cards.filter((c: any) => c.status === 'SUSPENDED').length;
+        const revokedCards = cards.filter((c: any) => c.status === 'REVOKED').length;
+
+        return {
+          status: 200,
+          body: {
+            success: true,
+            readersOnline,
+            readersOffline,
+            readersPending,
+            activeCards,
+            suspendedCards,
+            revokedCards,
+            queueDepth: null,
+            recentScans: scans.map((s: any) => ({
+              id: s.id,
+              time: s.time,
+              student: s.studentName || (s.studentId ? `Student #${s.studentId.slice(0, 6)}` : 'Unknown Tap'),
+              reader: s.readerName || 'Gate Reader',
+              location: s.location || 'Entrance Gate',
+              decision: s.decision,
+              direction: s.direction,
+              method: s.isOffline ? 'OFFLINE_BUFFER' : 'RFID_SECURE',
+            })),
+          },
+        };
+      });
     } catch (error: any) {
       return { status: 500, body: { success: false, error: error.message } };
     }

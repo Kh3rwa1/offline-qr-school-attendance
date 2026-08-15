@@ -68,21 +68,23 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks Full History Secret Scan
-        uses: gitleaks/gitleaks-action@v2.3.8
+        uses: gitleaks/gitleaks-action@f586c14365d4643c6aa59d472ae6e984bf47bb34 # v2.3.8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Trivy Security Scanner Binary
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /tmp
-          sudo mv /tmp/trivy /usr/local/bin/trivy
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.deb" -o /tmp/trivy.deb
+          echo "cf1e32ec8d4d8823e023096a28cadb14f5b5123ce03f201fb633c5b76aa712dd  /tmp/trivy.deb" | sha256sum --check --status
+          sudo dpkg -i /tmp/trivy.deb
+          trivy --version
 
       - name: Run Trivy Filesystem Vulnerability Scan
         run: |
           trivy fs --severity HIGH,CRITICAL --format sarif --output trivy-fs-results.sarif .
 
       - name: Upload Trivy FS SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3.27.9
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem
@@ -168,6 +170,8 @@ jobs:
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           PRODUCTION_PG_TEST: "1"
           PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
@@ -239,10 +243,14 @@ jobs:
       APP_DB_PASSWORD: ci_password
       SYSTEM_DB_USER: attendance_system
       SYSTEM_DB_PASSWORD: ci_password
+      AUTH_DB_USER: attendance_auth
+      AUTH_DB_PASSWORD: ci_password
       REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_01234567890123456789
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
       RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+      RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+      KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
       ALLOW_IN_MEMORY_RATE_LIMITER: "true"
       SMS_PROVIDER: console
       ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -325,13 +333,15 @@ jobs:
       - name: Execute Authentic Pull-Request Business Load Smoke Gate
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
@@ -380,7 +390,6 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
-          cache: npm
 
       - name: Install Dependencies
         run: npm ci
@@ -396,9 +405,10 @@ jobs:
           ALLOW_SEED_RESET: "true"
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -414,15 +424,18 @@ jobs:
       - name: "Run Expanded Playwright E2E Suite (retries: 0)"
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789
           CSRF_SECRET: ci-session-secret-01234567890123456789
-          ALLOW_TEST_BYPASS: "true"
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"

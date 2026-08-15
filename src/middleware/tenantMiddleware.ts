@@ -32,7 +32,7 @@ export async function requireTenant(
   }
 
   const { memberships } = req.sessionContext;
-  const isSuperAdmin = memberships.some((membership) => membership.role === 'SUPER_ADMIN');
+  const isSuperAdmin = req.sessionContext.platformRole === 'SUPER_ADMIN' || req.sessionContext.user?.platformRole === 'SUPER_ADMIN' || memberships.some((membership) => membership.role === 'SUPER_ADMIN');
   const targetMembership = memberships.find((membership) => membership.schoolId === targetSchoolId);
 
   if (!isSuperAdmin) {

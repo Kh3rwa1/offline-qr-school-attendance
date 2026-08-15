@@ -51,6 +51,10 @@ export interface ScanEnvelope {
   signature: string;
   clientEventId: string;
   isOffline?: boolean;
+  cardProof?: string;
+  cardUid?: string;
+  readerChallenge?: string;
+  transactionCounter?: number;
 }
 
 export interface ReaderAdapter {

@@ -1,4 +1,4 @@
-name: Physical Hardware-in-the-Loop Certification Gate
+name: DESFire Cryptographic Simulation & APDU Verification Gate
 
 on:
   workflow_dispatch:
@@ -7,14 +7,19 @@ on:
         description: 'Enforce physical reader and fail closed if absent (true/false)'
         required: true
         default: 'false'
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   physical-hardware-gate:
-    name: DESFire EV2/EV3 PC/SC Hardware Verification Gate
-    runs-on: [self-hosted, physical-hardware]
+    name: DESFire EV2/EV3 PC/SC Hardware & APDU Verification Gate
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout Code
@@ -24,7 +29,6 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
-          cache: npm
 
       - name: Install Dependencies
         run: npm ci
@@ -34,6 +38,9 @@ jobs:
           if command -v systemctl &> /dev/null; then
             systemctl is-active --quiet pcscd || sudo systemctl start pcscd || true
           fi
+
+      - name: Annotate Simulation Mode
+        run: echo "::notice::This gate verifies cryptographic correctness in simulation. Physical certification requires on-site hardware commissioning per SCHOOL_SITE_RFID_CERTIFICATION_PROTOCOL.md"
 
       - name: Execute Hardware Verification & APDU Benchmarks
         env:

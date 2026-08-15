@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { getOutboxStatus, syncOutboxEvents } from '../services/offlineSyncService';
 import { useSession } from './SessionProvider';
 
@@ -22,6 +22,7 @@ export const OfflineStatusProvider: React.FC<{ children: React.ReactNode }> = ({
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const { activeSchoolId } = useSession();
+  const syncFailureCount = useRef<number>(0);
 
   const refreshOutbox = useCallback(async () => {
     try {
@@ -38,17 +39,23 @@ export const OfflineStatusProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const deviceIdentifier = localStorage.getItem('attendance.deviceIdentifier') || 'browser-client';
       await syncOutboxEvents({ schoolId: activeSchoolId, deviceIdentifier });
+      syncFailureCount.current = 0;
       setLastSyncedAt(new Date());
       await refreshOutbox();
+    } catch (err: any) {
+      syncFailureCount.current = Math.min(syncFailureCount.current + 1, 5);
+      console.warn(`[OfflineSync] Outbox synchronization error (attempt failure count: ${syncFailureCount.current}):`, err?.message || err);
+      throw err;
     } finally {
       setIsSyncing(false);
     }
   }, [isOnline, isSyncing, activeSchoolId, refreshOutbox]);
 
+  // Online / Offline window listeners
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      void syncNow();
+      void syncNow().catch(() => {});
     };
     const handleOffline = () => setIsOnline(false);
 
@@ -64,6 +71,20 @@ export const OfflineStatusProvider: React.FC<{ children: React.ReactNode }> = ({
       clearInterval(interval);
     };
   }, [refreshOutbox, syncNow]);
+
+  // Autonomous background sync: When online and outbox has unsynced items, debounce 5s and sync
+  useEffect(() => {
+    if (!isOnline || outboxCount <= 0 || isSyncing || !activeSchoolId) {
+      return;
+    }
+
+    const backoffDelay = Math.min(30000, 5000 * Math.pow(1.5, syncFailureCount.current));
+    const timer = setTimeout(() => {
+      void syncNow().catch(() => {});
+    }, backoffDelay);
+
+    return () => clearTimeout(timer);
+  }, [isOnline, outboxCount, isSyncing, activeSchoolId, syncNow]);
 
   return (
     <OfflineStatusContext.Provider

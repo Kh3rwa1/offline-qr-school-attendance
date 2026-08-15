@@ -4,10 +4,12 @@ import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/au
 import { requireTenant } from '../middleware/tenantMiddleware';
 import {
   generateXlsxTemplate,
-  parseAndValidateXlsx,
+  parseAndValidateFile,
   executeTransactionalImport,
+  ImportMode,
 } from '../services/importService';
 import { createAuditLog } from '../services/auditLogService';
+import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 
@@ -26,9 +28,10 @@ importRouter.get(
   }
 );
 
-// POST /api/v1/schools/:schoolId/students/import-xlsx
+// POST /api/v1/schools/:schoolId/students/import-file (Supports XLSX, CSV, JSON)
 importRouter.post(
-  '/:schoolId/students/import-xlsx',
+  ['/:schoolId/students/import-file', '/:schoolId/students/import-xlsx', '/:schoolId/students/import-csv', '/:schoolId/students/import-json'],
+  rateLimitPolicies.import,
   requireAuth,
   requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
@@ -36,26 +39,41 @@ importRouter.post(
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'NO_FILE_UPLOADED', message: 'An XLSX file is required' });
+    let fileBuffer: Buffer | null = null;
+    let fileName = 'import-upload.json';
+
+    if (req.file) {
+      fileBuffer = req.file.buffer;
+      fileName = req.file.originalname;
+    } else if (req.body && req.body.data) {
+      fileBuffer = Buffer.from(typeof req.body.data === 'string' ? req.body.data : JSON.stringify(req.body.data));
+      fileName = req.body.fileName || 'import-data.json';
     }
 
+    if (!fileBuffer) {
+      return res.status(400).json({ error: 'NO_FILE_UPLOADED', message: 'A file or data payload is required' });
+    }
+
+    const mode = (req.body.mode || 'CREATE_ONLY') as ImportMode;
+
     try {
-      const validationResult = await parseAndValidateXlsx({
+      const validationResult = await parseAndValidateFile({
         schoolId,
-        fileBuffer: req.file.buffer,
-        fileName: req.file.originalname,
+        fileBuffer,
+        fileName,
         createdBy: req.user!.id,
+        mode,
       });
 
       await createAuditLog({
         schoolId,
         actorId: req.user!.id,
-        action: 'STAGED_XLSX_IMPORT',
+        action: 'STAGED_IMPORT',
         resourceType: 'IMPORT_JOB',
         resourceId: validationResult.importJobId,
         metadata: {
-          fileName: req.file.originalname,
+          fileName,
+          mode,
           totalRows: validationResult.totalRows,
           validRows: validationResult.validRowsCount,
           invalidRows: validationResult.invalidRowsCount,
@@ -72,12 +90,13 @@ importRouter.post(
 // POST /api/v1/schools/:schoolId/students/import-confirm
 importRouter.post(
   '/:schoolId/students/import-confirm',
+  rateLimitPolicies.import,
   requireAuth,
   requireTenant,
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
-    const { importJobId } = req.body;
+    const { importJobId, confirmToken } = req.body;
 
     if (!importJobId) {
       return res.status(400).json({
@@ -91,12 +110,13 @@ importRouter.post(
         schoolId,
         importJobId,
         createdBy: req.user!.id,
+        confirmToken,
       });
 
       await createAuditLog({
         schoolId,
         actorId: req.user!.id,
-        action: 'EXECUTE_XLSX_IMPORT',
+        action: 'EXECUTE_IMPORT',
         resourceType: 'IMPORT_JOB',
         resourceId: importJobId,
         metadata: { importedCount: result.importedCount },
@@ -111,3 +131,5 @@ importRouter.post(
     }
   }
 );
+
+export default importRouter;

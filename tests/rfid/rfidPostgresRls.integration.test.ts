@@ -23,13 +23,13 @@ describe.skipIf(!enabled)('RFID PostgreSQL RLS Multi-Tenant Isolation Tests (Pro
     migrationPool = new pg.Pool({ connectionString: migrationUrl });
     appPool = new pg.Pool({ connectionString: appUrl });
 
-    // Seed baseline multi-tenant test data using Migration Role (Superuser context)
     const client = await migrationPool.connect();
     try {
       await client.query('BEGIN');
+      const rand = Math.random().toString(36).substring(2, 7);
       await client.query(
-        'INSERT INTO schools (id, name, district, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)',
-        [schoolA, 'RFID RLS School A', 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', 'Test', 'ACTIVE']
+        'INSERT INTO schools (id, name, slug, district, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+        [schoolA, 'RFID RLS School A', `rfid-rls-school-a-${rand}`, 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', `rfid-rls-school-b-${rand}`, 'Test', 'ACTIVE']
       );
 
       const userPhone = `+9199${String(Date.now()).slice(-8)}`;

@@ -125,17 +125,23 @@ export function computeCredentialDigest(
   keyVersionParam?: number
 ): string {
   let secret = process.env.RFID_CREDENTIAL_DIGEST_KEY || process.env.RFID_HMAC_SECRET;
-  let schoolId = 'default-school';
+  let schoolId = '';
   let keyVersion = 1;
   let securityMode = 'SECURE';
   let uidHex = '00';
 
   if (typeof paramsOrUid === 'string') {
     uidHex = canonicalizeUid(paramsOrUid);
-    schoolId = schoolIdParam || 'school1';
+    if (!schoolIdParam) {
+      throw new Error('schoolId is required to generate credential digest');
+    }
+    schoolId = schoolIdParam;
     keyVersion = keyVersionParam || 1;
   } else {
     secret = paramsOrUid.hmacSecret || secret;
+    if (!paramsOrUid.schoolId) {
+      throw new Error('schoolId is required to generate credential digest');
+    }
     schoolId = paramsOrUid.schoolId;
     keyVersion = paramsOrUid.keyVersion;
     securityMode = paramsOrUid.securityMode || 'SECURE';

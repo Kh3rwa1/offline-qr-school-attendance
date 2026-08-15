@@ -4,7 +4,7 @@ import RequireAuth from '../auth/RequireAuth';
 import RequireRole from '../auth/RequireRole';
 import DashboardLayout from '../layouts/DashboardLayout';
 import LoginPage from './LoginPage';
-import AuthenticatedApp from './AuthenticatedApp';
+import LandingPage from './LandingPage';
 import UnauthorizedPage from '../auth/UnauthorizedPage';
 import { useSession } from './SessionProvider';
 import { getDefaultRouteForRole } from '../auth/permissions';
@@ -21,6 +21,7 @@ const SecurityOverview = lazy(() => import('../dashboards/super-admin/SecurityOv
 const AuditOverview = lazy(() => import('../dashboards/super-admin/AuditOverview'));
 
 const UserManagement = lazy(() => import('../dashboards/school-admin/UserManagement'));
+const StudentRoster = lazy(() => import('../dashboards/school-admin/StudentRoster'));
 const AcademicManagement = lazy(() => import('../dashboards/school-admin/AcademicManagement'));
 const AttendanceOperations = lazy(() => import('../dashboards/school-admin/AttendanceOperations'));
 const NotificationOperations = lazy(() => import('../dashboards/school-admin/NotificationOperations'));
@@ -37,14 +38,35 @@ const CardOperations = lazy(() => import('../dashboards/rfid-operator/CardOperat
 const EnrollmentOperations = lazy(() => import('../dashboards/rfid-operator/EnrollmentOperations'));
 const RfidIncidentQueue = lazy(() => import('../dashboards/rfid-operator/RfidIncidentQueue'));
 
+const HomeOrLanding: React.FC = () => {
+  const { isAuthenticated, activeRole, isLoading } = useSession();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-sm">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-display">Verifying secure workspace session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={getDefaultRouteForRole(activeRole || undefined)} replace />;
+  }
+
+  return <LandingPage />;
+};
+
 const RootRedirect: React.FC = () => {
   const { isAuthenticated, activeRole, isLoading } = useSession();
   if (isLoading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-600 font-bold text-sm">
+      <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-sm">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p>Verifying secure session…</p>
+          <div className="w-8 h-8 border-4 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-display">Verifying secure session…</p>
         </div>
       </div>
     );
@@ -57,16 +79,22 @@ export const AppRouter: React.FC = () => {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500 font-bold text-xs">
+        <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-xs">
           <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <span>Loading workspace…</span>
+            <div className="w-6 h-6 border-2 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-xs font-display">Loading workspace…</span>
           </div>
         </div>
       }
     >
       <Routes>
+        {/* Public Acquisition Landing Page */}
+        <Route path="/" element={<HomeOrLanding />} />
+        <Route path="/welcome" element={<LandingPage />} />
+
+        {/* Global and Path-Based Login Routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/s/:schoolSlug/login" element={<LoginPage />} />
 
         {/* Protected Dashboard Shell */}
         <Route
@@ -127,6 +155,14 @@ export const AppRouter: React.FC = () => {
             element={
               <RequireRole allowedRoles={['SCHOOL_ADMIN', 'SUPER_ADMIN']}>
                 <UserManagement />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="school-admin/students"
+            element={
+              <RequireRole allowedRoles={['SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <StudentRoster />
               </RequireRole>
             }
           />
@@ -257,12 +293,57 @@ export const AppRouter: React.FC = () => {
             }
           />
 
+          {/* RFID Operator Route Aliases */}
+          <Route
+            path="rfid-operator"
+            element={
+              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <RfidOperatorDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="rfid-operator/readers"
+            element={
+              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <ReaderOperations />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="rfid-operator/cards"
+            element={
+              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <CardOperations />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="rfid-operator/enrollment"
+            element={
+              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <EnrollmentOperations />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="rfid-operator/events"
+            element={
+              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <RfidIncidentQueue />
+              </RequireRole>
+            }
+          />
+
           {/* 403 Page */}
           <Route path="unauthorized" element={<UnauthorizedPage />} />
         </Route>
 
-        {/* Root Fallback */}
-        <Route path="/" element={<RootRedirect />} />
+        {/* Path-based School Tenant Route Aliases */}
+        <Route path="/s/:schoolSlug" element={<Navigate to="login" replace />} />
+        <Route path="/s/:schoolSlug/app/*" element={<Navigate to="/app" replace />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

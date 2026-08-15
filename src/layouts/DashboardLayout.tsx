@@ -6,16 +6,19 @@ import { MobileNavigation } from './MobileNavigation';
 
 export const DashboardLayout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Desktop Left Sidebar */}
-      <Sidebar />
+    <div className="min-h-screen bg-canvas p-3 sm:p-5 lg:p-7 flex justify-center items-start">
+      {/* Outer App Shell Box */}
+      <div className="w-full max-w-[1550px] bg-surface rounded-[28px] sm:rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-line overflow-hidden flex min-h-[92vh]">
+        {/* Desktop Left Sidebar */}
+        <Sidebar />
 
-      {/* Main Workspace Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
-        <TopBar />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          <Outlet />
-        </main>
+        {/* Main Workspace Area */}
+        <div className="flex-1 flex flex-col min-w-0 pb-24 lg:pb-0 bg-canvas/30">
+          <TopBar />
+          <main className="flex-1 p-5 sm:p-8 lg:p-10 w-full overflow-y-auto">
+            <Outlet />
+          </main>
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation */}

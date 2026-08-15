@@ -14,6 +14,10 @@ const envSchema = z.object({
   ALLOW_TEST_BYPASS: z.string().default('false'),
   APP_URL: z.string().optional(),
   
+  KMS_MASTER_KEY: z.string().optional(),
+  AUTH_DATABASE_URL: z.string().optional(),
+  RFID_CARD_MASTER_KEY: z.string().optional(),
+  RFID_REQUIRE_CARD_PROOF: z.string().default('true'),
   // RFID Configuration
   ALLOW_LEGACY_RFID_UID_MODE: z.string().default('false'),
   RFID_HMAC_SECRET: z.string().optional(),
@@ -37,21 +41,77 @@ if (parsedEnv.NODE_ENV === 'production' && parsedEnv.COMPONENT === 'web' && !par
 
 export function validateProductionEnv() {
   const parsed = envSchema.parse(process.env);
-  if (parsed.NODE_ENV === 'production' && parsed.COMPONENT === 'web') {
+  if (parsed.NODE_ENV === 'production') {
+    if (process.env.ALLOW_TEST_BYPASS === 'true') {
+      throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_TEST_BYPASS is strictly prohibited in production mode');
+    }
+    if (process.env.SMS_PROVIDER === 'fake') {
+      throw new Error('FATAL_SECURITY_CONFIGURATION: Fake SMS provider is strictly prohibited in production mode. Configure a real provider or console.');
+    }
+
+    const secretVars = [
+      'SESSION_SECRET',
+      'CSRF_SECRET',
+      'REDIS_KEY_HMAC_SECRET',
+      'METRICS_AUTH_TOKEN',
+      'RFID_HMAC_SECRET',
+      'RFID_CARD_MASTER_KEY',
+      'KMS_MASTER_KEY',
+      'BACKUP_ENCRYPTION_KEY',
+      'MIGRATION_DB_PASSWORD',
+      'APP_DB_PASSWORD',
+      'SYSTEM_DB_PASSWORD',
+      'AUTH_DB_PASSWORD',
+    ];
+    for (const varName of secretVars) {
+      const val = process.env[varName];
+      if (val && (val.includes('replace-with') || val.includes('placeholder') || val.includes('changeme'))) {
+        throw new Error(`FATAL_SECURITY_CONFIGURATION: ${varName} contains an insecure example placeholder. Generate a real random secret before starting in production.`);
+      }
+    }
+
     if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
       throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
     }
-    const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
-    if (!csrfSecret || csrfSecret.length < 32) {
-      throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
-    }
-    const hmacSecret = process.env.REDIS_KEY_HMAC_SECRET;
-    if (!hmacSecret || hmacSecret.length < 32) {
-      throw new Error('REDIS_KEY_HMAC_SECRET must be at least 32 characters in production mode');
-    }
-    const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
-    if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
-      throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+    if (parsed.COMPONENT === 'web') {
+      const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
+      if (!csrfSecret || csrfSecret.length < 32) {
+        throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
+      }
+      const hmacSecret = process.env.REDIS_KEY_HMAC_SECRET;
+      if (!hmacSecret || hmacSecret.length < 32) {
+        throw new Error('REDIS_KEY_HMAC_SECRET must be at least 32 characters in production mode');
+      }
+      const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
+      if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
+        throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+      }
+      const rfidCardMasterKey = process.env.RFID_CARD_MASTER_KEY;
+      if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
+        throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode for DESFire card proof validation');
+      }
+
+      // KMS configuration: require explicit key management in production
+      const kmsMasterKey = process.env.KMS_MASTER_KEY;
+      const awsKmsArn = process.env.AWS_KMS_KEY_ARN;
+      const gcpKmsId = process.env.GCP_KMS_RESOURCE_ID;
+      if (!kmsMasterKey && !awsKmsArn && !gcpKmsId) {
+        throw new Error('FATAL_KMS_CONFIGURATION: Production mode requires explicit key management. Set KMS_MASTER_KEY, AWS_KMS_KEY_ARN, or GCP_KMS_RESOURCE_ID.');
+      }
+
+      // Auth database isolation: require dedicated auth database in production
+      const authDbUrl = process.env.AUTH_DATABASE_URL;
+      if (!authDbUrl) {
+        throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
+      }
+      try {
+        const parsedAuthUrl = new URL(authDbUrl);
+        if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
+          throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
+        }
+      } catch (err: any) {
+        throw new Error(`FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${err.message}`);
+      }
     }
   }
   return parsed;

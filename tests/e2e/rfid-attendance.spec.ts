@@ -4,21 +4,21 @@ import { computeCanonicalSignature } from '../../src/services/rfid/cryptoService
 
 test.describe('RFID Attendance & Portal E2E Suite', () => {
   test('Renders login page and verifies application title and branding', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/login');
     await expect(page).toHaveTitle(/Attendance|School/i);
     const heading = page.locator('h1, h2, header');
     await expect(heading.first()).toBeVisible();
   });
 
   test('Authenticates user via login form and loads dashboard', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/login');
     
-    const phoneInput = page.locator('input[type="tel"], input[name="phoneNumber"], input[name="phone"]');
-    const passwordInput = page.locator('input[type="password"]');
+    const phoneInput = page.locator('#login-phone, input[type="tel"]');
+    const passwordInput = page.locator('#login-password, input[type="password"]');
     const submitBtn = page.locator('button[type="submit"]');
 
     if (await phoneInput.count() > 0) {
-      await phoneInput.fill('+919100000001');
+      await phoneInput.fill('9100000001');
       await passwordInput.fill('SchoolAdminPassword123!');
       await submitBtn.click();
       await page.waitForLoadState('networkidle');
@@ -38,6 +38,9 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
       data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
     });
     expect(loginRes.ok()).toBeTruthy();
+    const loginData = await loginRes.json();
+    const csrfToken = loginData.csrfToken;
+    const csrfHeaders: Record<string, string> = csrfToken ? { 'x-csrf-token': csrfToken } : {};
 
     const meRes = await request.get('/api/v1/auth/me');
     expect(meRes.ok()).toBeTruthy();
@@ -50,6 +53,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     const classSectionId = (await classesRes.json()).data[0].classSectionId;
 
     await request.post(`/api/v1/schools/${schoolId}/devices/register`, {
+      headers: csrfHeaders,
       data: { deviceIdentifier: `e2e-rfid-device-${testInfo.workerIndex}` },
     });
 
@@ -63,15 +67,20 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     // Register & Approve Reader
     const deviceId = `e2e-rfid-reader-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const regRes = await request.post(`/api/v1/schools/${schoolId}/rfid/readers/register`, {
+      headers: csrfHeaders,
       data: { deviceId, name: 'Main Gate Reader', location: 'Gate 1', adapterType: 'GATEWAY', securityCapability: 'MUTUAL_AUTH_DESFIRE' },
     });
     expect(regRes.ok()).toBeTruthy();
     const regData = await regRes.json();
     const readerId = regData.reader.id;
-    const approveRes = await request.post(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/approve`);
+    const approveRes = await request.post(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/approve`, {
+      headers: csrfHeaders,
+    });
     expect(approveRes.ok()).toBeTruthy();
 
-    const provRes = await request.post(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/provision`);
+    const provRes = await request.post(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/provision`, {
+      headers: csrfHeaders,
+    });
     expect(provRes.ok()).toBeTruthy();
     const provData = await provRes.json();
     const readerSecret = provData.provisioning.provisionedSecret;
@@ -84,6 +93,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
       for (const c of creds) {
         if (c.studentId === studentId && (c.status === 'ACTIVE' || c.status === 'PENDING')) {
           await request.post(`/api/v1/schools/${schoolId}/rfid/credentials/${c.id}/revoke`, {
+            headers: csrfHeaders,
             data: { reason: 'E2E Test Revoke' },
           }).catch(() => undefined);
         }
@@ -93,13 +103,16 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     // Enroll & Activate Credential
     const digest = `digest_e2e_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const enrollRes = await request.post(`/api/v1/schools/${schoolId}/rfid/credentials/enroll`, {
+      headers: csrfHeaders,
       data: { studentId, credentialDigest: digest, securityMode: 'SECURE' },
     });
     expect(enrollRes.ok()).toBeTruthy();
     const enrollData = await enrollRes.json();
     const credentialId = enrollData.credential.id;
 
-    const activateRes = await request.post(`/api/v1/schools/${schoolId}/rfid/credentials/${credentialId}/activate`);
+    const activateRes = await request.post(`/api/v1/schools/${schoolId}/rfid/credentials/${credentialId}/activate`, {
+      headers: csrfHeaders,
+    });
     expect(activateRes.ok()).toBeTruthy();
 
     // Create or reuse Open Attendance Session
@@ -114,6 +127,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     }
     if (!attendanceSessionId) {
       const sessionRes = await request.post(`/api/v1/schools/${schoolId}/attendance/sessions`, {
+        headers: csrfHeaders,
         data: { classSectionId, sessionDate: today, sessionType: 'DAILY' },
       });
       if (sessionRes.ok()) {

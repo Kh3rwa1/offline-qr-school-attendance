@@ -4,9 +4,19 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
 import crypto from 'crypto';
 
+function getReaderEncryptionKey(): Buffer {
+  const masterKey = process.env.KMS_MASTER_KEY || process.env.RFID_HMAC_SECRET;
+  if (!masterKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('KMS_MASTER_KEY or RFID_HMAC_SECRET is required for reader secret encryption in production.');
+    }
+    return Buffer.from(crypto.hkdfSync('sha256', 'test-secret-32-chars-length-environment', 'kms-salt', Buffer.from('kms-reader-secret'), 32));
+  }
+  return Buffer.from(crypto.hkdfSync('sha256', masterKey, 'kms-salt', Buffer.from('kms-reader-secret'), 32));
+}
+
 export function encryptReaderSecret(secret: string): string {
-  const masterKeyHex = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
-  const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
+  const masterKey = getReaderEncryptionKey();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
   const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
@@ -15,19 +25,27 @@ export function encryptReaderSecret(secret: string): string {
 }
 
 export function decryptReaderSecret(encryptedStr: string): string {
-  if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
+  if (!encryptedStr || !encryptedStr.includes(':')) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('READER_SECRET_DECRYPT_FAILED: Plaintext or malformed reader secret in production database');
+    }
+    return encryptedStr;
+  }
   try {
-    const masterKeyHex = process.env.RFID_HMAC_SECRET || 'test-secret-32-chars-length-environment';
-    const masterKey = crypto.createHash('sha256').update(masterKeyHex).digest();
-    const [ivHex, tagHex, cipherHex] = encryptedStr.split(':');
+    const masterKey = getReaderEncryptionKey();
+    const parts = encryptedStr.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid ciphertext structure (expected iv:tag:ciphertext)');
+    }
+    const [ivHex, tagHex, cipherHex] = parts;
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const cipherText = Buffer.from(cipherHex, 'hex');
     const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
     decipher.setAuthTag(tag);
     return decipher.update(cipherText).toString('utf8') + decipher.final('utf8');
-  } catch {
-    return encryptedStr;
+  } catch (err: any) {
+    throw new Error(`READER_SECRET_DECRYPT_FAILED: Authentication tag mismatch or corrupted reader secret: ${err.message}`);
   }
 }
 
@@ -79,6 +97,15 @@ export async function registerReader(params: {
     const rawSecret = params.sharedSecret || crypto.randomBytes(32).toString('hex');
     const encryptedSecret = encryptReaderSecret(rawSecret);
 
+    let normalizedDirection: 'ENTRY' | 'EXIT' | 'BIDIRECTIONAL' | 'NONE' = 'NONE';
+    if ((params.directionMode as any) === 'IN' || params.directionMode === 'ENTRY') {
+      normalizedDirection = 'ENTRY';
+    } else if ((params.directionMode as any) === 'OUT' || params.directionMode === 'EXIT') {
+      normalizedDirection = 'EXIT';
+    } else if (params.directionMode === 'BIDIRECTIONAL') {
+      normalizedDirection = 'BIDIRECTIONAL';
+    }
+
     const [inserted] = await tx
       .insert(rfidReaders)
       .values({
@@ -86,7 +113,7 @@ export async function registerReader(params: {
         deviceId: params.deviceId,
         name: params.name,
         location: params.location,
-        directionMode: params.directionMode || 'NONE',
+        directionMode: normalizedDirection,
         readerModel: params.readerModel,
         firmwareVersion: params.firmwareVersion,
         adapterType: params.adapterType,

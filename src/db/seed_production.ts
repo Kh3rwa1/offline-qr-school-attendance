@@ -85,6 +85,7 @@ export async function seedProductionDatabase() {
     .insert(schools)
     .values({
       name: 'Murshidabad Model Primary School',
+      slug: 'murshidabad-model-primary-0103',
       udiseCode: '19100100103',
       district: 'Murshidabad',
       block: 'Raninagar-I',
@@ -98,6 +99,7 @@ export async function seedProductionDatabase() {
     .insert(schools)
     .values({
       name: 'Murshidabad Girls High School',
+      slug: 'murshidabad-girls-high-0104',
       udiseCode: '19100100104',
       district: 'Murshidabad',
       block: 'Raninagar-II',

@@ -35,6 +35,56 @@ groups:
         annotations:
           summary: "Redis cache connection is down"
 
+      - alert: BackupStale
+        expr: (time() - app_backup_latest_timestamp_seconds) > 86400
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Encrypted database backup is older than 24 hours"
+          description: "Last backup occurred {{ $value }} seconds ago"
+
+      - alert: BackupVerificationFailed
+        expr: app_backup_verification_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database backup self-test or SHA-256 integrity check failed"
+
+      - alert: RestoreDrillStale
+        expr: (time() - app_restore_drill_latest_timestamp_seconds) > 604800
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Automated disaster recovery restore drill is older than 7 days"
+
+      - alert: DbPoolSaturation
+        expr: (app_db_pool_active_connections / app_db_pool_max_connections) > 0.90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection pool utilization exceeds 90%"
+          description: "Current pool utilization is {{ $value | humanizePercentage }}"
+
+      - alert: DbDeadlocksDetected
+        expr: increase(pg_stat_database_deadlocks[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL deadlocks detected in database"
+
+      - alert: DbSlowQueriesHigh
+        expr: increase(app_db_slow_queries_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High volume of slow queries detected (>500ms)"
+
       - alert: SmsQueueBacklogHigh
         expr: app_notification_queue_depth > 1000
         for: 10m
@@ -42,3 +92,11 @@ groups:
           severity: warning
         annotations:
           summary: "SMS notification queue backlog exceeds 1,000 pending jobs"
+
+      - alert: ImportFailureRateHigh
+        expr: rate(app_import_jobs_failed_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Batch data import jobs experiencing elevated failure rate"

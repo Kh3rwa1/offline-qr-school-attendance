@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   students,
@@ -116,17 +116,44 @@ export async function createStudent(input: CreateStudentInput) {
   });
 }
 
+import { encodeCursor, decodeCursor, parseLimit } from './paginationHelper';
+
 export async function listStudents(params: {
   schoolId: string;
   classSectionId?: string;
   status?: string;
+  search?: string;
+  limit?: number | string | null;
+  cursor?: string | null;
+  page?: number;
 }) {
-  let conditions = [eq(students.schoolId, params.schoolId)];
+  const limit = parseLimit(params.limit, 50, 200);
+  const decoded = decodeCursor(params.cursor);
+
+  let conditions: any[] = [eq(students.schoolId, params.schoolId)];
 
   if (params.status && params.status !== 'ALL') {
     conditions.push(eq(students.status, params.status));
   } else if (!params.status) {
     conditions.push(eq(students.status, 'ACTIVE'));
+  }
+
+  if (params.classSectionId) {
+    conditions.push(eq(enrollments.classSectionId, params.classSectionId));
+  }
+
+  if (params.search && params.search.trim()) {
+    const pattern = `%${params.search.trim()}%`;
+    conditions.push(
+      sql`(${students.name} ILIKE ${pattern} OR ${students.studentCode} ILIKE ${pattern} OR ${students.banglarShikshaId} ILIKE ${pattern})`
+    );
+  }
+
+  if (decoded) {
+    const cursorValue = decoded.value !== undefined ? String(decoded.value) : '';
+    conditions.push(
+      sql`(${students.name} > ${cursorValue} OR (${students.name} = ${cursorValue} AND ${students.id} > ${decoded.id}))`
+    );
   }
 
   const query = db
@@ -136,6 +163,7 @@ export async function listStudents(params: {
       studentCode: students.studentCode,
       banglarShikshaId: students.banglarShikshaId,
       name: students.name,
+      fullName: students.name,
       nameBn: students.nameBn,
       gender: students.gender,
       dateOfBirth: students.dateOfBirth,
@@ -156,15 +184,34 @@ export async function listStudents(params: {
     )
     .leftJoin(classSections, eq(enrollments.classSectionId, classSections.id))
     .leftJoin(academicYears, eq(enrollments.academicYearId, academicYears.id))
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .orderBy(students.name, students.id)
+    .limit(limit + 1);
 
-  const rows = await query;
-
-  if (params.classSectionId) {
-    return rows.filter((r: { classSectionId: string | null }) => r.classSectionId === params.classSectionId);
+  // If legacy page > 1 requested without cursor
+  if (!decoded && params.page && params.page > 1) {
+    query.offset((params.page - 1) * limit);
   }
 
-  return rows;
+  const rows = await query;
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && items.length > 0) {
+    const lastItem = items[items.length - 1];
+    nextCursor = encodeCursor({
+      id: lastItem.id,
+      value: lastItem.name,
+    });
+  }
+
+  return Object.assign(items, {
+    items,
+    nextCursor,
+    hasMore,
+    limit,
+  });
 }
 
 export async function getStudentById(schoolId: string, studentId: string) {

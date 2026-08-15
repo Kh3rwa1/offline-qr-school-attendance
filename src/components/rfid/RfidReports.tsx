@@ -1,80 +1,195 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
-import { Download } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
+import { Button } from '../shared/Button';
+import { EmptyState } from '../shared/EmptyState';
 
 export default function RfidReports({ schoolId }: { schoolId: string }) {
-  const [data, setData] = useState<any[]>([]);
-  const [filter, setFilter] = useState({ date: new Date().toISOString().slice(0,10), method: 'ALL' });
+  const [filterMethod, setFilterMethod] = useState('ALL');
 
-  useEffect(() => {
-    // Mock load
-    setData([
-      { student: 'Alice Smith', time: '08:01:23', method: 'RFID_SECURE', reader: 'Main Gate In', location: 'Gate A', direction: 'IN', online: true },
-      { student: 'Bob Jones', time: '08:05:11', method: 'QR', reader: 'Tablet 1', location: 'Class 10A', direction: 'IN', online: false },
-      { student: 'Charlie Brown', time: '08:12:45', method: 'RFID_UID_LEGACY', reader: 'Main Gate In', location: 'Gate A', direction: 'IN', online: true }
-    ]);
-  }, [schoolId, filter]);
+  const { data: scansData, isLoading, error, refetch } = useQuery({
+    queryKey: ['schools', schoolId, 'rfid', 'reports', 'scans'],
+    queryFn: async () => {
+      if (!schoolId) return { recentScans: [] };
+      return api<{
+        success: boolean;
+        readersOnline: number;
+        readersOffline: number;
+        activeCards: number;
+        suspendedCards: number;
+        recentScans: any[];
+      }>(`/api/v1/schools/${schoolId}/rfid/reports/scans`);
+    },
+    enabled: Boolean(schoolId),
+  });
+
+  const scans = scansData?.recentScans || [];
+  const filteredScans = scans.filter((s) => filterMethod === 'ALL' || s.method === filterMethod);
+
+  const totalScans = scans.length;
+  const acceptedScans = scans.filter((s) => s.decision === 'ACCEPTED').length;
+  const rejectedScans = totalScans - acceptedScans;
+
+  const handleExportCSV = () => {
+    const csvContent = [
+      ['Time', 'Student', 'Decision', 'Method', 'Reader', 'Location'].join(','),
+      ...filteredScans.map((s) => [
+        `"${s.time}"`,
+        `"${s.student}"`,
+        `"${s.decision}"`,
+        `"${s.method}"`,
+        `"${s.reader}"`,
+        `"${s.location}"`,
+      ].join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rfid-scans-${schoolId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-black">Attendance Capture Report</h2>
-        <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl font-bold text-sm">
-          <Download className="w-4 h-4" /> Export CSV
-        </button>
+    <div className="app-card p-6 text-left">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+        <div>
+          <h2 className="text-xl font-extrabold text-ink font-display">Gate Tap & Capture Report</h2>
+          <p className="t-body text-xs text-ink-soft">Real-time gate telemetry logs recorded from hardware readers.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="p-2 rounded-full bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink cursor-pointer border border-line"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleExportCSV}
+            disabled={scans.length === 0}
+            leftIcon={<Download className="w-4 h-4" />}
+          >
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4 mb-6">
-        <input type="date" value={filter.date} onChange={e => setFilter({...filter, date: e.target.value})} className="border p-2 rounded-xl text-sm" />
-        <select value={filter.method} onChange={e => setFilter({...filter, method: e.target.value})} className="border p-2 rounded-xl text-sm">
+        <select
+          value={filterMethod}
+          onChange={(e) => setFilterMethod(e.target.value)}
+          className="border border-line px-4 py-2 rounded-full text-xs font-bold text-ink bg-surface-soft outline-none focus:border-forest-700 font-display cursor-pointer"
+        >
           <option value="ALL">All Methods</option>
-          <option value="QR">QR Code</option>
-          <option value="RFID_SECURE">RFID Secure</option>
-          <option value="RFID_UID_LEGACY">RFID Legacy</option>
+          <option value="RFID_SECURE">RFID Secure (DESFire)</option>
+          <option value="OFFLINE_BUFFER">Offline Synced Taps</option>
         </select>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-slate-50 p-4 rounded-xl text-center"><div className="text-2xl font-black">350</div><div className="text-xs text-slate-500">Total Scans</div></div>
-        <div className="bg-blue-50 p-4 rounded-xl text-center"><div className="text-2xl font-black text-blue-700">210</div><div className="text-xs text-slate-500">RFID SECURE</div></div>
-        <div className="bg-amber-50 p-4 rounded-xl text-center"><div className="text-2xl font-black text-amber-700">40</div><div className="text-xs text-slate-500">RFID LEGACY</div></div>
-        <div className="bg-purple-50 p-4 rounded-xl text-center"><div className="text-2xl font-black text-purple-700">100</div><div className="text-xs text-slate-500">QR Code</div></div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-surface-soft p-4 rounded-2xl border border-line text-center">
+          <div className="text-2xl font-extrabold text-ink font-display font-mono">{totalScans}</div>
+          <div className="text-[11px] text-ink-muted font-bold">Total Gate Taps</div>
+        </div>
+        <div className="bg-success-50 p-4 rounded-2xl border border-success-100 dark:border-success-600/30 text-center">
+          <div className="text-2xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">{acceptedScans}</div>
+          <div className="text-[11px] text-forest-700 dark:text-forest-600 font-bold">Verified & Accepted</div>
+        </div>
+        <div className="bg-danger-50 p-4 rounded-2xl border border-danger-100 dark:border-danger-600/30 text-center">
+          <div className="text-2xl font-extrabold text-danger-800 font-display font-mono">{rejectedScans}</div>
+          <div className="text-[11px] text-danger-800 font-bold">Rejected / Anomalies</div>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-slate-500">
-              <th className="pb-2">Time</th>
-              <th className="pb-2">Student</th>
-              <th className="pb-2">Method</th>
-              <th className="pb-2">Reader / Location</th>
-              <th className="pb-2">Network</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row, i) => (
-              <tr key={i} className="border-b last:border-0">
-                <td className="py-3">{row.time}</td>
-                <td className="py-3 font-bold">{row.student}</td>
-                <td className="py-3">
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                    row.method === 'RFID_SECURE' ? 'bg-blue-100 text-blue-800' :
-                    row.method === 'RFID_UID_LEGACY' ? 'bg-amber-100 text-amber-800' :
-                    'bg-purple-100 text-purple-800'
-                  }`}>{row.method}</span>
-                </td>
-                <td className="py-3">{row.reader} <span className="text-slate-400 text-xs">({row.location})</span></td>
-                <td className="py-3">
-                  <span className={`px-2 py-1 rounded text-xs ${row.online ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
-                    {row.online ? 'Online' : 'Offline'}
+      {filteredScans.length === 0 ? (
+        <div className="p-8 border border-line rounded-2xl">
+          <EmptyState
+            kind="generic"
+            title="No gate scans found"
+            description="No gate scans found for this school."
+          />
+        </div>
+      ) : (
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto border border-line rounded-2xl">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+                <tr>
+                  <th className="p-3">Time</th>
+                  <th className="p-3">Student</th>
+                  <th className="p-3">Method</th>
+                  <th className="p-3">Reader / Location</th>
+                  <th className="p-3 text-right">Decision</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+                {filteredScans.map((row: any, i: number) => (
+                  <tr key={i} className="table-row-hover">
+                    <td className="p-3 font-mono text-ink-muted">
+                      {new Date(row.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </td>
+                    <td className="p-3 font-bold text-ink font-display">{row.student}</td>
+                    <td className="p-3">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-info-50 text-info-800 border border-info-100 dark:border-info-600/30">
+                        {row.method}
+                      </span>
+                    </td>
+                    <td className="p-3 text-ink-soft font-medium">
+                      {row.reader} <span className="text-ink-muted font-normal">({row.location})</span>
+                    </td>
+                    <td className="p-3 text-right">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
+                        row.decision === 'ACCEPTED'
+                          ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                          : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                      }`}>
+                        {row.decision}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Stacked Cards */}
+          <div className="md:hidden space-y-3">
+            {filteredScans.map((row: any, i: number) => (
+              <div key={i} className="app-card p-4 space-y-2 border border-line">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-extrabold text-ink text-sm font-display">{row.student}</h4>
+                    <span className="font-mono text-xs text-ink-muted">
+                      {new Date(row.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display shrink-0 ${
+                    row.decision === 'ACCEPTED'
+                      ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                      : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                  }`}>
+                    {row.decision}
                   </span>
-                </td>
-              </tr>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-line text-ink-soft">
+                  <span>{row.reader} <span className="text-ink-muted">({row.location})</span></span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-info-50 text-info-800 border border-info-100 dark:border-info-600/30">
+                    {row.method}
+                  </span>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

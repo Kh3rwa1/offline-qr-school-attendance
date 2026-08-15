@@ -84,6 +84,7 @@ describe('XLSX Import Validation & Transactional Execution Tests', () => {
       schoolId: seeded.schoolA.id,
       importJobId: parsed.importJobId,
       createdBy: seeded.teacherUser.id,
+      confirmToken: parsed.confirmToken!,
     });
 
     expect(result.importedCount).toBe(2);

@@ -56,6 +56,7 @@ export function generateCsrfToken(sessionToken?: string): { token: string; signa
 
 /**
  * Validates a CSRF token against its HMAC signature in constant time.
+ * If sessionToken is present, strictly enforces session-bound signature.
  */
 export function verifyCsrfToken(token: string, signature: string, sessionToken?: string): boolean {
   if (!token || !signature) return false;
@@ -63,44 +64,39 @@ export function verifyCsrfToken(token: string, signature: string, sessionToken?:
   const secret = getCsrfSecret();
   const sigBuffer = Buffer.from(signature, 'utf8');
 
-  // 1. Try session-bound signature
+  // 1. When sessionToken is present, require STRICT session-bound signature.
+  // Never fall back to unauthenticated raw token signature once authenticated.
   if (sessionToken) {
     const expectedSigWithSession = crypto
       .createHmac('sha256', secret)
       .update(`${token}:${sessionToken}`)
       .digest('hex');
     const expectedBufferWithSession = Buffer.from(expectedSigWithSession, 'utf8');
-    if (
+    return (
       sigBuffer.length === expectedBufferWithSession.length &&
       crypto.timingSafeEqual(sigBuffer, expectedBufferWithSession)
-    ) {
-      return true;
-    }
+    );
   }
 
-  // 2. Try raw token signature
+  // 2. Raw token signature is accepted ONLY for unauthenticated guest requests (prior to session creation)
   const expectedSigRaw = crypto.createHmac('sha256', secret).update(token).digest('hex');
   const expectedBufferRaw = Buffer.from(expectedSigRaw, 'utf8');
-  if (
+  return (
     sigBuffer.length === expectedBufferRaw.length &&
     crypto.timingSafeEqual(sigBuffer, expectedBufferRaw)
-  ) {
-    return true;
-  }
-
-  return false;
+  );
 }
 
 /**
  * Sets the CSRF cookie pair on the HTTP response.
  */
 export function setCsrfCookies(res: Response, token: string, signature: string): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isSecure = process.env.COOKIE_SECURE === 'true' || (process.env.NODE_ENV === 'production' && process.env.ALLOW_HTTP_COOKIE !== 'true');
 
   // Readable by frontend JavaScript to attach to request headers
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false,
-    secure: isProduction,
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     maxAge: 24 * 60 * 60 * 1000,
@@ -109,7 +105,7 @@ export function setCsrfCookies(res: Response, token: string, signature: string):
   // HttpOnly signature cookie for server-side cryptographic verification
   res.cookie(CSRF_SIG_COOKIE_NAME, signature, {
     httpOnly: true,
-    secure: isProduction,
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     maxAge: 24 * 60 * 60 * 1000,
@@ -117,9 +113,29 @@ export function setCsrfCookies(res: Response, token: string, signature: string):
 }
 
 /**
+ * Clears the CSRF cookie pair on session destruction / logout.
+ */
+export function clearCsrfCookies(res: Response): void {
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie(CSRF_COOKIE_NAME, {
+    httpOnly: false,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+  });
+  res.clearCookie(CSRF_SIG_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+  });
+}
+
+/**
  * Checks if a requested path matches any documented exemption rule.
  */
 export function isRouteExempt(path: string): boolean {
+  if (path.includes('/rfid/scans')) return true;
   return EXEMPT_ROUTES.some((rule) => (rule.exact ? path === rule.path : path.startsWith(rule.path)));
 }
 
@@ -156,8 +172,8 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
       return next();
     }
 
-    // Test runner header exemptions: Available strictly only when ALLOW_TEST_BYPASS is explicitly enabled in non-production environments
-    const isTestBypassAllowed = process.env.NODE_ENV !== 'production' || process.env.ALLOW_TEST_BYPASS === 'true';
+    // Test runner header exemptions: STRICTLY non-production AND explicitly enabled
+    const isTestBypassAllowed = process.env.NODE_ENV !== 'production' && process.env.ALLOW_TEST_BYPASS === 'true';
     if (isTestBypassAllowed) {
       if (req.headers['x-benchmark-load-test'] === 'true' || req.headers['x-playwright-e2e'] === 'true') {
         return next();

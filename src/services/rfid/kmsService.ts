@@ -38,7 +38,15 @@ export class KMSService {
   constructor(config?: KMSConfig) {
     this.keyVersion = config?.keyVersion || 1;
 
-    const rawMaster = process.env.RFID_HMAC_SECRET || process.env.KMS_MASTER_KEY;
+    const rawMasterKms = process.env.KMS_MASTER_KEY;
+    let rawMaster = rawMasterKms;
+    if (!rawMaster && process.env.RFID_HMAC_SECRET) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('KMS_SECRET_MISSING: Refusing to fall back to RFID_HMAC_SECRET in production mode.');
+      }
+      rawMaster = process.env.RFID_HMAC_SECRET;
+    }
+
     if (process.env.NODE_ENV === 'production' && !rawMaster && !config?.purposeSecrets && !config?.kmsProvider) {
       throw new Error('KMS_FATAL: Production mode requires configured KMS provider or KMS master secret');
     }
@@ -57,36 +65,62 @@ export class KMSService {
 
     const testMaster = rawMaster || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
 
+    const purposes: CryptoKeyPurpose[] = [
+      'RFID_READER_HMAC_KEY',
+      'RFID_CREDENTIAL_DIGEST_KEY',
+      'RFID_OUTBOX_ENCRYPTION_KEY',
+      'ROSTER_SIGNING_PRIVATE_KEY',
+      'ROSTER_SIGNING_PUBLIC_KEY',
+      'DATABASE_ENCRYPTION_KEK',
+      'REDIS_KEY_HMAC_SECRET',
+      'SESSION_SECRET',
+      'MTLS_PRIVATE_KEY',
+    ];
+
+    const defaultSecrets: Record<string, string> = {};
+    for (const p of purposes) {
+      const custom = config?.purposeSecrets?.[p] || process.env[p];
+      let secretVal = custom;
+      if (!secretVal && testMaster) {
+        // Deterministically derive 32-byte purpose key from master key using HKDF
+        const derived = Buffer.from(crypto.hkdfSync('sha256', testMaster, 'kms-salt', Buffer.from(`kms-purpose-${p}`), 32));
+        secretVal = derived.toString('hex');
+      }
+      if (secretVal) {
+        if (secretVal.length < 32 && process.env.NODE_ENV === 'production') {
+          throw new Error(`KMS_FATAL: Purpose key '${p}' must be at least 32 bytes`);
+        }
+        defaultSecrets[p] = secretVal;
+        this.purposeSecrets.set(p, secretVal);
+      }
+    }
+
     if (config?.kmsProvider) {
       this.provider = config.kmsProvider;
-    } else if (process.env.NODE_ENV === 'production' && !config?.purposeSecrets) {
+    } else if ((process.env.AWS_KMS_KEY_ARN || process.env.GCP_KMS_RESOURCE_ID) && !rawMaster) {
       this.provider = new CloudKmsProviderAdapter();
     } else {
-      const defaultSecrets: Record<string, string> = {};
-      const purposes: CryptoKeyPurpose[] = [
-        'RFID_READER_HMAC_KEY',
-        'RFID_CREDENTIAL_DIGEST_KEY',
-        'RFID_OUTBOX_ENCRYPTION_KEY',
-        'ROSTER_SIGNING_PRIVATE_KEY',
-        'ROSTER_SIGNING_PUBLIC_KEY',
-        'DATABASE_ENCRYPTION_KEK',
-        'REDIS_KEY_HMAC_SECRET',
-        'SESSION_SECRET',
-        'MTLS_PRIVATE_KEY',
-      ];
-      for (const p of purposes) {
-        const custom = config?.purposeSecrets?.[p] || process.env[p];
-        const secretVal = custom || (testMaster ? `${testMaster}-${p}` : undefined);
-        if (secretVal) {
-          if (secretVal.length < 32 && process.env.NODE_ENV === 'production') {
-            throw new Error(`KMS_FATAL: Purpose key '${p}' must be at least 32 bytes`);
-          }
-          defaultSecrets[p] = secretVal;
-          this.purposeSecrets.set(p, secretVal);
-        }
-      }
       this.provider = new LocalKmsProvider(defaultSecrets, this.keyVersion);
     }
+  }
+
+  /**
+   * Derives a dedicated cryptographic key for a specific purpose from KMS master state.
+   */
+  deriveKey(purpose: CryptoKeyPurpose): string {
+    const existing = this.purposeSecrets.get(purpose);
+    if (existing) return existing;
+    const rawMaster = process.env.KMS_MASTER_KEY || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    if (!rawMaster) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`KMS_FATAL: Cannot derive key for purpose '${purpose}' without KMS_MASTER_KEY in production.`);
+      }
+      return 'test-secret-32-chars-length-environment';
+    }
+    const derived = Buffer.from(crypto.hkdfSync('sha256', rawMaster, 'kms-salt', Buffer.from(`kms-purpose-${purpose}`), 32));
+    const derivedHex = derived.toString('hex');
+    this.purposeSecrets.set(purpose, derivedHex);
+    return derivedHex;
   }
 
   /**
@@ -164,7 +198,13 @@ export class KMSService {
         dataKey = await this.provider.decryptDataKey(envelope.kmsKeyId, envelope.encryptedDataKey, envelope.keyVersion);
       } else {
         // Local fallback key for legacy format
-        const purposeSecret = this.purposeSecrets.get(envelope.kmsKeyId as CryptoKeyPurpose) || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+        let purposeSecret = this.purposeSecrets.get(envelope.kmsKeyId as CryptoKeyPurpose);
+        if (!purposeSecret) {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('KMS_SECRET_MISSING: Refusing to fall back to RFID_HMAC_SECRET in production mode.');
+          }
+          purposeSecret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+        }
         if (!purposeSecret) throw new Error('KMS_FATAL: Required cryptographic secret is missing in server configuration');
         dataKey = Buffer.from(crypto.hkdfSync('sha256', purposeSecret, 'kms-salt', `kms-provider-${envelope.kmsKeyId}`, 32));
       }
@@ -190,7 +230,13 @@ export class KMSService {
    */
   encryptSecret(plainSecret: string, purpose: CryptoKeyPurpose = 'DATABASE_ENCRYPTION_KEK'): string {
     if (!plainSecret) throw new Error('KMS_ERROR: Cannot encrypt empty secret');
-    const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    let secret = this.purposeSecrets.get(purpose);
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('KMS_SECRET_MISSING: Refusing to fall back to RFID_HMAC_SECRET in production mode.');
+      }
+      secret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    }
     if (!secret) throw new Error('KMS_FATAL: Required cryptographic secret is missing in server configuration');
     const key = Buffer.from(crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32));
     const iv = crypto.randomBytes(12);
@@ -213,7 +259,13 @@ export class KMSService {
       throw new Error('KMS_DECRYPT_FAILED: Truncated or empty envelope components');
     }
     try {
-      const secret = this.purposeSecrets.get(purpose) || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      let secret = this.purposeSecrets.get(purpose);
+      if (!secret) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error('KMS_SECRET_MISSING: Refusing to fall back to RFID_HMAC_SECRET in production mode.');
+        }
+        secret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      }
       if (!secret) throw new Error('KMS_FATAL: Required cryptographic secret is missing in server configuration');
       const key = Buffer.from(crypto.hkdfSync('sha256', secret, 'kms-salt', `kms-secret-${purpose}`, 32));
       const iv = Buffer.from(ivHex, 'hex');

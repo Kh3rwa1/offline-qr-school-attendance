@@ -1,0 +1,62 @@
+{
+  "description": "PrometheusRule defines recording and alerting rules for a Prometheus instance",
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "spec": {
+      "type": "object",
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "rules"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "interval": {
+                "type": "string"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "alert": {
+                      "type": "string"
+                    },
+                    "record": {
+                      "type": "string"
+                    },
+                    "expr": {
+                      "type": "string"
+                    },
+                    "for": {
+                      "type": "string"
+                    },
+                    "labels": {
+                      "type": "object"
+                    },
+                    "annotations": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": ["groups"]
+    }
+  },
+  "required": ["apiVersion", "kind", "metadata", "spec"]
+}

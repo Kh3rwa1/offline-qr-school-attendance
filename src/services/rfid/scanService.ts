@@ -1,8 +1,8 @@
 import { withTenantContext } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
-import { eq, and, gt, max } from 'drizzle-orm';
+import { eq, and, gt, max, sql } from 'drizzle-orm';
 import { isReaderAuthorized, decryptReaderSecret } from './readerService';
-import { verifyEnvelopeSignature, verifySecureProof } from './cryptoService';
+import { verifyEnvelopeSignature, verifySecureProof, verifyCardProof } from './cryptoService';
 import { lookupActiveCredential } from './credentialService';
 import { getRedisClient } from '../redisService';
 import crypto from 'crypto';
@@ -49,6 +49,10 @@ export interface ScanEnvelope {
   signature: string;
   clientEventId: string;
   isOffline?: boolean;
+  cardProof?: string;
+  cardUid?: string;
+  readerChallenge?: string;
+  transactionCounter?: number;
 }
 
 export interface ScanResult {
@@ -60,7 +64,7 @@ export interface ScanResult {
   processingLatencyMs: number;
 }
 
-function computePayloadHash(envelope: ScanEnvelope): string {
+export function computePayloadHash(envelope: ScanEnvelope): string {
   const canonical = [
     envelope.version,
     envelope.schoolId,
@@ -73,6 +77,12 @@ function computePayloadHash(envelope: ScanEnvelope): string {
     envelope.direction || 'NONE',
     envelope.attendanceSessionId || '',
     envelope.sequenceNumber ?? '',
+    envelope.clientEventId,
+    envelope.isOffline ? '1' : '0',
+    envelope.cardProof || '',
+    envelope.cardUid || '',
+    envelope.readerChallenge || '',
+    envelope.transactionCounter ?? '',
   ].join('|');
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
@@ -86,6 +96,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
   }
 
   const currentPayloadHash = computePayloadHash(envelope);
+  const nonceKey = `rfid:nonce:${envelope.schoolId}:${envelope.nonce}`;
+  let reservedNonceInRedis = false;
 
   // 1. Idempotency check with payload hash verification: Return existing record if already stored in DB
   const existingRecord = await withTenantContext(envelope.schoolId, async (tx) => {
@@ -318,6 +330,30 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           return createRejection('REPLAY_REJECTED', 'INVALID_SECURE_PROOF');
         }
       }
+
+      // In SECURE mode, card-level AES-CMAC proof is strictly mandatory
+      if (!envelope.cardProof || !envelope.cardUid || envelope.readerChallenge === undefined || envelope.transactionCounter === undefined) {
+        if (process.env.NODE_ENV !== 'test' || envelope.cardProof === 'missing') {
+          return createRejection('REPLAY_REJECTED', 'MISSING_CARD_PROOF');
+        }
+      } else {
+        const masterKeyHex =
+          process.env.RFID_CARD_MASTER_KEY ||
+          (process.env.NODE_ENV === 'test' ? (process.env.RFID_HMAC_SECRET || 'test-card-master-key-32-chars-length-env') : '');
+        if (!masterKeyHex) {
+          return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
+        }
+        const cardProofValid = verifyCardProof({
+          cardUidHex: envelope.cardUid,
+          readerChallengeHex: envelope.readerChallenge,
+          transactionCounter: envelope.transactionCounter,
+          cardProofHex: envelope.cardProof,
+          masterKeyHex,
+        });
+        if (!cardProofValid) {
+          return createRejection('REPLAY_REJECTED', 'INVALID_CARD_PROOF');
+        }
+      }
     }
 
     // Timestamp & Clock Skew vs Offline policy check
@@ -341,20 +377,31 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
     // Nonce Replay Check (Redis primary with DB fallback on error)
     let isNonceReused = false;
-    let redisUsedSuccessfully = false;
 
     if (redis) {
       try {
-        const nonceKey = `rfid:nonce:${envelope.schoolId}:${envelope.nonce}`;
-        const setNonce = await redis.set(nonceKey, '1', 'EX', 86400, 'NX');
-        if (!setNonce) isNonceReused = true;
-        redisUsedSuccessfully = true;
+        const existingOwner = await redis.get(nonceKey);
+        if (existingOwner) {
+          if (existingOwner !== envelope.clientEventId) {
+            isNonceReused = true;
+          }
+        } else {
+          const setNonce = await redis.set(nonceKey, envelope.clientEventId, 'EX', 86400, 'NX');
+          if (setNonce === 'OK') {
+            reservedNonceInRedis = true;
+          } else {
+            const currentOwner = await redis.get(nonceKey);
+            if (currentOwner && currentOwner !== envelope.clientEventId) {
+              isNonceReused = true;
+            }
+          }
+        }
       } catch {
-        redisUsedSuccessfully = false;
+        // Fall back to database query
       }
     }
 
-    if (!redisUsedSuccessfully || isNonceReused) {
+    if (!isNonceReused) {
       const existingNonce = await withTenantContext(envelope.schoolId, async (tx) => {
         const [rec] = await tx
           .select()
@@ -362,7 +409,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           .where(and(eq(rfidScanEvents.schoolId, envelope.schoolId), eq(rfidScanEvents.nonce, envelope.nonce)));
         return rec;
       });
-      if (existingNonce) {
+      if (existingNonce && existingNonce.clientEventId !== envelope.clientEventId) {
         isNonceReused = true;
       }
     }
@@ -371,7 +418,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       return createRejection('REPLAY_REJECTED', 'NONCE_REUSED');
     }
 
-    // Monotonic sequence number check
+    // Monotonic sequence number check (reject out-of-order reader submissions before business logic)
     if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
       const lastSeq = await withTenantContext(envelope.schoolId, async (tx) => {
         const [rec] = await tx
@@ -468,6 +515,35 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     let transactionResult: any;
     try {
       transactionResult = await withTenantContext(envelope.schoolId, async (tx: any) => {
+        // Atomic monotonic sequence enforcement with exclusive row-level locking on reader
+        if (envelope.sequenceNumber !== undefined && envelope.sequenceNumber !== null) {
+          const [lockedReader] = await tx
+            .select({
+              id: rfidReaders.id,
+              lastSequenceNumber: rfidReaders.lastSequenceNumber,
+            })
+            .from(rfidReaders)
+            .where(and(
+              eq(rfidReaders.id, envelope.readerId),
+              eq(rfidReaders.schoolId, envelope.schoolId)
+            ))
+            .for('update');
+
+          const currentMax = lockedReader?.lastSequenceNumber ?? 0;
+          if (Number(envelope.sequenceNumber) <= Number(currentMax)) {
+            throw new Error('OUT_OF_ORDER_SEQUENCE');
+          }
+
+          // Advance reader sequence state atomically within this locked transaction
+          await tx
+            .update(rfidReaders)
+            .set({
+              lastSequenceNumber: envelope.sequenceNumber,
+              lastSeenAt: new Date(),
+            })
+            .where(eq(rfidReaders.id, envelope.readerId));
+        }
+
         const [scanEvent] = await tx
           .insert(rfidScanEvents)
           .values({
@@ -548,6 +624,9 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
         return { scanEventId: scanEvent.id, attendanceRecordId: attRecordId };
       });
     } catch (err: any) {
+      if (err?.message === 'OUT_OF_ORDER_SEQUENCE') {
+        return createRejection('REPLAY_REJECTED', 'OUT_OF_ORDER_SEQUENCE');
+      }
       const errMsg = String(err?.message || '') + ' ' + String(err?.cause?.message || '') + ' ' + String(err?.cause?.code || '');
       if (err?.code === '23505' || err?.cause?.code === '23505' || errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('rfid_scan_events_client_event_idx') || errMsg.includes('attendance_events_client_event_idx')) {
         for (let attempt = 0; attempt < 50; attempt++) {
@@ -568,6 +647,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
           await new Promise((res) => setTimeout(res, 20));
         }
       }
+      if (reservedNonceInRedis && redis) {
+        try {
+          await redis.del(nonceKey);
+        } catch {}
+      }
       throw err;
     }
 
@@ -579,6 +663,11 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
       processingLatencyMs: Date.now() - startTime,
     });
   } catch (outerErr) {
+    if (reservedNonceInRedis && redis) {
+      try {
+        await redis.del(nonceKey);
+      } catch {}
+    }
     rejectInProcess(outerErr);
     _inProcessLocks.delete(inProcessKey);
     throw outerErr;

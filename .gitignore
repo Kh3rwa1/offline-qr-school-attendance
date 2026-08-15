@@ -7,3 +7,6 @@ output/
 *.log
 .env*
 !.env.example
+gateway-data/
+backups/
+.update.lock

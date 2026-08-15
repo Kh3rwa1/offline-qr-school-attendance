@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AttendEaseBackupManifest",
+  "type": "object",
+  "required": [
+    "backupFormatVersion",
+    "backupFile",
+    "checksumSha256",
+    "timestamp",
+    "sizeBytes",
+    "rawSizeBytes",
+    "database",
+    "appVersion",
+    "schemaVersion",
+    "encryption",
+    "status"
+  ],
+  "properties": {
+    "backupFormatVersion": {
+      "type": "string",
+      "enum": ["1.0", "2.0"]
+    },
+    "backupFile": {
+      "type": "string",
+      "pattern": "^attendease-[0-9]{8}-[0-9]{6}\\.sql\\.gz\\.enc$"
+    },
+    "checksumSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sizeBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "rawSizeBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pgVersion": {
+      "type": "string"
+    },
+    "appVersion": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "type": "string"
+    },
+    "gitCommit": {
+      "type": "string"
+    },
+    "encryption": {
+      "type": "string",
+      "enum": ["AES-256-CBC-PBKDF2"]
+    },
+    "keyId": {
+      "type": "string"
+    },
+    "restoreVerified": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "FAILED"]
+    }
+  },
+  "additionalProperties": false
+}

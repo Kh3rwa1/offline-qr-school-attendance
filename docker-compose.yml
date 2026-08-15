@@ -3,6 +3,7 @@ services:
     image: postgres:16-alpine
     container_name: school_attendance_db
     restart: always
+    command: ["postgres", "-c", "wal_level=replica"]
     environment:
       POSTGRES_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
       POSTGRES_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
@@ -14,11 +15,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   redis:
     image: redis:7-alpine
     container_name: school_attendance_redis
     restart: always
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
     healthcheck:
@@ -26,6 +33,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   app:
     build:
@@ -41,6 +53,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      AUTH_DATABASE_URL: postgres://${AUTH_DB_USER:?AUTH_DB_USER is required}:${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       REDIS_URL: redis://redis:6379
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
@@ -48,11 +61,20 @@ services:
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
       RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
+      RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:?RFID_CARD_MASTER_KEY is required}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY:?KMS_MASTER_KEY is required}
+    volumes:
+      - ./backups:/backups:ro
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null']
       interval: 10s
       timeout: 5s
       retries: 6
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       db:
         condition: service_healthy
@@ -75,9 +97,16 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
       SYSTEM_DB_USER: ${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}
       SYSTEM_DB_PASSWORD: ${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}
+      AUTH_DB_USER: ${AUTH_DB_USER:?AUTH_DB_USER is required}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}
     volumes:
       - ./docker/bootstrap-db.sh:/bootstrap-db.sh:ro
     entrypoint: ['/bin/sh', '/bootstrap-db.sh']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       db:
         condition: service_healthy
@@ -96,6 +125,11 @@ services:
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
     command: ['node', 'dist/migrate.cjs']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       db:
         condition: service_healthy
@@ -129,6 +163,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       db:
         condition: service_healthy
@@ -136,6 +175,36 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  backup:
+    image: postgres:16-alpine
+    container_name: school_attendance_backup
+    restart: always
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
+      POSTGRES_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET:-replace-with-a-random-32-byte-backup-encryption-key-012345678}}
+      BACKUP_CRON: ${BACKUP_CRON:-18:30}
+      BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./docker/backup-entrypoint.sh:/backup-entrypoint.sh:ro
+    entrypoint: ['/bin/sh', '/backup-entrypoint.sh']
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /backups/LATEST']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    depends_on:
+      db:
+        condition: service_healthy
 
   rfid-gateway:
     build:
@@ -148,15 +217,23 @@ services:
       PORT: 3001
       DATABASE_URL: postgres://${APP_DB_USER:?APP_DB_USER is required}:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       SYSTEM_DATABASE_URL: postgres://${SYSTEM_DB_USER:?SYSTEM_DB_USER is required}:${SYSTEM_DB_PASSWORD:?SYSTEM_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      AUTH_DATABASE_URL: postgres://${AUTH_DB_USER:?AUTH_DB_USER is required}:${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       REDIS_URL: redis://redis:6379
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
+      RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:?RFID_CARD_MASTER_KEY is required}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY:?KMS_MASTER_KEY is required}
       ALLOW_LEGACY_RFID_UID_MODE: ${ALLOW_LEGACY_RFID_UID_MODE:-false}
     ports:
       - '3001:3001'
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       db:
         condition: service_healthy

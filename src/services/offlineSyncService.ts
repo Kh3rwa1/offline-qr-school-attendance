@@ -276,6 +276,13 @@ async function markSyncFailure(event: OutboxEventItem, error: string, failureCla
   });
 }
 
+function getCsrfHeader(): Record<string, string> {
+  if (typeof document === 'undefined') return {};
+  const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/);
+  const token = match ? decodeURIComponent(match[1]) : null;
+  return token ? { 'x-csrf-token': token } : {};
+}
+
 // 4. Flush the outbox to the server in bounded batches.
 export async function syncOutboxEvents(params: {
   schoolId: string;
@@ -344,7 +351,10 @@ export async function syncOutboxEvents(params: {
     try {
       const response = await fetchImpl(`/api/v1/schools/${schoolId}/sync/attendance-events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCsrfHeader(),
+        },
         credentials: 'include',
         body: JSON.stringify(payload),
       });

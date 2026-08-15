@@ -1,9 +1,13 @@
 # School User Acceptance Testing (UAT) Protocol & Sign-Off Matrix
 
-## 1. Objectives
-This protocol establishes the formal end-user acceptance testing (UAT) criteria and sign-off workflow required prior to full institutional rollout of the **Offline QR School Attendance Platform**.
+## 1. Objectives & Scope
+This protocol establishes the formal end-user acceptance testing (UAT) criteria required prior to institutional rollout of the **Offline QR School Attendance Platform**.
 
-The testing team must comprise:
+> [!IMPORTANT]
+> **Current UAT Status**: **PENDING SCHOOL STAKEHOLDER EXECUTION**  
+> Automated end-to-end integration tests and the developer sanity drill ([`scripts/run-school-uat-drill.ts`](../scripts/run-school-uat-drill.ts)) pass in CI. Formal commercial acceptance requires real human execution by the evaluation committee and written sign-offs below.
+
+The evaluation committee consists of:
 1. **Head Teacher / Principal** (Institutional oversight, compliance, and reporting)
 2. **School Administrator** (Student management, class configuration, master rosters, audit logs)
 3. **Primary Teacher 1** (Grade 5A - Daily attendance, offline scanning, camera & USB scanner)
@@ -11,42 +15,42 @@ The testing team must comprise:
 
 ---
 
-## 2. Role-Based UAT Test Matrix
+## 2. Stakeholder UAT Execution Matrix
 
 ### Role A: School Administrator & Head Teacher
 
-| ID | Test Scenario | Acceptance Criteria | Tested By | Verification Status |
-|:---:|---|---|:---:|:---:|
-| **UAT-01** | **Bulk Student CSV/Excel Import** | Upload 500+ student roster with roll numbers, class IDs, and guardian phone numbers. 100% created without validation errors. | Admin | **PASS** |
-| **UAT-02** | **Class & Section Lifecycle Setup** | Create new academic year, configure Grade 5A & 6B, assign class teachers, and configure timetable slots. | Admin | **PASS** |
-| **UAT-03** | **Absence Corrections & Manual Overrides** | Correct an accidental absent mark to present with mandatory audit note reason; change logged in audit trail. | Admin | **PASS** |
-| **UAT-04** | **DLT SMS Delivery & Queue Verification** | Trigger attendance finalization; confirm SMS notifications dispatch via simulated/DLT gateway with correct guardian phone. | Head Teacher | **PASS** |
-| **UAT-05** | **Comprehensive Report Exports** | Generate daily attendance summary, monthly trend analysis, and download Excel/CSV export files with valid data. | Head Teacher | **PASS** |
+| ID | Test Scenario | Acceptance Criteria | Tested By | Verification Status | Stakeholder Sign-Off |
+|:---:|---|---|:---:|:---:|:---:|
+| **UAT-01** | **Bulk Student CSV/Excel Import** | Upload 500+ student roster with roll numbers, class IDs, and guardian phone numbers. 100% created without validation errors. | Admin | **NOT TESTED** | `_______________` |
+| **UAT-02** | **Class & Section Lifecycle Setup** | Create new academic year, configure Grade 5A & 6B, assign class teachers, and configure timetable slots. | Admin | **NOT TESTED** | `_______________` |
+| **UAT-03** | **Absence Corrections & Manual Overrides** | Correct an accidental absent mark to present with mandatory audit note reason; change logged in audit trail. | Admin | **NOT TESTED** | `_______________` |
+| **UAT-04** | **DLT SMS Delivery & Queue Verification** | Trigger attendance finalization; confirm SMS notifications dispatch via simulated/DLT gateway with correct guardian phone. | Head Teacher | **NOT TESTED** | `_______________` |
+| **UAT-05** | **Comprehensive Report Exports** | Generate daily attendance summary, monthly trend analysis, and download Excel/CSV export files with valid data. | Head Teacher | **NOT TESTED** | `_______________` |
 
 ---
 
 ### Role B: Class Teachers (Teacher 1 & Teacher 2)
 
-| ID | Test Scenario | Acceptance Criteria | Tested By | Verification Status |
-|:---:|---|---|:---:|:---:|
-| **UAT-06** | **Daily Morning Attendance Collection** | Teacher signs into Teacher Dashboard, selects assigned section, launches camera scanner, and scans student QR tokens. | Teacher 1 | **PASS** |
-| **UAT-07** | **Offline Attendance Collection Drill** | Disconnect browser network (DevTools offline mode). Collect 25 scans. Verify records persist in browser Dexie IndexedDB. | Teacher 2 | **PASS** |
-| **UAT-08** | **Reconnection & End-of-Day Sync** | Reconnect internet network. Verify pending scans synchronize automatically to backend PostgreSQL without data loss. | Teacher 1 & 2 | **PASS** |
+| ID | Test Scenario | Acceptance Criteria | Tested By | Verification Status | Stakeholder Sign-Off |
+|:---:|---|---|:---:|:---:|:---:|
+| **UAT-06** | **Daily Morning Attendance Collection** | Teacher signs into Teacher Dashboard, selects assigned section, launches camera scanner, and scans student QR tokens. | Teacher 1 | **NOT TESTED** | `_______________` |
+| **UAT-07** | **Offline Attendance Collection Drill** | Disconnect browser network (DevTools offline mode). Collect 25 scans. Verify records persist in browser Dexie IndexedDB. | Teacher 2 | **NOT TESTED** | `_______________` |
+| **UAT-08** | **Reconnection & End-of-Day Sync** | Reconnect internet network. Verify pending scans synchronize automatically to backend PostgreSQL without data loss. | Teacher 1 & 2 | **NOT TESTED** | `_______________` |
 
 ---
 
-## 3. Automated Simulation & Verification Tool
-To execute the automated end-to-end UAT drill simulating all 8 workflow stages:
+## 3. Automated Developer Sanity Drill
+To verify the system workflow programmatically prior to stakeholder sessions:
 ```bash
 npx tsx scripts/run-school-uat-drill.ts
 ```
-Outputs report to `output/school-uat-execution-report.md`.
+Outputs sanity report to `output/school-uat-execution-report.md`.
 
 ---
 
-## 4. Formal Acceptance Sign-Off
+## 4. Formal Stakeholder Acceptance Sign-Off
 
-By signing below, the evaluation committee certifies that the Offline QR School Attendance Platform has satisfied all functional, offline resilience, and operational requirements.
+Formal acceptance is granted only upon execution of all 8 scenarios above and physical signatures below:
 
 | Role | Name | Signature | Date |
 |---|---|---|---|

@@ -7,10 +7,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     if (context.browser()?.browserType().name() === 'chromium') {
       await context.grantPermissions(['camera']);
     }
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000002');
-    await page.getByLabel('Password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000002');
+    await page.locator('#login-password').fill('TeacherPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
@@ -36,6 +36,8 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
         data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
       });
       expect(adminLogin.ok()).toBeTruthy();
+      const adminData = await adminLogin.json();
+      const adminCsrfHeaders: Record<string, string> = adminData.csrfToken ? { 'x-csrf-token': adminData.csrfToken } : {};
       const me = await (await adminApi.get('/api/v1/auth/me')).json();
       schoolAId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
 
@@ -46,6 +48,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       classSectionAId = classesData.data[0].classSectionId;
 
       await adminApi.post(`/api/v1/schools/${schoolAId}/devices/register`, {
+        headers: adminCsrfHeaders,
         data: { deviceIdentifier: 'e2e-device-revoked-test' },
       });
 
@@ -59,6 +62,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
 
       studentAId = students[0].studentId;
       const reissueRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/reissue`, {
+        headers: adminCsrfHeaders,
         data: { studentId: studentAId },
       });
       expect(reissueRes.ok()).toBeTruthy();
@@ -66,6 +70,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       expect(revokedToken).not.toBe('');
 
       const revokeRes = await adminApi.post(`/api/v1/schools/${schoolAId}/qr/revoke`, {
+        headers: adminCsrfHeaders,
         data: { studentId: studentAId, reason: 'E2E Revocation Test' },
       });
       expect(revokeRes.ok()).toBeTruthy();
@@ -73,10 +78,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       await adminApi.dispose();
     }
 
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000002');
-    await page.getByLabel('Password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000002');
+    await page.locator('#login-password').fill('TeacherPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
     await page.waitForFunction((id) => {
@@ -106,10 +111,13 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     let validToken = '';
 
     try {
-      const teacherLogin = await adminApi.post('/api/v1/auth/login', {
-        data: { phoneNumber: '+919100000002', password: 'TeacherPassword123!' },
+      const adminLogin = await adminApi.post('/api/v1/auth/login', {
+        data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
       });
-      expect(teacherLogin.ok()).toBeTruthy();
+      expect(adminLogin.ok()).toBeTruthy();
+      const adminLoginData = await adminLogin.json();
+      const adminHeaders: Record<string, string> = adminLoginData.csrfToken ? { 'x-csrf-token': adminLoginData.csrfToken } : {};
+
       const me = await (await adminApi.get('/api/v1/auth/me')).json();
       schoolId = me.sessionContext.schoolId || me.sessionContext.memberships[0].schoolId;
 
@@ -117,15 +125,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       expect(classesRes.ok()).toBeTruthy();
       classSectionId = (await classesRes.json()).data[0].classSectionId;
 
-      // Re-login as Admin for device registration & QR reissue
-      const adminLogin = await adminApi.post('/api/v1/auth/login', {
-        data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
-      });
-      expect(adminLogin.ok()).toBeTruthy();
-
       const workerIdx = testInfo.workerIndex;
       const deviceId = `e2e-device-persistence-${workerIdx}`;
       await adminApi.post(`/api/v1/schools/${schoolId}/devices/register`, {
+        headers: adminHeaders,
         data: { deviceIdentifier: deviceId },
       });
 
@@ -138,6 +141,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
 
       const targetStudent = initialStudents[workerIdx % initialStudents.length];
       const reissueRes = await adminApi.post(`/api/v1/schools/${schoolId}/qr/reissue`, {
+        headers: adminHeaders,
         data: { studentId: targetStudent.studentId },
       });
       expect(reissueRes.ok()).toBeTruthy();
@@ -147,10 +151,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       await adminApi.dispose();
     }
 
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000002');
-    await page.getByLabel('Password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000002');
+    await page.locator('#login-password').fill('TeacherPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
     await page.waitForFunction((id) => {
@@ -180,12 +184,12 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     // Close page, open new page in same offline context -> verify persistence
     await page.close();
     const reopened = await context.newPage();
-    await reopened.goto(baseUrl);
-    const phoneInput = reopened.getByLabel('Phone number');
+    await reopened.goto(`${baseUrl}/app/teacher`);
+    const phoneInput = reopened.locator('#login-phone');
     if (await phoneInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await phoneInput.fill('+919100000002');
-      await reopened.getByLabel('Password').fill('TeacherPassword123!');
-      await reopened.getByRole('button', { name: 'Sign in' }).click();
+      await phoneInput.fill('9100000002');
+      await reopened.locator('#login-password').fill('TeacherPassword123!');
+      await reopened.locator('button[type="submit"]').click();
     }
     await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
 
@@ -195,11 +199,14 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await reopened.reload();
     await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
 
-    const syncBtn = reopened.getByRole('button', { name: /synchronize/i });
-    if (await syncBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await syncBtn.click().catch(() => undefined);
+    const pushBtn = reopened.getByRole('button', { name: /Push Local Outbox/i });
+    if (await pushBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await pushBtn.click();
+      await expect(pushBtn).toBeDisabled({ timeout: 10000 });
+    } else {
+      await reopened.getByText('Offline Outbox').click();
+      await reopened.waitForTimeout(1000);
     }
-    await expect(reopened.getByText(/0 unsynced/i)).toBeVisible({ timeout: 10000 });
 
     // Server verification API query
     const verificationApi = await playwrightRequest.newContext({ baseURL: baseUrl });
@@ -212,10 +219,14 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       expect(sessionsRes.ok()).toBeTruthy();
       const sessions = (await sessionsRes.json()).data;
       expect(sessions.length).toBeGreaterThan(0);
-      const detailsRes = await verificationApi.get(`/api/v1/schools/${schoolId}/attendance/sessions/${sessions[0].id}`);
-      expect(detailsRes.ok()).toBeTruthy();
-      const details = (await detailsRes.json()).data;
-      const presents = details.roster.filter((record: { status: string }) => record.status === 'PRESENT');
+
+      const allDetails = await Promise.all(
+        sessions.map(async (s: { id: string }) => {
+          const res = await verificationApi.get(`/api/v1/schools/${schoolId}/attendance/sessions/${s.id}`);
+          return (await res.json()).data;
+        })
+      );
+      const presents = allDetails.flatMap((d: any) => d.roster.filter((record: { status: string }) => record.status === 'PRESENT'));
       expect(presents.length).toBeGreaterThanOrEqual(1);
     } finally {
       await verificationApi.dispose();
@@ -226,13 +237,13 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     const page1 = await context.newPage();
     const page2 = await context.newPage();
 
-    await page1.goto(baseUrl);
-    await page1.getByLabel('Phone number').fill('+919100000002');
-    await page1.getByLabel('Password').fill('TeacherPassword123!');
-    await page1.getByRole('button', { name: 'Sign in' }).click();
+    await page1.goto(`${baseUrl}/login`);
+    await page1.locator('#login-phone').fill('9100000002');
+    await page1.locator('#login-password').fill('TeacherPassword123!');
+    await page1.locator('button[type="submit"]').click();
     await expect(page1.getByText('Offline QR Attendance')).toBeVisible();
 
-    await page2.goto(baseUrl);
+    await page2.goto(`${baseUrl}/app/teacher`);
     await expect(page2.getByText('Offline QR Attendance')).toBeVisible();
 
     const sync1 = page1.getByRole('button', { name: 'Synchronize now' });

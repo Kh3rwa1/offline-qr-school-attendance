@@ -4,21 +4,21 @@ import { computeCanonicalSignature } from '../../src/services/rfid/cryptoService
 
 test.describe('RFID Attendance & Portal E2E Suite', () => {
   test('Renders login page and verifies application title and branding', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/login');
     await expect(page).toHaveTitle(/Attendance|School/i);
     const heading = page.locator('h1, h2, header');
     await expect(heading.first()).toBeVisible();
   });
 
   test('Authenticates user via login form and loads dashboard', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/login');
     
-    const phoneInput = page.locator('input[type="tel"], input[name="phoneNumber"], input[name="phone"]');
-    const passwordInput = page.locator('input[type="password"]');
+    const phoneInput = page.locator('#login-phone, input[type="tel"]');
+    const passwordInput = page.locator('#login-password, input[type="password"]');
     const submitBtn = page.locator('button[type="submit"]');
 
     if (await phoneInput.count() > 0) {
-      await phoneInput.fill('+919100000001');
+      await phoneInput.fill('9100000001');
       await passwordInput.fill('SchoolAdminPassword123!');
       await submitBtn.click();
       await page.waitForLoadState('networkidle');

@@ -63,22 +63,49 @@ describe('Central Role & Permissions Engine', () => {
   });
 
   it('resolves correct default landing routes for each role', () => {
-    expect(getDefaultRouteForRole('SUPER_ADMIN')).toBe('/app/super-admin');
-    expect(getDefaultRouteForRole('SCHOOL_ADMIN')).toBe('/app/school-admin');
-    expect(getDefaultRouteForRole('TEACHER')).toBe('/app/teacher');
-    expect(getDefaultRouteForRole('REPORT_VIEWER')).toBe('/app/reports');
-    expect(getDefaultRouteForRole('RFID_OPERATOR')).toBe('/app/rfid');
-    expect(getDefaultRouteForRole(undefined)).toBe('/login');
+    const originalEnv = process.env.FEATURE_RFID;
+    try {
+      delete process.env.FEATURE_RFID;
+      expect(getDefaultRouteForRole('SUPER_ADMIN')).toBe('/app/super-admin');
+      expect(getDefaultRouteForRole('SCHOOL_ADMIN')).toBe('/app/school-admin');
+      expect(getDefaultRouteForRole('TEACHER')).toBe('/app/teacher');
+      expect(getDefaultRouteForRole('REPORT_VIEWER')).toBe('/app/reports');
+      expect(getDefaultRouteForRole('RFID_OPERATOR')).toBe('/login');
+      expect(getDefaultRouteForRole(undefined)).toBe('/login');
+
+      process.env.FEATURE_RFID = 'true';
+      expect(getDefaultRouteForRole('RFID_OPERATOR')).toBe('/app/rfid');
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.FEATURE_RFID = originalEnv;
+      } else {
+        delete process.env.FEATURE_RFID;
+      }
+    }
   });
 
-  it('filters navigation items based on active role permissions', () => {
-    const teacherNav = getNavigationForRole('TEACHER');
-    expect(teacherNav.some((n) => n.href === '/app/teacher')).toBe(true);
-    expect(teacherNav.some((n) => n.href === '/app/super-admin')).toBe(false);
-    expect(teacherNav.some((n) => n.href === '/app/rfid/readers')).toBe(false);
+  it('filters navigation items based on active role permissions and feature flags', () => {
+    const originalEnv = process.env.FEATURE_RFID;
+    try {
+      delete process.env.FEATURE_RFID;
+      const teacherNav = getNavigationForRole('TEACHER');
+      expect(teacherNav.some((n) => n.href === '/app/teacher')).toBe(true);
+      expect(teacherNav.some((n) => n.href === '/app/super-admin')).toBe(false);
+      expect(teacherNav.some((n) => n.href === '/app/rfid/readers')).toBe(false);
 
-    const rfidNav = getNavigationForRole('RFID_OPERATOR');
-    expect(rfidNav.some((n) => n.href === '/app/rfid')).toBe(true);
-    expect(rfidNav.some((n) => n.href === '/app/school-admin/users')).toBe(false);
+      const rfidNavDefaultOff = getNavigationForRole('RFID_OPERATOR');
+      expect(rfidNavDefaultOff.some((n) => n.href.startsWith('/app/rfid'))).toBe(false);
+
+      process.env.FEATURE_RFID = 'true';
+      const rfidNavEnabled = getNavigationForRole('RFID_OPERATOR');
+      expect(rfidNavEnabled.some((n) => n.href === '/app/rfid')).toBe(true);
+      expect(rfidNavEnabled.some((n) => n.href === '/app/school-admin/users')).toBe(false);
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.FEATURE_RFID = originalEnv;
+      } else {
+        delete process.env.FEATURE_RFID;
+      }
+    }
   });
 });

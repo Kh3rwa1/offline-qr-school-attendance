@@ -251,89 +251,93 @@ export const AppRouter: React.FC = () => {
             }
           />
 
-          {/* RFID Operator Routes */}
-          <Route
-            path="rfid"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <RfidOperatorDashboard />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid/readers"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <ReaderOperations />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid/cards"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <CardOperations />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid/enrollment"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <EnrollmentOperations />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid/events"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <RfidIncidentQueue />
-              </RequireRole>
-            }
-          />
+          {/* RFID Operator Routes - Feature Flag Gated */}
+          {((import.meta as any).env?.VITE_FEATURE_RFID === 'true') && (
+            <>
+              <Route
+                path="rfid"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <RfidOperatorDashboard />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid/readers"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <ReaderOperations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid/cards"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <CardOperations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid/enrollment"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <EnrollmentOperations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid/events"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <RfidIncidentQueue />
+                  </RequireRole>
+                }
+              />
 
-          {/* RFID Operator Route Aliases */}
-          <Route
-            path="rfid-operator"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <RfidOperatorDashboard />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid-operator/readers"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <ReaderOperations />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid-operator/cards"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <CardOperations />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid-operator/enrollment"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <EnrollmentOperations />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="rfid-operator/events"
-            element={
-              <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
-                <RfidIncidentQueue />
-              </RequireRole>
-            }
-          />
+              {/* RFID Operator Route Aliases */}
+              <Route
+                path="rfid-operator"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <RfidOperatorDashboard />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid-operator/readers"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <ReaderOperations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid-operator/cards"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <CardOperations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid-operator/enrollment"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <EnrollmentOperations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="rfid-operator/events"
+                element={
+                  <RequireRole allowedRoles={['RFID_OPERATOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                    <RfidIncidentQueue />
+                  </RequireRole>
+                }
+              />
+            </>
+          )}
 
           {/* 403 Page */}
           <Route path="unauthorized" element={<UnauthorizedPage />} />

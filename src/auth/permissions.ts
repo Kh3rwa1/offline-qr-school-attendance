@@ -161,6 +161,10 @@ export function hasAnyPermission(role: UserRole | string | undefined, permission
 }
 
 export function getDefaultRouteForRole(role: UserRole | string | undefined): string {
+  const isRfidEnabled =
+    (typeof process !== 'undefined' && process.env?.FEATURE_RFID === 'true') ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_RFID === 'true');
+
   switch (role) {
     case 'SUPER_ADMIN':
       return '/app/super-admin';
@@ -171,7 +175,7 @@ export function getDefaultRouteForRole(role: UserRole | string | undefined): str
     case 'REPORT_VIEWER':
       return '/app/reports';
     case 'RFID_OPERATOR':
-      return '/app/rfid';
+      return isRfidEnabled ? '/app/rfid' : '/login';
     default:
       return '/login';
   }
@@ -349,8 +353,7 @@ export function getNavigationForRole(role: UserRole | string | undefined): Navig
 
   const isRfidEnabled =
     (typeof process !== 'undefined' && process.env?.FEATURE_RFID === 'true') ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_RFID === 'true') ||
-    role === 'RFID_OPERATOR';
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_RFID === 'true');
 
   return allNavItems
     .filter((item) => isRfidEnabled || !item.id.startsWith('rfid-'))

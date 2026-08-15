@@ -29,6 +29,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
   });
 
   test('Submits RFID scan envelope to API and verifies attendance record creation', async ({ request }, testInfo) => {
+    test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
     // Check system health endpoint first
     const health = await request.get('/api/v1/health');
     expect(health.status()).toBe(200);

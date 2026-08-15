@@ -69,15 +69,15 @@ echo "Target Database: ${POSTGRES_DB}"
 
 # Check if docker compose is running
 if command -v docker >/dev/null 2>&1 && docker compose ps --services 2>/dev/null | grep -q "db"; then
-  echo "Streaming decrypted backup into docker-compose database service..."
+  echo "Streaming decrypted backup into docker-compose database service (with ON_ERROR_STOP=1)..."
   openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -in "${BACKUP_FILE}" \
     | gunzip -c \
-    | docker compose exec -T db psql -U "${MIGRATION_DB_USER}" -d "${POSTGRES_DB}"
+    | docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${MIGRATION_DB_USER}" -d "${POSTGRES_DB}"
 elif [ -n "${DATABASE_URL:-}" ]; then
-  echo "Streaming decrypted backup using local psql connection..."
+  echo "Streaming decrypted backup using local psql connection (with ON_ERROR_STOP=1)..."
   openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -in "${BACKUP_FILE}" \
     | gunzip -c \
-    | psql "${DATABASE_URL}"
+    | psql -v ON_ERROR_STOP=1 "${DATABASE_URL}"
 else
   echo "Error: Neither docker compose 'db' service nor DATABASE_URL is available for restoration." >&2
   exit 1

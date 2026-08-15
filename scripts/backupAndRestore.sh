@@ -15,8 +15,9 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
-  echo "Error: BACKUP_PASSPHRASE environment variable is required for encryption."
+BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-${BACKUP_PASSPHRASE:-}}"
+if [ -z "${BACKUP_ENCRYPTION_KEY}" ]; then
+  echo "Error: BACKUP_ENCRYPTION_KEY environment variable is required for encryption."
   exit 1
 fi
 
@@ -40,11 +41,11 @@ trap cleanup EXIT
 START_TIME=$(date +%s)
 
 echo "1. Creating AES-256 encrypted PostgreSQL backup from ${SOURCE_DB_NAME} to ${BACKUP_FILE}..."
-pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -out "${BACKUP_FILE}"
+pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -out "${BACKUP_FILE}"
 echo "Backup created and encrypted successfully. Size: $(du -sh "${BACKUP_FILE}" | cut -f1)"
 
 echo "2. Decrypting and verifying backup archive integrity..."
-openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_PASSPHRASE}" -in "${BACKUP_FILE}" | gunzip -c > "${RESTORE_FILE}"
+openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -in "${BACKUP_FILE}" | gunzip -c > "${RESTORE_FILE}"
 echo "Decryption successful. Uncompressed dump size: $(du -sh "${RESTORE_FILE}" | cut -f1)"
 
 echo "3. Restoring dump into separate fresh test database ${RESTORE_DB_NAME} with ON_ERROR_STOP=1..."

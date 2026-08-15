@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import {
   importJobs,
@@ -153,11 +153,26 @@ export async function parseAndValidateXlsx(params: {
     throw new Error('NO_CURRENT_ACADEMIC_YEAR');
   }
 
-  // Fetch existing student codes and enrollments for DB collision checks
-  const existingStudents = await db
-    .select({ studentCode: students.studentCode })
-    .from(students)
-    .where(eq(students.schoolId, params.schoolId));
+  // Fetch existing student codes in this upload for collision checks
+  const codesInUpload = Array.from(
+    new Set(
+      rawRows
+        .map((r) => r['Student Code'] || r['student_code'])
+        .filter((c) => typeof c === 'string' && c.trim().length > 0)
+    )
+  );
+
+  const existingStudents = codesInUpload.length > 0
+    ? await db
+        .select({ studentCode: students.studentCode })
+        .from(students)
+        .where(
+          and(
+            eq(students.schoolId, params.schoolId),
+            inArray(students.studentCode, codesInUpload)
+          )
+        )
+    : [];
 
   const existingStudentCodes = new Set(existingStudents.map((s: { studentCode: string }) => s.studentCode));
 

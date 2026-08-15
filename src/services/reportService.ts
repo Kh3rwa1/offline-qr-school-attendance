@@ -346,7 +346,13 @@ export async function getMonthlyClassRegister(schoolId: string, classSectionId: 
 }
 
 // 4. Individual Student History
-export async function getStudentAttendanceHistory(schoolId: string, studentId: string, startDate?: string, endDate?: string) {
+export async function getStudentAttendanceHistory(
+  schoolId: string,
+  studentId: string,
+  startDate?: string,
+  endDate?: string,
+  pagination?: { limit?: number; offset?: number }
+) {
   const [student] = await db
     .select()
     .from(students)
@@ -368,6 +374,9 @@ export async function getStudentAttendanceHistory(schoolId: string, studentId: s
     queryConditions.push(lte(attendanceSessions.sessionDate, endDate));
   }
 
+  const limit = Math.min(Math.max(pagination?.limit || 200, 1), 1000);
+  const offset = Math.max(pagination?.offset || 0, 0);
+
   const history = await db
     .select({
       recordId: attendanceRecords.id,
@@ -380,7 +389,9 @@ export async function getStudentAttendanceHistory(schoolId: string, studentId: s
     .from(attendanceRecords)
     .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
     .where(and(...queryConditions))
-    .orderBy(desc(attendanceSessions.sessionDate));
+    .orderBy(desc(attendanceSessions.sessionDate))
+    .limit(limit)
+    .offset(offset);
 
   let present = 0, late = 0, absent = 0, leave = 0, excused = 0;
   for (const item of history) {
@@ -416,8 +427,20 @@ export async function getStudentAttendanceHistory(schoolId: string, studentId: s
 }
 
 // 5. Absent-Student Report
-export async function getAbsentStudentReport(schoolId: string, params: { classSectionId?: string; startDate: string; endDate?: string; includeGuardianPhone?: boolean }) {
+export async function getAbsentStudentReport(
+  schoolId: string,
+  params: {
+    classSectionId?: string;
+    startDate: string;
+    endDate?: string;
+    includeGuardianPhone?: boolean;
+    limit?: number;
+    offset?: number;
+  }
+) {
   const { classSectionId, startDate, endDate = startDate, includeGuardianPhone = false } = params;
+  const limit = Math.min(Math.max(params.limit || 500, 1), 2000);
+  const offset = Math.max(params.offset || 0, 0);
 
   let sessionConditions = [
     eq(attendanceSessions.schoolId, schoolId),
@@ -446,7 +469,9 @@ export async function getAbsentStudentReport(schoolId: string, params: { classSe
     .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
     .innerJoin(students, eq(attendanceRecords.studentId, students.id))
     .where(and(...sessionConditions, eq(attendanceRecords.status, 'ABSENT')))
-    .orderBy(attendanceSessions.sessionDate, classSections.className, classSections.sectionName);
+    .orderBy(attendanceSessions.sessionDate, classSections.className, classSections.sectionName)
+    .limit(limit)
+    .offset(offset);
 
   let guardianMap: Record<string, string> = {};
   if (includeGuardianPhone && absentees.length > 0) {
@@ -482,7 +507,12 @@ export async function getAbsentStudentReport(schoolId: string, params: { classSe
 }
 
 // 6. Attendance Correction Report
-export async function getCorrectionReport(schoolId: string, startDate?: string, endDate?: string) {
+export async function getCorrectionReport(
+  schoolId: string,
+  startDate?: string,
+  endDate?: string,
+  pagination?: { limit?: number; offset?: number }
+) {
   let conditions = [
     eq(attendanceCorrections.schoolId, schoolId),
   ];
@@ -493,6 +523,9 @@ export async function getCorrectionReport(schoolId: string, startDate?: string, 
   if (endDate) {
     conditions.push(lte(attendanceSessions.sessionDate, endDate));
   }
+
+  const limit = Math.min(Math.max(pagination?.limit || 200, 1), 1000);
+  const offset = Math.max(pagination?.offset || 0, 0);
 
   const corrections = await db
     .select({
@@ -518,7 +551,9 @@ export async function getCorrectionReport(schoolId: string, startDate?: string, 
     .innerJoin(students, eq(attendanceRecords.studentId, students.id))
     .leftJoin(users, eq(attendanceCorrections.correctedBy, users.id))
     .where(and(...conditions))
-    .orderBy(desc(attendanceCorrections.correctedAt));
+    .orderBy(desc(attendanceCorrections.correctedAt))
+    .limit(limit)
+    .offset(offset);
 
   return {
     schoolId,
@@ -528,10 +563,18 @@ export async function getCorrectionReport(schoolId: string, startDate?: string, 
 }
 
 // 7. Teacher / Session Audit Report
-export async function getTeacherSessionReport(schoolId: string, startDate?: string, endDate?: string) {
+export async function getTeacherSessionReport(
+  schoolId: string,
+  startDate?: string,
+  endDate?: string,
+  pagination?: { limit?: number; offset?: number }
+) {
   let sessionConditions = [eq(attendanceSessions.schoolId, schoolId)];
   if (startDate) sessionConditions.push(gte(attendanceSessions.sessionDate, startDate));
   if (endDate) sessionConditions.push(lte(attendanceSessions.sessionDate, endDate));
+
+  const limit = Math.min(Math.max(pagination?.limit || 200, 1), 1000);
+  const offset = Math.max(pagination?.offset || 0, 0);
 
   const sessions = await db
     .select({
@@ -551,7 +594,9 @@ export async function getTeacherSessionReport(schoolId: string, startDate?: stri
     .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
     .innerJoin(users, eq(attendanceSessions.teacherId, users.id))
     .where(and(...sessionConditions))
-    .orderBy(desc(attendanceSessions.sessionDate));
+    .orderBy(desc(attendanceSessions.sessionDate))
+    .limit(limit)
+    .offset(offset);
 
   const sessionIds = sessions.map((s: any) => s.sessionId);
 
@@ -582,6 +627,85 @@ export async function getTeacherSessionReport(schoolId: string, startDate?: stri
     schoolId,
     totalSessions: reports.length,
     sessions: reports,
+  };
+}
+
+// 8. Full Tenant Data Portability Export
+export async function getFullTenantExport(schoolId: string) {
+  const [school] = await db
+    .select()
+    .from(schools)
+    .where(eq(schools.id, schoolId));
+
+  if (!school) {
+    throw new Error('SCHOOL_NOT_FOUND');
+  }
+
+  const sections = await db
+    .select()
+    .from(classSections)
+    .where(eq(classSections.schoolId, schoolId));
+
+  const allStudents = await db
+    .select()
+    .from(students)
+    .where(eq(students.schoolId, schoolId));
+
+  const allEnrollments = await db
+    .select()
+    .from(enrollments)
+    .where(eq(enrollments.schoolId, schoolId));
+
+  const allGuardians = await db
+    .select()
+    .from(guardians)
+    .where(eq(guardians.schoolId, schoolId));
+
+  const allStudentGuardians = await db
+    .select({
+      studentId: studentGuardians.studentId,
+      guardianId: studentGuardians.guardianId,
+      isPrimary: studentGuardians.isPrimary,
+    })
+    .from(studentGuardians)
+    .innerJoin(students, eq(studentGuardians.studentId, students.id))
+    .where(eq(students.schoolId, schoolId));
+
+  const recentSessions = await db
+    .select()
+    .from(attendanceSessions)
+    .where(eq(attendanceSessions.schoolId, schoolId))
+    .orderBy(desc(attendanceSessions.sessionDate))
+    .limit(500);
+
+  const recentAuditLogs = await db
+    .select()
+    .from(auditLogs)
+    .where(eq(auditLogs.schoolId, schoolId))
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(1000);
+
+  return {
+    exportVersion: '1.0.0',
+    exportTimestamp: new Date().toISOString(),
+    school: {
+      id: school.id,
+      name: school.name,
+      slug: school.slug,
+      udiseCode: school.udiseCode,
+      district: school.district,
+      block: school.block,
+      preferredLanguage: school.preferredLanguage,
+      timezone: school.timezone,
+      status: school.status,
+    },
+    classSections: sections,
+    students: allStudents,
+    enrollments: allEnrollments,
+    guardians: allGuardians,
+    studentGuardians: allStudentGuardians,
+    sessions: recentSessions,
+    auditLogs: recentAuditLogs,
   };
 }
 

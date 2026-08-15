@@ -1,4 +1,6 @@
 import { Router, Response } from 'express';
+import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { requireTenant } from '../middleware/tenantMiddleware';
 import {
   getDailySchoolReport,
   getDailyClassReport,
@@ -10,45 +12,72 @@ import {
   generateXLSXExport,
   generateCSVExport,
   sanitizeFilename,
+  getFullTenantExport,
 } from '../services/reportService';
+import { teacherAssignments, attendanceSessions, attendanceRecords, enrollments } from '../db/schema';
+import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
+import { db } from '../db';
 import { createAuditLog } from '../services/auditLogService';
-import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { requireTenant } from '../middleware/tenantMiddleware';
-import { db, withTenantContext } from '../db';
-import { enrollments, teacherAssignments, attendanceRecords, attendanceSessions } from '../db/schema';
-import { and, eq, sql } from 'drizzle-orm';
 
 const reportRouter = Router({ mergeParams: true });
 
-async function teacherHasClassAccess(req: AuthenticatedRequest, schoolId: string, classSectionId?: string) {
-  if (req.userRole !== 'TEACHER') return true;
-  if (!classSectionId) return false;
-  const [assignment] = await db.select({ id: teacherAssignments.id }).from(teacherAssignments).where(and(
-    eq(teacherAssignments.schoolId, schoolId),
-    eq(teacherAssignments.teacherId, req.user!.id),
-    eq(teacherAssignments.classSectionId, classSectionId)
-  ));
-  return Boolean(assignment);
+// Helper to check if a teacher has access to a specific classSectionId
+async function teacherHasClassAccess(req: AuthenticatedRequest, schoolId: string, classSectionId?: string): Promise<boolean> {
+  if (!classSectionId) return true;
+  if (req.userRole === 'SUPER_ADMIN' || req.userRole === 'SCHOOL_ADMIN' || req.userRole === 'REPORT_VIEWER') {
+    return true;
+  }
+  if (req.userRole === 'TEACHER') {
+    const [assignment] = await db
+      .select()
+      .from(teacherAssignments)
+      .where(
+        and(
+          eq(teacherAssignments.schoolId, schoolId),
+          eq(teacherAssignments.teacherId, req.user!.id),
+          eq(teacherAssignments.classSectionId, classSectionId)
+        )
+      );
+    return !!assignment;
+  }
+  return false;
 }
 
-async function teacherHasStudentAccess(req: AuthenticatedRequest, schoolId: string, studentId: string) {
-  if (req.userRole !== 'TEACHER') return true;
-  const [assignment] = await db.select({ id: teacherAssignments.id })
-    .from(enrollments)
-    .innerJoin(teacherAssignments, and(
-      eq(teacherAssignments.schoolId, enrollments.schoolId),
-      eq(teacherAssignments.classSectionId, enrollments.classSectionId),
-    ))
-    .where(and(
-      eq(enrollments.schoolId, schoolId),
-      eq(enrollments.studentId, studentId),
-      eq(enrollments.status, 'ACTIVE'),
-      eq(teacherAssignments.teacherId, req.user!.id),
-    ));
-  return Boolean(assignment);
+// Helper to check if a teacher has access to a specific student
+async function teacherHasStudentAccess(req: AuthenticatedRequest, schoolId: string, studentId: string): Promise<boolean> {
+  if (req.userRole === 'SUPER_ADMIN' || req.userRole === 'SCHOOL_ADMIN' || req.userRole === 'REPORT_VIEWER') {
+    return true;
+  }
+  if (req.userRole === 'TEACHER') {
+    const assignments = await db
+      .select({ classSectionId: teacherAssignments.classSectionId })
+      .from(teacherAssignments)
+      .where(
+        and(
+          eq(teacherAssignments.schoolId, schoolId),
+          eq(teacherAssignments.teacherId, req.user!.id)
+        )
+      );
+
+    if (assignments.length === 0) return false;
+    const assignedClassIds = assignments.map((a: any) => a.classSectionId);
+
+    const [enrollment] = await db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.schoolId, schoolId),
+          eq(enrollments.studentId, studentId),
+          inArray(enrollments.classSectionId, assignedClassIds)
+        )
+      );
+    return !!enrollment;
+  }
+  return false;
 }
 
-// 1. Daily School Summary
+// 1. Daily School Attendance Summary (Admin & Report Viewer)
 reportRouter.get(
   '/daily-school',
   requireAuth,
@@ -67,7 +96,7 @@ reportRouter.get(
   }
 );
 
-// 2. Daily Class Detail
+// 2. Daily Class Attendance Detail (Admin, Teacher, Report Viewer)
 reportRouter.get(
   '/daily-class',
   requireAuth,
@@ -97,7 +126,7 @@ reportRouter.get(
   }
 );
 
-// 3. Monthly Class Register
+// 3. Monthly Class Register Grid (Admin, Teacher, Report Viewer)
 reportRouter.get(
   '/monthly-register',
   requireAuth,
@@ -114,6 +143,7 @@ reportRouter.get(
         res.status(400).json({ error: 'MISSING_CLASS_SECTION_ID' });
         return;
       }
+
       if (!await teacherHasClassAccess(req, schoolId, classSectionId)) {
         res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
         return;
@@ -127,7 +157,7 @@ reportRouter.get(
   }
 );
 
-// 4. Individual Student History
+// 4. Individual Student History (Admin, Teacher, Report Viewer)
 reportRouter.get(
   '/student-history',
   requireAuth,
@@ -139,6 +169,8 @@ reportRouter.get(
       const studentId = req.query.studentId as string;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
+      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const offset = req.query.offset ? Number(req.query.offset) : undefined;
 
       if (!studentId) {
         res.status(400).json({ error: 'MISSING_STUDENT_ID' });
@@ -150,7 +182,7 @@ reportRouter.get(
         return;
       }
 
-      const report = await getStudentAttendanceHistory(schoolId, studentId, startDate, endDate);
+      const report = await getStudentAttendanceHistory(schoolId, studentId, startDate, endDate, { limit, offset });
       res.json(report);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -158,7 +190,7 @@ reportRouter.get(
   }
 );
 
-// 5. Absent-Student Report
+// 5. Absent-Student Report (Admin, Teacher, Report Viewer)
 reportRouter.get(
   '/absentee',
   requireAuth,
@@ -171,13 +203,14 @@ reportRouter.get(
       const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
       const endDate = req.query.endDate as string;
       const reqGuardianPhone = req.query.includeGuardianPhone === 'true';
+      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const offset = req.query.offset ? Number(req.query.offset) : undefined;
 
       if (req.userRole === 'TEACHER' && !await teacherHasClassAccess(req, schoolId, classSectionId)) {
         res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
         return;
       }
 
-      // Guardian phone number authorization check: only admins or super_admins
       const userRole = req.userRole!;
       const includeGuardianPhone = reqGuardianPhone && (userRole === 'SCHOOL_ADMIN' || userRole === 'SUPER_ADMIN');
 
@@ -186,6 +219,8 @@ reportRouter.get(
         startDate,
         endDate,
         includeGuardianPhone,
+        limit,
+        offset,
       });
       res.json(report);
     } catch (error: any) {
@@ -205,8 +240,10 @@ reportRouter.get(
       const schoolId = req.activeSchoolId!;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
+      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const offset = req.query.offset ? Number(req.query.offset) : undefined;
 
-      const report = await getCorrectionReport(schoolId, startDate, endDate);
+      const report = await getCorrectionReport(schoolId, startDate, endDate, { limit, offset });
       res.json(report);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -225,8 +262,10 @@ reportRouter.get(
       const schoolId = req.activeSchoolId!;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
+      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const offset = req.query.offset ? Number(req.query.offset) : undefined;
 
-      const report = await getTeacherSessionReport(schoolId, startDate, endDate);
+      const report = await getTeacherSessionReport(schoolId, startDate, endDate, { limit, offset });
       res.json(report);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -234,7 +273,39 @@ reportRouter.get(
   }
 );
 
-// 8. Universal Export Endpoint (XLSX / CSV)
+// 8. Full Tenant Data Portability Package Export (SUPER_ADMIN, SCHOOL_ADMIN)
+reportRouter.get(
+  '/export/full-tenant',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const exportData = await getFullTenantExport(schoolId);
+
+      await createAuditLog({
+        schoolId,
+        actorId: req.user!.id,
+        action: 'EXPORT_FULL_TENANT_DATA',
+        resourceType: 'SCHOOL',
+        metadata: {
+          schoolSlug: exportData.school.slug,
+          studentCount: exportData.students.length,
+          enrollmentCount: exportData.enrollments.length,
+        },
+      });
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="attendease_tenant_export_${exportData.school.slug}_${Date.now()}.json"`);
+      res.json(exportData);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// 9. Universal Export Endpoint (XLSX / CSV)
 reportRouter.get(
   '/export',
   requireAuth,
@@ -244,7 +315,7 @@ reportRouter.get(
     try {
       const schoolId = req.activeSchoolId!;
       const userRole = req.userRole!;
-      const type = req.query.type as string; // 'monthly-register' | 'absentee' | 'daily-school' | 'daily-class'
+      const type = req.query.type as string; // 'monthly-register' | 'absentee' | 'daily-school' | 'daily-class' | 'corrections'
       const format = ((req.query.format as string) || 'xlsx').toLowerCase(); // 'xlsx' | 'csv'
 
       let headers: string[] = [];
@@ -271,6 +342,26 @@ reportRouter.get(
           `${s.attendancePercentage}%`,
         ]);
         defaultFilename = `daily_school_report_${dateStr}`;
+      } else if (type === 'daily-class') {
+        const classSectionId = req.query.classSectionId as string;
+        const dateStr = (req.query.date as string) || new Date().toISOString().split('T')[0];
+        if (!classSectionId || !await teacherHasClassAccess(req, schoolId, classSectionId)) {
+          res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
+          return;
+        }
+        const data = await getDailyClassReport(schoolId, classSectionId, dateStr);
+        headers = ['Roll', 'Student Code', 'Name', 'Name (Bengali)', 'Status', 'First Scanned At', 'Conflict', 'Correction Reason'];
+        rows = data.roster.map((r: any) => [
+          r.rollNumber,
+          r.studentCode,
+          r.studentName,
+          r.studentNameBn || '',
+          r.status,
+          r.firstScannedAt || '',
+          r.hasConflict ? 'Yes' : 'No',
+          r.correctionReason || '',
+        ]);
+        defaultFilename = `daily_class_${data.className}_${data.sectionName}_${dateStr}`;
       } else if (type === 'monthly-register') {
         const classSectionId = req.query.classSectionId as string;
         const year = parseInt(req.query.year as string) || new Date().getFullYear();
@@ -403,7 +494,7 @@ reportRouter.get(
   }
 );
 
-// 9. Multi-Day Attendance Trends Rollup
+// 10. Multi-Day Attendance Trends Rollup (Single Optimized Grouped SQL Query)
 reportRouter.get(
   '/trends',
   requireAuth,
@@ -414,39 +505,52 @@ reportRouter.get(
       const schoolId = req.activeSchoolId!;
       const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 60);
 
-      const trends = await withTenantContext(schoolId, async (tx) => {
-        const today = new Date();
-        const results = [];
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date(today);
-          d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().slice(0, 10);
+      const today = new Date();
+      const minDate = new Date(today);
+      minDate.setDate(minDate.getDate() - (days - 1));
+      const minDateStr = minDate.toISOString().slice(0, 10);
+      const maxDateStr = today.toISOString().slice(0, 10);
 
-          const [stats] = await tx
-            .select({
-              total: sql<number>`count(*)::int`,
-              present: sql<number>`count(case when ${attendanceRecords.status} in ('PRESENT', 'LATE') then 1 end)::int`,
-              absent: sql<number>`count(case when ${attendanceRecords.status} = 'ABSENT' then 1 end)::int`,
-            })
-            .from(attendanceRecords)
-            .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
-            .where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceSessions.sessionDate, dateStr)));
+      // Execute ONE single grouped SQL query for the entire date range
+      const rows = await db
+        .select({
+          sessionDate: attendanceSessions.sessionDate,
+          total: sql<number>`count(*)::int`,
+          present: sql<number>`count(case when ${attendanceRecords.status} in ('PRESENT', 'LATE') then 1 end)::int`,
+          absent: sql<number>`count(case when ${attendanceRecords.status} = 'ABSENT' then 1 end)::int`,
+        })
+        .from(attendanceRecords)
+        .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
+        .where(
+          and(
+            eq(attendanceRecords.schoolId, schoolId),
+            gte(attendanceSessions.sessionDate, minDateStr),
+            lte(attendanceSessions.sessionDate, maxDateStr)
+          )
+        )
+        .groupBy(attendanceSessions.sessionDate);
 
-          const pct = stats?.total && stats.total > 0
-            ? Math.round((stats.present / stats.total) * 1000) / 10
-            : 0;
+      const statsByDate = new Map<string, { total: number; present: number; absent: number }>();
+      for (const r of rows) {
+        statsByDate.set(r.sessionDate, { total: r.total, present: r.present, absent: r.absent });
+      }
 
-          results.push({
-            date: dateStr,
-            day: d.toLocaleDateString('en-US', { weekday: 'short' }),
-            totalStudents: stats?.total || 0,
-            presentStudents: stats?.present || 0,
-            absentStudents: stats?.absent || 0,
-            percentage: pct,
-          });
-        }
-        return results;
-      });
+      const trends = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const stats = statsByDate.get(dateStr) || { total: 0, present: 0, absent: 0 };
+        const pct = stats.total > 0 ? Math.round((stats.present / stats.total) * 1000) / 10 : 0;
+        trends.push({
+          date: dateStr,
+          day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          totalStudents: stats.total,
+          presentStudents: stats.present,
+          absentStudents: stats.absent,
+          percentage: pct,
+        });
+      }
 
       res.json({ success: true, days, trends });
     } catch (error: any) {

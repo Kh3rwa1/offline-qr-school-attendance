@@ -8,6 +8,10 @@ import { reconcileStuckSessions } from '../src/services/sessionReconciler';
 import { bootstrapAdmin } from '../scripts/bootstrap-admin';
 import { GatewayDaemon } from '../src/gateway/gatewayDaemon';
 import { alertingService, SystemAlert } from '../src/services/alertingService';
+import { getFullTenantExport, getStudentAttendanceHistory } from '../src/services/reportService';
+import { db } from '../src/db';
+import { schools, students, classSections, users } from '../src/db/schema';
+import { eq } from 'drizzle-orm';
 
 describe('AttendEase OS — Production Appliance Operations & Verification Suite', () => {
   const testEnvPath = path.resolve(process.cwd(), '.env.test_appliance');
@@ -191,6 +195,8 @@ SMS_PROVIDER="fake"
         checksumSha256: checksum,
         timestamp: new Date().toISOString(),
         sizeBytes: fs.statSync(encFile).size,
+        appVersion: '1.0.0',
+        schemaVersion: '0014_school_slug_tenancy',
         encryption: 'AES-256-CBC-PBKDF2',
       };
       fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
@@ -240,6 +246,7 @@ SMS_PROVIDER="fake"
           backupFile: 'attendease-20260815-183000.sql.gz.enc',
           checksumSha256: checksum,
           timestamp: new Date().toISOString(),
+          appVersion: '1.0.0',
         })
       );
 
@@ -288,7 +295,72 @@ SMS_PROVIDER="fake"
     });
   });
 
-  describe('7. Autonomous Session Reconciler', () => {
+  describe('7. Full Tenant Data Portability Package & Report Pagination', () => {
+    it('exports full tenant data package containing school, students, sections, and audit logs', async () => {
+      // Create test school
+      const [school] = await db
+        .insert(schools)
+        .values({
+          name: 'Portability Test School',
+          slug: `portability-test-${Date.now()}`,
+          district: 'Bankura',
+          status: 'ACTIVE',
+        })
+        .returning();
+
+      const [student] = await db
+        .insert(students)
+        .values({
+          schoolId: school.id,
+          studentCode: `PORT_${Date.now()}`,
+          name: 'Test Portability Student',
+          status: 'ACTIVE',
+        })
+        .returning();
+
+      const tenantPackage = await getFullTenantExport(school.id);
+      expect(tenantPackage.exportVersion).toBe('1.0.0');
+      expect(tenantPackage.school.id).toBe(school.id);
+      expect(tenantPackage.school.name).toBe('Portability Test School');
+      expect(tenantPackage.students.some((s: any) => s.id === student.id)).toBe(true);
+      expect(Array.isArray(tenantPackage.classSections)).toBe(true);
+      expect(Array.isArray(tenantPackage.guardians)).toBe(true);
+      expect(Array.isArray(tenantPackage.auditLogs)).toBe(true);
+    });
+
+    it('paginates student attendance history with limit and offset', async () => {
+      const [school] = await db
+        .insert(schools)
+        .values({
+          name: 'Pagination School',
+          slug: `pagination-${Date.now()}`,
+          district: 'Purulia',
+          status: 'ACTIVE',
+        })
+        .returning();
+
+      const [student] = await db
+        .insert(students)
+        .values({
+          schoolId: school.id,
+          studentCode: `PAG_${Date.now()}`,
+          name: 'Paging Student',
+          status: 'ACTIVE',
+        })
+        .returning();
+
+      const res = await getStudentAttendanceHistory(school.id, student.id, undefined, undefined, {
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(res.student.id).toBe(student.id);
+      expect(Array.isArray(res.history)).toBe(true);
+      expect(res.summary).toBeDefined();
+    });
+  });
+
+  describe('8. Autonomous Session Reconciler', () => {
     it('executes safely without errors and returns valid audit metrics', async () => {
       const result = await reconcileStuckSessions(0);
       expect(result).toHaveProperty('checkedAt');

@@ -16,6 +16,7 @@ describe('RFID Credential Reactivation Workflow', () => {
 
   beforeAll(async () => {
     process.env.TEST_SERVER_STATIC = 'true';
+    process.env.FEATURE_RFID = 'true';
     await seedDatabase();
 
     const [school] = await db.select().from(schools).limit(1);

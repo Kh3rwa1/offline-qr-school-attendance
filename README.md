@@ -1,132 +1,113 @@
-# Hybrid Offline QR + Production RFID/NFC School Attendance Platform
+# AttendEase OS — Bilingual Offline QR School Attendance
 
-An enterprise-grade hybrid attendance platform supporting school-issued QR credentials, MIFARE DESFire EV2/EV3 RFID cards, and NFC hardware gateways. Features multi-tenant PostgreSQL Row-Level Security (RLS), atomic Redis idempotency, AES-256-GCM encrypted per-reader secrets, and offline outbox synchronization.
+An offline-first, bilingual (**English** + **বাংলা**) QR card attendance system built specifically for government schools in rural West Bengal. Designed to run reliably on low-end Android smartphones (2–4 GB RAM, Chrome browser) over intermittent 2G/4G mobile networks.
 
 ---
 
-## ⚡ Appliance Operations (Install-and-Forget)
+## 🎯 What It Does
+
+1. **Teacher Daily Workflow**:
+   - **Download Roster**: Teacher downloads their assigned classroom roster before class.
+   - **Offline Scanning**: Works 100% offline using phone camera viewfinder or USB/OTG plug-in barcode scanners.
+   - **Live Audio & Haptic Feedback**: Positive chime on success, distinctive alert on duplicate scans, buzzer on errors.
+   - **Duplicate Protection**: Prevents double-marking with clear messages like *"Aniket Mondal (Roll #1) already marked PRESENT at 10:15"*.
+   - **Crash-Proof Local Storage**: Attendance records are saved locally to IndexedDB/Dexie immediately upon scan.
+   - **Finalization & Auto-Absent**: Teacher reviews unmarked students, overrides to LATE / LEAVE / EXCUSED, and finalizes the session (auto-marking remaining unmarked students as ABSENT).
+   - **Idempotent Sync**: Reconnects when network is available to synchronize attendance events without duplicate records.
+   - **Parent Absence SMS**: Server automatically queues transactional DLT SMS notifications in Bengali / English to primary guardians of absent students.
+
+2. **Security & Data Integrity**:
+   - **PostgreSQL Row-Level Security (RLS)**: Strict tenant isolation (`app.current_school_id`) prevents cross-school data access.
+   - **Role-Based Access Control**: Teachers can only take attendance for their explicitly assigned classes.
+   - **Session-Bound CSRF**: Cryptographic token signing prevents cross-site request forgery attacks.
+   - **Nightly Encrypted Backups**: Automated AES-256 encrypted database backups with local filesystem and Cloudflare R2 storage support.
+
+---
+
+## ⚡ Quick Start
+
+### Prerequisites
+- Node.js 20+ and npm
+- PostgreSQL 16 (or built-in PGlite for local development/testing)
+- Redis 7 (optional for single-node development; required for multi-replica production)
+
+### Installation
 
 ```bash
-Install: cp .env.example .env && ./scripts/install.sh
-Update:  git pull && ./scripts/update.sh
-Backup:  Automatic nightly (18:30 IST); encrypted AES-256 files in ./backups
-Restore: CONFIRM=yes ./scripts/restore.sh ./backups/attendease-YYYYMMDD-HHMMSS.sql.gz.enc
-Logs:    docker compose logs -f app sms-worker backup
+# 1. Clone the repository
+git clone https://github.com/Kh3rwa1/offline-qr-school-attendance.git
+cd offline-qr-school-attendance
+
+# 2. Copy environment file
+cp .env.example .env
+
+# 3. Install dependencies
+npm install
+
+# 4. Run database migrations & seed test data
+npm run migrate
+npm run seed
+
+# 5. Start development server
+npm run dev
+```
+
+Visit `http://localhost:3000` to log in:
+- **School Admin**: `+919100000001` / `Admin@12345`
+- **Teacher**: `+919200000001` / `Teacher@12345`
+
+---
+
+## 🧪 Verification & Quality Gates
+
+Run all automated checks and tests:
+
+```bash
+# Type check and forbidden-string security scan
+npm run check
+
+# Full Vitest unit and integration test suite
+npm test
+
+# Production build
+npm run build
 ```
 
 ---
 
-## 🚀 Quality Gates & Verification
+## 🧭 Hardware & Feature Status
 
-```bash
-npm run check          # TypeScript static analysis (0 errors)
-npm test               # 100% passing unit & integration test suite
-npm run test:e2e       # Playwright browser end-to-end tests
-npm run test:postgres  # Restricted PostgreSQL RLS & Schema Completeness Audit
-npm run test:load-smoke# Mandatory Pull-Request Load Smoke Gate
-npm run test:load-full # 10-scenario full-scale business load benchmark
-npm run build          # Vite production SPA + Node CJS bundles
-```
+We maintain complete honesty about feature maturity. See [`docs/STATUS.md`](docs/STATUS.md) for full details:
 
----
-
-## 🛡️ Architecture & Security Model
-
-1. **Multi-Tenant Row-Level Security (RLS)**:
-   - Every tenant table enforces `rowsecurity = true` and `forcerowsecurity = true`.
-   - Application connections run as `attendance_app` (`NOSUPERUSER`, `NOBYPASSRLS`).
-   - Every request executes inside `withTenantContext(schoolId)` setting `app.current_school_id` transactionally.
-
-2. **DESFire EV2/EV3 RFID & Reader Security**:
-   - AES-128 3-Pass Mutual Authentication & AN10922 key diversification.
-   - Per-reader HMAC secrets encrypted via AES-256-GCM (`shared_secret_encrypted`).
-   - mTLS client certificate fingerprint matching and canonical envelope signature verification.
-
-3. **Redis Multi-Replica & Rate Limiting**:
-   - Shared sliding-window rate limiter powered by atomic Lua scripts.
-   - HMAC-SHA256 hashed rate limit keys eliminate raw IP/phone exposure in Redis storage.
-   - Resilient fallback returning HTTP 503 during Redis infrastructure outages.
-
-4. **Offline Sync & Idempotency**:
-   - Dexie/IndexedDB transactional outbox storing client event UUIDs.
-   - Signed offline rosters with tamper-evident HMAC validation.
-   - Batch synchronization with chunked concurrency meeting < 10,000 ms SLO for 5,000 events.
-
----
-
-## 🇮🇳 Indian Production DLT/SMS Prerequisites
-
-For live production SMS delivery in India:
-- **DLT Telemarketer Registration**: Entity ID and Principal Entity (PE) registration with telecom operators.
-- **Header Registration**: Registered 6-alpha Sender ID (e.g. `SCHATT`).
-- **Template ID**: Approved Content Template ID containing variables (e.g., `{#var#}`).
-- Set production environment variables:
-  ```env
-  SMS_PROVIDER=dlt
-  DLT_ENTITY_ID=1001xxxxxxxxxxxxxx
-  DLT_HEADER_ID=SCHATT
-  DLT_TEMPLATE_ID=1107xxxxxxxxxxxxxx
-  ```
-
----
-
-## 📦 Container & Kubernetes Operations
-
-- **Docker Compose**: `docker compose up -d --build` bootstraps PostgreSQL 16, Redis 7, database role setup, Drizzle migrations, web app, and SMS worker container.
-- **Kubernetes**: Production manifests located in `k8s/` including Deployments, Services, Ingress, NetworkPolicies, ServiceMonitor, HPA, PDB, and ExternalSecrets integration templates.
-
----
-
-## 📚 Incident Runbooks
-
-Detailed operational runbooks are maintained in [`docs/runbooks/INCIDENT_RUNBOOKS.md`](docs/runbooks/INCIDENT_RUNBOOKS.md):
-- Runbook 1: PostgreSQL Outage & Connection Recovery
-- Runbook 2: Redis Failure & Outage Recovery
-- Runbook 3: SMS Worker Queue Backlog Clearing
-- Runbook 4: Encrypted Backup & Restore Execution
-
----
-
-## 📋 RFID Production Certification Matrix
-
-- [x] **Schema & Migrations**: RFID tables (`rfid_readers`, `rfid_credentials`, `rfid_scan_events`, `rfid_key_versions`) with RLS policies enabled.
-- [x] **Per-Reader Keys**: AES-256-GCM encrypted reader secret storage and dynamic decryption.
-- [x] **DESFire EV2/EV3 Cryptography**: AN10922 key diversification, AES-128 CMAC, and 3-pass mutual auth verification.
-- [x] **Credential Lifecycle**: Strict status validation (`ACTIVE` required; `PENDING`, `REPLACED`, `SUSPENDED`, `REVOKED`, `EXPIRED` rejected).
-- [x] **Offline SLO**: 5,000-event batch sync processing benchmark completing in < 10,000 ms.
-- [x] **mTLS & Fingerprints**: Certificate fingerprint validation (`x-reader-cert-fingerprint`) for certificate-bound readers.
-
----
-
-## 👥 Five Role-Aware Enterprise Dashboards
-
-The application is structured into five distinct, role-guarded workspaces with bookmarkable URLs, lazy-loaded chunk splitting, and server-enforced RLS isolation:
-
-| Role | Landing Route | Key Capabilities |
+| Module | Status | Notes |
 | :--- | :--- | :--- |
-| **`SUPER_ADMIN`** | `/app/super-admin` | Multi-tenant platform overview, tenant provisioning/suspension, global audit log explorer, platform health telemetry |
-| **`SCHOOL_ADMIN`** | `/app/school-admin` | Single-school operations, staff memberships, academic classes & sections, attendance oversight, SMS dispatch queue |
-| **`TEACHER`** | `/app/teacher` | Offline IndexedDB attendance capture, optical camera & USB wedge QR scanner, live roster verification, review & finalize |
-| **`REPORT_VIEWER`** | `/app/reports` | Read-only analytics, daily class reports, longitudinal 7/30-day trends, state MIS CSV export |
-| **`RFID_OPERATOR`** | `/app/rfid` | MIFARE DESFire EV2 smartcard console, reader gateway diagnostics, card enrollment wizard, tap event incident queue |
-
-### Central Permission Model
-
-| Permission Area | Capabilities |
-| :--- | :--- |
-| **Platform** | `platform.schools.read`, `platform.schools.manage`, `platform.security.read`, `platform.audit.read` |
-| **School Admin** | `school.settings.*`, `school.users.*`, `school.academics.*`, `audit.read` |
-| **Attendance** | `attendance.sessions.read`, `attendance.sessions.create`, `attendance.sessions.review`, `attendance.sessions.finalize` |
-| **RFID Operations** | `rfid.dashboard.read`, `rfid.readers.read`, `rfid.readers.manage`, `rfid.cards.read`, `rfid.cards.enroll`, `rfid.cards.revoke`, `rfid.events.read` |
-| **Reports** | `reports.read`, `reports.export` (Strictly read-only) |
+| **Bilingual UI (EN / বাংলা)** | ✅ **Working** | Full dictionary toggle in header; teacher-friendly Bengali terminology |
+| **Phone Camera QR Scanner** | ✅ **Working** | HTML5 camera scanner with active viewfinder & permission error alerts |
+| **USB / OTG Barcode Scanner** | ✅ **Working** | Keyboard-wedge hardware listener with audio & haptic feedback |
+| **Offline IndexedDB Outbox** | ✅ **Working** | Atomic Dexie transactions with SHA-256 token digest validation |
+| **Session Finalize & Auto-Absent** | ✅ **Working** | Atomic database transaction creating absence SMS jobs on finalize |
+| **Indian DLT SMS Queue** | ✅ **Working** | DLT template rendering with segment estimation & carrier webhook callbacks |
+| **PostgreSQL RLS & Tenant Guard** | ✅ **Working** | 100% enforced in PostgreSQL with fail-closed security invariants |
+| **Encrypted Backups (AES-256 / R2)** | ✅ **Working** | Automated AES-256-CBC PBKDF2 encryption & Cloudflare R2 upload drills |
+| **RFID / DESFire Card Gateway** | ⚠️ *Simulated* | Frozen / emulation mode. Feature-flagged **OFF** (`FEATURE_RFID=false`) by default for the QR pilot |
 
 ---
 
-## 🔒 Security Invariants
+## 🇮🇳 Indian DLT SMS Configuration
 
-- **Zero Client Trust**: User roles, school IDs, and capabilities are derived directly from authenticated server sessions.
-- **Forced Row-Level Security**: Every tenant operation runs inside `withTenantContext(schoolId)`.
-- **Multi-Membership School Switching**: Verified via `POST /api/v1/auth/switch-school` with complete tenant state invalidation.
-- **Bounded Offline Auth**: Bounded local cache with strict prohibition of offline privilege elevation.
-- **Parent Portal Extension Point**: Feature-flagged under `FEATURE_PARENT_PORTAL=false` by default.
+For live production SMS dispatch to parents via Indian telecom carriers:
+1. Register with a DLT-approved telemarketer (e.g. Jio DLT, Airtel, Vodafone Idea).
+2. Obtain your **Principal Entity ID** (PE ID) and 6-character **Sender Header** (e.g., `SCHATT`).
+3. Create and approve the standard Bengali / English absence message templates.
+4. Configure in `.env`:
+   ```env
+   SMS_PROVIDER=console          # Use 'console' for testing or 'dlt' / real webhook in production
+   DLT_ENTITY_ID=1001000000000000
+   DLT_HEADER_ID=SCHATT
+   ```
 
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

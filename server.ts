@@ -132,16 +132,18 @@ export async function createApp() {
   app.use('/api/v1/schools', schoolRouter);
   app.use('/api/v1/schools', academicRouter);
   app.use('/api/v1/schools', studentRouter);
-  app.use('/api/v1/schools', importRouter);
+  app.use('/api/v1/schools', rateLimitPolicies.import, importRouter);
   app.use('/api/v1/schools', qrRouter);
-  app.use('/api/v1/schools', rfidRouter);
+  if (process.env.FEATURE_RFID === 'true') {
+    app.use('/api/v1/schools', rfidRouter);
+  }
   app.use('/api/v1/schools/:schoolId/attendance', attendanceRouter);
   app.use('/api/v1/schools/:schoolId/sync', rateLimitPolicies.sync, syncRouter);
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
   app.use('/api/v1/audit', platformAuditRouter);
-  app.use('/api/v1/system', rateLimitPolicies.generalApi, systemHealthRouter);
+  app.use('/api/v1/system', systemHealthRouter);
   app.use('/api/v1/schools/:schoolId/notifications', notificationRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);

@@ -26,11 +26,13 @@ export async function verifyTeacherAssignment(params: {
   classSectionId: string;
   actorId: string;
   userRole: string;
+  tx?: any;
 }) {
-  const { schoolId, classSectionId, actorId, userRole } = params;
+  const { schoolId, classSectionId, actorId, userRole, tx } = params;
   if (['SUPER_ADMIN', 'SCHOOL_ADMIN', 'SYSTEM'].includes(userRole)) return;
 
-  const [assignment] = await db
+  const client = tx || db;
+  const [assignment] = await client
     .select({ id: teacherAssignments.id })
     .from(teacherAssignments)
     .where(
@@ -214,112 +216,116 @@ export async function updateSessionStatus(params: {
 }) {
   const { schoolId, sessionId, actorId, userRole, newStatus, reason, autoMarkAbsentForUnmarked = false } = params;
 
-  const [session] = await db
-    .select()
-    .from(attendanceSessions)
-    .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)));
+  return await db.transaction(async (tx: any) => {
+    const [session] = await tx
+      .select()
+      .from(attendanceSessions)
+      .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)));
 
-  if (!session) {
-    throw new Error('SESSION_NOT_FOUND');
-  }
-
-  await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
-
-  const currentStatus = session.status as SessionStatus;
-
-  // Enforce State Machine Invariants
-  if (currentStatus === 'FINALIZED' && newStatus !== 'REOPENED') {
-    throw new Error('FINALIZED_SESSION_LOCKED');
-  }
-
-  if (newStatus === 'REOPENED') {
-    // Require SUPER_ADMIN or SCHOOL_ADMIN and explicit reason
-    if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
-      throw new Error('REOPEN_REQUIRES_ADMIN_ROLE');
+    if (!session) {
+      throw new Error('SESSION_NOT_FOUND');
     }
-    if (!reason || reason.trim().length === 0) {
-      throw new Error('REOPEN_REASON_REQUIRED');
+
+    await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole, tx });
+
+    const currentStatus = session.status as SessionStatus;
+
+    // Enforce State Machine Invariants
+    if (currentStatus === 'FINALIZED' && newStatus !== 'REOPENED') {
+      throw new Error('FINALIZED_SESSION_LOCKED');
     }
-  }
 
-  // Handle finalization logic
-  if (newStatus === 'FINALIZED') {
-    if (autoMarkAbsentForUnmarked) {
-      // Find all UNMARKED records for this session
-      const unmarked = await db
-        .select()
-        .from(attendanceRecords)
-        .where(
-          and(
-            eq(attendanceRecords.schoolId, schoolId),
-            eq(attendanceRecords.attendanceSessionId, sessionId),
-            eq(attendanceRecords.status, 'UNMARKED')
-          )
-        );
-
-      for (const rec of unmarked) {
-        const clientEventId = `auto-absent-${sessionId}-${rec.studentId}-${Date.now()}`;
-        await db.insert(attendanceEvents).values({
-          schoolId,
-          clientEventId,
-          attendanceSessionId: sessionId,
-          studentId: rec.studentId,
-          eventType: 'FINALIZATION_AUTO_ABSENT',
-          statusValue: 'ABSENT',
-          clientTimestamp: new Date(),
-          serverReceivedAt: new Date(),
-          actorId,
-          metadata: { note: 'Auto-marked ABSENT upon session finalization' },
-        });
-
-        await db
-          .update(attendanceRecords)
-          .set({
-            status: 'ABSENT',
-            lastUpdatedAt: new Date(),
-          })
-          .where(eq(attendanceRecords.id, rec.id));
+    if (newStatus === 'REOPENED') {
+      // Require SUPER_ADMIN or SCHOOL_ADMIN and explicit reason
+      if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
+        throw new Error('REOPEN_REQUIRES_ADMIN_ROLE');
+      }
+      if (!reason || reason.trim().length === 0) {
+        throw new Error('REOPEN_REASON_REQUIRED');
       }
     }
-  }
 
-  const updateData: any = {
-    status: newStatus,
-    updatedAt: new Date(),
-  };
+    // Handle finalization logic
+    if (newStatus === 'FINALIZED') {
+      if (autoMarkAbsentForUnmarked) {
+        // Find all UNMARKED records for this session
+        const unmarked = await tx
+          .select()
+          .from(attendanceRecords)
+          .where(
+            and(
+              eq(attendanceRecords.schoolId, schoolId),
+              eq(attendanceRecords.attendanceSessionId, sessionId),
+              eq(attendanceRecords.status, 'UNMARKED')
+            )
+          );
 
-  if (newStatus === 'FINALIZED') {
-    updateData.finalizedAt = new Date();
-    updateData.finalizedBy = actorId;
-  }
+        for (const rec of unmarked) {
+          const clientEventId = `auto-absent-${sessionId}-${rec.studentId}-${Date.now()}`;
+          await tx.insert(attendanceEvents).values({
+            schoolId,
+            clientEventId,
+            attendanceSessionId: sessionId,
+            studentId: rec.studentId,
+            eventType: 'FINALIZATION_AUTO_ABSENT',
+            statusValue: 'ABSENT',
+            clientTimestamp: new Date(),
+            serverReceivedAt: new Date(),
+            actorId,
+            metadata: { note: 'Auto-marked ABSENT upon session finalization' },
+          });
 
-  const [updatedSession] = await db
-    .update(attendanceSessions)
-    .set(updateData)
-    .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)))
-    .returning();
+          await tx
+            .update(attendanceRecords)
+            .set({
+              status: 'ABSENT',
+              lastUpdatedAt: new Date(),
+            })
+            .where(eq(attendanceRecords.id, rec.id));
+        }
+      }
+    }
 
-  await createAuditLog({
-    schoolId,
-    actorId,
-    action: `SESSION_STATUS_${newStatus}`,
-    resourceType: 'ATTENDANCE_SESSION',
-    resourceId: sessionId,
-    metadata: { previousStatus: currentStatus, newStatus, reason },
+    const updateData: any = {
+      status: newStatus,
+      updatedAt: new Date(),
+    };
+
+    if (newStatus === 'FINALIZED') {
+      updateData.finalizedAt = new Date();
+      updateData.finalizedBy = actorId;
+    }
+
+    const [updatedSession] = await tx
+      .update(attendanceSessions)
+      .set(updateData)
+      .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)))
+      .returning();
+
+    await createAuditLog(
+      {
+        schoolId,
+        actorId,
+        action: `SESSION_STATUS_${newStatus}`,
+        resourceType: 'ATTENDANCE_SESSION',
+        resourceId: sessionId,
+        metadata: { previousStatus: currentStatus, newStatus, reason },
+      },
+      tx
+    );
+
+    if (newStatus === 'FINALIZED') {
+      // Transactional absence notification creation: commits or rolls back together with finalization
+      await createAbsenceNotificationJobs({
+        schoolId,
+        attendanceSessionId: sessionId,
+        actorId,
+        tx,
+      });
+    }
+
+    return updatedSession;
   });
-
-  if (newStatus === 'FINALIZED') {
-    // This runs inside the request tenant transaction. If queue creation
-    // fails, the finalization and its audit entry must roll back together so
-    // the API cannot report a finalized session with missing notifications.
-    await createAbsenceNotificationJobs({
-      schoolId,
-      attendanceSessionId: sessionId,
-      actorId,
-    });
-  }
-
-  return updatedSession;
 }
 
 export async function processQRCode(params: {
@@ -519,51 +525,51 @@ export async function processQRCode(params: {
     };
   }
 
-  // 6. Append Event & Project Current Record State
+  // 6. Append Event & Project Current Record State in a Transaction
   const clientTs = clientTimestamp ? new Date(clientTimestamp) : new Date();
   const serverReceivedAt = new Date();
 
-  await db.insert(attendanceEvents).values({
-    schoolId,
-    clientEventId,
-    attendanceSessionId: sessionId,
-    studentId: targetStudentId,
-    eventType: source === 'USB' ? 'USB_BARCODE_SCANNED' : 'QR_SCANNED',
-    statusValue,
-    clientTimestamp: clientTs,
-    serverReceivedAt,
-    deviceId: deviceId || null,
-    actorId,
-    metadata: { source, ...metadata },
+  const updatedRecord = await db.transaction(async (tx: any) => {
+    await tx.insert(attendanceEvents).values({
+      schoolId,
+      clientEventId,
+      attendanceSessionId: sessionId,
+      studentId: targetStudentId,
+      eventType: source === 'USB' ? 'USB_BARCODE_SCANNED' : 'QR_SCANNED',
+      statusValue,
+      clientTimestamp: clientTs,
+      serverReceivedAt,
+      deviceId: deviceId || null,
+      actorId,
+      metadata: { source, ...metadata },
+    });
+
+    if (existingRecord) {
+      const [updated] = await tx
+        .update(attendanceRecords)
+        .set({
+          status: statusValue,
+          firstScannedAt: existingRecord.firstScannedAt || serverReceivedAt,
+          lastUpdatedAt: serverReceivedAt,
+        })
+        .where(eq(attendanceRecords.id, existingRecord.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await tx
+        .insert(attendanceRecords)
+        .values({
+          schoolId,
+          attendanceSessionId: sessionId,
+          studentId: targetStudentId,
+          status: statusValue,
+          firstScannedAt: serverReceivedAt,
+          lastUpdatedAt: serverReceivedAt,
+        })
+        .returning();
+      return created;
+    }
   });
-
-  let updatedRecord: any;
-
-  if (existingRecord) {
-    const [updated] = await db
-      .update(attendanceRecords)
-      .set({
-        status: statusValue,
-        firstScannedAt: existingRecord.firstScannedAt || serverReceivedAt,
-        lastUpdatedAt: serverReceivedAt,
-      })
-      .where(eq(attendanceRecords.id, existingRecord.id))
-      .returning();
-    updatedRecord = updated;
-  } else {
-    const [created] = await db
-      .insert(attendanceRecords)
-      .values({
-        schoolId,
-        attendanceSessionId: sessionId,
-        studentId: targetStudentId,
-        status: statusValue,
-        firstScannedAt: serverReceivedAt,
-        lastUpdatedAt: serverReceivedAt,
-      })
-      .returning();
-    updatedRecord = created;
-  }
 
   return {
     success: true,

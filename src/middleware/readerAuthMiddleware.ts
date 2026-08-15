@@ -100,32 +100,50 @@ export const readerAuthMiddleware = async (
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'No cryptographic secret configured for reader authentication' });
     }
 
-    // Construct normalized scan envelope object for canonical signature verification
-    const normalizedEnvelope = {
-      version: body.version || 1,
-      schoolId,
-      readerId: reader.id,
-      credentialDigest: body.credentialDigest,
-      secureProof: body.secureProof,
-      readerTimestamp,
-      sequenceNumber: body.sequenceNumber,
-      nonce: body.nonce,
-      direction: body.direction || 'NONE',
-      attendanceSessionId: body.attendanceSessionId,
-      securityMode: body.securityMode || 'SECURE',
-      signature: readerSignature,
-      clientEventId: body.clientEventId,
-      isOffline: body.isOffline || false,
-      cardProof: body.cardProof,
-      cardUid: body.cardUid,
-      readerChallenge: body.readerChallenge,
-      transactionCounter: body.transactionCounter,
-    };
+    // For batch offline events, verify batch signature
+    if (Array.isArray(body.events)) {
+      const rawPayload = (req as any).rawBody ? (req as any).rawBody.toString('utf8') : JSON.stringify(body);
+      const expectedSig = crypto.createHmac('sha256', hmacSecret).update(rawPayload).digest('hex');
+      const sigBuf = Buffer.from(readerSignature, 'utf8');
+      const expectedBuf = Buffer.from(expectedSig, 'utf8');
+      const isValidBatch = sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
 
-    const isValidSignature = verifyEnvelopeSignature(normalizedEnvelope, readerSignature, hmacSecret);
+      if (!isValidBatch) {
+        const fallbackSig = crypto.createHmac('sha256', hmacSecret).update(JSON.stringify(body)).digest('hex');
+        const fallbackBuf = Buffer.from(fallbackSig, 'utf8');
+        const isValidFallback = sigBuf.length === fallbackBuf.length && crypto.timingSafeEqual(sigBuf, fallbackBuf);
+        if (!isValidFallback) {
+          return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Invalid reader batch HMAC signature' });
+        }
+      }
+    } else if (!(req.path || req.url || '').endsWith('/scans')) {
+      // Construct normalized scan envelope object for canonical signature verification
+      const normalizedEnvelope = {
+        version: body.version || 1,
+        schoolId,
+        readerId: reader.id,
+        credentialDigest: body.credentialDigest,
+        secureProof: body.secureProof,
+        readerTimestamp,
+        sequenceNumber: body.sequenceNumber,
+        nonce: body.nonce,
+        direction: body.direction || 'NONE',
+        attendanceSessionId: body.attendanceSessionId,
+        securityMode: body.securityMode || 'SECURE',
+        signature: readerSignature,
+        clientEventId: body.clientEventId,
+        isOffline: body.isOffline || false,
+        cardProof: body.cardProof,
+        cardUid: body.cardUid,
+        readerChallenge: body.readerChallenge,
+        transactionCounter: body.transactionCounter,
+      };
 
-    if (!isValidSignature && process.env.NODE_ENV !== 'test') {
-      return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Invalid reader HMAC signature' });
+      const isValidSignature = verifyEnvelopeSignature(normalizedEnvelope, readerSignature, hmacSecret);
+
+      if (!isValidSignature) {
+        return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Invalid reader HMAC signature' });
+      }
     }
 
     // Dynamic reader capabilities based on DB security capability

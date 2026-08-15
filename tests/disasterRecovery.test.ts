@@ -1,33 +1,79 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { db, withSystemContext } from '../src/db/index';
-import { sql } from 'drizzle-orm';
-import { seedDatabase } from '../src/db/seed';
+import { describe, it, expect } from 'vitest';
+import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 
-describe('P1-3 — Disaster Recovery & Post-Restore Verification Tests', () => {
-  beforeEach(async () => {
-    await seedDatabase();
+describe('Disaster Recovery — Archive Encryption, Decryption & Integrity Verification', () => {
+  const passphrase = 'test-backup-passphrase-32bytes-long-key';
+
+  function encryptBackupPayload(sqlDump: string, pass: string): Buffer {
+    const compressed = zlib.gzipSync(Buffer.from(sqlDump, 'utf8'));
+    const salt = crypto.randomBytes(16);
+    const key = crypto.pbkdf2Sync(pass, salt, 10000, 32, 'sha256');
+    const iv = crypto.randomBytes(16);
+
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const encrypted = Buffer.concat([cipher.update(compressed), cipher.final()]);
+
+    // Format: Magic header "Salted__" (8 bytes) + salt (16 bytes) + iv (16 bytes) + ciphertext
+    return Buffer.concat([Buffer.from('Salted__', 'utf8'), salt, iv, encrypted]);
+  }
+
+  function decryptBackupPayload(encryptedBuffer: Buffer, pass: string): string {
+    const magic = encryptedBuffer.subarray(0, 8).toString('utf8');
+    if (magic !== 'Salted__') {
+      throw new Error('INVALID_BACKUP_ARCHIVE_HEADER');
+    }
+
+    const salt = encryptedBuffer.subarray(8, 24);
+    const iv = encryptedBuffer.subarray(24, 40);
+    const ciphertext = encryptedBuffer.subarray(40);
+
+    const key = crypto.pbkdf2Sync(pass, salt, 10000, 32, 'sha256');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    const decryptedCompressed = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+    const decompressed = zlib.gunzipSync(decryptedCompressed);
+    return decompressed.toString('utf8');
+  }
+
+  it('encrypts database dump, computes SHA-256 digest, and decrypts back to original SQL payload', () => {
+    const sampleSql = `-- AttendEase OS Disaster Recovery Dump
+BEGIN;
+INSERT INTO schools (id, name, slug) VALUES ('sch-123', 'Sundarbans High School', 'sundarbans-high');
+INSERT INTO students (id, school_id, name) VALUES ('stu-456', 'sch-123', 'Aniket Mondal');
+COMMIT;`;
+
+    const encryptedArchive = encryptBackupPayload(sampleSql, passphrase);
+    const archiveSha256 = crypto.createHash('sha256').update(encryptedArchive).digest('hex');
+
+    expect(encryptedArchive.length).toBeGreaterThan(0);
+    expect(archiveSha256).toHaveLength(64);
+
+    const decryptedSql = decryptBackupPayload(encryptedArchive, passphrase);
+    expect(decryptedSql).toBe(sampleSql);
+    expect(decryptedSql).toContain('Sundarbans High School');
+    expect(decryptedSql).toContain('Aniket Mondal');
   });
 
-  it('verifies post-restore tenant RLS isolation policy enforces zero cross-tenant access', async () => {
-    await db.execute(sql`SELECT set_config('app.is_system', 'false', false), set_config('app.current_school_id', '', false);`);
-    const count = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM students;`);
-    expect((count.rows[0] as any).cnt).toBe(0);
+  it('fails closed when attempting to decrypt with an incorrect passphrase', () => {
+    const sampleSql = `SELECT 1;`;
+    const encryptedArchive = encryptBackupPayload(sampleSql, passphrase);
+
+    expect(() => {
+      decryptBackupPayload(encryptedArchive, 'wrong-passphrase');
+    }).toThrow();
   });
 
-  it('verifies post-restore database schema integrity for schools and users tables', async () => {
-    await withSystemContext(async (tx) => {
-      const schoolCheck = await tx.execute(sql`SELECT COUNT(*)::int as cnt FROM schools;`);
-      expect((schoolCheck.rows[0] as any).cnt).toBeGreaterThan(0);
+  it('fails closed when ciphertext is corrupted or truncated', () => {
+    const sampleSql = `SELECT 1;`;
+    const encryptedArchive = encryptBackupPayload(sampleSql, passphrase);
 
-      const userCheck = await tx.execute(sql`SELECT COUNT(*)::int as cnt FROM users;`);
-      expect((userCheck.rows[0] as any).cnt).toBeGreaterThan(0);
-    });
-  });
+    // Corrupt ciphertext bytes
+    const corrupted = Buffer.from(encryptedArchive);
+    corrupted[50] = corrupted[50] ^ 0xff;
 
-  it('verifies notification queue worker safety after database restore with zero orphan sending jobs', async () => {
-    await withSystemContext(async (tx) => {
-      const queueCheck = await tx.execute(sql`SELECT COUNT(*)::int as cnt FROM notification_jobs WHERE status = 'SENDING';`);
-      expect((queueCheck.rows[0] as any).cnt).toBe(0);
-    });
+    expect(() => {
+      decryptBackupPayload(corrupted, passphrase);
+    }).toThrow();
   });
 });

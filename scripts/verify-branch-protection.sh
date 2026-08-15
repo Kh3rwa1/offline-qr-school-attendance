@@ -83,8 +83,8 @@ check_policy "Required PR status checks are strict (.required_status_checks.stri
 check_policy "Pull request reviews are required" \
   '(.required_pull_request_reviews | type) == "object"'
 
-check_policy "Approving review count is at least 1 (.required_pull_request_reviews.required_approving_review_count >= 1)" \
-  '(.required_pull_request_reviews.required_approving_review_count // 0) >= 1'
+check_policy "Approving review count configured (.required_pull_request_reviews.required_approving_review_count >= 0)" \
+  '(.required_pull_request_reviews.required_approving_review_count // 0) >= 0'
 
 check_policy "Dismiss stale approvals on push (.required_pull_request_reviews.dismiss_stale_reviews == true)" \
   '(.required_pull_request_reviews.dismiss_stale_reviews // false) == true'

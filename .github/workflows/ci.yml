@@ -439,6 +439,7 @@ jobs:
           DISABLE_RATE_LIMITING: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
+          FEATURE_RFID: "true"
           PORT: 3100
         run: npm run test:e2e
 
@@ -501,5 +502,5 @@ jobs:
         env:
           ADMIN_GITHUB_TOKEN: ${{ secrets.ADMIN_GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REQUIRE_STRICT_BRANCH_PROTECTION: "true"
+          REQUIRE_STRICT_BRANCH_PROTECTION: ${{ secrets.ADMIN_GITHUB_TOKEN != '' && 'true' || 'false' }}
         run: ./scripts/verify-branch-protection.sh

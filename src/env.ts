@@ -13,6 +13,7 @@ const envSchema = z.object({
   CSRF_SECRET: z.string().min(32).optional(),
   ALLOW_TEST_BYPASS: z.string().default('false'),
   APP_URL: z.string().optional(),
+  FEATURE_RFID: z.string().default('false'),
   
   KMS_MASTER_KEY: z.string().optional(),
   AUTH_DATABASE_URL: z.string().optional(),
@@ -54,8 +55,6 @@ export function validateProductionEnv() {
       'CSRF_SECRET',
       'REDIS_KEY_HMAC_SECRET',
       'METRICS_AUTH_TOKEN',
-      'RFID_HMAC_SECRET',
-      'RFID_CARD_MASTER_KEY',
       'KMS_MASTER_KEY',
       'BACKUP_ENCRYPTION_KEY',
       'MIGRATION_DB_PASSWORD',
@@ -63,6 +62,10 @@ export function validateProductionEnv() {
       'SYSTEM_DB_PASSWORD',
       'AUTH_DB_PASSWORD',
     ];
+    if (process.env.FEATURE_RFID === 'true') {
+      secretVars.push('RFID_HMAC_SECRET', 'RFID_CARD_MASTER_KEY');
+    }
+
     for (const varName of secretVars) {
       const val = process.env[varName];
       if (val && (val.includes('replace-with') || val.includes('placeholder') || val.includes('changeme'))) {
@@ -74,6 +77,20 @@ export function validateProductionEnv() {
       throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
     }
     if (parsed.COMPONENT === 'web') {
+      const authDbUrl = process.env.AUTH_DATABASE_URL;
+      if (authDbUrl) {
+        try {
+          const parsedAuthUrl = new URL(authDbUrl);
+          if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
+            throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
+          }
+        } catch (err: any) {
+          throw new Error(`FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${err.message}`);
+        }
+      } else {
+        throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
+      }
+
       const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
       if (!csrfSecret || csrfSecret.length < 32) {
         throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
@@ -82,13 +99,20 @@ export function validateProductionEnv() {
       if (!hmacSecret || hmacSecret.length < 32) {
         throw new Error('REDIS_KEY_HMAC_SECRET must be at least 32 characters in production mode');
       }
-      const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
-      if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
-        throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+      const metricsToken = process.env.METRICS_AUTH_TOKEN;
+      if (!metricsToken || metricsToken.length < 32) {
+        throw new Error('METRICS_AUTH_TOKEN must be at least 32 characters in production mode');
       }
-      const rfidCardMasterKey = process.env.RFID_CARD_MASTER_KEY;
-      if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
-        throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode for DESFire card proof validation');
+
+      if (process.env.FEATURE_RFID === 'true') {
+        const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
+        if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
+          throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode when FEATURE_RFID is enabled');
+        }
+        const rfidCardMasterKey = process.env.RFID_CARD_MASTER_KEY;
+        if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
+          throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode when FEATURE_RFID is enabled');
+        }
       }
 
       // KMS configuration: require explicit key management in production
@@ -97,20 +121,6 @@ export function validateProductionEnv() {
       const gcpKmsId = process.env.GCP_KMS_RESOURCE_ID;
       if (!kmsMasterKey && !awsKmsArn && !gcpKmsId) {
         throw new Error('FATAL_KMS_CONFIGURATION: Production mode requires explicit key management. Set KMS_MASTER_KEY, AWS_KMS_KEY_ARN, or GCP_KMS_RESOURCE_ID.');
-      }
-
-      // Auth database isolation: require dedicated auth database in production
-      const authDbUrl = process.env.AUTH_DATABASE_URL;
-      if (!authDbUrl) {
-        throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
-      }
-      try {
-        const parsedAuthUrl = new URL(authDbUrl);
-        if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
-          throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
-        }
-      } catch (err: any) {
-        throw new Error(`FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${err.message}`);
       }
     }
   }

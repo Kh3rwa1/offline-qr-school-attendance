@@ -72,22 +72,22 @@ export const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
                 </td>
                 <td className="p-3">
                   <div className="font-bold text-ink font-display">{student.name}</div>
-                  <div className="text-[11px] text-ink-soft">{student.nameBn}</div>
+                  <div className="text-xs text-ink-soft">{student.nameBn}</div>
                 </td>
                 <td className="p-3 font-mono text-ink-muted">{student.banglarShikshaId || '-'}</td>
                 <td className="p-3">
                   {student.status === 'PRESENT' && (
-                    <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2.5 py-1 rounded-full text-[11px] font-display">
+                    <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2.5 py-1 rounded-full text-xs font-display">
                       PRESENT ({student.scannedAt || 'Scanned'})
                     </span>
                   )}
                   {student.status === 'ABSENT' && (
-                    <span className="bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30 font-bold px-2.5 py-1 rounded-full text-[11px] font-display">
+                    <span className="bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30 font-bold px-2.5 py-1 rounded-full text-xs font-display">
                       ABSENT
                     </span>
                   )}
                   {student.status === 'UNMARKED' && (
-                    <span className="bg-surface-soft text-ink-soft border border-line font-bold px-2.5 py-1 rounded-full text-[11px] font-display">
+                    <span className="bg-surface-soft text-ink-soft border border-line font-bold px-2.5 py-1 rounded-full text-xs font-display">
                       UNMARKED
                     </span>
                   )}
@@ -185,7 +185,7 @@ export const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
               <div className="mt-3 font-mono text-xs text-ink font-bold">
                 ROLL: #{String(selectedStudentForQr.rollNumber).padStart(4, '0')} | CLASS VIII-A
               </div>
-              <div className="text-[11px] text-ink-muted mt-1 font-mono">
+              <div className="text-xs text-ink-muted mt-1 font-mono">
                 DIGEST: {selectedStudentForQr.qrDigest.slice(0, 16)}...
               </div>
             </div>

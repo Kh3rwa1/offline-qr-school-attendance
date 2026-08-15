@@ -132,10 +132,10 @@ export const Sidebar: React.FC = () => {
                         <span className={`transition-colors duration-200 ${isActive ? 'text-forest-700 dark:text-forest-600' : 'text-ink-soft group-hover:text-ink'}`}>
                           {getNavIcon(item.icon)}
                         </span>
-                        <span className="font-display">{item.label}</span>
+                        <span className="font-display text-sm">{item.label}</span>
                       </motion.div>
                       {item.id === 'rfid' && (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 animate-pulse">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 animate-pulse">
                           Live
                         </span>
                       )}

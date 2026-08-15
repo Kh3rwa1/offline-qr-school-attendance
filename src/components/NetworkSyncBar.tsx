@@ -90,7 +90,7 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
         {!isOnline ? (
           <span className="flex items-center gap-1.5 font-semibold text-warning-800">
             <WifiOff className="w-4 h-4 text-warning-600" />
-            <span id="pwa-status-pill" className="bg-warning-100 px-2 py-0.5 rounded text-[11px] font-mono font-bold">
+            <span id="pwa-status-pill" className="bg-warning-100 px-2 py-0.5 rounded text-xs font-mono font-bold">
               OFFLINE
             </span>
             <span className="hidden sm:inline text-xs">Local scans will queue in outbox</span>
@@ -98,21 +98,21 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
         ) : (
           <span className="flex items-center gap-1.5 text-success-800">
             <Wifi className="w-4 h-4 text-success-600" />
-            <span id="pwa-status-pill" className="bg-success-100 px-2 py-0.5 rounded text-[11px] font-mono font-bold">
+            <span id="pwa-status-pill" className="bg-success-100 px-2 py-0.5 rounded text-xs font-mono font-bold">
               ONLINE
             </span>
           </span>
         )}
 
         {unsyncedCount > 0 && (
-          <span id="unsynced-outbox-pill" className="ml-2 bg-warning-100 text-warning-800 px-2.5 py-0.5 rounded-full font-mono font-bold text-[11px] flex items-center gap-1">
+          <span id="unsynced-outbox-pill" className="ml-2 bg-warning-100 text-warning-800 px-2.5 py-0.5 rounded-full font-mono font-bold text-xs flex items-center gap-1">
             <CloudUpload className="w-3.5 h-3.5" />
             {unsyncedCount} Pending Scan{unsyncedCount > 1 ? 's' : ''}
           </span>
         )}
 
         {lastSyncStatus && (
-          <span className="ml-2 text-ink-soft flex items-center gap-1 text-[11px]">
+          <span className="ml-2 text-ink-soft flex items-center gap-1 text-xs">
             <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
             {lastSyncStatus}
           </span>

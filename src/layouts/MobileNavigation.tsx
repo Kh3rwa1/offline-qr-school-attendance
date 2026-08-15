@@ -29,7 +29,7 @@ export const MobileNavigation: React.FC = () => {
             {({ isActive }) => (
               <>
                 <span className="text-base leading-none mb-1">{getNavIcon(item.icon)}</span>
-                <span className="text-[11px] whitespace-nowrap font-display">{item.label.split(' ')[0]}</span>
+                <span className="text-xs font-semibold whitespace-nowrap font-display">{item.label.split(' ')[0]}</span>
                 {isActive && <span className="sr-only">(current page)</span>}
               </>
             )}

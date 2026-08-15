@@ -234,7 +234,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
         >
           <MessageSquare className="w-4 h-4" />
           <span>{language === 'bn' ? 'SMS ব্যবহার ও প্রাক্কলন' : 'SMS Usage & Metrics'}</span>
-          <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 text-[11px] px-2 py-0.5 rounded-full font-bold">
+          <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 text-xs px-2 py-0.5 rounded-full font-bold">
             LIVE
           </span>
         </button>
@@ -262,7 +262,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                 Total Enrolled
               </div>
               <div className="text-3xl font-extrabold text-ink font-display t-data">{totalEnrolled}</div>
-              <div className="text-[11px] text-ink-soft mt-1">Active class size roster</div>
+              <div className="text-xs text-ink-soft mt-1">Active class size roster</div>
             </div>
 
             <div id="card-confirmed-present" className="bg-success-50 rounded-2xl p-5 border border-success-100 dark:border-success-600/30">
@@ -270,7 +270,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                 Confirmed Present
               </div>
               <div className="text-3xl font-extrabold text-success-800 font-display t-data">{presentStudents.length}</div>
-              <div className="text-[11px] text-success-800 font-semibold mt-1">
+              <div className="text-xs text-success-800 font-semibold mt-1">
                 {totalEnrolled > 0 ? Math.round((presentStudents.length / totalEnrolled) * 100) : 0}% Attendance rate today
               </div>
             </div>
@@ -280,7 +280,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                 Confirmed Absent
               </div>
               <div className="text-3xl font-extrabold text-danger-800 font-display t-data">{absentStudents.length}</div>
-              <div className="text-[11px] text-danger-800 font-semibold mt-1">
+              <div className="text-xs text-danger-800 font-semibold mt-1">
                 Pending parent alerts in queue
               </div>
             </div>
@@ -318,20 +318,20 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                         <tr key={stu.id} className="table-row-hover">
                           <td className="p-3">
                             <div className="font-bold text-ink font-display">{stu.name}</div>
-                            <div className="text-[11px] text-ink-soft">{stu.nameBn}</div>
+                            <div className="text-xs text-ink-soft">{stu.nameBn}</div>
                           </td>
                           <td className="p-3 font-mono text-ink-soft">+91 ******4321</td>
                           <td className="p-3 text-ink-soft max-w-xs">
-                            <div className="text-[11px] italic bg-surface-soft p-2 rounded-xl border border-line leading-relaxed">
+                            <div className="text-xs italic bg-surface-soft p-2 rounded-xl border border-line leading-relaxed">
                               "{text}"
                             </div>
                           </td>
                           <td className="p-3 font-mono">
                             <div className="font-semibold text-ink">{segments} Seg</div>
-                            <div className="text-[11px] text-ink-muted">{charCount} Chars ({isUnicode ? 'Unicode' : 'GSM'})</div>
+                            <div className="text-xs text-ink-muted">{charCount} Chars ({isUnicode ? 'Unicode' : 'GSM'})</div>
                           </td>
                           <td className="p-3">
-                            <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2 py-1 rounded-full text-[11px] flex items-center gap-1 w-max font-display">
+                            <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2 py-1 rounded-full text-xs flex items-center gap-1 w-max font-display">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               QUEUED_FOR_DISPATCH
                             </span>
@@ -403,7 +403,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   Verified historic dispatches and billing parameters for {SCHOOLS_METRICS[selectedSchool].name}
                 </p>
               </div>
-              <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2.5 py-0.5 rounded-full text-[11px] font-display">
+              <span className="bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold px-2.5 py-0.5 rounded-full text-xs font-display">
                 DLT Audited
               </span>
             </div>
@@ -461,7 +461,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-start gap-2 bg-info-50 border border-info-100 dark:border-info-600/30 p-2.5 rounded-xl text-[11px] text-info-800 font-medium leading-normal">
+                <div className="mt-4 flex items-start gap-2 bg-info-50 border border-info-100 dark:border-info-600/30 p-2.5 rounded-xl text-xs text-info-800 font-medium leading-normal">
                   <Info className="w-4 h-4 shrink-0 text-info-600 mt-0.5" />
                   <span>Billing parameters estimate at a base rate of ₹0.12 per DLT segment. Bengali unicode requires multi-segment billing.</span>
                 </div>
@@ -523,7 +523,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   />
                 </div>
 
-                <div className="flex justify-between text-[11px] text-ink-muted font-bold">
+                <div className="flex justify-between text-xs text-ink-muted font-bold">
                   <span>0 Chars</span>
                   <span className="text-forest-700 dark:text-forest-600">{progress.isUnicode ? 'Bengali Unicode (70/67 limits)' : 'English GSM (160/153 limits)'}</span>
                   <span>{progress.segmentMax} Limit</span>
@@ -569,7 +569,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
 
               <div className="bg-warning-50 rounded-xl p-3 border border-warning-100 dark:border-warning-600/30 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-warning-600 shrink-0 mt-0.5" />
-                <div className="text-[11px] text-warning-800 font-medium leading-relaxed">
+                <div className="text-xs text-warning-800 font-medium leading-relaxed">
                   <strong>Unicode Segment Counting:</strong> Since templates use Bengali Unicode letters, each individual message character reduces the standard 160-char SMS limit to 70 for the first segment and 67 thereafter. Keeping names short and templates efficient avoids costly third-segment splits!
                 </div>
               </div>

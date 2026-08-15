@@ -118,7 +118,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
             <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(52,211,153,0.8)] absolute top-1/2 animate-pulse"></div>
           )}
 
-          <div className="text-slate-400 text-[11px] font-mono tracking-widest uppercase text-center px-4">
+          <div className="text-slate-400 text-xs font-mono tracking-widest uppercase text-center px-4">
             {language === 'bn' ? 'QR কোড ফ্রেমের মধ্যে রাখুন' : 'Align QR inside frame'}
           </div>
         </div>
@@ -174,7 +174,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
           <p className="t-label text-emerald-200 uppercase tracking-widest">
             {language === 'bn' ? 'সর্বশেষ স্ক্যান করা হয়েছে' : 'Last Scanned'}
           </p>
-          <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] font-mono font-bold">
+          <span className="bg-white/20 px-2 py-0.5 rounded text-xs font-mono font-bold">
             {lastScannedStudent?.scannedAt || 'JUST NOW'}
           </span>
         </div>
@@ -187,7 +187,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
               <span className="text-xs font-mono bg-black/20 px-2 py-1 rounded font-bold">
                 ROLL: {String(lastScannedStudent.rollNumber).padStart(4, '0')}
               </span>
-              <span className="text-[11px] font-mono font-bold bg-white/20 px-2 py-1 rounded">
+              <span className="text-xs font-mono font-bold bg-white/20 px-2 py-1 rounded">
                 {lastScannedStudent.studentCode}
               </span>
             </div>
@@ -253,7 +253,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
               ? 'অনুপস্থিত ছাত্র নিশ্চিত করুন এবং সাবমিট করুন'
               : 'Review unmarked students & submit final list'}
           </p>
-          <p className="text-[11px] mt-3 font-bold uppercase tracking-widest bg-white/20 self-start px-3 py-1 rounded-full font-display">
+          <p className="text-xs mt-3 font-bold uppercase tracking-widest bg-white/20 self-start px-3 py-1 rounded-full font-display">
             {unmarkedCount} {language === 'bn' ? 'জন বাকী আছে' : 'Students Unmarked'}
           </p>
         </div>
@@ -264,7 +264,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
             className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 rounded-2xl flex flex-col items-center justify-center border border-white/20 hover:bg-white/20 transition-all cursor-pointer"
           >
             <UserCheck className="w-5 h-5 mb-1" />
-            <span className="text-[11px] font-bold uppercase font-display">
+            <span className="text-xs font-bold uppercase font-display">
               {language === 'bn' ? 'ম্যানুয়াল' : 'Manual'}
             </span>
           </button>
@@ -276,7 +276,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
             <span className="text-base sm:text-lg font-extrabold uppercase">
               {language === 'bn' ? 'জমা দিন' : 'Submit'}
             </span>
-            <span className="text-[11px] font-semibold opacity-80">
+            <span className="text-xs font-semibold opacity-80">
               {language === 'bn' ? 'চূড়ান্ত উপস্থিতি' : 'Finalize Attendance'}
             </span>
           </button>

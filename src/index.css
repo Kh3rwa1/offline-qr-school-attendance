@@ -184,18 +184,17 @@
 .t-body {
   font-family: var(--font-sans);
   font-size: 0.875rem;
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 400;
   color: var(--ink-soft);
 }
 
 .t-label {
   font-family: var(--font-sans);
-  font-size: 0.6875rem;
-  line-height: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  letter-spacing: 0.04em;
+  font-weight: 700;
   color: var(--ink-soft);
 }
 

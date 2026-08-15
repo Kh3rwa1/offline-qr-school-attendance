@@ -110,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
             <>
               <div className="w-2.5 h-2.5 rounded-full bg-warning-600 mr-2 animate-pulse"></div>
               <WifiOff className="w-3.5 h-3.5 text-warning-600 mr-1.5" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+              <span className="text-xs font-bold uppercase tracking-wider text-ink-soft font-display">
                 {language === 'bn' ? 'অফলাইন মোড' : 'Offline Mode'}
               </span>
             </>
@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
             <>
               <div className="w-2.5 h-2.5 rounded-full bg-success-600 mr-2"></div>
               <Wifi className="w-3.5 h-3.5 text-success-600 mr-1.5" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+              <span className="text-xs font-bold uppercase tracking-wider text-ink-soft font-display">
                 {language === 'bn' ? 'অনলাইন মোড' : 'Online Mode'}
               </span>
             </>

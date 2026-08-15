@@ -287,10 +287,10 @@ export const HeadmasterDashboard: React.FC<HeadmasterDashboardProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between pt-3 border-t border-line">
-                  <div className="text-[11px] text-ink-muted font-mono">
+                  <div className="text-xs text-ink-muted font-mono">
                     ID: {student.studentCode}
                   </div>
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-success-800 bg-success-50 px-2 py-0.5 rounded-full border border-success-100 dark:border-success-600/30">
+                  <div className="flex items-center gap-1 text-xs font-bold text-success-800 bg-success-50 px-2 py-0.5 rounded-full border border-success-100 dark:border-success-600/30">
                     <QrCode className="w-3 h-3" />
                     <span>QR Ready</span>
                   </div>
@@ -336,13 +336,13 @@ export const HeadmasterDashboard: React.FC<HeadmasterDashboardProps> = ({
                     <td className="p-3 font-mono font-bold text-ink">#{s.rollNumber}</td>
                     <td className="p-3">
                       <div className="font-bold text-ink font-display">{s.name}</div>
-                      <div className="text-[11px] text-ink-soft">{s.nameBn}</div>
+                      <div className="text-xs text-ink-soft">{s.nameBn}</div>
                     </td>
                     <td className="p-3 font-medium text-ink-soft">
                       {s.className} ({s.section})
                     </td>
                     <td className="p-3">
-                      <span className="inline-flex items-center gap-1 bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-bold text-xs px-2.5 py-0.5 rounded-full">
                         <Check className="w-3 h-3" /> Active (v1)
                       </span>
                     </td>
@@ -358,7 +358,7 @@ export const HeadmasterDashboard: React.FC<HeadmasterDashboardProps> = ({
                                 : `New QR Key re-issued for ${s.name}! Old key invalidated.`
                             );
                           }}
-                          className="flex items-center gap-1 bg-warning-50 hover:bg-warning-100 text-warning-800 border border-warning-100 dark:border-warning-600/30 px-3 py-1 rounded-full font-bold text-[11px] cursor-pointer"
+                          className="flex items-center gap-1 bg-warning-50 hover:bg-warning-100 text-warning-800 border border-warning-100 dark:border-warning-600/30 px-3 py-1 rounded-full font-bold text-xs cursor-pointer"
                           title="Re-issue new secret QR key (invalidates lost card)"
                         >
                           <RefreshCw className="w-3 h-3" />
@@ -374,7 +374,7 @@ export const HeadmasterDashboard: React.FC<HeadmasterDashboardProps> = ({
                                 : `QR key revoked for ${s.name}!`
                             );
                           }}
-                          className="flex items-center gap-1 bg-danger-50 hover:bg-danger-100 text-danger-800 border border-danger-100 dark:border-danger-600/30 px-3 py-1 rounded-full font-bold text-[11px] cursor-pointer"
+                          className="flex items-center gap-1 bg-danger-50 hover:bg-danger-100 text-danger-800 border border-danger-100 dark:border-danger-600/30 px-3 py-1 rounded-full font-bold text-xs cursor-pointer"
                           title="Permanently revoke active QR key"
                         >
                           <X className="w-3 h-3" />
@@ -435,7 +435,7 @@ export const HeadmasterDashboard: React.FC<HeadmasterDashboardProps> = ({
                 <div>
                   <h4 className="font-bold text-sm text-ink font-display">Samsung Galaxy Tab A8</h4>
                   <p className="text-xs text-ink-soft">Teacher: Assistant Headmaster (Rahim Sir)</p>
-                  <div className="text-[11px] text-success-800 font-bold mt-0.5 font-mono">STATUS: AUTHORIZED</div>
+                  <div className="text-xs text-success-800 font-bold mt-0.5 font-mono">STATUS: AUTHORIZED</div>
                 </div>
               </div>
               <button
@@ -454,7 +454,7 @@ export const HeadmasterDashboard: React.FC<HeadmasterDashboardProps> = ({
                 <div>
                   <h4 className="font-bold text-sm text-ink font-display">Redmi Note 12 Scanner</h4>
                   <p className="text-xs text-ink-soft">Teacher: Class 10 Teacher (Kabir Ahmed)</p>
-                  <div className="text-[11px] text-success-800 font-bold mt-0.5 font-mono">STATUS: AUTHORIZED</div>
+                  <div className="text-xs text-success-800 font-bold mt-0.5 font-mono">STATUS: AUTHORIZED</div>
                 </div>
               </div>
               <button

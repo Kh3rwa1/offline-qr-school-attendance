@@ -26,7 +26,7 @@ export const Footer: React.FC<FooterProps> = () => {
   }, []);
 
   return (
-    <footer className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 text-ink-muted text-[11px] font-semibold uppercase tracking-wider font-mono">
+    <footer className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 text-ink-muted text-xs font-semibold uppercase tracking-wider font-mono">
       <div>AttendEase OS • Stable Offline Runtime</div>
       <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
         <div className="flex items-center gap-2">

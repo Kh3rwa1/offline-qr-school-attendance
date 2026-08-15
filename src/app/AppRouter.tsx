@@ -4,7 +4,7 @@ import RequireAuth from '../auth/RequireAuth';
 import RequireRole from '../auth/RequireRole';
 import DashboardLayout from '../layouts/DashboardLayout';
 import LoginPage from './LoginPage';
-import AuthenticatedApp from './AuthenticatedApp';
+import LandingPage from './LandingPage';
 import UnauthorizedPage from '../auth/UnauthorizedPage';
 import { useSession } from './SessionProvider';
 import { getDefaultRouteForRole } from '../auth/permissions';
@@ -38,14 +38,35 @@ const CardOperations = lazy(() => import('../dashboards/rfid-operator/CardOperat
 const EnrollmentOperations = lazy(() => import('../dashboards/rfid-operator/EnrollmentOperations'));
 const RfidIncidentQueue = lazy(() => import('../dashboards/rfid-operator/RfidIncidentQueue'));
 
+const HomeOrLanding: React.FC = () => {
+  const { isAuthenticated, activeRole, isLoading } = useSession();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-sm">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-display">Verifying secure workspace session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={getDefaultRouteForRole(activeRole || undefined)} replace />;
+  }
+
+  return <LandingPage />;
+};
+
 const RootRedirect: React.FC = () => {
   const { isAuthenticated, activeRole, isLoading } = useSession();
   if (isLoading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-600 font-bold text-sm">
+      <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-sm">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p>Verifying secure session…</p>
+          <div className="w-8 h-8 border-4 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-display">Verifying secure session…</p>
         </div>
       </div>
     );
@@ -58,16 +79,22 @@ export const AppRouter: React.FC = () => {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500 font-bold text-xs">
+        <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-xs">
           <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <span>Loading workspace…</span>
+            <div className="w-6 h-6 border-2 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-xs font-display">Loading workspace…</span>
           </div>
         </div>
       }
     >
       <Routes>
+        {/* Public Acquisition Landing Page */}
+        <Route path="/" element={<HomeOrLanding />} />
+        <Route path="/welcome" element={<LandingPage />} />
+
+        {/* Global and Path-Based Login Routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/s/:schoolSlug/login" element={<LoginPage />} />
 
         {/* Protected Dashboard Shell */}
         <Route
@@ -312,8 +339,11 @@ export const AppRouter: React.FC = () => {
           <Route path="unauthorized" element={<UnauthorizedPage />} />
         </Route>
 
-        {/* Root Fallback */}
-        <Route path="/" element={<RootRedirect />} />
+        {/* Path-based School Tenant Route Aliases */}
+        <Route path="/s/:schoolSlug" element={<Navigate to="login" replace />} />
+        <Route path="/s/:schoolSlug/app/*" element={<Navigate to="/app" replace />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

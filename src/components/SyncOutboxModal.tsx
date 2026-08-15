@@ -64,7 +64,7 @@ export const SyncOutboxModal: React.FC<SyncOutboxModalProps> = ({
           </div>
           <div>
             <div className="text-xs font-bold text-ink font-display">Pending Outbox Events</div>
-            <div className="text-[11px] text-ink-muted">Awaiting Server Acknowledgement</div>
+            <div className="text-xs text-ink-muted">Awaiting Server Acknowledgement</div>
           </div>
         </div>
 
@@ -74,7 +74,7 @@ export const SyncOutboxModal: React.FC<SyncOutboxModalProps> = ({
           </div>
           <div>
             <div className="text-xs font-bold text-ink font-display">Synced Events</div>
-            <div className="text-[11px] text-ink-muted">{syncedEvents.length} Ingested Idempotently</div>
+            <div className="text-xs text-ink-muted">{syncedEvents.length} Ingested Idempotently</div>
           </div>
         </div>
 
@@ -84,7 +84,7 @@ export const SyncOutboxModal: React.FC<SyncOutboxModalProps> = ({
           </div>
           <div>
             <div className="text-xs font-bold text-ink font-display">IndexedDB Health</div>
-            <div className="text-[11px] text-success-800 font-bold font-mono">ACTIVE & ENCRYPTED</div>
+            <div className="text-xs text-success-800 font-bold font-mono">ACTIVE & ENCRYPTED</div>
           </div>
         </div>
       </div>

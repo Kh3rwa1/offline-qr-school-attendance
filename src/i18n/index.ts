@@ -46,9 +46,15 @@ export const translations = {
     accountHelp3Desc: 'If you have forgotten your password or are locked out, contact your School Headmaster.',
     contactAdminTitle: 'Contact School Administrator',
     contactAdminDesc: 'Please reach out to your school\'s designated Headmaster or Administrator for account assistance or roster updates.',
+    productTour: 'Product Tour',
+    resolvingSchool: 'Resolving School Workspace',
+    connectingSchool: 'Connecting to the authenticated school directory…',
     schoolNotFoundTitle: 'This school workspace was not found',
     schoolNotFoundDesc: 'We could not find an active school workspace at this address. Please verify the URL or contact your school administrator.',
-    backToHome: 'Back to Home',
+    schoolSuspendedTitle: 'This school workspace is suspended',
+    schoolSuspendedDesc: 'This institutional workspace is currently inactive or suspended by the district authority.',
+    backToHome: 'Return to Home',
+    platformSignIn: 'Platform Sign In',
 
     // Roles
     roleSuperAdmin: 'Super Administrator',
@@ -176,9 +182,15 @@ export const translations = {
     accountHelp3Desc: 'পাসওয়ার্ড ভুলে গেলে বা কোনো সমস্যা হলে বিদ্যালয় প্রধানের সাথে যোগাযোগ করুন।',
     contactAdminTitle: 'বিদ্যালয় প্রশাসকের সাথে যোগাযোগ',
     contactAdminDesc: 'অ্যাকাউন্ট সহায়তা বা তথ্যের জন্য আপনার বিদ্যালয়ের প্রধান শিক্ষক বা প্রশাসকের সাথে যোগাযোগ করুন।',
+    productTour: 'পণ্য পরিচিতি',
+    resolvingSchool: 'বিদ্যালয় তথ্য লোড হচ্ছে…',
+    connectingSchool: 'বিদ্যালয় ডিরেক্টরির সাথে সংযোগ করা হচ্ছে…',
     schoolNotFoundTitle: 'এই বিদ্যালয়টি পাওয়া যায়নি',
     schoolNotFoundDesc: 'এই ঠিকানায় কোনো সক্রিয় বিদ্যালয় খুঁজে পাওয়া যায়নি। অনুগ্রহ করে ঠিকানা যাচাই করুন বা প্রশাসকের সাথে যোগাযোগ করুন।',
+    schoolSuspendedTitle: 'এই বিদ্যালয়টি স্থগিত রয়েছে',
+    schoolSuspendedDesc: 'এই বিদ্যালয়ের অ্যাকাউন্টটি জেলা কর্তৃপক্ষ কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে।',
     backToHome: 'হোমপেজে ফিরে যান',
+    platformSignIn: 'মূল লগইন',
 
     // Roles
     roleSuperAdmin: 'সুপার অ্যাডমিনিস্ট্রেটর',

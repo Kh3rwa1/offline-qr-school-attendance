@@ -137,11 +137,18 @@ export const LoginPage: React.FC = () => {
       ) {
         setError(
           resolvedSchool
-            ? `This mobile number is not a member of ${resolvedSchool.name}.`
-            : 'You do not have access to this school workspace.'
+            ? (language === 'bn'
+              ? `এই মোবাইল নম্বরটি ${resolvedSchool.name} এর অন্তর্ভুক্ত নয়।`
+              : `This mobile number is not a member of ${resolvedSchool.name}.`)
+            : (language === 'bn'
+              ? 'এই বিদ্যালয় ওয়ার্কস্পেসে আপনার প্রবেশাধিকার নেই।'
+              : 'You do not have access to this school workspace.')
         );
       } else {
-        setError(err.message || 'Invalid mobile number or password. Please try again.');
+        const defaultMsg = language === 'bn'
+          ? 'ভুল মোবাইল নম্বর বা পাসওয়ার্ড। অনুগ্রহ করে পুনরায় চেষ্টা করুন।'
+          : 'Invalid mobile number or password. Please try again.';
+        setError(err.message && err.message !== 'INVALID_CREDENTIALS' && !err.message.includes('Invalid') ? err.message : defaultMsg);
       }
     } finally {
       setIsSubmitting(false);
@@ -181,7 +188,7 @@ export const LoginPage: React.FC = () => {
 
           <Link to="/">
             <Button variant="ghost" size="sm">
-              Product Tour
+              {t('productTour')}
             </Button>
           </Link>
         </div>
@@ -193,8 +200,8 @@ export const LoginPage: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-surface-soft border border-line flex items-center justify-center mx-auto text-forest-700 dark:text-forest-400">
             <RefreshCw className="w-6 h-6 animate-spin" />
           </div>
-          <h2 className="text-xl font-bold text-ink font-display">Resolving School Workspace</h2>
-          <p className="text-sm text-ink-soft">Connecting to the authenticated school directory…</p>
+          <h2 className="text-xl font-bold text-ink font-display">{t('resolvingSchool')}</h2>
+          <p className="text-sm text-ink-soft">{t('connectingSchool')}</p>
           <div className="pt-2 space-y-2">
             <Skeleton variant="text" className="h-4 w-full" />
             <Skeleton variant="text" className="h-4 w-3/4 mx-auto" />
@@ -210,10 +217,14 @@ export const LoginPage: React.FC = () => {
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-extrabold text-ink font-display">
-              This school workspace was not found
+              {t('schoolNotFoundTitle')}
             </h2>
             <p className="text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
-              We could not find an active school workspace at <code className="px-1.5 py-0.5 rounded bg-surface-soft font-mono text-xs text-ink font-bold">/s/{schoolSlug}</code>. Please check the URL or contact your school administrator.
+              {language === 'bn' ? (
+                <>আমরা <code className="px-1.5 py-0.5 rounded bg-surface-soft font-mono text-xs text-ink font-bold">/s/{schoolSlug}</code> ঠিকানায় কোনো সক্রিয় বিদ্যালয় খুঁজে পাইনি। অনুগ্রহ করে ওয়েব ঠিকানা যাচাই করুন বা প্রশাসকের সাথে যোগাযোগ করুন।</>
+              ) : (
+                <>We could not find an active school workspace at <code className="px-1.5 py-0.5 rounded bg-surface-soft font-mono text-xs text-ink font-bold">/s/{schoolSlug}</code>. Please check the URL or contact your school administrator.</>
+              )}
             </p>
           </div>
 
@@ -224,14 +235,14 @@ export const LoginPage: React.FC = () => {
               leftIcon={<Home className="w-4 h-4" />}
               onClick={() => navigate('/')}
             >
-              Return to Home
+              {t('backToHome')}
             </Button>
             <Button
               variant="secondary"
               size="md"
               onClick={() => navigate('/login')}
             >
-              Platform Sign In
+              {t('platformSignIn')}
             </Button>
           </div>
         </div>
@@ -245,10 +256,10 @@ export const LoginPage: React.FC = () => {
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-extrabold text-ink font-display">
-              This school workspace is suspended
+              {t('schoolSuspendedTitle')}
             </h2>
             <p className="text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
-              This institutional workspace is currently inactive or suspended by the district authority.
+              {t('schoolSuspendedDesc')}
             </p>
           </div>
 
@@ -259,7 +270,7 @@ export const LoginPage: React.FC = () => {
               leftIcon={<Home className="w-4 h-4" />}
               onClick={() => navigate('/')}
             >
-              Return to Home
+              {t('backToHome')}
             </Button>
           </div>
         </div>

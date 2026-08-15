@@ -4,6 +4,7 @@ const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
 test.describe('RFID Card Enrollment E2E Suite', () => {
   test('RFID_OPERATOR searches student, selects security mode, and enrolls smartcard', async ({ page }) => {
+    test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
     // 1. Log in as RFID_OPERATOR
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000003');

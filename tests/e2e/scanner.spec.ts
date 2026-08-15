@@ -158,13 +158,93 @@ test('bilingual language toggle on login page reflects English and Bengali strin
   await expect(page.getByText(/Daily classroom/i)).toBeVisible();
 });
 
-test('camera scanner verifies video element attributes in viewfinder', async ({ page }) => {
+test('live camera scanner initializes getUserMedia with environment facing mode and plays live stream', async ({ page }) => {
+  // Stub getUserMedia with a canvas captureStream to provide a live MediaStream
+  await page.addInitScript(() => {
+    (window as any).__getUserMediaCalls = [];
+    if (!navigator.mediaDevices) {
+      (navigator as any).mediaDevices = {};
+    }
+    navigator.mediaDevices.getUserMedia = async (constraints: any) => {
+      (window as any).__getUserMediaCalls.push(constraints);
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#059669';
+        ctx.fillRect(0, 0, 640, 480);
+      }
+      return canvas.captureStream ? canvas.captureStream(30) : new MediaStream();
+    };
+  });
+
   // Log in as teacher
   await page.goto(`${baseUrl}/login`);
   await page.evaluate(() => navigator.serviceWorker?.ready);
   await page.locator('#login-phone').fill('9100000002');
   await page.locator('#login-password').fill('TeacherPassword123!');
-  await page.getByRole('button', { name: /Sign In/i }).click();
+  await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+
+  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+
+  // Select class and start session
+  const selectEl = page.locator('select');
+  await expect(selectEl).toBeVisible();
+  const optionValues = await selectEl.locator('option').evaluateAll((options) =>
+    options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
+  );
+  expect(optionValues.length).toBeGreaterThan(0);
+  await selectEl.selectOption(optionValues[0]);
+  await page.getByRole('button', { name: 'Download roster' }).click();
+  await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
+
+  const startBtn = page.getByRole('button', { name: 'Start offline session' });
+  if (await startBtn.isVisible()) {
+    await startBtn.click();
+    await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+  }
+
+  // 1. Assert getUserMedia was called with facingMode: 'environment'
+  await expect.poll(async () => {
+    return page.evaluate(() => {
+      const calls = (window as any).__getUserMediaCalls || [];
+      return calls.some((c: any) => {
+        const video = c?.video;
+        return video && (video.facingMode === 'environment' || JSON.stringify(video).includes('environment'));
+      });
+    });
+  }).toBe(true);
+
+  // 2. Assert video element is mounted and has non-null srcObject with active stream
+  const video = page.locator('video');
+  await expect(video).toBeAttached();
+  await expect(video).toHaveAttribute('playsinline');
+  const hasSrcObject = await video.evaluate((v: HTMLVideoElement) => Boolean(v.srcObject));
+  expect(hasSrcObject).toBe(true);
+
+  // 3. Assert camera HUD displays LIVE status
+  await expect(page.getByText(/CAMERA:\s*LIVE/i)).toBeVisible();
+});
+
+test('camera permission denied renders bilingual error HUD and interactive retry button', async ({ page }) => {
+  // Stub getUserMedia to reject with NotAllowedError
+  await page.addInitScript(() => {
+    if (!navigator.mediaDevices) {
+      (navigator as any).mediaDevices = {};
+    }
+    navigator.mediaDevices.getUserMedia = async () => {
+      const err = new DOMException('Camera permission denied', 'NotAllowedError');
+      throw err;
+    };
+  });
+
+  // Log in as teacher
+  await page.goto(`${baseUrl}/login`);
+  await page.evaluate(() => navigator.serviceWorker?.ready);
+  await page.locator('#login-phone').fill('9100000002');
+  await page.locator('#login-password').fill('TeacherPassword123!');
+  await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
   await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
@@ -186,22 +266,52 @@ test('camera scanner verifies video element attributes in viewfinder', async ({ 
     }
   }
 
-  // Verify video element is mounted in viewfinder with playsinline attribute
-  const video = page.locator('video');
-  await expect(video).toBeAttached();
-  await expect(video).toHaveAttribute('playsinline');
+  // 1. Assert HUD is NOT LIVE
+  await expect(page.getByText(/CAMERA:\s*LIVE/i)).toHaveCount(0);
+
+  // 2. Assert English denied copy is displayed
+  await expect(page.getByText(/Camera permission denied/i)).toBeVisible();
+
+  // 3. Assert Retry button is visible
+  const retryBtn = page.getByRole('button', { name: /Retry Camera|Retry/i });
+  await expect(retryBtn).toBeVisible();
+
+  // 4. Switch to Bengali and assert Bengali denied copy
+  const bnBtn = page.getByRole('button', { name: 'বাংলা' });
+  if (await bnBtn.isVisible()) {
+    await bnBtn.click();
+    await expect(page.getByText(/ক্যামেরার অনুমতি প্রত্যাখ্যাত/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /পুনরায় ক্যামেরা চেষ্টা করুন|পুনরায় চেষ্টা করুন/i })).toBeVisible();
+  }
 });
 
-test('RFID operator routes and navigation are gated when FEATURE_RFID is false', async ({ page }) => {
+test('RFID off by default: API returns 404 and RFID operator has no navigation or dashboard access', async ({ page }) => {
+  // 1. Assert API returns 404 when FEATURE_RFID is unset/false
+  const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
+  try {
+    const adminLogin = await adminApi.post('/api/v1/auth/login', {
+      data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
+    });
+    expect(adminLogin.ok()).toBeTruthy();
+    const adminMe = await (await adminApi.get('/api/v1/auth/me')).json();
+    const schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.memberships[0].schoolId;
+    const rfidApiRes = await adminApi.get(`/api/v1/schools/${schoolId}/rfid/readers`);
+    expect(rfidApiRes.status()).toBe(404);
+  } finally {
+    await adminApi.dispose();
+  }
+
+  // 2. Log in as seeded RFID operator
   await page.goto(`${baseUrl}/login`);
-  await page.locator('#login-phone').fill('9100000002');
-  await page.locator('#login-password').fill('TeacherPassword123!');
-  await page.getByRole('button', { name: /Sign In/i }).click();
+  await page.locator('#login-phone').fill('9100000003');
+  await page.locator('#login-password').fill('RfidOpPassword123!');
+  await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
-  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
-
-  // Assert RFID links are absent from navigation
+  // 3. Assert no RFID links exist in navigation
   await expect(page.locator('a[href="/app/rfid"]')).toHaveCount(0);
-  await expect(page.locator('a[href="/app/rfid/readers"]')).toHaveCount(0);
-  await expect(page.locator('a[href="/app/rfid/cards"]')).toHaveCount(0);
+  await expect(page.locator('a[href^="/app/rfid/"]')).toHaveCount(0);
+
+  // 4. Direct navigation to /app/rfid does NOT render the RFID operator console
+  await page.goto(`${baseUrl}/app/rfid`);
+  await expect(page.getByText('MIFARE DESFire EV2 Operator Console')).toHaveCount(0);
 });

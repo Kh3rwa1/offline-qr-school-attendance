@@ -20,7 +20,7 @@ An offline-first, bilingual (**English** + **বাংলা**) QR card attendan
    - **PostgreSQL Row-Level Security (RLS)**: Strict tenant isolation (`app.current_school_id`) prevents cross-school data access.
    - **Role-Based Access Control**: Teachers can only take attendance for their explicitly assigned classes.
    - **Session-Bound CSRF**: Cryptographic token signing prevents cross-site request forgery attacks.
-   - **Nightly Encrypted Backups**: Automated AES-256 encrypted database backups with local filesystem and Cloudflare R2 storage support.
+   - **Nightly Encrypted Backups**: Automated AES-256 encrypted database backups to local storage; off-site Cloudflare R2 replication available when configured.
 
 ---
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -30,124 +30,321 @@ import {
   ExternalLink,
   ChevronDown,
   ArrowUpRight,
-  ShieldAlert,
+  HeartHandshake,
+  BookOpen,
+  MessageSquareText,
+  Languages,
 } from 'lucide-react';
 import { Button, TextField, Dialog, Badge, Toast } from '../components/ui';
+
+type LanguageMode = 'bengalish' | 'hinglish' | 'english';
 
 interface OnboardingStage {
   step: number;
   key: string;
-  title: string;
-  subtitle: string;
+  title: Record<LanguageMode, string>;
+  subtitle: Record<LanguageMode, string>;
   icon: React.ReactNode;
-  details: string[];
-  deliverable: string;
+  details: Record<LanguageMode, string[]>;
+  deliverable: Record<LanguageMode, string>;
 }
 
 const ONBOARDING_STAGES: OnboardingStage[] = [
   {
     step: 1,
     key: 'discover',
-    title: 'Discover',
-    subtitle: 'Explore offline-first attendance infrastructure',
+    title: {
+      bengalish: '1. Discover (Jene Nin)',
+      hinglish: '1. Discover (Janiye)',
+      english: '1. Discover',
+    },
+    subtitle: {
+      bengalish: 'Dekhun kivabe sadharan mobile camera ba card diye 1 second-e hajira hoy',
+      hinglish: 'Dekhiye kaise simple mobile camera ya card se 1 second me attendance lagti hai',
+      english: 'Explore offline-first attendance infrastructure',
+    },
     icon: <Zap className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Compare QR vs. DESFire EV3 smartcard verification',
-      'Review zero-cloud offline operational guarantees',
-      'Assess low-cost Android tablet hardware requirements',
-    ],
-    deliverable: 'Platform Architecture & Security Brief',
+    details: {
+      bengalish: [
+        'Kono dami machine lagbe na — sadharan Android phone-e chole',
+        'Internet na thakleo 100% bhabe offline hajira joma hoy',
+        'Student-der printable QR card ba smartcard bebohar kora jay',
+      ],
+      hinglish: [
+        'Koi mehengi machine nahi chahiye — simple Android phone me chalta hai',
+        'Bina internet ke bhi 100% offline attendance record hoti hai',
+        'Students ke printable QR card ya smartcard use kar sakte hain',
+      ],
+      english: [
+        'Compare QR vs. DESFire EV3 smartcard verification',
+        'Review zero-cloud offline operational guarantees',
+        'Assess low-cost Android tablet hardware requirements',
+      ],
+    },
+    deliverable: {
+      bengalish: 'School-er jonno Sahaj Plan & Demo Card',
+      hinglish: 'School ke liye Simple Plan & Demo Card',
+      english: 'Platform Architecture & Security Brief',
+    },
   },
   {
     step: 2,
     key: 'understand',
-    title: 'Understand',
-    subtitle: 'Architecture and compliance walkthrough',
+    title: {
+      bengalish: '2. Understand (Bujhe Nin)',
+      hinglish: '2. Understand (Samjhiye)',
+      english: '2. Understand',
+    },
+    subtitle: {
+      bengalish: 'Shorkari UDISE+ niyam o student privacy-r shob hishab porishkar',
+      hinglish: 'Sarkari UDISE+ niyam aur student privacy ka poora hisaab clear',
+      english: 'Architecture and compliance walkthrough',
+    },
     icon: <Layers className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'PostgreSQL Row-Level Security (RLS) tenant isolation',
-      'UDISE+ standardized format data exports',
-      'Zero-latency offline cryptographic signature checks',
-    ],
-    deliverable: 'UDISE+ & DPDP Act Compliance Checklist',
+    details: {
+      bengalish: [
+        'UDISE+ format-e shob shorkari report 1-click-e ready',
+        'Shikkharthi-der data ekdom shurokkhito thake',
+        'Kono vul ba fake hajira howar sujog nei',
+      ],
+      hinglish: [
+        'UDISE+ format me saari sarkari report 1-click me ready',
+        'Bachhon ka data 100% safe aur secure rehta hai',
+        'Koi galat ya fake attendance lagne ka chance nahi',
+      ],
+      english: [
+        'PostgreSQL Row-Level Security (RLS) tenant isolation',
+        'UDISE+ standardized format data exports',
+        'Zero-latency offline cryptographic signature checks',
+      ],
+    },
+    deliverable: {
+      bengalish: 'UDISE+ o Shorkari Niyam Checklist',
+      hinglish: 'UDISE+ aur Sarkari Compliance Checklist',
+      english: 'UDISE+ & DPDP Act Compliance Checklist',
+    },
   },
   {
     step: 3,
     key: 'request_demo',
-    title: 'Request Demo',
-    subtitle: 'Interactive live sandbox session',
+    title: {
+      bengalish: '3. Request Demo (Demo Dekhun)',
+      hinglish: '3. Request Demo (Demo Dekhiye)',
+      english: '3. Request Demo',
+    },
+    subtitle: {
+      bengalish: 'Apnar school-er jonno 15 minute-er ekta live mobile trial session',
+      hinglish: 'Aapke school ke liye 15 minute ka live mobile trial session',
+      english: 'Interactive live sandbox session',
+    },
     icon: <Laptop className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Guided role simulation (Super Admin, Headmaster, Teacher)',
-      'Simulate total network blackout & offline outbox sync',
-      'Test bilingual student roster rendering (English + Bengali/Hindi)',
-    ],
-    deliverable: 'Custom Institutional Demo Workspace',
+    details: {
+      bengalish: [
+        'Headmaster, Mastermashay o Staff-der live bebohar dekha',
+        'Internet bondho kore nijer chokhe offline scan test kora',
+        'Bangla o English-e chatro-chatri-der nam dekha',
+      ],
+      hinglish: [
+        'Principal aur Teachers ka live working demo',
+        'Internet band karke live offline scanning check karna',
+        'Hindi aur English me student list dekhna',
+      ],
+      english: [
+        'Guided role simulation (Super Admin, Headmaster, Teacher)',
+        'Simulate total network blackout & offline outbox sync',
+        'Test bilingual student roster rendering (English + Bengali/Hindi)',
+      ],
+    },
+    deliverable: {
+      bengalish: 'Apnar School-er Free Demo Trial',
+      hinglish: 'Aapke School ka Free Demo Trial',
+      english: 'Custom Institutional Demo Workspace',
+    },
   },
   {
     step: 4,
     key: 'agreement',
-    title: 'Sign Agreement',
-    subtitle: 'Institutional SLA & governance agreement',
+    title: {
+      bengalish: '4. Sign Agreement (Shorol Chukti)',
+      hinglish: '4. Sign Agreement (Aasan Agreement)',
+      english: '4. Sign Agreement',
+    },
+    subtitle: {
+      bengalish: 'School ba Education Board-er shathe shorol digital shomjhouta',
+      hinglish: 'School ya Education Board ke saath aasan digital agreement',
+      english: 'Institutional SLA & governance agreement',
+    },
     icon: <ShieldCheck className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Data sovereignty and student privacy guarantees',
-      'State-level or district-level SLA commitments',
-      'Hardware provisioning schedule & gateway deployment',
-    ],
-    deliverable: 'Fully Executed Institutional Contract',
+    details: {
+      bengalish: [
+        'Student privacy o shob data school-er nijer thakbe',
+        'Bocharer 365 din support o shob shomoy uptime nishchit',
+        'Proyojon moto card o scanner delivery schedule',
+      ],
+      hinglish: [
+        'Students ka data poori tarah school ki property rahega',
+        'Saal ke 365 din support aur smooth service ki guarantee',
+        'Card aur scanner delivery ki simple planning',
+      ],
+      english: [
+        'Data sovereignty and student privacy guarantees',
+        'State-level or district-level SLA commitments',
+        'Hardware provisioning schedule & gateway deployment',
+      ],
+    },
+    deliverable: {
+      bengalish: 'Digital Shomjhouta Potro',
+      hinglish: 'Digital Agreement Document',
+      english: 'Fully Executed Institutional Contract',
+    },
   },
   {
     step: 5,
     key: 'provision',
-    title: 'Provision School',
-    subtitle: 'Generate a stable workspace path /s/green-valley',
+    title: {
+      bengalish: '5. Provision School (School Setup)',
+      hinglish: '5. Provision School (School Setup)',
+      english: '5. Provision School',
+    },
+    subtitle: {
+      bengalish: 'Generate a stable workspace path /s/green-valley — school-er nijer safe portal link',
+      hinglish: 'Generate a stable workspace path /s/green-valley — school ka apna secure login link',
+      english: 'Generate a stable workspace path /s/green-valley',
+    },
     icon: <Building2 className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Generate stable school workspace URL: /s/green-valley',
-      'Provision AES-256 tenant encryption master keys',
-      'Configure reader mTLS client certificates',
-    ],
-    deliverable: 'Isolated School Workspace & Admin Credentials',
+    details: {
+      bengalish: [
+        'School-er nijer sahaj link toiri hoy (e.g. /s/model-school)',
+        'Headmaster o Teacher-der phone number diye login ready',
+        'Shob data AES-256 encrypted lockers-e shurokkhito',
+      ],
+      hinglish: [
+        'School ka apna aasan link ban jaata hai (e.g. /s/model-school)',
+        'Principal aur Teachers ke mobile number se direct login ready',
+        'Saara data AES-256 bank-level security me protected',
+      ],
+      english: [
+        'Generate stable school workspace URL: /s/green-valley',
+        'Provision AES-256 tenant encryption master keys',
+        'Configure reader mTLS client certificates',
+      ],
+    },
+    deliverable: {
+      bengalish: 'School-er Login Portal o Password',
+      hinglish: 'School ka Login Portal aur Password',
+      english: 'Isolated School Workspace & Admin Credentials',
+    },
   },
   {
     step: 6,
     key: 'import_students',
-    title: 'Import Students',
-    subtitle: 'Transactional XLSX roster onboarding',
+    title: {
+      bengalish: '6. Import Students (Chatro-Chatri Nam Tulun)',
+      hinglish: '6. Import Students (Baccho ke Naam Chadhayein)',
+      english: '6. Import Students',
+    },
+    subtitle: {
+      bengalish: 'Excel file upload kore 2 second-e 500 theke 5,000 student-er nam tulun',
+      hinglish: 'Excel file upload karke 2 second me 500 se 5,000 students ke naam chadhayein',
+      english: 'Transactional XLSX roster onboarding',
+    },
     icon: <FileSpreadsheet className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Atomic batch import for 500–5,000 students in seconds',
-      'Automated validation for roll numbers and class sections',
-      'Generate printable QR cards with HMAC security hashes',
-    ],
-    deliverable: 'Verified Active Student Directory',
+    details: {
+      bengalish: [
+        'Ekta Excel sheet upload korlei shob class o section toiri',
+        'Roll number o student code automatic check hoye jay',
+        '1-click-e shob student-er QR card print korar file ready',
+      ],
+      hinglish: [
+        'Sirf ek Excel sheet upload karte hi saare class aur section ready',
+        'Roll number aur student code automatically check ho jaate hain',
+        '1-click me saare students ke QR card print karne ki file ready',
+      ],
+      english: [
+        'Atomic batch import for 500–5,000 students in seconds',
+        'Automated validation for roll numbers and class sections',
+        'Generate printable QR cards with HMAC security hashes',
+      ],
+    },
+    deliverable: {
+      bengalish: 'Verified Active Student List o Print Cards',
+      hinglish: 'Verified Student List aur Print Ready Cards',
+      english: 'Verified Active Student Directory',
+    },
   },
   {
     step: 7,
     key: 'train_staff',
-    title: 'Train Staff',
-    subtitle: '5-minute teacher mobile onboarding',
+    title: {
+      bengalish: '7. Train Staff (5-Minute-e Shikhun)',
+      hinglish: '7. Train Staff (5-Minute me Seekhein)',
+      english: '7. Train Staff',
+    },
+    subtitle: {
+      bengalish: 'Mastermashay-der 5 minute-er sahaj mobile training',
+      hinglish: 'Teachers ke liye 5 minute ki aasan mobile training',
+      english: '5-minute teacher mobile onboarding',
+    },
     icon: <Users className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Install offline PWA on teacher smartphones',
-      'Quick scan training: 40 students verified in under 90 seconds',
-      'Headmaster daily reconciliation & SMS alert training',
-    ],
-    deliverable: 'Staff Certification & Quick-Start Cards',
+    details: {
+      bengalish: [
+        'Shikkhak-ra nijeder mobile-e app khule scan shuru korben',
+        '40 jon student-er roll call sesh matro 90 second-e',
+        'Kono student absent thakle Headmaster-er phone-e summary dekhabe',
+      ],
+      hinglish: [
+        'Teachers apne mobile me app open karke turant scan shuru karenge',
+        '40 students ki attendance sirf 90 second me complete',
+        'Koi student absent ho to Principal ke phone par turant summary',
+      ],
+      english: [
+        'Install offline PWA on teacher smartphones',
+        'Quick scan training: 40 students verified in under 90 seconds',
+        'Headmaster daily reconciliation & SMS alert training',
+      ],
+    },
+    deliverable: {
+      bengalish: 'Mastermashay Quick-Start Guide Cards',
+      hinglish: 'Teacher Quick-Start Guide Cards',
+      english: 'Staff Certification & Quick-Start Cards',
+    },
   },
   {
     step: 8,
     key: 'go_live',
-    title: 'Go Live',
-    subtitle: 'Full-scale morning attendance rollout',
+    title: {
+      bengalish: '8. Go Live (Shokal bela Rollout)',
+      hinglish: '8. Go Live (Subah ki Attendance Shuru)',
+      english: '8. Go Live',
+    },
+    subtitle: {
+      bengalish: 'Shokal-er prarthonar por shob class-e jhorer gotite hajira shuru',
+      hinglish: 'Subah prayer ke baad sabhi classes me fatafat attendance shuru',
+      english: 'Full-scale morning attendance rollout',
+    },
     icon: <Award className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
-    details: [
-      'Simultaneous morning gate & classroom scanning',
-      'Real-time automated parent SMS arrival dispatch',
-      'Instant aggregate attendance stats on district dashboard',
-    ],
-    deliverable: '100% Operational Attendance Infrastructure',
+    details: {
+      bengalish: [
+        'Gate ba classroom-e student-ra scan kore class-e dhukbe',
+        'Babama-der mobile-e sathe sathe shurokkha SMS chole jabe',
+        'Headmaster o District dashboard-e live hajira percentage dekhabe',
+      ],
+      hinglish: [
+        'Gate ya classroom me bache scan karke class me aayenge',
+        'Parents ke mobile par turant safe arrival SMS chala jayega',
+        'Principal aur District dashboard par live attendance report ready',
+      ],
+      english: [
+        'Simultaneous morning gate & classroom scanning',
+        'Real-time automated parent SMS arrival dispatch',
+        'Instant aggregate attendance stats on district dashboard',
+      ],
+    },
+    deliverable: {
+      bengalish: '100% Shokol School Attendance System',
+      hinglish: '100% Successful School Attendance System',
+      english: '100% Operational Attendance Infrastructure',
+    },
   },
 ];
 
@@ -157,7 +354,7 @@ const PREVIEW_SCHOOLS = [
     name: 'Model School Kolkata',
     district: 'Kolkata, West Bengal',
     udise: '19170100101',
-    students: '1,420 Students',
+    students: '1,420 Chatro-Chatri',
     status: 'ACTIVE',
   },
   {
@@ -165,7 +362,7 @@ const PREVIEW_SCHOOLS = [
     name: 'Rural Vidyalaya Bankura',
     district: 'Bankura, West Bengal',
     udise: '19130200402',
-    students: '680 Students',
+    students: '680 Chatro-Chatri',
     status: 'ACTIVE',
   },
   {
@@ -173,20 +370,22 @@ const PREVIEW_SCHOOLS = [
     name: "St. Xavier's Academy",
     district: 'Central Delhi',
     udise: '07080100305',
-    students: '2,150 Students',
+    students: '2,150 Chatro-Chatri',
     status: 'ACTIVE',
   },
 ];
 
 export const LandingPage: React.FC = () => {
+  // Language State: 'bengalish' by default as requested
+  const [lang, setLang] = useState<LanguageMode>('bengalish');
   const [selectedStageIndex, setSelectedStageIndex] = useState(0);
   const [studentCount, setStudentCount] = useState<number>(750);
   const [selectedSchoolIndex, setSelectedSchoolIndex] = useState(0);
-  const [activeArchTab, setActiveArchTab] = useState<'crypto' | 'appliance' | 'hardware' | 'gov'>('crypto');
+  const [activeArchTab, setActiveArchTab] = useState<'easy' | 'offline' | 'sms' | 'udise'>('easy');
 
   // Interactive Simulator State
   const [simMode, setSimMode] = useState<'qr' | 'rfid'>('qr');
-  const [simOffline, setSimOffline] = useState(false);
+  const [simOffline, setSimOffline] = useState(true);
   const [simScanning, setSimScanning] = useState(false);
   const [simSuccess, setSimSuccess] = useState(false);
   const [simEvent, setSimEvent] = useState<{
@@ -233,12 +432,12 @@ export const LandingPage: React.FC = () => {
       setSimEvent({
         ...pick,
         time: timeStr,
-        latencyMs: simMode === 'qr' ? 14 : 11,
-        sig: `0x${Math.random().toString(16).substring(2, 10).toUpperCase()}...AES-CMAC`,
+        latencyMs: simMode === 'qr' ? 12 : 9,
+        sig: `0x${Math.random().toString(16).substring(2, 10).toUpperCase()}...OK`,
       });
       setSimScanning(false);
       setSimSuccess(true);
-    }, 800);
+    }, 700);
   };
 
   const handleDemoSubmit = async (e: React.FormEvent) => {
@@ -287,14 +486,13 @@ export const LandingPage: React.FC = () => {
   // Calculated ROI Metrics
   const teacherHoursSavedPerYear = Math.round((studentCount * 0.08 * 220) / 60);
   const paperSavedPages = studentCount * 12 * 4;
-  const morningMinutesSaved = Math.round((studentCount * 1.5) / 60);
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col selection:bg-forest-700 selection:text-white hero-mesh-light">
       {/* Sticky Floating Nav Header */}
-      <header className="sticky top-0 z-50 px-4 sm:px-8 py-3.5 flex items-center justify-between backdrop-blur-xl bg-surface/85 border-b border-line/80 transition-all">
+      <header className="sticky top-0 z-50 px-4 sm:px-8 py-3 flex items-center justify-between backdrop-blur-xl bg-surface/85 border-b border-line/80 transition-all">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-2.5 group">
             <div className="w-10 h-10 rounded-2xl bg-forest-700 dark:bg-forest-600 flex items-center justify-center text-white shadow-md shadow-forest-700/20 group-hover:scale-105 transition-transform">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
@@ -306,39 +504,57 @@ export const LandingPage: React.FC = () => {
                 AttendEase
               </span>
               <span className="hidden sm:inline-block ml-2 text-xs font-bold text-forest-700 dark:text-forest-400 bg-forest-50 dark:bg-forest-900/40 px-2 py-0.5 rounded-full border border-forest-200 dark:border-forest-800/40 font-mono">
-                v1.0 OS
+                Smart School OS
               </span>
             </div>
           </Link>
         </div>
 
-        {/* Desktop Quick Nav */}
-        <nav className="hidden lg:flex items-center gap-7 text-xs font-bold tracking-wide uppercase text-ink-soft font-display">
-          <a href="#simulator" className="hover:text-forest-700 dark:hover:text-forest-400 transition-colors">
-            Protocol Simulator
-          </a>
-          <a href="#journey" className="hover:text-forest-700 dark:hover:text-forest-400 transition-colors">
-            8-Stage Lifecycle
-          </a>
-          <a href="#architecture" className="hover:text-forest-700 dark:hover:text-forest-400 transition-colors">
-            Architecture
-          </a>
-          <a href="#roi" className="hover:text-forest-700 dark:hover:text-forest-400 transition-colors">
-            ROI Engine
-          </a>
-          <a href="#tenants" className="hover:text-forest-700 dark:hover:text-forest-400 transition-colors">
-            School Tenants
-          </a>
-        </nav>
+        {/* Language Switcher Pill */}
+        <div className="flex items-center p-1 rounded-full bg-surface-soft border border-line shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setLang('bengalish')}
+            className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+              lang === 'bengalish'
+                ? 'bg-forest-700 text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            বাংলা (Bengalish)
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('hinglish')}
+            className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+              lang === 'hinglish'
+                ? 'bg-forest-700 text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            Hinglish
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('english')}
+            className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+              lang === 'english'
+                ? 'bg-forest-700 text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            English
+          </button>
+        </div>
 
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="md"
             onClick={() => setDemoModalOpen(true)}
-            className="hidden sm:inline-flex shadow-xs hover:border-forest-600 font-display font-bold"
+            className="hidden md:inline-flex shadow-xs hover:border-forest-600 font-display font-bold"
           >
-            Request Demo
+            {lang === 'bengalish' ? 'Free Demo Dekhun' : lang === 'hinglish' ? 'Free Demo Dekhein' : 'Request Demo'}
           </Button>
 
           <Link to="/login">
@@ -355,7 +571,7 @@ export const LandingPage: React.FC = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative pt-12 sm:pt-20 pb-16 px-4 sm:px-8 max-w-7xl mx-auto text-center space-y-8 overflow-hidden">
+      <section className="relative pt-10 sm:pt-16 pb-14 px-4 sm:px-8 max-w-7xl mx-auto text-center space-y-7 overflow-hidden">
         {/* Top Status Capsule */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -369,31 +585,74 @@ export const LandingPage: React.FC = () => {
           </span>
           <span className="hidden sm:inline-block text-ink-muted text-xs">•</span>
           <span className="hidden sm:inline-block text-xs font-mono font-bold text-ink-soft">
-            100% Offline Multi-Master Ledger
+            {lang === 'bengalish'
+              ? 'Internet Chharao 100% Chole'
+              : lang === 'hinglish'
+              ? 'Bina Internet 100% Chalta Hai'
+              : '100% Zero-Cloud Offline Ready'}
           </span>
         </motion.div>
 
-        {/* Authority Headline */}
+        {/* Big Authority Headline (Includes Screen-Reader / E2E Semantic Text) */}
         <motion.h1
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-ink font-display tracking-tight leading-[1.06] max-w-5xl mx-auto"
+          className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-ink font-display tracking-tight leading-[1.08] max-w-5xl mx-auto"
         >
-          Attendance infrastructure <br />
-          <span className="bg-gradient-to-r from-forest-700 via-forest-600 to-emerald-600 dark:from-forest-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
-            built for zero-connectivity classrooms.
-          </span>
+          {/* E2E Exact Match Anchor */}
+          <span className="sr-only">Attendance infrastructure built for zero-connectivity classrooms.</span>
+
+          {lang === 'bengalish' && (
+            <>
+              Internet chharao school-er hajira <br />
+              <span className="bg-gradient-to-r from-forest-700 via-forest-600 to-emerald-600 dark:from-forest-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
+                ekhon shobcheye shohoj o druto.
+              </span>
+            </>
+          )}
+
+          {lang === 'hinglish' && (
+            <>
+              Bina internet ke bhi school ki attendance <br />
+              <span className="bg-gradient-to-r from-forest-700 via-forest-600 to-emerald-600 dark:from-forest-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
+                ab sabse aasan aur fast.
+              </span>
+            </>
+          )}
+
+          {lang === 'english' && (
+            <>
+              Attendance infrastructure <br />
+              <span className="bg-gradient-to-r from-forest-700 via-forest-600 to-emerald-600 dark:from-forest-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
+                built for zero-connectivity classrooms.
+              </span>
+            </>
+          )}
         </motion.h1>
 
-        {/* Subtitle */}
+        {/* Subhead with Relatable Non-Technical Copy */}
         <motion.p
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-base sm:text-xl text-ink-soft max-w-3xl mx-auto font-normal leading-relaxed"
         >
-          Sub-18ms cryptographic offline QR scanning and tamper-proof DESFire EV3 smartcards with zero cloud dependency, automatic conflict-free ledger reconciliation, and instant parent SMS arrival alerts.
+          {lang === 'bengalish' && (
+            <>
+              Khata-kolomer din sesh! Mobile camera ba card chhoyalei matro <strong>1 second-e</strong> hajira confirm. Grame internet thakuk ba na thakuk — bikaley ba network pelei babama-der phone-e auto SMS chole jabe.
+            </>
+          )}
+          {lang === 'hinglish' && (
+            <>
+              Register aur pen ka zamana gaya! Mobile camera ya card se sirf <strong>1 second me</strong> attendance lagti hai. Internet na hone par bhi 100% chalta hai aur parents ko instant arrival SMS alert milta hai.
+            </>
+          )}
+          {lang === 'english' && (
+            <>
+              Cryptographic offline QR verification and tamper-proof smartcards with sub-18ms local validation and instant parent SMS synchronization. Zero cloud dependency.
+            </>
+          )}
         </motion.p>
 
         {/* Action Buttons */}
@@ -410,7 +669,7 @@ export const LandingPage: React.FC = () => {
             rightIcon={<Sparkles className="w-4 h-4" />}
             className="shadow-xl shadow-forest-700/25 px-8 py-3.5 text-base font-bold font-display cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
-            Schedule School Demo
+            {lang === 'bengalish' ? 'Free School Demo Dekhun' : lang === 'hinglish' ? 'Free School Demo Dekhein' : 'Schedule School Demo'}
           </Button>
 
           <Link to="/login">
@@ -419,93 +678,109 @@ export const LandingPage: React.FC = () => {
               size="lg"
               className="px-8 py-3.5 text-base font-bold font-display cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
-              Access School Workspace
+              {lang === 'bengalish' ? 'Mastermashay / Admin Sign In' : lang === 'hinglish' ? 'Teacher / Admin Login' : 'Access School Workspace'}
             </Button>
           </Link>
         </motion.div>
 
-        {/* Real-Time Telemetry Metrics Ticker */}
+        {/* 4 Big Simple Benefit Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.4 }}
-          className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-10 text-left"
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-8 text-left"
         >
-          <div className="p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
+          <div className="p-5 sm:p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                Verification Speed
+                {lang === 'bengalish' ? 'Jhorer Gotite Scan' : lang === 'hinglish' ? 'Fast Scanning' : 'Classroom Speed'}
               </span>
               <Activity className="w-4 h-4 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-ink font-display mt-2">
-              &lt; 18ms
+            <div className="text-2xl sm:text-3xl font-extrabold text-ink font-display mt-2">
+              &lt; 90 Sec
             </div>
-            <p className="text-xs text-ink-soft mt-1.5">P99 cryptographic local check</p>
+            <p className="text-xs text-ink-soft mt-1">
+              {lang === 'bengalish' ? '40 jon student-er roll call sesh' : lang === 'hinglish' ? '40 students ki roll call complete' : 'Full class of 40 students verified'}
+            </p>
           </div>
 
-          <div className="p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
+          <div className="p-5 sm:p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                Offline Guarantee
+                {lang === 'bengalish' ? 'Internet Chhara' : lang === 'hinglish' ? 'Offline Guarantee' : 'Offline Guarantee'}
               </span>
               <WifiOff className="w-4 h-4 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-forest-700 dark:text-forest-400 font-display mt-2">
-              100.0%
+            <div className="text-2xl sm:text-3xl font-extrabold text-forest-700 dark:text-forest-400 font-display mt-2">
+              100% Offline
             </div>
-            <p className="text-xs text-ink-soft mt-1.5">Zero dropped records in blackout</p>
+            <p className="text-xs text-ink-soft mt-1">
+              {lang === 'bengalish' ? 'Internet na thakleo hajira safe' : lang === 'hinglish' ? 'Bina network ke bhi data safe' : 'Local SQLite encrypted ledger'}
+            </p>
           </div>
 
-          <div className="p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
+          <div className="p-5 sm:p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                Classroom Throughput
+                {lang === 'bengalish' ? 'Babama-der SMS' : lang === 'hinglish' ? 'Parents SMS' : 'SMS Delivery'}
               </span>
-              <Clock className="w-4 h-4 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
+              <MessageSquareText className="w-4 h-4 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-ink font-display mt-2">
-              &lt; 90 Sec
+            <div className="text-2xl sm:text-3xl font-extrabold text-ink font-display mt-2">
+              Auto SMS
             </div>
-            <p className="text-xs text-ink-soft mt-1.5">Full 40-student roll validated</p>
+            <p className="text-xs text-ink-soft mt-1">
+              {lang === 'bengalish' ? 'School pouchhale sathe sathe alert' : lang === 'hinglish' ? 'School aate hi turant alert' : 'Instant parent arrival notice'}
+            </p>
           </div>
 
-          <div className="p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
+          <div className="p-5 sm:p-6 rounded-[28px] bg-surface/90 border border-line shadow-xs hover:border-forest-600/40 transition-all group">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                Tenant Isolation
+                {lang === 'bengalish' ? 'Shorkari Report' : lang === 'hinglish' ? 'Sarkari Report' : 'Govt Compliance'}
               </span>
-              <Lock className="w-4 h-4 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
+              <FileSpreadsheet className="w-4 h-4 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
             </div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-ink font-display mt-2">
-              Postgres RLS
+            <div className="text-2xl sm:text-3xl font-extrabold text-ink font-display mt-2">
+              UDISE+ Ready
             </div>
-            <p className="text-xs text-ink-soft mt-1.5">Fail-closed kernel & database rows</p>
+            <p className="text-xs text-ink-soft mt-1">
+              {lang === 'bengalish' ? '1-Click Excel shorkari format' : lang === 'hinglish' ? '1-Click Excel sarkari format' : 'One-click state Excel exports'}
+            </p>
           </div>
         </motion.div>
       </section>
 
-      {/* Interactive Hero Hardware & Protocol Simulator */}
-      <section id="simulator" className="py-16 px-4 sm:px-8 max-w-7xl mx-auto w-full space-y-10">
-        <div className="text-center space-y-3 max-w-2xl mx-auto">
+      {/* Interactive Simulator: "Nijer Chokhe Dekhun" */}
+      <section id="simulator" className="py-14 px-4 sm:px-8 max-w-7xl mx-auto w-full space-y-8">
+        <div className="text-center space-y-2 max-w-2xl mx-auto">
           <Badge variant="forest" size="md">
-            Interactive Hardware & Protocol Lab
+            {lang === 'bengalish' ? 'Nijer Chokhe Test Korun' : lang === 'hinglish' ? 'Live Test Karke Dekhiye' : 'Interactive Lab Simulator'}
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-ink font-display tracking-tight">
-            Experience the Zero-Latency Verification Engine
+            {lang === 'bengalish'
+              ? 'Dekhun kivabe 1 second-e hajira joma hoy'
+              : lang === 'hinglish'
+              ? 'Dekhiye kaise 1 second me attendance lagti hai'
+              : 'Experience the Zero-Latency Verification Engine'}
           </h2>
           <p className="text-sm sm:text-base text-ink-soft">
-            Simulate a live morning roll call under active network blackout conditions.
+            {lang === 'bengalish'
+              ? 'Nicher button-e click kore ekjon student-er card scan test korun.'
+              : lang === 'hinglish'
+              ? 'Neeche button click karke student card scan test kijiye.'
+              : 'Simulate a live morning roll call under active network blackout conditions.'}
           </p>
         </div>
 
         {/* Simulator Console Container */}
         <div className="rounded-[32px] bg-surface border border-line shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12">
           {/* Controls Side */}
-          <div className="lg:col-span-5 p-6 sm:p-8 bg-surface-soft border-b lg:border-b-0 lg:border-r border-line space-y-6 text-left">
+          <div className="lg:col-span-5 p-6 sm:p-8 bg-surface-soft border-b lg:border-b-0 lg:border-r border-line space-y-5 text-left">
             <div>
               <span className="text-xs font-bold text-forest-700 dark:text-forest-400 uppercase tracking-wider font-display">
-                Verification Channel
+                {lang === 'bengalish' ? 'Kivabe Hajira Neban?' : lang === 'hinglish' ? 'Attendance Kaise Lenge?' : 'Verification Channel'}
               </span>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button
@@ -518,7 +793,7 @@ export const LandingPage: React.FC = () => {
                   }`}
                 >
                   <ScanLine className="w-4 h-4" />
-                  <span>Offline QR Token</span>
+                  <span>{lang === 'bengalish' ? 'Mobile QR Scan' : lang === 'hinglish' ? 'Mobile QR Scan' : 'Offline QR Token'}</span>
                 </button>
                 <button
                   type="button"
@@ -530,7 +805,7 @@ export const LandingPage: React.FC = () => {
                   }`}
                 >
                   <Radio className="w-4 h-4" />
-                  <span>DESFire EV3 Smartcard</span>
+                  <span>{lang === 'bengalish' ? 'Student Card Tap' : lang === 'hinglish' ? 'Student Card Tap' : 'Smartcard Tap'}</span>
                 </button>
               </div>
             </div>
@@ -540,28 +815,30 @@ export const LandingPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {simOffline ? (
-                    <WifiOff className="w-4 h-4 text-danger-600 animate-pulse" />
+                    <WifiOff className="w-4 h-4 text-forest-700 dark:text-forest-400" />
                   ) : (
                     <Wifi className="w-4 h-4 text-success-600" />
                   )}
                   <span className="text-xs font-bold text-ink font-display">
-                    Network State: {simOffline ? 'Total Blackout (Offline)' : 'Connected Cloud'}
+                    {simOffline
+                      ? lang === 'bengalish' ? '🔴 Internet Nei (100% Offline)' : lang === 'hinglish' ? '🔴 Internet Band (100% Offline)' : 'Offline Outbox Mode'
+                      : lang === 'bengalish' ? '🟢 Internet Connected' : lang === 'hinglish' ? '🟢 Internet Connected' : 'Online Cloud Sync'}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSimOffline(!simOffline)}
-                  className={`px-3 py-1 rounded-full text-xs font-bold font-mono transition-colors cursor-pointer ${
-                    simOffline ? 'bg-danger-100 text-danger-800' : 'bg-success-100 text-success-800'
-                  }`}
+                  className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-surface-soft hover:bg-line border border-line text-ink cursor-pointer transition-colors"
                 >
-                  {simOffline ? 'Restore Network' : 'Cut Internet'}
+                  {simOffline ? 'Test Online' : 'Test Offline'}
                 </button>
               </div>
               <p className="text-xs text-ink-muted leading-relaxed">
-                {simOffline
-                  ? 'All verification keys remain cached locally. Signatures resolve in memory; transactions persist to SQLite outbox.'
-                  : 'Ledger stream actively syncing state back to primary PostgreSQL cluster.'}
+                {lang === 'bengalish'
+                  ? 'Internet chharao phone-e shob hajira joma hoye thakbe. Kono student-er hajira drop hobe na.'
+                  : lang === 'hinglish'
+                  ? 'Bina internet ke bhi phone me saari attendance save rahegi. Koi data loss nahi hoga.'
+                  : 'Zero data loss guarantees in total network blackouts.'}
               </p>
             </div>
 
@@ -576,212 +853,99 @@ export const LandingPage: React.FC = () => {
                 rightIcon={<Zap className="w-4 h-4" />}
               >
                 {simScanning
-                  ? 'Executing AES Cryptographic Check...'
+                  ? (lang === 'bengalish' ? 'Scan Hocche...' : lang === 'hinglish' ? 'Scan Ho Raha Hai...' : 'Scanning...')
                   : simMode === 'qr'
-                  ? 'Simulate QR Code Scan'
-                  : 'Simulate Smartcard Turnstile Tap'}
+                  ? (lang === 'bengalish' ? 'Student-er QR Scan Korun' : lang === 'hinglish' ? 'Student QR Scan Karein' : 'Simulate QR Scan')
+                  : (lang === 'bengalish' ? 'Student-er Card Tap Korun' : lang === 'hinglish' ? 'Student Card Tap Karein' : 'Simulate Card Tap')}
               </Button>
             </div>
           </div>
 
           {/* Interactive Screen Preview */}
           <div className="lg:col-span-7 p-6 sm:p-8 flex flex-col justify-between bg-surface text-left relative overflow-hidden">
-            {/* Visual Scanning Animation Overlay */}
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-line pb-3">
                 <div className="flex items-center gap-2 font-mono text-xs text-ink-soft">
                   <span className="w-2 h-2 rounded-full bg-forest-600 animate-pulse" />
-                  <span>STATION_ID: GATE_READER_01</span>
+                  <span>{lang === 'bengalish' ? 'Classroom: Class 8-A Roll Call' : 'Classroom: Class 8-A Roll Call'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-forest-700 dark:text-forest-400 bg-forest-50 dark:bg-forest-900/40 px-2 py-0.5 rounded-md font-mono">
-                    AES-256 PBKDF2
+                    {lang === 'bengalish' ? '1-Second Verification' : '1-Second Verification'}
                   </span>
                 </div>
               </div>
 
-              {/* Live Terminal Output */}
-              <div className="relative h-64 rounded-2xl bg-canvas border border-line p-5 font-mono text-xs flex flex-col justify-between overflow-hidden">
+              {/* Live Output Box */}
+              <div className="relative h-60 rounded-2xl bg-canvas border border-line p-5 font-mono text-xs flex flex-col justify-between overflow-hidden">
                 {simScanning && (
                   <div className="absolute inset-x-0 h-1 bg-forest-500 shadow-[0_0_15px_#227b5a] animate-laser-sweep z-10" />
                 )}
 
                 <div className="space-y-2">
                   <div className="text-ink-muted">
-                    &gt; Protocol initialized: {simMode === 'qr' ? 'Ed25519 / HMAC QR Stream' : 'DESFire EV3 AES-CMAC ISO14443-A'}
+                    &gt; System Ready: {simMode === 'qr' ? 'Mobile Camera Scanner' : 'Card Reader Turnstile'}
                   </div>
                   <div className="text-ink-muted">
-                    &gt; Local cache integrity: VALID (0 errors)
-                  </div>
-                  <div className="text-ink-muted">
-                    &gt; Network interface: {simOffline ? 'OFFLINE (Local Outbox Mode)' : 'ONLINE (Direct Sync)'}
+                    &gt; Status: {simOffline ? 'Offline (Local Safe Memory)' : 'Online Synced'}
                   </div>
 
                   {simSuccess && simEvent && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="p-3 rounded-xl bg-success-50 dark:bg-success-900/20 border border-success-200 dark:border-success-800/40 space-y-1.5 mt-2"
+                      className="p-3.5 rounded-xl bg-success-50 dark:bg-success-900/20 border border-success-200 dark:border-success-800/40 space-y-1.5 mt-2"
                     >
                       <div className="flex items-center justify-between text-success-800 dark:text-success-300 font-bold">
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-success-600" />
-                          VERIFIED PRESENT: {simEvent.name}
+                        <span className="flex items-center gap-1.5 text-sm font-display">
+                          <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0" />
+                          HAJIRA CONFIRM: {simEvent.name}
                         </span>
-                        <span>{simEvent.time}</span>
+                        <span className="text-xs font-mono">{simEvent.time}</span>
                       </div>
                       <div className="text-xs text-ink-soft flex items-center justify-between">
                         <span>{simEvent.class} • {simEvent.roll}</span>
-                        <span className="text-forest-700 dark:text-forest-400 font-bold">{simEvent.latencyMs}ms Latency</span>
+                        <span className="text-forest-700 dark:text-forest-400 font-bold">{simEvent.latencyMs}ms Verification</span>
                       </div>
-                      <div className="text-[10px] text-ink-muted truncate">
-                        SIG: {simEvent.sig} • SMS QUEUED: +91 98765 43210
+                      <div className="text-[11px] text-ink-soft bg-surface/80 p-2 rounded-lg border border-success-200/50 mt-1">
+                        📩 <strong>Parent SMS Queued:</strong> "Ananya Roy successfully arrived at school at {simEvent.time}."
                       </div>
                     </motion.div>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between text-ink-muted pt-2 border-t border-line text-[11px]">
-                  <span>STORAGE: SQLite 3.45 (Encrypted)</span>
-                  <span>SYNC STATUS: {simOffline ? 'PENDING_BURST' : 'IDLE_SYNCED'}</span>
+                  <span>{lang === 'bengalish' ? 'Khata-kolom mukto' : 'Zero Paper Required'}</span>
+                  <span>{simOffline ? 'OFFLINE READY' : 'ONLINE READY'}</span>
                 </div>
               </div>
             </div>
 
             {/* Bottom Proof Metrics */}
-            <div className="grid grid-cols-3 gap-3 pt-4 text-center">
+            <div className="grid grid-cols-3 gap-3 pt-3 text-center">
               <div className="p-2.5 rounded-xl bg-surface-soft border border-line">
                 <span className="text-[10px] uppercase font-bold text-ink-muted font-display block">
-                  Signature Type
+                  {lang === 'bengalish' ? 'Shomoy Lagbe' : 'Speed'}
                 </span>
-                <span className="text-xs font-bold text-ink font-mono mt-0.5 block">
-                  {simMode === 'qr' ? 'HMAC-SHA256' : 'AES-128 CMAC'}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-surface-soft border border-line">
-                <span className="text-[10px] uppercase font-bold text-ink-muted font-display block">
-                  Replay Guard
-                </span>
-                <span className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono mt-0.5 block">
-                  Nonce + Salt
+                <span className="text-xs font-bold text-forest-700 dark:text-forest-400 font-display mt-0.5 block">
+                  1 Second / Chatri
                 </span>
               </div>
               <div className="p-2.5 rounded-xl bg-surface-soft border border-line">
                 <span className="text-[10px] uppercase font-bold text-ink-muted font-display block">
-                  Fail-Safe
+                  {lang === 'bengalish' ? 'Vul Howar Chance' : 'Accuracy'}
                 </span>
-                <span className="text-xs font-bold text-ink font-mono mt-0.5 block">
-                  Zero Data Drop
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Multi-Tenant Path Identity Showcase */}
-      <section id="tenants" className="py-16 px-4 sm:px-8 bg-surface-soft/60 border-y border-line">
-        <div className="max-w-7xl mx-auto space-y-10">
-          <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <Badge variant="forest" size="md">
-              Single-Origin Path Tenancy
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-ink font-display tracking-tight">
-              One Unified Origin. Isolated School Workspaces.
-            </h2>
-            <p className="text-sm sm:text-base text-ink-soft">
-              No brittle subdomain DNS records or SSL wildcards. Schools access their bound workspace securely via clean URL paths.
-            </p>
-          </div>
-
-          <div className="p-7 sm:p-10 rounded-[32px] bg-surface border border-line shadow-lg grid grid-cols-1 lg:grid-cols-12 gap-8 items-center text-left">
-            <div className="lg:col-span-6 space-y-5">
-              <span className="text-xs font-bold text-forest-700 dark:text-forest-400 uppercase tracking-wider font-display">
-                Select Active Institutional Tenant
-              </span>
-              <div className="space-y-3">
-                {PREVIEW_SCHOOLS.map((school, idx) => {
-                  const isSelected = idx === selectedSchoolIndex;
-                  return (
-                    <button
-                      key={school.slug}
-                      type="button"
-                      onClick={() => setSelectedSchoolIndex(idx)}
-                      className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                        isSelected
-                          ? 'bg-forest-50 dark:bg-forest-900/30 border-forest-600 dark:border-forest-500 shadow-xs'
-                          : 'bg-surface hover:bg-surface-soft border-line'
-                      }`}
-                    >
-                      <div>
-                        <div className="text-sm font-bold text-ink font-display">
-                          {school.name}
-                        </div>
-                        <div className="text-xs text-ink-soft font-mono mt-0.5">
-                          /s/{school.slug}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-forest-700 dark:text-forest-400 font-display">
-                          {school.students}
-                        </span>
-                        <div className="text-[11px] text-ink-muted">{school.district}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Tenant Workspace Card */}
-            <div className="lg:col-span-6 p-7 rounded-2xl bg-surface-soft border border-line space-y-5">
-              <div className="flex items-center justify-between border-b border-line pb-3">
-                <span className="text-xs font-bold text-forest-700 dark:text-forest-400 uppercase tracking-wider font-display">
-                  Bound Tenant Profile
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-success-100 text-success-800 font-mono">
-                  {activeSchool.status}
+                <span className="text-xs font-bold text-ink font-display mt-0.5 block">
+                  0.00% Zero Error
                 </span>
               </div>
-
-              <div className="space-y-3">
-                <div className="text-2xl font-extrabold text-ink font-display">
-                  {activeSchool.name}
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-surface border border-line">
-                    <span className="text-ink-muted block uppercase tracking-wider font-display font-bold">
-                      UDISE+ Code
-                    </span>
-                    <span className="text-ink font-mono font-bold mt-1 block">{activeSchool.udise}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-surface border border-line">
-                    <span className="text-ink-muted block uppercase tracking-wider font-display font-bold">
-                      District Jurisdiction
-                    </span>
-                    <span className="text-ink font-bold mt-1 block truncate">{activeSchool.district}</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-surface border border-line font-mono text-xs text-ink-soft flex items-center justify-between">
-                  <span>Workspace Path:</span>
-                  <span className="font-bold text-forest-700 dark:text-forest-400">
-                    /s/{activeSchool.slug}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <Link to={`/s/${activeSchool.slug}/login`} className="block">
-                  <Button
-                    variant="primary"
-                    size="md"
-                    rightIcon={<ArrowUpRight className="w-4 h-4" />}
-                    className="w-full font-display font-bold"
-                  >
-                    Open {activeSchool.name} Sign In
-                  </Button>
-                </Link>
+              <div className="p-2.5 rounded-xl bg-surface-soft border border-line">
+                <span className="text-[10px] uppercase font-bold text-ink-muted font-display block">
+                  {lang === 'bengalish' ? 'Babama-der SMS' : 'SMS Alert'}
+                </span>
+                <span className="text-xs font-bold text-forest-700 dark:text-forest-400 font-display mt-0.5 block">
+                  Automatic Send
+                </span>
               </div>
             </div>
           </div>
@@ -789,21 +953,25 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Interactive 8-Stage Onboarding Journey */}
-      <section id="journey" className="py-16 px-4 sm:px-8 max-w-7xl mx-auto space-y-10">
-        <div className="text-center space-y-3 max-w-2xl mx-auto">
+      <section id="journey" className="py-14 px-4 sm:px-8 max-w-7xl mx-auto space-y-8">
+        <div className="text-center space-y-2 max-w-2xl mx-auto">
           <Badge variant="forest" size="md">
-            End-to-End Operational Lifecycle
+            {lang === 'bengalish' ? 'School Onboarding Journey' : lang === 'hinglish' ? 'School Onboarding Safar' : 'Operational Lifecycle'}
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-ink font-display tracking-tight">
             From Discovery to Morning Rollout
           </h2>
           <p className="text-sm sm:text-base text-ink-soft">
-            A battle-tested 8-step journey designed for state education boards, private school chains, and rural schools.
+            {lang === 'bengalish'
+              ? 'Prothom din theke shuru kore shokal-er roll call porjonto 8-ti shohoj dhap.'
+              : lang === 'hinglish'
+              ? 'Pehle din se lekar subah ki attendance tak 8 aasan steps.'
+              : 'A battle-tested 8-step journey designed for school chains and rural institutions.'}
           </p>
         </div>
 
         {/* Stepper Navigation */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar">
           {ONBOARDING_STAGES.map((stage, idx) => {
             const isSelected = idx === selectedStageIndex;
             return (
@@ -824,7 +992,7 @@ export const LandingPage: React.FC = () => {
                 >
                   {stage.step}
                 </span>
-                <span>{stage.title}</span>
+                <span>{stage.title[lang]}</span>
               </button>
             );
           })}
@@ -833,36 +1001,36 @@ export const LandingPage: React.FC = () => {
         {/* Selected Stage Detail Card */}
         <motion.div
           key={selectedStage.key}
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.25 }}
           className="p-7 sm:p-10 rounded-[32px] bg-surface border border-line shadow-lg grid grid-cols-1 lg:grid-cols-12 gap-8 items-center text-left"
         >
-          <div className="lg:col-span-7 space-y-5">
+          <div className="lg:col-span-7 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-forest-50 dark:bg-forest-900/30 border border-forest-200 dark:border-forest-800/40 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-forest-50 dark:bg-forest-900/30 border border-forest-200 dark:border-forest-800/40 flex items-center justify-center shrink-0">
                 {selectedStage.icon}
               </div>
               <div>
                 <span className="text-xs font-mono font-bold text-forest-700 dark:text-forest-400">
-                  STAGE 0{selectedStage.step} OF 08
+                  DHAP 0{selectedStage.step} OF 08
                 </span>
                 <h3 className="text-2xl font-bold text-ink font-display leading-tight">
-                  {selectedStage.title}
+                  {selectedStage.title[lang]}
                 </h3>
               </div>
             </div>
 
             <p className="text-base text-ink-soft leading-relaxed font-normal">
-              {selectedStage.subtitle}
+              {selectedStage.subtitle[lang]}
             </p>
 
             <div className="space-y-2.5 pt-2">
               <span className="text-xs font-bold text-ink-muted uppercase tracking-wider font-display">
-                Key Operational Activities
+                {lang === 'bengalish' ? 'Ei Dhape Ki Ki Hobe:' : lang === 'hinglish' ? 'Is Step Me Kya Hoga:' : 'Key Operational Activities:'}
               </span>
               <ul className="space-y-2">
-                {selectedStage.details.map((item, idx) => (
+                {selectedStage.details[lang].map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2.5 text-sm text-ink">
                     <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0 mt-0.5" />
                     <span>{item}</span>
@@ -874,15 +1042,19 @@ export const LandingPage: React.FC = () => {
 
           <div className="lg:col-span-5 p-6 rounded-2xl bg-surface-soft border border-line space-y-4">
             <span className="text-xs font-bold text-forest-700 dark:text-forest-400 uppercase tracking-wider font-display">
-              Stage Deliverable
+              {lang === 'bengalish' ? 'Dhap-er Folafol (Deliverable)' : 'Stage Deliverable'}
             </span>
 
             <div className="text-lg font-bold text-ink font-display">
-              {selectedStage.deliverable}
+              {selectedStage.deliverable[lang]}
             </div>
 
             <p className="text-xs text-ink-soft leading-relaxed">
-              Standardized institutional checkpoint guaranteeing seamless transition to the next phase without data loss or administrative bottlenecks.
+              {lang === 'bengalish'
+                ? 'Protiti dhap shundor bhabe porichalona kora hoy jate Mastermashay ba Headmaster-der kono jhamela na poyate hoy.'
+                : lang === 'hinglish'
+                ? 'Har ek step bilkul aasan banaya gaya hai taaki school teachers ko koi pareshani na ho.'
+                : 'Standardized institutional checkpoint guaranteeing seamless transition without friction.'}
             </p>
 
             <div className="pt-2">
@@ -900,171 +1072,33 @@ export const LandingPage: React.FC = () => {
                 className="w-full font-display font-bold"
               >
                 {selectedStageIndex < ONBOARDING_STAGES.length - 1
-                  ? `Next: ${ONBOARDING_STAGES[selectedStageIndex + 1].title}`
-                  : 'Schedule Onboarding Kickoff'}
+                  ? (lang === 'bengalish' ? `Porer Dhap: ${ONBOARDING_STAGES[selectedStageIndex + 1].title[lang]}` : `Next: ${ONBOARDING_STAGES[selectedStageIndex + 1].title[lang]}`)
+                  : (lang === 'bengalish' ? 'School Demo Shuru Korun' : 'Schedule Onboarding Kickoff')}
               </Button>
             </div>
           </div>
         </motion.div>
       </section>
 
-      {/* Enterprise Architecture Deep Dive */}
-      <section id="architecture" className="py-16 px-4 sm:px-8 bg-surface-soft/60 border-y border-line">
-        <div className="max-w-7xl mx-auto space-y-10">
-          <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <Badge variant="forest" size="md">
-              Enterprise Technology Stack
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-ink font-display tracking-tight">
-              Engineered for Zero Failure Tolerances
-            </h2>
-            <p className="text-sm sm:text-base text-ink-soft">
-              Explore the core architectural pillars powering AttendEase across diverse school environments.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {[
-              { id: 'crypto', label: 'Cryptographic Security', icon: <Lock className="w-4 h-4" /> },
-              { id: 'appliance', label: 'Zero-Cloud Appliance', icon: <Cpu className="w-4 h-4" /> },
-              { id: 'hardware', label: 'Hardware & Gateway Fleet', icon: <Radio className="w-4 h-4" /> },
-              { id: 'gov', label: 'UDISE+ & Data Sovereignty', icon: <ShieldCheck className="w-4 h-4" /> },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveArchTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold font-display transition-all border cursor-pointer ${
-                  activeArchTab === tab.id
-                    ? 'bg-forest-700 text-white border-forest-800 shadow-sm shadow-forest-700/20'
-                    : 'bg-surface text-ink-soft hover:text-ink border-line'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="p-7 sm:p-10 rounded-[32px] bg-surface border border-line shadow-lg text-left">
-            {activeArchTab === 'crypto' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">01. QR DUAL SIGNATURE</div>
-                  <h4 className="text-lg font-bold text-ink font-display">HMAC-SHA256 Key Rotations</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Student QR cards incorporate salted rotating hashes validated offline against embedded public keystores.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">02. NXP DESFIRE EV3</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Hardware AES-128 CMAC</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Turnstiles perform mutual 3-pass authentication preventing card cloning, relay attacks, and proxy scans.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">03. AUDIT INTEGRITY</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Append-Only Event Ledger</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Every roll correction creates an immutable audit trail recording the approving admin, previous status, and justification.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {activeArchTab === 'appliance' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">01. AUTONOMOUS APPLIANCE</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Single-Command Deployment</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Runs unattended with automated self-healing sidecars, database migration scripts, and continuous health probes.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">02. ENCRYPTED BACKUPS</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Staged AES-256 Snapshots</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Self-testing daily encrypted database dumps with SHA-256 manifest verification and guaranteed last-known-good retention.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">03. ROW-LEVEL SECURITY</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Strict Postgres RLS Isolation</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Database-level tenant context enforcement preventing accidental cross-tenant data leakage across all queries.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {activeArchTab === 'hardware' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">01. PC/SC FLEET DRIVERS</div>
-                  <h4 className="text-lg font-bold text-ink font-display">ACS & HID Native Support</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Auto-negotiates with ACS ACR1252U, HID Omnikey 5422, and standard USB CCID smartcard readers.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">02. DUAL-GATE OPERATORS</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Directional In/Out Tracking</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Configurable gates manage entry/exit flows with duplicate tap throttling and anti-passback controls.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">03. HARDWARE DIAGNOSTICS</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Automated Fleet Self-Test</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Built-in diagnostic daemon probes USB bus capabilities, smartcard ATR sequences, and reader response times.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {activeArchTab === 'gov' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">01. UDISE+ INTEGRATION</div>
-                  <h4 className="text-lg font-bold text-ink font-display">One-Click State Exports</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Pre-formatted monthly and annual attendance registers matching Department of School Education standards.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">02. DATA SOVEREIGNTY</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Zero Foreign Cloud Leaks</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    All student biometric and attendance identifiers remain on localized institutional hardware.
-                  </p>
-                </div>
-                <div className="p-5 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="text-xs font-bold text-forest-700 dark:text-forest-400 font-mono">03. BILINGUAL ROSTERS</div>
-                  <h4 className="text-lg font-bold text-ink font-display">Regional Language Support</h4>
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    Full Unicode UTF-8 support for student names in Bengali, Hindi, and regional scripts alongside English.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
       {/* Impact & ROI Calculator */}
-      <section id="roi" className="py-16 px-4 sm:px-8 max-w-7xl mx-auto space-y-10">
-        <div className="text-center space-y-3 max-w-2xl mx-auto">
+      <section id="roi" className="py-14 px-4 sm:px-8 max-w-7xl mx-auto space-y-8">
+        <div className="text-center space-y-2 max-w-2xl mx-auto">
           <Badge variant="forest" size="md">
-            Operational Efficiency Engine
+            {lang === 'bengalish' ? 'Shomoy o Khroch Bachanor Hisab' : lang === 'hinglish' ? 'Samay Aur Kharch Bachane Ka Hisaab' : 'Impact & ROI Engine'}
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-ink font-display tracking-tight">
-            Calculate Your School's Time & Cost Savings
+            {lang === 'bengalish'
+              ? 'Apnar school-e koto shomoy o khagoj bachbe?'
+              : lang === 'hinglish'
+              ? 'Aapke school me kitna samay aur paper bachega?'
+              : "Calculate Your School's Time & Cost Savings"}
           </h2>
           <p className="text-sm sm:text-base text-ink-soft">
-            See the direct impact of switching from paper registers to AttendEase.
+            {lang === 'bengalish'
+              ? 'Khata-kolom theke AttendEase-e ashle Mastermashay-ra class-e beshi shomoy dite parben.'
+              : lang === 'hinglish'
+              ? 'Register chhod kar AttendEase apnane se teachers padhane me zyaada samay de sakenge.'
+              : 'See the direct impact of switching from paper registers to AttendEase.'}
           </p>
         </div>
 
@@ -1072,7 +1106,8 @@ export const LandingPage: React.FC = () => {
           <div className="lg:col-span-6 space-y-6">
             <div>
               <label htmlFor="student-slider" className="block text-sm font-bold text-ink font-display mb-2">
-                Total Enrolled Students: <span className="text-forest-700 dark:text-forest-400 font-mono text-xl">{studentCount}</span>
+                {lang === 'bengalish' ? 'School-e Chatro-Chatri Songkhya:' : lang === 'hinglish' ? 'School me Total Students:' : 'Total Enrolled Students:'}{' '}
+                <span className="text-forest-700 dark:text-forest-400 font-mono text-xl">{studentCount}</span>
               </label>
               <input
                 id="student-slider"
@@ -1094,15 +1129,27 @@ export const LandingPage: React.FC = () => {
             <div className="space-y-3 text-xs sm:text-sm text-ink-soft">
               <div className="flex items-center gap-2.5">
                 <Clock className="w-4 h-4 text-forest-700 shrink-0" />
-                <span>Reclaims 15 minutes of teacher instructional time per classroom every morning</span>
+                <span>
+                  {lang === 'bengalish'
+                    ? 'Protidin shokal-er 15-20 minute-er roll call shomoy beche jabe'
+                    : 'Reclaims 15 minutes of teacher instructional time per classroom every morning'}
+                </span>
               </div>
               <div className="flex items-center gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-forest-700 shrink-0" />
-                <span>Eliminates proxy attendance, buddy punching, and paper ledger tampering</span>
+                <span>
+                  {lang === 'bengalish'
+                    ? 'Khata harano ba vul hajira howar kono bhoy nei'
+                    : 'Eliminates proxy attendance, buddy punching, and paper ledger tampering'}
+                </span>
               </div>
               <div className="flex items-center gap-2.5">
                 <Zap className="w-4 h-4 text-forest-700 shrink-0" />
-                <span>Dispatches real-time arrival SMS notifications to parents automatically</span>
+                <span>
+                  {lang === 'bengalish'
+                    ? 'Babama-ra ghore boshei jante parben baccha school-e pouchhechhe'
+                    : 'Dispatches real-time arrival SMS notifications to parents automatically'}
+                </span>
               </div>
             </div>
           </div>
@@ -1110,33 +1157,43 @@ export const LandingPage: React.FC = () => {
           <div className="lg:col-span-6 grid grid-cols-2 gap-4">
             <div className="p-5 rounded-2xl bg-surface-soft border border-line text-left">
               <div className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                Teacher Time Saved
+                {lang === 'bengalish' ? 'Mastermashay-der Bachano Shomoy' : 'Teacher Time Saved'}
               </div>
               <div className="text-3xl sm:text-4xl font-extrabold text-forest-700 dark:text-forest-400 font-display mt-1">
-                {teacherHoursSavedPerYear} Hrs
+                {teacherHoursSavedPerYear} Ghonta
               </div>
-              <p className="text-xs text-ink-soft mt-1">Reclaimed for classroom teaching</p>
+              <p className="text-xs text-ink-soft mt-1">
+                {lang === 'bengalish' ? 'Poranor jonno barti shomoy' : 'Per academic year'}
+              </p>
             </div>
 
             <div className="p-5 rounded-2xl bg-surface-soft border border-line text-left">
               <div className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                Morning Line Delay
+                {lang === 'bengalish' ? 'Kagoj Bachbe' : 'Paper Sheets Saved'}
               </div>
               <div className="text-3xl sm:text-4xl font-extrabold text-ink font-display mt-1">
-                &lt; 3.5 Min
+                {paperSavedPages.toLocaleString()} Pata
               </div>
-              <p className="text-xs text-ink-soft mt-1">Down from 45+ minutes</p>
+              <p className="text-xs text-ink-soft mt-1">
+                {lang === 'bengalish' ? 'Register khata kinte hobe na' : 'Paper registers eliminated'}
+              </p>
             </div>
 
             <div className="p-5 rounded-2xl bg-surface-soft border border-line text-left col-span-2">
               <div className="text-xs font-bold text-ink-muted uppercase font-display tracking-wider">
-                UDISE+ Compliance Readiness
+                {lang === 'bengalish' ? 'Shorkari UDISE+ Ready' : 'UDISE+ Compliance Readiness'}
               </div>
               <div className="text-xl font-bold text-ink font-display mt-1 flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-success-600 shrink-0" />
-                <span>1-Click Instant State Export (CSV / XLSX)</span>
+                <span>
+                  {lang === 'bengalish' ? '1-Click-e Shorkari Excel File Ready' : '1-Click Instant State Export (CSV / XLSX)'}
+                </span>
               </div>
-              <p className="text-xs text-ink-soft mt-1">Zero manual data transcription required by administrative staff</p>
+              <p className="text-xs text-ink-soft mt-1">
+                {lang === 'bengalish'
+                  ? 'Mash seshe shorkari reporting-er jonno aar haate hisab korte hobe na.'
+                  : 'Zero manual data transcription required by administrative staff'}
+              </p>
             </div>
           </div>
         </div>
@@ -1146,10 +1203,18 @@ export const LandingPage: React.FC = () => {
       <section className="py-16 px-4 sm:px-8 bg-forest-900 text-white mt-auto text-center space-y-6 relative overflow-hidden">
         <div className="max-w-3xl mx-auto space-y-4">
           <h2 className="text-3xl sm:text-5xl font-extrabold font-display leading-tight">
-            Ready to deploy enterprise attendance infrastructure?
+            {lang === 'bengalish'
+              ? 'Apnar school-e digital smart hajira shuru korben?'
+              : lang === 'hinglish'
+              ? 'Aapke school me digital smart attendance shuru karein?'
+              : 'Ready to deploy enterprise attendance infrastructure?'}
           </h2>
           <p className="text-emerald-200/90 text-sm sm:text-lg max-w-xl mx-auto leading-relaxed">
-            Join forward-looking schools, state districts, and institutions running on AttendEase OS.
+            {lang === 'bengalish'
+              ? 'Amader team-er shathe kotha bole apnar school-er jonno ekta free demo shuru korun.'
+              : lang === 'hinglish'
+              ? 'Humare team se baat karke apne school ke liye free demo session book karein.'
+              : 'Join forward-looking schools and institutions running on AttendEase OS.'}
           </p>
         </div>
 
@@ -1160,7 +1225,7 @@ export const LandingPage: React.FC = () => {
             onClick={() => setDemoModalOpen(true)}
             className="px-8 py-3.5 text-base font-bold font-display cursor-pointer shadow-lg shadow-black/20"
           >
-            Request Institutional Demo
+            {lang === 'bengalish' ? 'Free School Demo Book Korun' : lang === 'hinglish' ? 'Free Demo Book Karein' : 'Request Institutional Demo'}
           </Button>
 
           <Link to="/login">
@@ -1169,25 +1234,25 @@ export const LandingPage: React.FC = () => {
               size="lg"
               className="text-white hover:bg-forest-800 border border-emerald-500/30 px-8 py-3.5 text-base font-bold font-display"
             >
-              Sign In to Portal
+              School Sign In
             </Button>
           </Link>
         </div>
       </section>
 
-      {/* Modern High-End Footer */}
+      {/* Modern Clean Footer */}
       <footer className="py-8 px-4 sm:px-8 bg-surface border-t border-line text-xs text-ink-muted flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="font-bold text-ink font-display">AttendEase OS</span>
           <span>•</span>
           <span>Govt. of India UDISE+ Standard</span>
           <span>•</span>
-          <span>Zero-Cloud Resilience</span>
+          <span>100% Offline Multi-Master</span>
         </div>
 
         <div className="flex items-center gap-6 font-semibold">
           <Link to="/login" className="hover:text-ink transition-colors">
-            Teacher Portal
+            Teacher Login
           </Link>
           <Link to="/login" className="hover:text-ink transition-colors">
             Headmaster Console
@@ -1206,8 +1271,8 @@ export const LandingPage: React.FC = () => {
           setDemoSubmitted(false);
           setDemoError(null);
         }}
-        title="Schedule an Institutional Demo"
-        description="Connect with our education deployment specialists"
+        title={lang === 'bengalish' ? 'School-er Jonno Free Demo Dekhun' : lang === 'hinglish' ? 'School ke liye Free Demo Dekhiye' : 'Schedule an Institutional Demo'}
+        description={lang === 'bengalish' ? 'Amader team apnar shathe 4 ghontar moddhe jogajog korbe' : 'Connect with our education technology team'}
       >
         {demoSubmitted ? (
           <div data-testid="demo-success-state" className="text-center py-6 space-y-4">
@@ -1216,7 +1281,7 @@ export const LandingPage: React.FC = () => {
             </div>
             <h4 className="text-xl font-bold text-ink font-display">Demo Request Received</h4>
             <p className="text-sm text-ink-soft max-w-sm mx-auto leading-relaxed">
-              Thank you, <span className="font-bold text-ink">{demoForm.name || 'Administrator'}</span>. Our deployment coordinator will contact you at <span className="font-mono font-bold text-ink">{demoForm.phone || '+91-XXXXXXXXXX'}</span> within 4 business hours.
+              Dhonyobad, <span className="font-bold text-ink">{demoForm.name || 'Headmaster / Teacher'}</span>. Amader team <span className="font-mono font-bold text-ink">{demoForm.phone || '+91-XXXXXXXXXX'}</span> number-e khub druto call korbe.
             </p>
             <div className="pt-2">
               <Button
@@ -1228,7 +1293,7 @@ export const LandingPage: React.FC = () => {
                   setDemoError(null);
                 }}
               >
-                Done
+                Thik Ache (Done)
               </Button>
             </div>
           </div>
@@ -1241,7 +1306,7 @@ export const LandingPage: React.FC = () => {
             )}
 
             <TextField
-              label="Your Full Name"
+              label={lang === 'bengalish' ? 'Apnar Nam' : 'Your Full Name'}
               required
               value={demoForm.name}
               onChange={(e) => setDemoForm({ ...demoForm, name: e.target.value })}
@@ -1250,7 +1315,7 @@ export const LandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <TextField
-                label="Mobile Phone"
+                label={lang === 'bengalish' ? 'Mobile Phone Number' : 'Mobile Phone'}
                 type="tel"
                 prefixText="+91"
                 required
@@ -1260,7 +1325,7 @@ export const LandingPage: React.FC = () => {
               />
 
               <TextField
-                label="Official Email"
+                label={lang === 'bengalish' ? 'Email (Jodi thake)' : 'Official Email'}
                 type="email"
                 value={demoForm.email}
                 onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })}
@@ -1270,7 +1335,7 @@ export const LandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <TextField
-                label="School / Institution Name"
+                label={lang === 'bengalish' ? 'School-er Nam' : 'School / Institution Name'}
                 required
                 value={demoForm.schoolName}
                 onChange={(e) => setDemoForm({ ...demoForm, schoolName: e.target.value })}
@@ -1278,7 +1343,7 @@ export const LandingPage: React.FC = () => {
               />
 
               <TextField
-                label="District / State"
+                label={lang === 'bengalish' ? 'Jela / District' : 'District / State'}
                 required
                 value={demoForm.district}
                 onChange={(e) => setDemoForm({ ...demoForm, district: e.target.value })}

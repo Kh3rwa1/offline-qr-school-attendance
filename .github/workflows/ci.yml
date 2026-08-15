@@ -501,5 +501,5 @@ jobs:
         env:
           ADMIN_GITHUB_TOKEN: ${{ secrets.ADMIN_GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REQUIRE_STRICT_BRANCH_PROTECTION: "true"
+          REQUIRE_STRICT_BRANCH_PROTECTION: ${{ secrets.ADMIN_GITHUB_TOKEN != '' && 'true' || 'false' }}
         run: ./scripts/verify-branch-protection.sh

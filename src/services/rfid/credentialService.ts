@@ -1,6 +1,6 @@
 import { withTenantContext } from '../../db';
 import { rfidCredentials, students } from '../../db/schema';
-import { eq, and, inArray, desc, lt, isNotNull } from 'drizzle-orm';
+import { eq, and, inArray, desc, lt, isNotNull, sql } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
 import { redactCredentialDigest } from './cryptoService';
 
@@ -264,9 +264,26 @@ export async function lookupActiveCredential(schoolId: string, credentialDigest:
   });
 }
 
-export async function listAllCredentials(schoolId: string) {
+import { encodeCursor, decodeCursor, parseLimit } from '../paginationHelper';
+
+export async function listAllCredentials(
+  schoolId: string,
+  options?: { limit?: number | string | null; cursor?: string | null }
+) {
+  const limit = parseLimit(options?.limit, 50, 200);
+  const decoded = decodeCursor(options?.cursor);
+
   return withTenantContext(schoolId, async (tx) => {
-    const records = await tx
+    let conditions: any[] = [eq(rfidCredentials.schoolId, schoolId)];
+
+    if (decoded) {
+      const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+      conditions.push(
+        sql`(${rfidCredentials.createdAt} < ${cursorTime} OR (${rfidCredentials.createdAt} = ${cursorTime} AND ${rfidCredentials.id} < ${decoded.id}))`
+      );
+    }
+
+    const query = tx
       .select({
         id: rfidCredentials.id,
         studentId: rfidCredentials.studentId,
@@ -281,13 +298,34 @@ export async function listAllCredentials(schoolId: string) {
       })
       .from(rfidCredentials)
       .leftJoin(students, eq(rfidCredentials.studentId, students.id))
-      .where(eq(rfidCredentials.schoolId, schoolId))
-      .orderBy(desc(rfidCredentials.createdAt));
+      .where(and(...conditions))
+      .orderBy(desc(rfidCredentials.createdAt), desc(rfidCredentials.id))
+      .limit(limit + 1);
 
-    return records.map((c: any) => ({
+    const rows = await query;
+    const hasMore = rows.length > limit;
+    const records = hasMore ? rows.slice(0, limit) : rows;
+
+    let nextCursor: string | null = null;
+    if (hasMore && records.length > 0) {
+      const last = records[records.length - 1];
+      nextCursor = encodeCursor({
+        id: last.id,
+        timestamp: last.issuedAt ? new Date(last.issuedAt).toISOString() : undefined,
+      });
+    }
+
+    const sanitized = records.map((c: any) => ({
       ...c,
       credentialDigest: redactCredentialDigest(c.credentialDigest),
     }));
+
+    return Object.assign(sanitized, {
+      items: sanitized,
+      nextCursor,
+      hasMore,
+      limit,
+    });
   });
 }
 

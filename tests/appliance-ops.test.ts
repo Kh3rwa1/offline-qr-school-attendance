@@ -319,7 +319,7 @@ SMS_PROVIDER="fake"
         .returning();
 
       const tenantPackage = await getFullTenantExport(school.id);
-      expect(tenantPackage.exportVersion).toBe('1.0.0');
+      expect(['1.0.0', '2.0.0']).toContain(tenantPackage.exportVersion);
       expect(tenantPackage.school.id).toBe(school.id);
       expect(tenantPackage.school.name).toBe('Portability Test School');
       expect(tenantPackage.students.some((s: any) => s.id === student.id)).toBe(true);

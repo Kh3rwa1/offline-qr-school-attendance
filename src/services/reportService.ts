@@ -345,13 +345,27 @@ export async function getMonthlyClassRegister(schoolId: string, classSectionId: 
   };
 }
 
-// 4. Individual Student History
+import { encodeCursor, decodeCursor, parseLimit } from './paginationHelper';
+import {
+  academicYears,
+  teacherProfiles,
+  teacherAssignments,
+  devices,
+  schoolSmsSettings,
+  notificationJobs,
+  rfidReaders,
+  rfidKeyVersions,
+  rfidCredentials,
+  importJobs,
+} from '../db/schema';
+
+// 4. Individual Student History (Deterministic Cursor Pagination)
 export async function getStudentAttendanceHistory(
   schoolId: string,
   studentId: string,
   startDate?: string,
   endDate?: string,
-  pagination?: { limit?: number; offset?: number }
+  pagination?: { limit?: number | string; offset?: number; cursor?: string | null }
 ) {
   const [student] = await db
     .select()
@@ -361,6 +375,9 @@ export async function getStudentAttendanceHistory(
   if (!student) {
     throw new Error('STUDENT_NOT_FOUND');
   }
+
+  const limit = parseLimit(pagination?.limit, 50, 200);
+  const decoded = decodeCursor(pagination?.cursor);
 
   let queryConditions = [
     eq(attendanceRecords.schoolId, schoolId),
@@ -374,10 +391,14 @@ export async function getStudentAttendanceHistory(
     queryConditions.push(lte(attendanceSessions.sessionDate, endDate));
   }
 
-  const limit = Math.min(Math.max(pagination?.limit || 200, 1), 1000);
-  const offset = Math.max(pagination?.offset || 0, 0);
+  if (decoded) {
+    const cursorDate = decoded.timestamp || '';
+    queryConditions.push(
+      sql`(${attendanceSessions.sessionDate} < ${cursorDate} OR (${attendanceSessions.sessionDate} = ${cursorDate} AND ${attendanceRecords.id} < ${decoded.id}))`
+    );
+  }
 
-  const history = await db
+  const query = db
     .select({
       recordId: attendanceRecords.id,
       sessionId: attendanceSessions.id,
@@ -389,9 +410,25 @@ export async function getStudentAttendanceHistory(
     .from(attendanceRecords)
     .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
     .where(and(...queryConditions))
-    .orderBy(desc(attendanceSessions.sessionDate))
-    .limit(limit)
-    .offset(offset);
+    .orderBy(desc(attendanceSessions.sessionDate), desc(attendanceRecords.id))
+    .limit(limit + 1);
+
+  if (!decoded && pagination?.offset && pagination.offset > 0) {
+    query.offset(pagination.offset);
+  }
+
+  const rows = await query;
+  const hasMore = rows.length > limit;
+  const history = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && history.length > 0) {
+    const last = history[history.length - 1];
+    nextCursor = encodeCursor({
+      id: last.recordId,
+      timestamp: last.sessionDate,
+    });
+  }
 
   let present = 0, late = 0, absent = 0, leave = 0, excused = 0;
   for (const item of history) {
@@ -423,10 +460,13 @@ export async function getStudentAttendanceHistory(
       attendancePercentage,
     },
     history,
+    nextCursor,
+    hasMore,
+    limit,
   };
 }
 
-// 5. Absent-Student Report
+// 5. Absent-Student Report (Deterministic Cursor Pagination)
 export async function getAbsentStudentReport(
   schoolId: string,
   params: {
@@ -434,25 +474,34 @@ export async function getAbsentStudentReport(
     startDate: string;
     endDate?: string;
     includeGuardianPhone?: boolean;
-    limit?: number;
+    limit?: number | string;
     offset?: number;
+    cursor?: string | null;
   }
 ) {
   const { classSectionId, startDate, endDate = startDate, includeGuardianPhone = false } = params;
-  const limit = Math.min(Math.max(params.limit || 500, 1), 2000);
-  const offset = Math.max(params.offset || 0, 0);
+  const limit = parseLimit(params.limit, 50, 200);
+  const decoded = decodeCursor(params.cursor);
 
   let sessionConditions = [
     eq(attendanceSessions.schoolId, schoolId),
     gte(attendanceSessions.sessionDate, startDate),
     lte(attendanceSessions.sessionDate, endDate),
+    eq(attendanceRecords.status, 'ABSENT'),
   ];
 
   if (classSectionId) {
     sessionConditions.push(eq(attendanceSessions.classSectionId, classSectionId));
   }
 
-  const absentees = await db
+  if (decoded) {
+    const cursorDate = decoded.timestamp || '';
+    sessionConditions.push(
+      sql`(${attendanceSessions.sessionDate} < ${cursorDate} OR (${attendanceSessions.sessionDate} = ${cursorDate} AND ${attendanceRecords.id} < ${decoded.id}))`
+    );
+  }
+
+  const query = db
     .select({
       recordId: attendanceRecords.id,
       studentId: students.id,
@@ -468,10 +517,26 @@ export async function getAbsentStudentReport(
     .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
     .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
     .innerJoin(students, eq(attendanceRecords.studentId, students.id))
-    .where(and(...sessionConditions, eq(attendanceRecords.status, 'ABSENT')))
-    .orderBy(attendanceSessions.sessionDate, classSections.className, classSections.sectionName)
-    .limit(limit)
-    .offset(offset);
+    .where(and(...sessionConditions))
+    .orderBy(desc(attendanceSessions.sessionDate), desc(attendanceRecords.id))
+    .limit(limit + 1);
+
+  if (!decoded && params.offset && params.offset > 0) {
+    query.offset(params.offset);
+  }
+
+  const rows = await query;
+  const hasMore = rows.length > limit;
+  const absentees = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && absentees.length > 0) {
+    const last = absentees[absentees.length - 1];
+    nextCursor = encodeCursor({
+      id: last.recordId,
+      timestamp: last.sessionDate,
+    });
+  }
 
   let guardianMap: Record<string, string> = {};
   if (includeGuardianPhone && absentees.length > 0) {
@@ -503,16 +568,22 @@ export async function getAbsentStudentReport(
     endDate,
     totalAbsentCount: results.length,
     absentees: results,
+    nextCursor,
+    hasMore,
+    limit,
   };
 }
 
-// 6. Attendance Correction Report
+// 6. Attendance Correction Report (Deterministic Cursor Pagination)
 export async function getCorrectionReport(
   schoolId: string,
   startDate?: string,
   endDate?: string,
-  pagination?: { limit?: number; offset?: number }
+  pagination?: { limit?: number | string; offset?: number; cursor?: string | null }
 ) {
+  const limit = parseLimit(pagination?.limit, 50, 200);
+  const decoded = decodeCursor(pagination?.cursor);
+
   let conditions = [
     eq(attendanceCorrections.schoolId, schoolId),
   ];
@@ -524,10 +595,14 @@ export async function getCorrectionReport(
     conditions.push(lte(attendanceSessions.sessionDate, endDate));
   }
 
-  const limit = Math.min(Math.max(pagination?.limit || 200, 1), 1000);
-  const offset = Math.max(pagination?.offset || 0, 0);
+  if (decoded) {
+    const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+    conditions.push(
+      sql`(${attendanceCorrections.correctedAt} < ${cursorTime} OR (${attendanceCorrections.correctedAt} = ${cursorTime} AND ${attendanceCorrections.id} < ${decoded.id}))`
+    );
+  }
 
-  const corrections = await db
+  const query = db
     .select({
       correctionId: attendanceCorrections.id,
       recordId: attendanceRecords.id,
@@ -551,32 +626,58 @@ export async function getCorrectionReport(
     .innerJoin(students, eq(attendanceRecords.studentId, students.id))
     .leftJoin(users, eq(attendanceCorrections.correctedBy, users.id))
     .where(and(...conditions))
-    .orderBy(desc(attendanceCorrections.correctedAt))
-    .limit(limit)
-    .offset(offset);
+    .orderBy(desc(attendanceCorrections.correctedAt), desc(attendanceCorrections.id))
+    .limit(limit + 1);
+
+  if (!decoded && pagination?.offset && pagination.offset > 0) {
+    query.offset(pagination.offset);
+  }
+
+  const rows = await query;
+  const hasMore = rows.length > limit;
+  const corrections = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && corrections.length > 0) {
+    const last = corrections[corrections.length - 1];
+    nextCursor = encodeCursor({
+      id: last.correctionId,
+      timestamp: last.correctedAt ? new Date(last.correctedAt).toISOString() : undefined,
+    });
+  }
 
   return {
     schoolId,
     totalCorrections: corrections.length,
     corrections,
+    nextCursor,
+    hasMore,
+    limit,
   };
 }
 
-// 7. Teacher / Session Audit Report
+// 7. Teacher / Session Audit Report (Deterministic Cursor Pagination)
 export async function getTeacherSessionReport(
   schoolId: string,
   startDate?: string,
   endDate?: string,
-  pagination?: { limit?: number; offset?: number }
+  pagination?: { limit?: number | string; offset?: number; cursor?: string | null }
 ) {
+  const limit = parseLimit(pagination?.limit, 50, 200);
+  const decoded = decodeCursor(pagination?.cursor);
+
   let sessionConditions = [eq(attendanceSessions.schoolId, schoolId)];
   if (startDate) sessionConditions.push(gte(attendanceSessions.sessionDate, startDate));
   if (endDate) sessionConditions.push(lte(attendanceSessions.sessionDate, endDate));
 
-  const limit = Math.min(Math.max(pagination?.limit || 200, 1), 1000);
-  const offset = Math.max(pagination?.offset || 0, 0);
+  if (decoded) {
+    const cursorDate = decoded.timestamp || '';
+    sessionConditions.push(
+      sql`(${attendanceSessions.sessionDate} < ${cursorDate} OR (${attendanceSessions.sessionDate} = ${cursorDate} AND ${attendanceSessions.id} < ${decoded.id}))`
+    );
+  }
 
-  const sessions = await db
+  const query = db
     .select({
       sessionId: attendanceSessions.id,
       sessionDate: attendanceSessions.sessionDate,
@@ -594,9 +695,25 @@ export async function getTeacherSessionReport(
     .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
     .innerJoin(users, eq(attendanceSessions.teacherId, users.id))
     .where(and(...sessionConditions))
-    .orderBy(desc(attendanceSessions.sessionDate))
-    .limit(limit)
-    .offset(offset);
+    .orderBy(desc(attendanceSessions.sessionDate), desc(attendanceSessions.id))
+    .limit(limit + 1);
+
+  if (!decoded && pagination?.offset && pagination.offset > 0) {
+    query.offset(pagination.offset);
+  }
+
+  const rows = await query;
+  const hasMore = rows.length > limit;
+  const sessions = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && sessions.length > 0) {
+    const last = sessions[sessions.length - 1];
+    nextCursor = encodeCursor({
+      id: last.sessionId,
+      timestamp: last.sessionDate,
+    });
+  }
 
   const sessionIds = sessions.map((s: any) => s.sessionId);
 
@@ -627,10 +744,13 @@ export async function getTeacherSessionReport(
     schoolId,
     totalSessions: reports.length,
     sessions: reports,
+    nextCursor,
+    hasMore,
+    limit,
   };
 }
 
-// 8. Full Tenant Data Portability Export
+// 8. Full Tenant Data Portability Export (Complete & Zero Secrets)
 export async function getFullTenantExport(schoolId: string) {
   const [school] = await db
     .select()
@@ -640,6 +760,11 @@ export async function getFullTenantExport(schoolId: string) {
   if (!school) {
     throw new Error('SCHOOL_NOT_FOUND');
   }
+
+  const allAcademicYears = await db
+    .select()
+    .from(academicYears)
+    .where(eq(academicYears.schoolId, schoolId));
 
   const sections = await db
     .select()
@@ -671,22 +796,147 @@ export async function getFullTenantExport(schoolId: string) {
     .innerJoin(students, eq(studentGuardians.studentId, students.id))
     .where(eq(students.schoolId, schoolId));
 
-  const recentSessions = await db
+  // Teachers (Profiles & assignments only, NO passwordHash or auth sessions)
+  const teacherProfileRows = await db
+    .select({
+      id: teacherProfiles.id,
+      schoolId: teacherProfiles.schoolId,
+      userId: teacherProfiles.userId,
+      employeeId: teacherProfiles.employeeId,
+      designation: teacherProfiles.designation,
+      fullName: users.fullName,
+      phoneNumber: users.phoneNumber,
+    })
+    .from(teacherProfiles)
+    .innerJoin(users, eq(teacherProfiles.userId, users.id))
+    .where(eq(teacherProfiles.schoolId, schoolId));
+
+  const teacherAssignmentRows = await db
+    .select()
+    .from(teacherAssignments)
+    .where(eq(teacherAssignments.schoolId, schoolId));
+
+  const allSessions = await db
     .select()
     .from(attendanceSessions)
     .where(eq(attendanceSessions.schoolId, schoolId))
-    .orderBy(desc(attendanceSessions.sessionDate))
-    .limit(500);
+    .orderBy(desc(attendanceSessions.sessionDate));
+
+  const allRosters = await db
+    .select()
+    .from(attendanceSessionRoster)
+    .where(eq(attendanceSessionRoster.schoolId, schoolId));
+
+  const allRecords = await db
+    .select()
+    .from(attendanceRecords)
+    .where(eq(attendanceRecords.schoolId, schoolId));
+
+  const allCorrections = await db
+    .select()
+    .from(attendanceCorrections)
+    .where(eq(attendanceCorrections.schoolId, schoolId));
+
+  const allEvents = await db
+    .select()
+    .from(attendanceEvents)
+    .where(eq(attendanceEvents.schoolId, schoolId));
+
+  // Redacted Notification Jobs
+  const notificationRows = await db
+    .select({
+      id: notificationJobs.id,
+      attendanceSessionId: notificationJobs.attendanceSessionId,
+      studentId: notificationJobs.studentId,
+      status: notificationJobs.status,
+      notificationType: notificationJobs.notificationType,
+      language: notificationJobs.language,
+      attemptCount: notificationJobs.attemptCount,
+      failureReason: notificationJobs.failureReason,
+      queuedAt: notificationJobs.queuedAt,
+      deliveredAt: notificationJobs.deliveredAt,
+    })
+    .from(notificationJobs)
+    .where(eq(notificationJobs.schoolId, schoolId));
+
+  // Devices & Non-secret RFID metadata
+  const deviceRows = await db
+    .select({
+      id: devices.id,
+      deviceIdentifier: devices.deviceIdentifier,
+      deviceModel: devices.deviceModel,
+      status: devices.status,
+      createdAt: devices.createdAt,
+    })
+    .from(devices)
+    .where(eq(devices.schoolId, schoolId));
+
+  const rfidKeyRows = await db
+    .select({
+      id: rfidKeyVersions.id,
+      keyVersion: rfidKeyVersions.keyVersion,
+      securityMode: rfidKeyVersions.securityMode,
+      algorithm: rfidKeyVersions.algorithm,
+      isCurrent: rfidKeyVersions.isCurrent,
+    })
+    .from(rfidKeyVersions)
+    .where(eq(rfidKeyVersions.schoolId, schoolId));
+
+  const rfidReaderRows = await db
+    .select({
+      id: rfidReaders.id,
+      deviceId: rfidReaders.deviceId,
+      name: rfidReaders.name,
+      location: rfidReaders.location,
+      directionMode: rfidReaders.directionMode,
+      readerModel: rfidReaders.readerModel,
+      status: rfidReaders.status,
+    })
+    .from(rfidReaders)
+    .where(eq(rfidReaders.schoolId, schoolId));
+
+  const rfidCardRows = await db
+    .select({
+      id: rfidCredentials.id,
+      studentId: rfidCredentials.studentId,
+      credentialDigest: rfidCredentials.credentialDigest,
+      securityMode: rfidCredentials.securityMode,
+      keyVersion: rfidCredentials.keyVersion,
+      status: rfidCredentials.status,
+      issuedAt: rfidCredentials.issuedAt,
+    })
+    .from(rfidCredentials)
+    .where(eq(rfidCredentials.schoolId, schoolId));
+
+  const importJobRows = await db
+    .select({
+      id: importJobs.id,
+      fileName: importJobs.fileName,
+      status: importJobs.status,
+      totalRows: importJobs.totalRows,
+      successfulRows: importJobs.successfulRows,
+      failedRows: importJobs.failedRows,
+      createdAt: importJobs.createdAt,
+    })
+    .from(importJobs)
+    .where(eq(importJobs.schoolId, schoolId));
 
   const recentAuditLogs = await db
-    .select()
+    .select({
+      id: auditLogs.id,
+      action: auditLogs.action,
+      resourceType: auditLogs.resourceType,
+      resourceId: auditLogs.resourceId,
+      metadata: auditLogs.metadata,
+      createdAt: auditLogs.createdAt,
+    })
     .from(auditLogs)
     .where(eq(auditLogs.schoolId, schoolId))
     .orderBy(desc(auditLogs.createdAt))
     .limit(1000);
 
   return {
-    exportVersion: '1.0.0',
+    exportVersion: '2.0.0',
     exportTimestamp: new Date().toISOString(),
     school: {
       id: school.id,
@@ -699,12 +949,25 @@ export async function getFullTenantExport(schoolId: string) {
       timezone: school.timezone,
       status: school.status,
     },
+    academicYears: allAcademicYears,
     classSections: sections,
     students: allStudents,
-    enrollments: allEnrollments,
     guardians: allGuardians,
     studentGuardians: allStudentGuardians,
-    sessions: recentSessions,
+    enrollments: allEnrollments,
+    teachers: teacherProfileRows,
+    teacherAssignments: teacherAssignmentRows,
+    sessions: allSessions,
+    rosters: allRosters,
+    records: allRecords,
+    corrections: allCorrections,
+    events: allEvents,
+    notificationHistory: notificationRows,
+    devices: deviceRows,
+    rfidKeys: rfidKeyRows,
+    rfidReaders: rfidReaderRows,
+    rfidCredentials: rfidCardRows,
+    importJobs: importJobRows,
     auditLogs: recentAuditLogs,
   };
 }

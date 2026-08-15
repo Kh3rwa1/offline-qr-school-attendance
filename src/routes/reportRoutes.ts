@@ -169,8 +169,9 @@ reportRouter.get(
       const studentId = req.query.studentId as string;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = req.query.limit as string | undefined;
       const offset = req.query.offset ? Number(req.query.offset) : undefined;
+      const cursor = req.query.cursor as string | undefined;
 
       if (!studentId) {
         res.status(400).json({ error: 'MISSING_STUDENT_ID' });
@@ -182,9 +183,13 @@ reportRouter.get(
         return;
       }
 
-      const report = await getStudentAttendanceHistory(schoolId, studentId, startDate, endDate, { limit, offset });
+      const report = await getStudentAttendanceHistory(schoolId, studentId, startDate, endDate, { limit, offset, cursor });
       res.json(report);
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+        return;
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -203,8 +208,9 @@ reportRouter.get(
       const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
       const endDate = req.query.endDate as string;
       const reqGuardianPhone = req.query.includeGuardianPhone === 'true';
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = req.query.limit as string | undefined;
       const offset = req.query.offset ? Number(req.query.offset) : undefined;
+      const cursor = req.query.cursor as string | undefined;
 
       if (req.userRole === 'TEACHER' && !await teacherHasClassAccess(req, schoolId, classSectionId)) {
         res.status(403).json({ error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
@@ -221,9 +227,14 @@ reportRouter.get(
         includeGuardianPhone,
         limit,
         offset,
+        cursor,
       });
       res.json(report);
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+        return;
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -240,12 +251,17 @@ reportRouter.get(
       const schoolId = req.activeSchoolId!;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = req.query.limit as string | undefined;
       const offset = req.query.offset ? Number(req.query.offset) : undefined;
+      const cursor = req.query.cursor as string | undefined;
 
-      const report = await getCorrectionReport(schoolId, startDate, endDate, { limit, offset });
+      const report = await getCorrectionReport(schoolId, startDate, endDate, { limit, offset, cursor });
       res.json(report);
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+        return;
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -262,12 +278,17 @@ reportRouter.get(
       const schoolId = req.activeSchoolId!;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = req.query.limit as string | undefined;
       const offset = req.query.offset ? Number(req.query.offset) : undefined;
+      const cursor = req.query.cursor as string | undefined;
 
-      const report = await getTeacherSessionReport(schoolId, startDate, endDate, { limit, offset });
+      const report = await getTeacherSessionReport(schoolId, startDate, endDate, { limit, offset, cursor });
       res.json(report);
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+        return;
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -503,13 +524,40 @@ reportRouter.get(
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const schoolId = req.activeSchoolId!;
-      const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 60);
+      const MAX_TREND_RANGE_DAYS = 90;
 
-      const today = new Date();
-      const minDate = new Date(today);
-      minDate.setDate(minDate.getDate() - (days - 1));
-      const minDateStr = minDate.toISOString().slice(0, 10);
-      const maxDateStr = today.toISOString().slice(0, 10);
+      let minDateStr: string;
+      let maxDateStr: string;
+      let dateCount: number;
+
+      if (req.query.startDate && req.query.endDate) {
+        const start = new Date(req.query.startDate as string);
+        const end = new Date(req.query.endDate as string);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          res.status(400).json({ error: 'INVALID_DATE_FORMAT', message: 'startDate and endDate must be valid ISO date strings' });
+          return;
+        }
+        if (end < start) {
+          res.status(400).json({ error: 'INVALID_DATE_RANGE', message: 'endDate must be greater than or equal to startDate' });
+          return;
+        }
+        const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        if (diffDays > MAX_TREND_RANGE_DAYS) {
+          res.status(400).json({ error: 'DATE_RANGE_EXCEEDED', message: `Date range cannot exceed ${MAX_TREND_RANGE_DAYS} days` });
+          return;
+        }
+        minDateStr = start.toISOString().slice(0, 10);
+        maxDateStr = end.toISOString().slice(0, 10);
+        dateCount = diffDays;
+      } else {
+        const days = Math.min(Math.max(Number(req.query.days) || 7, 1), MAX_TREND_RANGE_DAYS);
+        const today = new Date();
+        const minDate = new Date(today);
+        minDate.setDate(minDate.getDate() - (days - 1));
+        minDateStr = minDate.toISOString().slice(0, 10);
+        maxDateStr = today.toISOString().slice(0, 10);
+        dateCount = days;
+      }
 
       // Execute ONE single grouped SQL query for the entire date range
       const rows = await db
@@ -536,23 +584,25 @@ reportRouter.get(
       }
 
       const trends = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().slice(0, 10);
+      const curr = new Date(minDateStr);
+      const end = new Date(maxDateStr);
+
+      while (curr <= end) {
+        const dateStr = curr.toISOString().slice(0, 10);
         const stats = statsByDate.get(dateStr) || { total: 0, present: 0, absent: 0 };
         const pct = stats.total > 0 ? Math.round((stats.present / stats.total) * 1000) / 10 : 0;
         trends.push({
           date: dateStr,
-          day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          day: curr.toLocaleDateString('en-US', { weekday: 'short' }),
           totalStudents: stats.total,
           presentStudents: stats.present,
           absentStudents: stats.absent,
           percentage: pct,
         });
+        curr.setDate(curr.getDate() + 1);
       }
 
-      res.json({ success: true, days, trends });
+      res.json({ success: true, days: dateCount, startDate: minDateStr, endDate: maxDateStr, trends });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

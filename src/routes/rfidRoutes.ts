@@ -8,7 +8,7 @@ import { readerService } from '../services/rfid/readerService';
 import { offlineService } from '../services/rfid/offlineService';
 import { db, withTenantContext } from '../db';
 import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 export const rfidRouter = Router();
@@ -88,6 +88,8 @@ rfidRouter.post(
   })
 );
 
+import { encodeCursor, decodeCursor, parseLimit } from '../services/paginationHelper';
+
 rfidRouter.get(
   '/:schoolId/rfid/credentials',
   requireAuth,
@@ -99,9 +101,23 @@ rfidRouter.get(
         const credentials = await credentialService.getCredentialHistory(schoolId, studentId);
         return { status: 200, body: { success: true, credentials } };
       }
-      const credentials = await credentialService.listAllCredentials(schoolId);
-      return { status: 200, body: { success: true, credentials } };
+      const limit = parseLimit(req.query.limit as string, 50, 200);
+      const cursor = req.query.cursor as string | undefined;
+      const result = await credentialService.listAllCredentials(schoolId, { limit, cursor });
+      return {
+        status: 200,
+        body: {
+          success: true,
+          credentials: (result as any).items || result,
+          nextCursor: (result as any).nextCursor || null,
+          hasMore: !!(result as any).hasMore,
+          limit,
+        },
+      };
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      }
       return { status: 500, body: { success: false, error: error.message } };
     }
   })
@@ -458,17 +474,54 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/scans',
   requireAuth,
-  tenantHandler(async ({ schoolId }) => {
+  tenantHandler(async ({ req, schoolId }) => {
     try {
-      const scans = await db
+      const limit = parseLimit(req.query.limit as string, 50, 200);
+      const cursor = req.query.cursor as string | undefined;
+      const decoded = decodeCursor(cursor);
+
+      const conditions: any[] = [eq(rfidScanEvents.schoolId, schoolId)];
+      if (decoded) {
+        const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+        conditions.push(
+          sql`(${rfidScanEvents.scanTimestamp} < ${cursorTime} OR (${rfidScanEvents.scanTimestamp} = ${cursorTime} AND ${rfidScanEvents.id} < ${decoded.id}))`
+        );
+      }
+
+      const query = db
         .select()
         .from(rfidScanEvents)
-        .where(eq(rfidScanEvents.schoolId, schoolId))
-        .orderBy(desc(rfidScanEvents.scanTimestamp))
-        .limit(100);
+        .where(and(...conditions))
+        .orderBy(desc(rfidScanEvents.scanTimestamp), desc(rfidScanEvents.id))
+        .limit(limit + 1);
 
-      return { status: 200, body: { success: true, report: scans } };
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const scans = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && scans.length > 0) {
+        const last = scans[scans.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.scanTimestamp ? new Date(last.scanTimestamp).toISOString() : undefined,
+        });
+      }
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          report: scans,
+          nextCursor,
+          hasMore,
+          limit,
+        },
+      };
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      }
       return { status: 500, body: { success: false, error: error.message } };
     }
   })
@@ -504,18 +557,58 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/rejections',
   requireAuth,
-  tenantHandler(async ({ schoolId }) => {
+  tenantHandler(async ({ req, schoolId }) => {
     try {
-      const rejections = await db
+      const limit = parseLimit(req.query.limit as string, 50, 200);
+      const cursor = req.query.cursor as string | undefined;
+      const decoded = decodeCursor(cursor);
+
+      const conditions: any[] = [
+        eq(rfidScanEvents.schoolId, schoolId),
+        ne(rfidScanEvents.decision, 'ACCEPTED'),
+      ];
+
+      if (decoded) {
+        const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+        conditions.push(
+          sql`(${rfidScanEvents.scanTimestamp} < ${cursorTime} OR (${rfidScanEvents.scanTimestamp} = ${cursorTime} AND ${rfidScanEvents.id} < ${decoded.id}))`
+        );
+      }
+
+      const query = db
         .select()
         .from(rfidScanEvents)
-        .where(and(eq(rfidScanEvents.schoolId, schoolId)))
-        .orderBy(desc(rfidScanEvents.scanTimestamp))
-        .limit(100);
+        .where(and(...conditions))
+        .orderBy(desc(rfidScanEvents.scanTimestamp), desc(rfidScanEvents.id))
+        .limit(limit + 1);
 
-      const filtered = rejections.filter((r: any) => r.decision !== 'ACCEPTED');
-      return { status: 200, body: { success: true, report: filtered } };
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const rejections = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && rejections.length > 0) {
+        const last = rejections[rejections.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.scanTimestamp ? new Date(last.scanTimestamp).toISOString() : undefined,
+        });
+      }
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          report: rejections,
+          nextCursor,
+          hasMore,
+          limit,
+        },
+      };
     } catch (error: any) {
+      if (error.message === 'INVALID_PAGINATION_CURSOR') {
+        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      }
       return { status: 500, body: { success: false, error: error.message } };
     }
   })

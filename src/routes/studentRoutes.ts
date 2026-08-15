@@ -18,15 +18,29 @@ studentRouter.get(
   requireAuth,
   requireTenant,
   async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const classSectionId = req.query.classSectionId as string | undefined;
-    const status = req.query.status as string | undefined;
-    const search = req.query.search as string | undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const page = req.query.page ? Number(req.query.page) : undefined;
+    try {
+      const schoolId = req.activeSchoolId!;
+      const classSectionId = req.query.classSectionId as string | undefined;
+      const status = req.query.status as string | undefined;
+      const search = req.query.search as string | undefined;
+      const limit = req.query.limit as string | undefined;
+      const cursor = req.query.cursor as string | undefined;
+      const page = req.query.page ? Number(req.query.page) : undefined;
 
-    const students = await listStudents({ schoolId, classSectionId, status, search, limit, page });
-    return res.json({ success: true, students });
+      const result = await listStudents({ schoolId, classSectionId, status, search, limit, cursor, page });
+      return res.json({
+        success: true,
+        students: result.items || result,
+        nextCursor: (result as any).nextCursor || null,
+        hasMore: !!(result as any).hasMore,
+        limit: (result as any).limit || 50,
+      });
+    } catch (err: any) {
+      if (err.message === 'INVALID_PAGINATION_CURSOR') {
+        return res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+      }
+      return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+    }
   }
 );
 

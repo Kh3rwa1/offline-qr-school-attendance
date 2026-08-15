@@ -97,8 +97,10 @@ router.post('/callback', async (req: Request, res: Response) => {
   });
 });
 
+import { encodeCursor, decodeCursor, parseLimit } from '../services/paginationHelper';
+
 // ==========================================
-// 2. Notification Queue Listing (School Scoped)
+// 2. Notification Queue Listing (School Scoped with Cursor Pagination)
 // ==========================================
 router.get(
   '/queue',
@@ -107,9 +109,21 @@ router.get(
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
+    const cursor = req.query.cursor as string | undefined;
+    const limit = parseLimit(req.query.limit as string | undefined, 50, 200);
 
     try {
-      const jobs = await db
+      const decoded = decodeCursor(cursor);
+      const conditions: any[] = [eq(notificationJobs.schoolId, schoolId)];
+
+      if (decoded) {
+        const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+        conditions.push(
+          sql`(${notificationJobs.queuedAt} < ${cursorTime} OR (${notificationJobs.queuedAt} = ${cursorTime} AND ${notificationJobs.id} < ${decoded.id}))`
+        );
+      }
+
+      const query = db
         .select({
           id: notificationJobs.id,
           studentId: notificationJobs.studentId,
@@ -125,9 +139,26 @@ router.get(
         })
         .from(notificationJobs)
         .leftJoin(students, eq(notificationJobs.studentId, students.id))
-        .where(eq(notificationJobs.schoolId, schoolId))
-        .orderBy(desc(notificationJobs.queuedAt))
-        .limit(100);
+        .where(and(...conditions))
+        .orderBy(desc(notificationJobs.queuedAt), desc(notificationJobs.id))
+        .limit(limit + 1);
+
+      if (!decoded && req.query.page && Number(req.query.page) > 1) {
+        query.offset((Number(req.query.page) - 1) * limit);
+      }
+
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const jobs = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && jobs.length > 0) {
+        const last = jobs[jobs.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.queuedAt ? new Date(last.queuedAt).toISOString() : undefined,
+        });
+      }
 
       const sanitizedJobs = jobs.map((j: any) => ({
         ...j,
@@ -148,15 +179,21 @@ router.get(
           queued: queuedCount,
         },
         jobs: sanitizedJobs,
+        nextCursor,
+        hasMore,
+        limit,
       });
     } catch (err: any) {
+      if (err.message === 'INVALID_PAGINATION_CURSOR') {
+        return res.status(400).json({ success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+      }
       return res.status(500).json({ success: false, error: err.message });
     }
   }
 );
 
 // ==========================================
-// 2.5. Student Notification History
+// 2.5. Student Notification History (Cursor Paginated)
 // ==========================================
 router.get(
   '/history/:studentId',
@@ -165,17 +202,58 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     const schoolId = req.activeSchoolId!;
     const { studentId } = req.params;
+    const cursor = req.query.cursor as string | undefined;
+    const limit = parseLimit(req.query.limit as string | undefined, 50, 200);
 
     try {
-      const jobs = await db
+      const decoded = decodeCursor(cursor);
+      const conditions: any[] = [
+        eq(notificationJobs.schoolId, schoolId),
+        eq(notificationJobs.studentId, studentId),
+      ];
+
+      if (decoded) {
+        const cursorTime = decoded.timestamp ? new Date(decoded.timestamp) : new Date(0);
+        conditions.push(
+          sql`(${notificationJobs.queuedAt} < ${cursorTime} OR (${notificationJobs.queuedAt} = ${cursorTime} AND ${notificationJobs.id} < ${decoded.id}))`
+        );
+      }
+
+      const query = db
         .select()
         .from(notificationJobs)
-        .where(and(eq(notificationJobs.schoolId, schoolId), eq(notificationJobs.studentId, studentId)))
-        .orderBy(desc(notificationJobs.queuedAt))
-        .limit(50);
+        .where(and(...conditions))
+        .orderBy(desc(notificationJobs.queuedAt), desc(notificationJobs.id))
+        .limit(limit + 1);
 
-      return res.json({ success: true, history: jobs });
+      if (!decoded && req.query.page && Number(req.query.page) > 1) {
+        query.offset((Number(req.query.page) - 1) * limit);
+      }
+
+      const rows = await query;
+      const hasMore = rows.length > limit;
+      const jobs = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && jobs.length > 0) {
+        const last = jobs[jobs.length - 1];
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.queuedAt ? new Date(last.queuedAt).toISOString() : undefined,
+        });
+      }
+
+      return res.json({
+        success: true,
+        history: jobs,
+        nextCursor,
+        hasMore,
+        limit,
+      });
     } catch (err: any) {
+      if (err.message === 'INVALID_PAGINATION_CURSOR') {
+        return res.status(400).json({ success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
+      }
       return res.status(500).json({ success: false, error: err.message });
     }
   }

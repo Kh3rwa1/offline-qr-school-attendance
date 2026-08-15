@@ -45,9 +45,8 @@ export function validateProductionEnv() {
     if (process.env.ALLOW_TEST_BYPASS === 'true') {
       throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_TEST_BYPASS is strictly prohibited in production mode');
     }
-    const isTestingContext = process.env.CI === 'true' || process.env.NODE_ENV === 'test' || process.env.PRODUCTION_PG_TEST === '1' || process.env.TEST_SERVER_STATIC === 'true' || process.env.ALLOW_IN_MEMORY_RATE_LIMITER === 'true';
-    if (!isTestingContext && process.env.ALLOW_FAKE_SMS_IN_PRODUCTION === 'true') {
-      throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_FAKE_SMS_IN_PRODUCTION is strictly prohibited in real production deployments');
+    if (process.env.SMS_PROVIDER === 'fake') {
+      throw new Error('FATAL_SECURITY_CONFIGURATION: Fake SMS provider is strictly prohibited in production mode. Configure a real provider or console.');
     }
 
     const secretVars = [

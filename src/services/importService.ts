@@ -56,6 +56,87 @@ export function sanitizeCell(val: any): string {
   return str;
 }
 
+/**
+ * RFC 4180 compliant CSV parser supporting quoted commas, quoted newlines, escaped quotes (""), and UTF-8 BOM
+ */
+export function parseRfcCsv(content: string): string[][] {
+  let str = content.startsWith('\uFEFF') ? content.slice(1) : content;
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < str.length) {
+    const char = str[i];
+    const nextChar = str[i + 1];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (nextChar === '"') {
+          currentField += '"';
+          i += 2;
+          continue;
+        } else {
+          inQuotes = false;
+          i++;
+          continue;
+        }
+      } else {
+        currentField += char;
+        i++;
+        continue;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+        i++;
+        continue;
+      } else if (char === ',') {
+        currentRow.push(currentField.trim());
+        currentField = '';
+        i++;
+        continue;
+      } else if (char === '\r') {
+        if (nextChar === '\n') {
+          i += 2;
+        } else {
+          i++;
+        }
+        currentRow.push(currentField.trim());
+        if (currentRow.some((c) => c !== '')) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+        currentField = '';
+        continue;
+      } else if (char === '\n') {
+        currentRow.push(currentField.trim());
+        if (currentRow.some((c) => c !== '')) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+        currentField = '';
+        i++;
+        continue;
+      } else {
+        currentField += char;
+        i++;
+        continue;
+      }
+    }
+  }
+
+  if (currentField !== '' || currentRow.length > 0) {
+    currentRow.push(currentField.trim());
+    if (currentRow.some((c) => c !== '')) {
+      rows.push(currentRow);
+    }
+  }
+
+  return rows;
+}
+
 export async function generateXlsxTemplate(): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Student Import Template');
@@ -159,52 +240,56 @@ export async function parseAndValidateFile(params: {
     throw new Error('FILE_SIZE_LIMIT_EXCEEDED');
   }
 
-  const rawRows: Record<string, any>[] = [];
-  const format = params.format || (params.fileName.endsWith('.csv') ? 'csv' : params.fileName.endsWith('.json') ? 'json' : 'xlsx');
+  const fileHash = crypto.createHash('sha256').update(params.fileBuffer).digest('hex');
+  const mode: ImportMode = params.mode || 'CREATE_ONLY';
+  let format = params.format;
+
+  if (!format) {
+    if (params.fileName.endsWith('.csv')) format = 'csv';
+    else if (params.fileName.endsWith('.json')) format = 'json';
+    else format = 'xlsx';
+  }
+
+  let rawRows: Record<string, any>[] = [];
 
   if (format === 'json') {
     try {
-      const jsonParsed = JSON.parse(params.fileBuffer.toString('utf8'));
-      const studentArray = Array.isArray(jsonParsed) ? jsonParsed : jsonParsed.students || [];
-      for (const s of studentArray) {
-        rawRows.push({
-          'Student Code': s.studentCode || s['Student Code'],
-          'Student Name (English)': s.name || s.studentName || s['Student Name (English)'],
-          'Bengali Name': s.nameBn || s['Bengali Name'] || '',
-          'Banglar Shiksha ID': s.banglarShikshaId || s['Banglar Shiksha ID'] || '',
-          'Class Name': s.className || s['Class Name'] || 'General',
-          'Section Name': s.sectionName || s['Section Name'] || 'A',
-          'Roll Number': s.rollNumber || s['Roll Number'] || 1,
-          'Gender': s.gender || s['Gender'] || 'MALE',
-          'Date of Birth (YYYY-MM-DD)': s.dateOfBirth || s['Date of Birth (YYYY-MM-DD)'] || '',
-          'Guardian Name': s.guardianName || s['Guardian Name'] || 'Guardian',
-          'Guardian Phone': s.guardianPhone || s['Guardian Phone'] || '+919999999999',
-          'Guardian Relationship': s.guardianRelationship || s['Guardian Relationship'] || 'PARENT',
-        });
+      const parsed = JSON.parse(params.fileBuffer.toString('utf8'));
+      if (Array.isArray(parsed)) {
+        rawRows = parsed;
+      } else if (parsed && Array.isArray(parsed.students)) {
+        rawRows = parsed.students;
+      } else {
+        throw new Error('INVALID_JSON_FORMAT');
       }
-    } catch {
-      throw new Error('INVALID_JSON_PAYLOAD');
+    } catch (e: any) {
+      throw new Error(`MALFORMED_JSON_IMPORT: ${e.message}`);
     }
   } else if (format === 'csv') {
-    const text = params.fileBuffer.toString('utf8');
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length <= 1) throw new Error('EMPTY_SHEET');
-    if (lines.length > 5001) throw new Error('MAX_ROWS_EXCEEDED');
-
-    const headers = lines[0].split(',').map((h) => h.replace(/^["']|["']$/g, '').trim());
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map((c) => c.replace(/^["']|["']$/g, '').trim());
+    const csvContent = params.fileBuffer.toString('utf8');
+    const parsedMatrix = parseRfcCsv(csvContent);
+    if (parsedMatrix.length < 2) {
+      throw new Error('EMPTY_SHEET');
+    }
+    const headers = parsedMatrix[0].map((h) => h.trim());
+    for (let r = 1; r < parsedMatrix.length; r++) {
+      const row = parsedMatrix[r];
       const rowData: Record<string, any> = {};
-      headers.forEach((h, idx) => {
-        rowData[h] = cols[idx] || '';
+      headers.forEach((h, colIdx) => {
+        rowData[h] = row[colIdx] != null ? row[colIdx] : '';
       });
       if (Object.values(rowData).some((v) => v !== '')) {
         rawRows.push(rowData);
       }
     }
   } else {
+    // XLSX parsing with sheet size & bomb protection
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(params.fileBuffer);
+    try {
+      await workbook.xlsx.load(params.fileBuffer);
+    } catch (err: any) {
+      throw new Error(`MALFORMED_XLSX_FILE: ${err.message}`);
+    }
 
     if (workbook.worksheets.length === 0) throw new Error('EMPTY_WORKBOOK');
     if (workbook.worksheets.length > 5) throw new Error('MAX_WORKSHEETS_EXCEEDED');
@@ -345,11 +430,13 @@ export async function parseAndValidateFile(params: {
     }
   }
 
-  // Set-based indexed conflict checks in Database for CREATE_ONLY mode
-  const mode = params.mode || 'CREATE_ONLY';
-  if (mode === 'CREATE_ONLY' && validRows.length > 0) {
+  // --------------------------------------------------------------------------
+  // Mode-Specific Validation (CREATE_ONLY, UPDATE_EXISTING, UPSERT)
+  // --------------------------------------------------------------------------
+  if (validRows.length > 0) {
     const codes = validRows.map((r) => r.studentCode);
-    // Batch in chunks of 500
+    const existingCodeSet = new Set<string>();
+
     for (let c = 0; c < codes.length; c += 500) {
       const chunk = codes.slice(c, c + 500);
       const existingInDb = await db
@@ -358,16 +445,34 @@ export async function parseAndValidateFile(params: {
         .where(and(eq(students.schoolId, params.schoolId), inArray(students.studentCode, chunk)));
 
       for (const ex of existingInDb) {
-        errors.push({
-          row: 0,
-          column: 'Student Code',
-          error: `Student Code already exists in school database: ${ex.studentCode}`,
-        });
+        existingCodeSet.add(ex.studentCode.toUpperCase());
+      }
+    }
+
+    if (mode === 'CREATE_ONLY') {
+      for (const r of validRows) {
+        if (existingCodeSet.has(r.studentCode.toUpperCase())) {
+          errors.push({
+            row: r.rowNumber,
+            column: 'Student Code',
+            error: `Student Code already exists in database (CREATE_ONLY mode): ${r.studentCode}`,
+          });
+        }
+      }
+    } else if (mode === 'UPDATE_EXISTING') {
+      for (const r of validRows) {
+        if (!existingCodeSet.has(r.studentCode.toUpperCase())) {
+          errors.push({
+            row: r.rowNumber,
+            column: 'Student Code',
+            error: `Student Code does not exist in database (UPDATE_EXISTING mode): ${r.studentCode}`,
+          });
+        }
       }
     }
   }
 
-  // Create staging job record with confirmation token
+  // Create staging job record with timing-safe confirmation token
   const confirmToken = crypto.randomBytes(24).toString('hex');
   const [job] = await db
     .insert(importJobs)
@@ -380,13 +485,16 @@ export async function parseAndValidateFile(params: {
       failedRows: errors.length,
       status: errors.length === 0 ? 'VALIDATED' : 'FAILED',
       errorSummary: errors.length > 0 ? { errors: errors.slice(0, 100), totalErrors: errors.length } : null,
-      stagedData: errors.length === 0 ? validRows : null,
-      metadata: {
+      stagedData: errors.length === 0 ? {
+        rows: validRows,
         confirmToken,
         mode,
+        fileHash,
+        userId: params.createdBy,
+        schoolId: params.schoolId,
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1h validity
-      },
+      } : null,
     })
     .returning();
 
@@ -395,8 +503,9 @@ export async function parseAndValidateFile(params: {
     status: job.status,
     confirmToken: errors.length === 0 ? confirmToken : undefined,
     mode,
+    fileHash,
     totalRows: rawRows.length,
-    validRowsCount: validRows.length,
+    validRowsCount: errors.length === 0 ? validRows.length : 0,
     invalidRowsCount: errors.length,
     errors,
     validRowsPreview: validRows.slice(0, 50),
@@ -409,6 +518,7 @@ export async function parseAndValidateXlsx(params: {
   fileBuffer: Buffer;
   fileName: string;
   createdBy: string;
+  mode?: ImportMode;
 }) {
   return parseAndValidateFile({
     schoolId: params.schoolId,
@@ -416,17 +526,30 @@ export async function parseAndValidateXlsx(params: {
     fileName: params.fileName,
     createdBy: params.createdBy,
     format: 'xlsx',
+    mode: params.mode,
   });
 }
 
 /**
+ * Timing-safe confirmation token verification
+ */
+function verifyConfirmationToken(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const pBuf = Buffer.from(provided);
+  const eBuf = Buffer.from(expected);
+  if (pBuf.length !== eBuf.length) return false;
+  return crypto.timingSafeEqual(pBuf, eBuf);
+}
+
+/**
  * Executes the validated import transaction in chunked batches with guardian deduplication
+ * Supports CREATE_ONLY, UPDATE_EXISTING, and UPSERT modes.
  */
 export async function executeTransactionalImport(params: {
   schoolId: string;
   importJobId: string;
   createdBy: string;
-  confirmToken?: string;
+  confirmToken: string;
 }) {
   const [job] = await db
     .select()
@@ -441,14 +564,33 @@ export async function executeTransactionalImport(params: {
     throw new Error('INVALID_JOB_STATUS');
   }
 
-  const jobMeta = (job.metadata || {}) as Record<string, any>;
-  if (params.confirmToken && jobMeta.confirmToken && params.confirmToken !== jobMeta.confirmToken) {
+  const stagedContainer = job.stagedData as any;
+  if (!stagedContainer) {
+    throw new Error('STAGED_DATA_EXPIRED_OR_NOT_FOUND');
+  }
+
+  const stagedRows: ParsedStudentRow[] = Array.isArray(stagedContainer) ? stagedContainer : (stagedContainer.rows || []);
+  const expectedToken = Array.isArray(stagedContainer) ? (job as any).metadata?.confirmToken : stagedContainer.confirmToken;
+  const mode: ImportMode = (Array.isArray(stagedContainer) ? 'CREATE_ONLY' : stagedContainer.mode) || 'CREATE_ONLY';
+  const expiresAt = stagedContainer?.expiresAt;
+  const tokenSchoolId = stagedContainer?.schoolId;
+
+  if (!params.confirmToken || !expectedToken || !verifyConfirmationToken(params.confirmToken, expectedToken)) {
     throw new Error('INVALID_CONFIRMATION_TOKEN');
   }
 
-  const stagedRows = job.stagedData as ParsedStudentRow[];
-  if (!stagedRows || !Array.isArray(stagedRows) || stagedRows.length === 0) {
-    throw new Error('STAGED_DATA_EXPIRED_OR_NOT_FOUND');
+  // Verify token binding
+  if (tokenSchoolId && tokenSchoolId !== params.schoolId) {
+    throw new Error('TOKEN_TENANT_MISMATCH');
+  }
+
+  // Check token expiration
+  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+    await db
+      .update(importJobs)
+      .set({ status: 'FAILED', stagedData: null, errorSummary: { error: 'CONFIRMATION_TOKEN_EXPIRED' } })
+      .where(eq(importJobs.id, params.importJobId));
+    throw new Error('CONFIRMATION_TOKEN_EXPIRED');
   }
 
   const [currentYear] = await db
@@ -461,10 +603,17 @@ export async function executeTransactionalImport(params: {
   }
   const academicYearId = currentYear.id;
 
-  // Mark job as PROCESSING
+  // Invalidate single-use token and mark job as PROCESSING
   await db
     .update(importJobs)
-    .set({ status: 'PROCESSING' })
+    .set({
+      status: 'PROCESSING',
+      stagedData: {
+        ...stagedContainer,
+        confirmToken: null, // Token consumed
+        processedAt: new Date().toISOString(),
+      },
+    })
     .where(eq(importJobs.id, params.importJobId));
 
   try {
@@ -499,7 +648,6 @@ export async function executeTransactionalImport(params: {
       }
 
       // 2. Tenant-scoped Guardian Deduplication
-      // Query existing guardians for these phone numbers in this school
       const uniquePhones = Array.from(new Set(stagedRows.map((r) => r.guardianPhone)));
       const existingGuardians = await tx
         .select()
@@ -513,7 +661,6 @@ export async function executeTransactionalImport(params: {
         }
       }
 
-      // Create new guardians for phone numbers not yet in DB
       for (const row of stagedRows) {
         if (!guardianMap.has(row.guardianPhone)) {
           const [newG] = await tx
@@ -529,78 +676,211 @@ export async function executeTransactionalImport(params: {
         }
       }
 
-      // 3. Batch Inserts for Students & Enrollments in Chunks of 100
+      // 3. Process Students according to Mode
+      const processedStudents: any[] = [];
       const CHUNK_SIZE = 100;
-      const createdStudents: any[] = [];
 
-      for (let i = 0; i < stagedRows.length; i += CHUNK_SIZE) {
-        const chunk = stagedRows.slice(i, i + CHUNK_SIZE);
+      if (mode === 'UPDATE_EXISTING') {
+        // UPDATE_EXISTING: Update student attributes & enrollments
+        for (const row of stagedRows) {
+          const [existingStudent] = await tx
+            .select()
+            .from(students)
+            .where(and(eq(students.schoolId, params.schoolId), eq(students.studentCode, row.studentCode)));
 
-        // Insert Student chunk
-        const studentValues = chunk.map((r) => ({
-          schoolId: params.schoolId,
-          studentCode: r.studentCode,
-          name: r.name,
-          nameBn: r.nameBn || null,
-          banglarShikshaId: r.banglarShikshaId || null,
-          gender: r.gender,
-          dateOfBirth: r.dateOfBirth || null,
-          status: 'ACTIVE',
-        }));
+          if (existingStudent) {
+            await tx
+              .update(students)
+              .set({
+                name: row.name,
+                nameBn: row.nameBn || existingStudent.nameBn,
+                banglarShikshaId: row.banglarShikshaId || existingStudent.banglarShikshaId,
+                gender: row.gender,
+                dateOfBirth: row.dateOfBirth || existingStudent.dateOfBirth,
+                updatedAt: new Date(),
+              })
+              .where(eq(students.id, existingStudent.id));
 
-        const insertedStudents = await tx
-          .insert(students)
-          .values(studentValues)
-          .returning();
+            const classSectionId = classSectionMap.get(`${row.className.toUpperCase()}:${row.sectionName.toUpperCase()}`)!;
+            // Update enrollment roll number and section
+            await tx
+              .update(enrollments)
+              .set({
+                classSectionId,
+                rollNumber: row.rollNumber,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(enrollments.schoolId, params.schoolId),
+                  eq(enrollments.studentId, existingStudent.id),
+                  eq(enrollments.academicYearId, academicYearId)
+                )
+              );
 
-        // Build Enrollments & StudentGuardians & QRs
-        const enrollmentValues = [];
-        const studentGuardianValues = [];
-
-        for (let j = 0; j < insertedStudents.length; j++) {
-          const s = insertedStudents[j];
-          const r = chunk[j];
-          const classSectionId = classSectionMap.get(`${r.className.toUpperCase()}:${r.sectionName.toUpperCase()}`)!;
-          const guardianId = guardianMap.get(r.guardianPhone)!;
-
-          enrollmentValues.push({
-            schoolId: params.schoolId,
-            studentId: s.id,
-            classSectionId,
-            academicYearId,
-            rollNumber: r.rollNumber,
-            startDate: new Date().toISOString().split('T')[0],
-            status: 'ACTIVE',
-          });
-
-          studentGuardianValues.push({
-            studentId: s.id,
-            guardianId,
-            isPrimary: true,
-          });
+            processedStudents.push({
+              student: existingStudent,
+              mode: 'UPDATED',
+              qrProvisioned: true,
+            });
+          }
         }
+      } else if (mode === 'UPSERT') {
+        // UPSERT: Update matches, insert new students
+        for (const row of stagedRows) {
+          const [existingStudent] = await tx
+            .select()
+            .from(students)
+            .where(and(eq(students.schoolId, params.schoolId), eq(students.studentCode, row.studentCode)));
 
-        const insertedEnrollments = await tx
-          .insert(enrollments)
-          .values(enrollmentValues)
-          .returning();
+          const classSectionId = classSectionMap.get(`${row.className.toUpperCase()}:${row.sectionName.toUpperCase()}`)!;
+          const guardianId = guardianMap.get(row.guardianPhone)!;
 
-        await tx.insert(studentGuardians).values(studentGuardianValues);
+          if (existingStudent) {
+            await tx
+              .update(students)
+              .set({
+                name: row.name,
+                nameBn: row.nameBn || existingStudent.nameBn,
+                banglarShikshaId: row.banglarShikshaId || existingStudent.banglarShikshaId,
+                gender: row.gender,
+                dateOfBirth: row.dateOfBirth || existingStudent.dateOfBirth,
+                updatedAt: new Date(),
+              })
+              .where(eq(students.id, existingStudent.id));
 
-        // Generate QR credentials for students
-        for (let j = 0; j < insertedStudents.length; j++) {
-          const s = insertedStudents[j];
-          const qr = await createQrCredential(tx, {
+            await tx
+              .update(enrollments)
+              .set({
+                classSectionId,
+                rollNumber: row.rollNumber,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(enrollments.schoolId, params.schoolId),
+                  eq(enrollments.studentId, existingStudent.id),
+                  eq(enrollments.academicYearId, academicYearId)
+                )
+              );
+
+            processedStudents.push({
+              student: existingStudent,
+              mode: 'UPDATED',
+              qrProvisioned: true,
+            });
+          } else {
+            const [newStudent] = await tx
+              .insert(students)
+              .values({
+                schoolId: params.schoolId,
+                studentCode: row.studentCode,
+                name: row.name,
+                nameBn: row.nameBn || null,
+                banglarShikshaId: row.banglarShikshaId || null,
+                gender: row.gender,
+                dateOfBirth: row.dateOfBirth || null,
+                status: 'ACTIVE',
+              })
+              .returning();
+
+            await tx.insert(enrollments).values({
+              schoolId: params.schoolId,
+              studentId: newStudent.id,
+              classSectionId,
+              academicYearId,
+              rollNumber: row.rollNumber,
+              startDate: new Date().toISOString().split('T')[0],
+              status: 'ACTIVE',
+            });
+
+            await tx.insert(studentGuardians).values({
+              studentId: newStudent.id,
+              guardianId,
+              isPrimary: true,
+            });
+
+            await createQrCredential(tx, {
+              schoolId: params.schoolId,
+              studentId: newStudent.id,
+            });
+
+            processedStudents.push({
+              student: newStudent,
+              mode: 'CREATED',
+              qrProvisioned: true,
+            });
+          }
+        }
+      } else {
+        // CREATE_ONLY: Batch inserts in chunks of 100
+        for (let i = 0; i < stagedRows.length; i += CHUNK_SIZE) {
+          const chunk = stagedRows.slice(i, i + CHUNK_SIZE);
+
+          const studentValues = chunk.map((r) => ({
             schoolId: params.schoolId,
-            studentId: s.id,
-          });
+            studentCode: r.studentCode,
+            name: r.name,
+            nameBn: r.nameBn || null,
+            banglarShikshaId: r.banglarShikshaId || null,
+            gender: r.gender,
+            dateOfBirth: r.dateOfBirth || null,
+            status: 'ACTIVE',
+          }));
 
-          createdStudents.push({
-            student: s,
-            enrollment: insertedEnrollments[j],
-            guardianId: guardianMap.get(chunk[j].guardianPhone),
-            qrSecretToken: qr.rawToken,
-          });
+          const insertedStudents = await tx
+            .insert(students)
+            .values(studentValues)
+            .returning();
+
+          const enrollmentValues = [];
+          const studentGuardianValues = [];
+
+          for (let j = 0; j < insertedStudents.length; j++) {
+            const s = insertedStudents[j];
+            const r = chunk[j];
+            const classSectionId = classSectionMap.get(`${r.className.toUpperCase()}:${r.sectionName.toUpperCase()}`)!;
+            const guardianId = guardianMap.get(r.guardianPhone)!;
+
+            enrollmentValues.push({
+              schoolId: params.schoolId,
+              studentId: s.id,
+              classSectionId,
+              academicYearId,
+              rollNumber: r.rollNumber,
+              startDate: new Date().toISOString().split('T')[0],
+              status: 'ACTIVE',
+            });
+
+            studentGuardianValues.push({
+              studentId: s.id,
+              guardianId,
+              isPrimary: true,
+            });
+          }
+
+          const insertedEnrollments = await tx
+            .insert(enrollments)
+            .values(enrollmentValues)
+            .returning();
+
+          await tx.insert(studentGuardians).values(studentGuardianValues);
+
+          for (let j = 0; j < insertedStudents.length; j++) {
+            const s = insertedStudents[j];
+            await createQrCredential(tx, {
+              schoolId: params.schoolId,
+              studentId: s.id,
+            });
+
+            processedStudents.push({
+              student: s,
+              enrollment: insertedEnrollments[j],
+              guardianId: guardianMap.get(chunk[j].guardianPhone),
+              mode: 'CREATED',
+              qrProvisioned: true,
+            });
+          }
         }
       }
 
@@ -617,8 +897,8 @@ export async function executeTransactionalImport(params: {
 
       return {
         importJobId: params.importJobId,
-        importedCount: createdStudents.length,
-        students: createdStudents,
+        importedCount: processedStudents.length,
+        students: processedStudents,
       };
     });
 

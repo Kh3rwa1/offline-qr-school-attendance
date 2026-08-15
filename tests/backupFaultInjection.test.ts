@@ -135,6 +135,6 @@ describe('Backup Correctness & Fault Injection Test Suite', () => {
 
     const res = await backupReplicationService.replicateBackup(encFile);
     expect(res.success).toBe(false);
-    expect(res.error).toBe('S3_REPLICATION_NOT_CONFIGURED');
+    expect(res.error).toBe('R2_REPLICATION_NOT_CONFIGURED');
   });
 });

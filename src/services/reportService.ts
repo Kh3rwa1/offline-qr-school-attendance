@@ -574,6 +574,78 @@ export async function getAbsentStudentReport(
   };
 }
 
+/**
+ * Universal un-truncated export query for absent students (no 50-row pagination cap)
+ */
+export async function getAllAbsentStudentsForExport(
+  schoolId: string,
+  params: {
+    classSectionId?: string;
+    startDate: string;
+    endDate?: string;
+    includeGuardianPhone?: boolean;
+  }
+) {
+  const { classSectionId, startDate, endDate = startDate, includeGuardianPhone = false } = params;
+
+  let sessionConditions = [
+    eq(attendanceSessions.schoolId, schoolId),
+    gte(attendanceSessions.sessionDate, startDate),
+    lte(attendanceSessions.sessionDate, endDate),
+    eq(attendanceRecords.status, 'ABSENT'),
+  ];
+
+  if (classSectionId) {
+    sessionConditions.push(eq(attendanceSessions.classSectionId, classSectionId));
+  }
+
+  const absentees = await db
+    .select({
+      recordId: attendanceRecords.id,
+      studentId: students.id,
+      studentCode: students.studentCode,
+      studentName: students.name,
+      studentNameBn: students.nameBn,
+      sessionDate: attendanceSessions.sessionDate,
+      className: classSections.className,
+      sectionName: classSections.sectionName,
+      status: attendanceRecords.status,
+    })
+    .from(attendanceRecords)
+    .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
+    .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
+    .innerJoin(students, eq(attendanceRecords.studentId, students.id))
+    .where(and(...sessionConditions))
+    .orderBy(desc(attendanceSessions.sessionDate), desc(attendanceRecords.id));
+
+  let guardianMap: Record<string, string> = {};
+  if (includeGuardianPhone && absentees.length > 0) {
+    const studentIds: string[] = Array.from(new Set(absentees.map((a: any) => String(a.studentId))));
+    for (let i = 0; i < studentIds.length; i += 500) {
+      const chunk: string[] = studentIds.slice(i, i + 500);
+      const gRows = await db
+        .select({
+          studentId: studentGuardians.studentId,
+          phoneNumber: guardians.phoneNumber,
+        })
+        .from(studentGuardians)
+        .innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+        .where(and(eq(guardians.schoolId, schoolId), inArray(studentGuardians.studentId, chunk)));
+
+      for (const g of gRows) {
+        if (g.phoneNumber) {
+          guardianMap[g.studentId] = g.phoneNumber;
+        }
+      }
+    }
+  }
+
+  return absentees.map((a: any) => ({
+    ...a,
+    guardianPhone: includeGuardianPhone ? guardianMap[a.studentId] || null : undefined,
+  }));
+}
+
 // 6. Attendance Correction Report (Deterministic Cursor Pagination)
 export async function getCorrectionReport(
   schoolId: string,
@@ -654,6 +726,49 @@ export async function getCorrectionReport(
     hasMore,
     limit,
   };
+}
+
+/**
+ * Universal un-truncated export query for corrections (no 50-row pagination cap)
+ */
+export async function getAllCorrectionsForExport(
+  schoolId: string,
+  startDate?: string,
+  endDate?: string
+) {
+  let conditions = [
+    eq(attendanceCorrections.schoolId, schoolId),
+  ];
+
+  if (startDate) {
+    conditions.push(gte(attendanceSessions.sessionDate, startDate));
+  }
+  if (endDate) {
+    conditions.push(lte(attendanceSessions.sessionDate, endDate));
+  }
+
+  return db
+    .select({
+      correctionId: attendanceCorrections.id,
+      sessionDate: attendanceSessions.sessionDate,
+      className: classSections.className,
+      sectionName: classSections.sectionName,
+      studentCode: students.studentCode,
+      studentName: students.name,
+      previousStatus: attendanceCorrections.previousStatus,
+      newStatus: attendanceCorrections.newStatus,
+      correctionReason: attendanceCorrections.reason,
+      correctedByName: users.fullName,
+      correctedAt: attendanceCorrections.correctedAt,
+    })
+    .from(attendanceCorrections)
+    .innerJoin(attendanceRecords, eq(attendanceCorrections.attendanceRecordId, attendanceRecords.id))
+    .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
+    .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
+    .innerJoin(students, eq(attendanceRecords.studentId, students.id))
+    .leftJoin(users, eq(attendanceCorrections.correctedBy, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(attendanceCorrections.correctedAt), desc(attendanceCorrections.id));
 }
 
 // 7. Teacher / Session Audit Report (Deterministic Cursor Pagination)

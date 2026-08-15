@@ -7,7 +7,9 @@ import {
   getMonthlyClassRegister,
   getStudentAttendanceHistory,
   getAbsentStudentReport,
+  getAllAbsentStudentsForExport,
   getCorrectionReport,
+  getAllCorrectionsForExport,
   getTeacherSessionReport,
   generateXLSXExport,
   generateCSVExport,
@@ -431,7 +433,7 @@ reportRouter.get(
         }
         const includeGuardianPhone = reqGuardianPhone && (userRole === 'SCHOOL_ADMIN' || userRole === 'SUPER_ADMIN');
 
-        const data = await getAbsentStudentReport(schoolId, {
+        const absentees = await getAllAbsentStudentsForExport(schoolId, {
           classSectionId,
           startDate,
           endDate,
@@ -441,7 +443,7 @@ reportRouter.get(
         headers = ['Date', 'Class', 'Section', 'Student Code', 'Name', 'Name (Bengali)'];
         if (includeGuardianPhone) headers.push('Guardian Phone');
 
-        rows = data.absentees.map((a: any) => {
+        rows = absentees.map((a: any) => {
           const r: (string | number | boolean | null)[] = [
             a.sessionDate,
             a.className,
@@ -461,10 +463,10 @@ reportRouter.get(
         }
         const startDate = req.query.startDate as string;
         const endDate = req.query.endDate as string;
-        const data = await getCorrectionReport(schoolId, startDate, endDate);
+        const corrections = await getAllCorrectionsForExport(schoolId, startDate, endDate);
 
         headers = ['Correction ID', 'Date', 'Class', 'Section', 'Student Code', 'Student Name', 'Previous Status', 'New Status', 'Reason', 'Corrected By', 'Corrected At'];
-        rows = data.corrections.map((c: any) => [
+        rows = corrections.map((c: any) => [
           c.correctionId,
           c.sessionDate,
           c.className,

@@ -15,6 +15,7 @@ if [ -z "${POSTGRES_DB}" ]; then
   exit 1
 fi
 
+BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET:-}}"
 if [ -z "${BACKUP_ENCRYPTION_KEY}" ]; then
   echo "Error: BACKUP_ENCRYPTION_KEY environment variable is required." >&2
   exit 1

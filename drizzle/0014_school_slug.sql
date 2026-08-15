@@ -60,13 +60,47 @@ CREATE INDEX IF NOT EXISTS "demo_requests_created_at_idx" ON "demo_requests" ("c
 CREATE INDEX IF NOT EXISTS "demo_requests_status_idx" ON "demo_requests" ("status");
 --> statement-breakpoint
 
+-- 3. Row Level Security for demo_requests
+ALTER TABLE "demo_requests" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "demo_requests" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
+
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS demo_requests_system_policy ON "demo_requests";
+  CREATE POLICY demo_requests_system_policy ON "demo_requests"
+    USING (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+    )
+    WITH CHECK (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+    );
+
+  DROP POLICY IF EXISTS demo_requests_app_insert_policy ON "demo_requests";
+  CREATE POLICY demo_requests_app_insert_policy ON "demo_requests"
+    FOR INSERT
+    WITH CHECK (true);
+END $$;
+--> statement-breakpoint
+
 -- Grant permissions to db roles
 DO $$
 BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
-    GRANT SELECT, INSERT ON TABLE "demo_requests" TO attendance_app;
+    GRANT INSERT ON TABLE "demo_requests" TO attendance_app;
   END IF;
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
-    GRANT ALL ON TABLE "demo_requests" TO attendance_system;
+    GRANT SELECT, INSERT, UPDATE ON TABLE "demo_requests" TO attendance_system;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN
+    GRANT SELECT, UPDATE ON TABLE "demo_requests" TO attendance_worker;
   END IF;
 END $$;
+

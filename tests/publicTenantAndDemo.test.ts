@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createApp } from '../server';
-import { db } from '../src/db';
+import { db, withSystemContext } from '../src/db';
 import { schools, demoRequests, auditLogs } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 import type { Server } from 'http';
@@ -19,16 +19,18 @@ describe('Public Tenant Resolution, Demo Lead Capture & Bound Workspace Login', 
     seededData = await seedDatabase();
 
     // Create a suspended test school
-    const [suspended] = await db
-      .insert(schools)
-      .values({
-        name: 'Suspended Test Academy',
-        slug: 'suspended-test-academy-9999',
-        udiseCode: '19100109999',
-        district: 'Kolkata',
-        status: 'SUSPENDED',
-      })
-      .returning();
+    const [suspended] = await withSystemContext(async (tx) => {
+      return tx
+        .insert(schools)
+        .values({
+          name: 'Suspended Test Academy',
+          slug: 'suspended-test-academy-9999',
+          udiseCode: '19100109999',
+          district: 'Kolkata',
+          status: 'SUSPENDED',
+        })
+        .returning();
+    });
     suspendedSchoolId = suspended.id;
 
     const app = await createApp();

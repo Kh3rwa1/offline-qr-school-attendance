@@ -115,9 +115,10 @@ async function runRfidIsolationSuite(migrationPool: pg.Pool, appPool: pg.Pool) {
   const migClient = await migrationPool.connect();
   try {
     await migClient.query('BEGIN');
+    const rfidRand = Math.random().toString(36).substring(2, 7);
     await migClient.query(
-      'INSERT INTO schools (id, name, district, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)',
-      [schoolA, 'RFID RLS School A', 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', 'Test', 'ACTIVE']
+      'INSERT INTO schools (id, name, slug, district, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+      [schoolA, 'RFID RLS School A', `rfid-rls-school-a-${rfidRand}`, 'Test', 'ACTIVE', schoolB, 'RFID RLS School B', `rfid-rls-school-b-${rfidRand}`, 'Test', 'ACTIVE']
     );
     await migClient.query(
       'INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5)',
@@ -214,7 +215,11 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
   const adminHash = await argon2.hash('AdminPassword123!', { type: argon2.argon2id });
 
   await migrationPool.query('BEGIN');
-  await migrationPool.query('INSERT INTO schools (id, name, district, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, 'RLS School A', 'Test', 'ACTIVE', schoolB, 'RLS School B', 'Test', 'ACTIVE']);
+  const rlsRand = Math.random().toString(36).substring(2, 7);
+  await migrationPool.query(
+    'INSERT INTO schools (id, name, slug, district, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+    [schoolA, 'RLS School A', `rls-school-a-${rlsRand}`, 'Test', 'ACTIVE', schoolB, 'RLS School B', `rls-school-b-${rlsRand}`, 'Test', 'ACTIVE']
+  );
   await migrationPool.query('INSERT INTO users (id, full_name, phone_number, password_hash, status) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)', [teacherId, 'RLS Teacher', teacherPhone, teacherHash, 'ACTIVE', adminId, 'RLS Admin', `+9197${String(Date.now()).slice(-8)}`, adminHash, 'ACTIVE']);
   await migrationPool.query('INSERT INTO school_memberships (school_id, user_id, role, status) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)', [schoolA, teacherId, 'TEACHER', 'ACTIVE', schoolB, adminId, 'SCHOOL_ADMIN', 'ACTIVE']);
   await migrationPool.query('INSERT INTO academic_years (id, school_id, name, start_date, end_date, is_current) VALUES ($1, $2, $3, $4, $5, true)', [academicYearId, schoolA, '2026', '2026-01-01', '2026-12-31']);

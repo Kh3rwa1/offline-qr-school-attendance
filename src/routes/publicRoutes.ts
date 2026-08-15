@@ -26,18 +26,20 @@ publicRouter.get(
         });
       }
 
-      const [school] = await db
-        .select({
-          id: schools.id,
-          name: schools.name,
-          slug: schools.slug,
-          district: schools.district,
-          block: schools.block,
-          status: schools.status,
-          preferredLanguage: schools.preferredLanguage,
-        })
-        .from(schools)
-        .where(eq(schools.slug, normalizedSlug));
+      const [school] = await withSystemContext(async (tx) => {
+        return tx
+          .select({
+            id: schools.id,
+            name: schools.name,
+            slug: schools.slug,
+            district: schools.district,
+            block: schools.block,
+            status: schools.status,
+            preferredLanguage: schools.preferredLanguage,
+          })
+          .from(schools)
+          .where(eq(schools.slug, normalizedSlug));
+      });
 
       if (!school) {
         return res.status(404).json({

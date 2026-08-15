@@ -55,7 +55,6 @@ export function validateProductionEnv() {
       'CSRF_SECRET',
       'REDIS_KEY_HMAC_SECRET',
       'METRICS_AUTH_TOKEN',
-      'KMS_MASTER_KEY',
       'BACKUP_ENCRYPTION_KEY',
       'MIGRATION_DB_PASSWORD',
       'APP_DB_PASSWORD',
@@ -63,7 +62,7 @@ export function validateProductionEnv() {
       'AUTH_DB_PASSWORD',
     ];
     if (process.env.FEATURE_RFID === 'true') {
-      secretVars.push('RFID_HMAC_SECRET', 'RFID_CARD_MASTER_KEY');
+      secretVars.push('RFID_HMAC_SECRET', 'RFID_CARD_MASTER_KEY', 'KMS_MASTER_KEY');
     }
 
     for (const varName of secretVars) {
@@ -76,6 +75,12 @@ export function validateProductionEnv() {
     if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
       throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
     }
+
+    const backupKey = process.env.BACKUP_ENCRYPTION_KEY;
+    if (backupKey && backupKey.length < 32) {
+      throw new Error('BACKUP_ENCRYPTION_KEY must be at least 32 characters in production mode');
+    }
+
     if (parsed.COMPONENT === 'web') {
       const authDbUrl = process.env.AUTH_DATABASE_URL;
       if (authDbUrl) {
@@ -113,14 +118,14 @@ export function validateProductionEnv() {
         if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
           throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode when FEATURE_RFID is enabled');
         }
-      }
 
-      // KMS configuration: require explicit key management in production
-      const kmsMasterKey = process.env.KMS_MASTER_KEY;
-      const awsKmsArn = process.env.AWS_KMS_KEY_ARN;
-      const gcpKmsId = process.env.GCP_KMS_RESOURCE_ID;
-      if (!kmsMasterKey && !awsKmsArn && !gcpKmsId) {
-        throw new Error('FATAL_KMS_CONFIGURATION: Production mode requires explicit key management. Set KMS_MASTER_KEY, AWS_KMS_KEY_ARN, or GCP_KMS_RESOURCE_ID.');
+        // KMS configuration: require explicit key management only when RFID is enabled
+        const kmsMasterKey = process.env.KMS_MASTER_KEY;
+        const awsKmsArn = process.env.AWS_KMS_KEY_ARN;
+        const gcpKmsId = process.env.GCP_KMS_RESOURCE_ID;
+        if (!kmsMasterKey && !awsKmsArn && !gcpKmsId) {
+          throw new Error('FATAL_KMS_CONFIGURATION: Production mode with FEATURE_RFID=true requires explicit key management. Set KMS_MASTER_KEY, AWS_KMS_KEY_ARN, or GCP_KMS_RESOURCE_ID.');
+        }
       }
     }
   }

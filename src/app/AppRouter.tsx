@@ -15,10 +15,10 @@ import TeacherDashboard from '../dashboards/teacher/TeacherDashboard';
 import ReportViewerDashboard from '../dashboards/report-viewer/ReportViewerDashboard';
 import RfidOperatorDashboard from '../dashboards/rfid-operator/RfidOperatorDashboard';
 
-// Lazy load secondary subpages for code splitting
 const SchoolsOverview = lazy(() => import('../dashboards/super-admin/SchoolsOverview'));
 const SecurityOverview = lazy(() => import('../dashboards/super-admin/SecurityOverview'));
 const AuditOverview = lazy(() => import('../dashboards/super-admin/AuditOverview'));
+const SetupWizardPage = lazy(() => import('./SetupWizardPage'));
 
 const UserManagement = lazy(() => import('../dashboards/school-admin/UserManagement'));
 const StudentRoster = lazy(() => import('../dashboards/school-admin/StudentRoster'));
@@ -91,6 +91,7 @@ export const AppRouter: React.FC = () => {
         {/* Public Acquisition Landing Page */}
         <Route path="/" element={<HomeOrLanding />} />
         <Route path="/welcome" element={<LandingPage />} />
+        <Route path="/setup" element={<SetupWizardPage />} />
 
         {/* Global and Path-Based Login Routes */}
         <Route path="/login" element={<LoginPage />} />

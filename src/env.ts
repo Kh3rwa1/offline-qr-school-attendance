@@ -13,6 +13,7 @@ const envSchema = z.object({
   CSRF_SECRET: z.string().min(32).optional(),
   ALLOW_TEST_BYPASS: z.string().default('false'),
   APP_URL: z.string().optional(),
+  FEATURE_RFID: z.string().default('false'),
   
   KMS_MASTER_KEY: z.string().optional(),
   AUTH_DATABASE_URL: z.string().optional(),
@@ -54,8 +55,6 @@ export function validateProductionEnv() {
       'CSRF_SECRET',
       'REDIS_KEY_HMAC_SECRET',
       'METRICS_AUTH_TOKEN',
-      'RFID_HMAC_SECRET',
-      'RFID_CARD_MASTER_KEY',
       'KMS_MASTER_KEY',
       'BACKUP_ENCRYPTION_KEY',
       'MIGRATION_DB_PASSWORD',
@@ -63,6 +62,10 @@ export function validateProductionEnv() {
       'SYSTEM_DB_PASSWORD',
       'AUTH_DB_PASSWORD',
     ];
+    if (process.env.FEATURE_RFID === 'true') {
+      secretVars.push('RFID_HMAC_SECRET', 'RFID_CARD_MASTER_KEY');
+    }
+
     for (const varName of secretVars) {
       const val = process.env[varName];
       if (val && (val.includes('replace-with') || val.includes('placeholder') || val.includes('changeme'))) {
@@ -82,13 +85,20 @@ export function validateProductionEnv() {
       if (!hmacSecret || hmacSecret.length < 32) {
         throw new Error('REDIS_KEY_HMAC_SECRET must be at least 32 characters in production mode');
       }
-      const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
-      if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
-        throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode');
+      const metricsToken = process.env.METRICS_AUTH_TOKEN;
+      if (!metricsToken || metricsToken.length < 32) {
+        throw new Error('METRICS_AUTH_TOKEN must be at least 32 characters in production mode');
       }
-      const rfidCardMasterKey = process.env.RFID_CARD_MASTER_KEY;
-      if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
-        throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode for DESFire card proof validation');
+
+      if (process.env.FEATURE_RFID === 'true') {
+        const rfidHmacSecret = process.env.RFID_HMAC_SECRET;
+        if (!rfidHmacSecret || rfidHmacSecret.length < 32) {
+          throw new Error('RFID_HMAC_SECRET must be at least 32 characters in production mode when FEATURE_RFID is enabled');
+        }
+        const rfidCardMasterKey = process.env.RFID_CARD_MASTER_KEY;
+        if (!rfidCardMasterKey || rfidCardMasterKey.length < 32) {
+          throw new Error('RFID_CARD_MASTER_KEY must be at least 32 characters in production mode when FEATURE_RFID is enabled');
+        }
       }
 
       // KMS configuration: require explicit key management in production

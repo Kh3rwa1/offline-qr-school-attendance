@@ -132,16 +132,18 @@ export async function createApp() {
   app.use('/api/v1/schools', schoolRouter);
   app.use('/api/v1/schools', academicRouter);
   app.use('/api/v1/schools', studentRouter);
-  app.use('/api/v1/schools', importRouter);
+  app.use('/api/v1/schools', rateLimitPolicies.import, importRouter);
   app.use('/api/v1/schools', qrRouter);
-  app.use('/api/v1/schools', rfidRouter);
+  if (process.env.FEATURE_RFID === 'true') {
+    app.use('/api/v1/schools', rfidRouter);
+  }
   app.use('/api/v1/schools/:schoolId/attendance', attendanceRouter);
   app.use('/api/v1/schools/:schoolId/sync', rateLimitPolicies.sync, syncRouter);
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
   app.use('/api/v1/audit', platformAuditRouter);
-  app.use('/api/v1/system', rateLimitPolicies.generalApi, systemHealthRouter);
+  app.use('/api/v1/system', systemHealthRouter);
   app.use('/api/v1/schools/:schoolId/notifications', notificationRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
@@ -167,16 +169,14 @@ export async function createApp() {
     const distPath = path.resolve(process.cwd(), 'dist');
     const indexHtmlPath = path.resolve(distPath, 'index.html');
     if (!fs.existsSync(indexHtmlPath)) {
-      if (process.env.NODE_ENV === 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
+      if (process.env.NODE_ENV === 'production') {
         throw new Error(
           'FATAL_PRODUCTION_ASSET_MISSING: dist/index.html was not found. Build the frontend production bundle before starting the server.'
         );
       }
     }
 
-    const indexHtmlContent = fs.existsSync(indexHtmlPath)
-      ? fs.readFileSync(indexHtmlPath, 'utf8')
-      : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';
+    const indexHtmlContent = fs.existsSync(indexHtmlPath) ? fs.readFileSync(indexHtmlPath, 'utf8') : '';
 
     app.use(express.static(distPath));
 

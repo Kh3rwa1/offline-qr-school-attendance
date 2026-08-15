@@ -148,8 +148,10 @@ export async function createAbsenceNotificationJobs(params: {
   schoolId: string;
   attendanceSessionId: string;
   actorId?: string;
+  tx?: any;
 }) {
-  const { schoolId, attendanceSessionId } = params;
+  const { schoolId, attendanceSessionId, tx } = params;
+  const client = tx || db;
 
   // Rule: Check school SMS settings. If school SMS is disabled, do not create jobs.
   const smsSettings = await getSchoolSmsSettings(schoolId);
@@ -162,7 +164,7 @@ export async function createAbsenceNotificationJobs(params: {
   }
 
   // Fetch session details
-  const [session] = await db
+  const [session] = await client
     .select()
     .from(attendanceSessions)
     .where(and(eq(attendanceSessions.id, attendanceSessionId), eq(attendanceSessions.schoolId, schoolId)));
@@ -181,14 +183,14 @@ export async function createAbsenceNotificationJobs(params: {
     : 'v1';
 
   // Fetch School & Class info
-  const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
-  const [classSec] = await db
+  const [school] = await client.select().from(schools).where(eq(schools.id, schoolId));
+  const [classSec] = await client
     .select()
     .from(classSections)
     .where(eq(classSections.id, session.classSectionId));
 
   // Fetch absent students in this session
-  const absentRecords = await db
+  const absentRecords = await client
     .select({
       studentId: attendanceRecords.studentId,
       status: attendanceRecords.status,
@@ -213,7 +215,7 @@ export async function createAbsenceNotificationJobs(params: {
   const studentIds = absentRecords.map((r: any) => r.studentId);
 
   // Fetch student details & enrollments
-  const studentRows = await db
+  const studentRows = await client
     .select({
       studentId: students.id,
       name: students.name,
@@ -247,7 +249,7 @@ export async function createAbsenceNotificationJobs(params: {
   const studentMap = new Map<string, StudentRow>(studentRows.map((s: any) => [s.studentId, s]));
 
   // Fetch Primary Guardians
-  const guardianRows = await db
+  const guardianRows = await client
     .select({
       studentId: studentGuardians.studentId,
       guardianName: guardians.name,
@@ -268,7 +270,7 @@ export async function createAbsenceNotificationJobs(params: {
 
   // Fetch School Custom Template or fallback to system default
   const prefLang = school?.preferredLanguage || 'bn';
-  const customTemplates = await db
+  const customTemplates = await client
     .select()
     .from(notificationTemplates)
     .where(
@@ -291,7 +293,7 @@ export async function createAbsenceNotificationJobs(params: {
 
     // Handle Missing Guardian Phone
     if (!recipientPhone) {
-      const [job] = await db
+      const [job] = await client
         .insert(notificationJobs)
         .values({
           schoolId,
@@ -314,7 +316,7 @@ export async function createAbsenceNotificationJobs(params: {
 
     // Handle Guardian Opt-Out
     if (g?.smsOptOut) {
-      const [job] = await db
+      const [job] = await client
         .insert(notificationJobs)
         .values({
           schoolId,
@@ -342,7 +344,7 @@ export async function createAbsenceNotificationJobs(params: {
       const isAllowed = allowlist.some((num) => num.replace(/\s+/g, '') === cleanPhone);
 
       if (!isAllowed) {
-        const [job] = await db
+        const [job] = await client
           .insert(notificationJobs)
           .values({
             schoolId,
@@ -376,7 +378,7 @@ export async function createAbsenceNotificationJobs(params: {
     });
 
     // Insert job into database with idempotency uniqueness rule
-    const [job] = await db
+    const [job] = await client
       .insert(notificationJobs)
       .values({
         schoolId,

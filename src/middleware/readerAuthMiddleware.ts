@@ -124,7 +124,7 @@ export const readerAuthMiddleware = async (
 
     const isValidSignature = verifyEnvelopeSignature(normalizedEnvelope, readerSignature, hmacSecret);
 
-    if (!isValidSignature && process.env.NODE_ENV !== 'test') {
+    if (!isValidSignature) {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Invalid reader HMAC signature' });
     }
 

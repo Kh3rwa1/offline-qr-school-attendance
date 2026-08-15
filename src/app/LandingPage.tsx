@@ -18,7 +18,6 @@ import {
   ChevronRight,
   Layers,
   Sparkles,
-  PhoneCall,
   Laptop,
   Check,
   Activity,
@@ -30,371 +29,113 @@ import {
   ExternalLink,
   ChevronDown,
   ArrowUpRight,
-  HeartHandshake,
-  BookOpen,
-  MessageSquareText,
-  Languages,
   Smartphone,
   CheckCircle,
   FileCheck,
-  BellRing,
-  Sun,
-  Smile,
-  XCircle,
+  MessageSquareText,
+  Lightbulb,
+  BookOpen,
+  ArrowDownToLine,
+  FileText,
+  School,
+  QrCode,
+  Globe,
 } from 'lucide-react';
 import { Button, TextField, Dialog, Badge, Toast } from '../components/ui';
-
-type LanguageMode = 'english' | 'bengalish' | 'hinglish';
 
 interface OnboardingStage {
   step: number;
   key: string;
-  title: Record<LanguageMode, string>;
-  subtitle: Record<LanguageMode, string>;
-  icon: React.ReactNode;
-  details: Record<LanguageMode, string[]>;
-  deliverable: Record<LanguageMode, string>;
+  name: string;
+  title: string;
+  subtitle: string;
+  deliverable: string;
+  impact: string;
 }
 
 const ONBOARDING_STAGES: OnboardingStage[] = [
   {
     step: 1,
     key: 'discover',
-    title: {
-      english: '1. Discover (See How It Works)',
-      bengalish: '1. Discover (Jene Nin)',
-      hinglish: '1. Discover (Janiye)',
-    },
-    subtitle: {
-      english: 'See how any standard mobile phone or card takes roll call in 1 second',
-      bengalish: 'Dekhun kivabe sadharan mobile camera ba card diye 1 second-e hajira hoy',
-      hinglish: 'Dekhiye kaise simple mobile camera ya card se 1 second me attendance lagti hai',
-    },
-    icon: <Zap className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'No costly hardware — runs on simple Android phones or tablets',
-        'Works 100% offline — zero internet needed inside classrooms',
-        'Print friendly student QR cards on regular school paper',
-      ],
-      bengalish: [
-        'Kono dami machine lagbe na — sadharan Android phone-e chole',
-        'Internet na thakleo 100% bhabe offline hajira joma hoy',
-        'Student-der printable QR card ba smartcard bebohar kora jay',
-      ],
-      hinglish: [
-        'Koi mehengi machine nahi chahiye — simple Android phone me chalta hai',
-        'Bina internet ke bhi 100% offline attendance record hoti hai',
-        'Students ke printable QR card ya smartcard use kar sakte hain',
-      ],
-    },
-    deliverable: {
-      english: 'Simple School Plan & Demo Card Sample',
-      bengalish: 'School-er jonno Sahaj Plan & Demo Card',
-      hinglish: 'School ke liye Simple Plan & Demo Card',
-    },
+    name: '1. Discover',
+    title: 'Discover Offline-First Infrastructure',
+    subtitle: 'See how simple mobile camera or student smartcards take roll call in 1 second with zero hardware costs.',
+    deliverable: 'Platform Architecture & Sample Student Card',
+    impact: 'No costly machines needed',
   },
   {
     step: 2,
     key: 'understand',
-    title: {
-      english: '2. Understand (Government Rules & Privacy)',
-      bengalish: '2. Understand (Bujhe Nin)',
-      hinglish: '2. Understand (Samjhiye)',
-    },
-    subtitle: {
-      english: 'UDISE+ government format compliance and student safety made simple',
-      bengalish: 'Shorkari UDISE+ niyam o student privacy-r shob hishab porishkar',
-      hinglish: 'Sarkari UDISE+ niyam aur student privacy ka poora hisaab clear',
-    },
-    icon: <Layers className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'All government UDISE+ attendance reports ready in 1 click',
-        'Student data stays completely safe and private to your school',
-        'Stops proxy attendance, buddy punching, and paper ledger errors',
-      ],
-      bengalish: [
-        'UDISE+ format-e shob shorkari report 1-click-e ready',
-        'Shikkharthi-der data ekdom shurokkhito thake',
-        'Kono vul ba fake hajira howar sujog nei',
-      ],
-      hinglish: [
-        'UDISE+ format me saari sarkari report 1-click me ready',
-        'Bachhon ka data 100% safe aur secure rehta hai',
-        'Koi galat ya fake attendance lagne ka chance nahi',
-      ],
-    },
-    deliverable: {
-      english: 'UDISE+ & Government Compliance Checklist',
-      bengalish: 'UDISE+ o Shorkari Niyam Checklist',
-      hinglish: 'UDISE+ aur Sarkari Compliance Checklist',
-    },
+    name: '2. Understand',
+    title: 'Understand Compliance & Privacy',
+    subtitle: 'UDISE+ standardized format data exports and strict student privacy guarantees with zero cloud leaks.',
+    deliverable: 'UDISE+ & DPDP Compliance Checklist',
+    impact: '100% safe & government ready',
   },
   {
     step: 3,
     key: 'request_demo',
-    title: {
-      english: '3. Request Demo (Free Live Trial)',
-      bengalish: '3. Request Demo (Demo Dekhun)',
-      hinglish: '3. Request Demo (Demo Dekhiye)',
-    },
-    subtitle: {
-      english: 'A 15-minute guided walkthrough tailored for your teachers and principal',
-      bengalish: 'Apnar school-er jonno 15 minute-er ekta live mobile trial session',
-      hinglish: 'Aapke school ke liye 15 minute ka live mobile trial session',
-    },
-    icon: <Laptop className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'Hands-on test for Headmasters and class teachers',
-        'Turn off Wi-Fi and mobile data to test offline scanning yourself',
-        'See student names in English, Bengali, or Hindi on the screen',
-      ],
-      bengalish: [
-        'Headmaster, Mastermashay o Staff-der live bebohar dekha',
-        'Internet bondho kore nijer chokhe offline scan test kora',
-        'Bangla o English-e chatro-chatri-der nam dekha',
-      ],
-      hinglish: [
-        'Principal aur Teachers ka live working demo',
-        'Internet band karke live offline scanning check karna',
-        'Hindi aur English me student list dekhna',
-      ],
-    },
-    deliverable: {
-      english: 'Free Trial Workspace for Your School',
-      bengalish: 'Apnar School-er Free Demo Trial',
-      hinglish: 'Aapke School ka Free Demo Trial',
-    },
+    name: '3. Request Demo',
+    title: 'Hands-On Interactive Trial',
+    subtitle: 'A 15-minute live guided sandbox session for your Headmaster and teachers to test offline roll calls.',
+    deliverable: 'Custom Institutional Demo Workspace',
+    impact: 'Test offline mode yourself',
   },
   {
     step: 4,
     key: 'agreement',
-    title: {
-      english: '4. Sign Agreement (Simple Agreement)',
-      bengalish: '4. Sign Agreement (Shorol Chukti)',
-      hinglish: '4. Sign Agreement (Aasan Agreement)',
-    },
-    subtitle: {
-      english: 'Straightforward school partnership agreement with no hidden lock-ins',
-      bengalish: 'School ba Education Board-er shathe shorol digital shomjhouta',
-      hinglish: 'School ya Education Board ke saath aasan digital agreement',
-    },
-    icon: <ShieldCheck className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'Your school owns 100% of student and attendance records',
-        '365-day dedicated teacher support and automatic backup guarantee',
-        'Card delivery and teacher setup schedule finalized',
-      ],
-      bengalish: [
-        'Student privacy o shob data school-er nijer thakbe',
-        'Bocharer 365 din support o shob shomoy uptime nishchit',
-        'Proyojon moto card o scanner delivery schedule',
-      ],
-      hinglish: [
-        'Students ka data poori tarah school ki property rahega',
-        'Saal ke 365 din support aur smooth service ki guarantee',
-        'Card aur scanner delivery ki simple planning',
-      ],
-    },
-    deliverable: {
-      english: 'Signed Simple Partnership Agreement',
-      bengalish: 'Digital Shomjhouta Potro',
-      hinglish: 'Digital Agreement Document',
-    },
+    name: '4. Sign Agreement',
+    title: 'Simple Institutional Agreement',
+    subtitle: 'Straightforward school SLA and governance agreement ensuring your school retains 100% data ownership.',
+    deliverable: 'Signed Institutional Agreement',
+    impact: 'Zero lock-in commitment',
   },
   {
     step: 5,
     key: 'provision',
-    title: {
-      english: '5. Provision School (Your School Link)',
-      bengalish: '5. Provision School (School Setup)',
-      hinglish: '5. Provision School (School Setup)',
-    },
-    subtitle: {
-      english: 'Generate a stable workspace path /s/green-valley — your school safe digital portal',
-      bengalish: 'Generate a stable workspace path /s/green-valley — school-er nijer safe portal link',
-      hinglish: 'Generate a stable workspace path /s/green-valley — school ka apna secure login link',
-    },
-    icon: <Building2 className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'Easy website link created for your school (e.g. /s/green-valley)',
-        'Teachers and Headmaster log in using their mobile phone number',
-        'All student data locked with bank-level encryption',
-      ],
-      bengalish: [
-        'School-er nijer sahaj link toiri hoy (e.g. /s/model-school)',
-        'Headmaster o Teacher-der phone number diye login ready',
-        'Shob data AES-256 encrypted lockers-e shurokkhito',
-      ],
-      hinglish: [
-        'School ka apna aasan link ban jaata hai (e.g. /s/model-school)',
-        'Principal aur Teachers ke mobile number se direct login ready',
-        'Saara data AES-256 bank-level security me protected',
-      ],
-    },
-    deliverable: {
-      english: 'School Login Portal & Staff Passwords',
-      bengalish: 'School-er Login Portal o Password',
-      hinglish: 'School ka Login Portal aur Password',
-    },
+    name: '5. Provision School',
+    title: 'Provision School Portal',
+    subtitle: 'Generate a stable workspace path /s/green-valley — isolated school workspace with phone login.',
+    deliverable: 'Isolated School Workspace & Admin Credentials',
+    impact: 'Generate a stable workspace path /s/green-valley',
   },
   {
     step: 6,
     key: 'import_students',
-    title: {
-      english: '6. Import Students (Add Student Names)',
-      bengalish: '6. Import Students (Chatro-Chatri Nam Tulun)',
-      hinglish: '6. Import Students (Baccho ke Naam Chadhayein)',
-    },
-    subtitle: {
-      english: 'Upload one Excel sheet to add 500 to 5,000 students in 2 seconds',
-      bengalish: 'Excel file upload kore 2 second-e 500 theke 5,000 student-er nam tulun',
-      hinglish: 'Excel file upload karke 2 second me 500 se 5,000 students ke naam chadhayein',
-    },
-    icon: <FileSpreadsheet className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'Upload your existing class list in Excel or CSV format',
-        'Roll numbers and class sections auto-organized automatically',
-        'Download ready-to-print ID cards with QR codes in 1 click',
-      ],
-      bengalish: [
-        'Ekta Excel sheet upload korlei shob class o section toiri',
-        'Roll number o student code automatic check hoye jay',
-        '1-click-e shob student-er QR card print korar file ready',
-      ],
-      hinglish: [
-        'Sirf ek Excel sheet upload karte hi saare class aur section ready',
-        'Roll number aur student code automatically check ho jaate hain',
-        '1-click me saare students ke QR card print karne ki file ready',
-      ],
-    },
-    deliverable: {
-      english: 'Verified Student Directory & Printable Cards',
-      bengalish: 'Verified Active Student List o Print Cards',
-      hinglish: 'Verified Student List aur Print Ready Cards',
-    },
+    name: '6. Import Students',
+    title: 'Import Student Rosters',
+    subtitle: 'Upload your existing Excel spreadsheet to onboard 500 to 5,000 students and generate printable QR cards.',
+    deliverable: 'Verified Active Student Directory',
+    impact: 'Ready in 2 seconds',
   },
   {
     step: 7,
     key: 'train_staff',
-    title: {
-      english: '7. Train Staff (5-Minute Teacher Training)',
-      bengalish: '7. Train Staff (5-Minute-e Shikhun)',
-      hinglish: '7. Train Staff (5-Minute me Seekhein)',
-    },
-    subtitle: {
-      english: 'Simple 5-minute phone tutorial for teachers of any age or tech background',
-      bengalish: 'Mastermashay-der 5 minute-er sahaj mobile training',
-      hinglish: 'Teachers ke liye 5 minute ki aasan mobile training',
-    },
-    icon: <Users className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'Teachers open the app on their phone and point at student cards',
-        'Take roll call for 40 students in less than 90 seconds',
-        'Absent student list automatically appears on Headmaster dashboard',
-      ],
-      bengalish: [
-        'Shikkhak-ra nijeder mobile-e app khule scan shuru korben',
-        '40 jon student-er roll call sesh matro 90 second-e',
-        'Kono student absent thakle Headmaster-er phone-e summary dekhabe',
-      ],
-      hinglish: [
-        'Teachers apne mobile me app open karke turant scan shuru karenge',
-        '40 students ki attendance sirf 90 second me complete',
-        'Koi student absent ho to Principal ke phone par turant summary',
-      ],
-    },
-    deliverable: {
-      english: 'Teacher Quick-Start Guide Pocket Cards',
-      bengalish: 'Mastermashay Quick-Start Guide Cards',
-      hinglish: 'Teacher Quick-Start Guide Cards',
-    },
+    name: '7. Train Staff',
+    title: '5-Minute Teacher Training',
+    subtitle: 'Ultra-simple phone onboarding so any teacher can record full class attendance in under 90 seconds.',
+    deliverable: 'Teacher Quick-Start Pocket Cards',
+    impact: 'Anyone can use it instantly',
   },
   {
     step: 8,
     key: 'go_live',
-    title: {
-      english: '8. Go Live (Morning Rollout)',
-      bengalish: '8. Go Live (Shokal bela Rollout)',
-      hinglish: '8. Go Live (Subah ki Attendance Shuru)',
-    },
-    subtitle: {
-      english: 'Start every morning fast and stress-free right after morning prayer',
-      bengalish: 'Shokal-er prarthonar por shob class-e jhorer gotite hajira shuru',
-      hinglish: 'Subah prayer ke baad sabhi classes me fatafat attendance shuru',
-    },
-    icon: <Award className="w-6 h-6 text-forest-700 dark:text-forest-400" />,
-    details: {
-      english: [
-        'Students tap their card at the gate or teacher scans inside classroom',
-        'Parents instantly get SMS confirming their child reached safely',
-        'Headmaster sees live school attendance percentage on their screen',
-      ],
-      bengalish: [
-        'Gate ba classroom-e student-ra scan kore class-e dhukbe',
-        'Babama-der mobile-e sathe sathe shurokkha SMS chole jabe',
-        'Headmaster o District dashboard-e live hajira percentage dekhabe',
-      ],
-      hinglish: [
-        'Gate ya classroom me bache scan karke class me aayenge',
-        'Parents ke mobile par turant safe arrival SMS chala jayega',
-        'Principal aur District dashboard par live attendance report ready',
-      ],
-    },
-    deliverable: {
-      english: '100% Running Attendance System',
-      bengalish: '100% Shokol School Attendance System',
-      hinglish: '100% Successful School Attendance System',
-    },
-  },
-];
-
-const PREVIEW_SCHOOLS = [
-  {
-    slug: 'model-school-kolkata',
-    name: 'Model School Kolkata',
-    district: 'Kolkata, West Bengal',
-    udise: '19170100101',
-    students: '1,420 Students',
-    status: 'ACTIVE',
-  },
-  {
-    slug: 'rural-vidyalaya-bankura',
-    name: 'Rural Vidyalaya Bankura',
-    district: 'Bankura, West Bengal',
-    udise: '19130200402',
-    students: '680 Students',
-    status: 'ACTIVE',
-  },
-  {
-    slug: 'st-xaviers-delhi',
-    name: "St. Xavier's Academy",
-    district: 'Central Delhi',
-    udise: '07080100305',
-    students: '2,150 Students',
-    status: 'ACTIVE',
+    name: '8. Go Live',
+    title: 'Full Morning Rollout',
+    subtitle: 'Simultaneous classroom and gate scanning with automated parent arrival SMS alerts and live dashboard stats.',
+    deliverable: '100% Operational School System',
+    impact: 'School attendance up 150%',
   },
 ];
 
 export const LandingPage: React.FC = () => {
-  // English is now default as requested by user
-  const [lang, setLang] = useState<LanguageMode>('english');
-  const [selectedStageIndex, setSelectedStageIndex] = useState(0);
+  const [selectedStageIndex, setSelectedStageIndex] = useState(4); // Default to stage 5 for quick preview
   const [studentCount, setStudentCount] = useState<number>(750);
-  const [selectedSchoolIndex, setSelectedSchoolIndex] = useState(0);
 
   // Interactive Simulator State
-  const [simMode, setSimMode] = useState<'qr' | 'rfid'>('qr');
-  const [simOffline, setSimOffline] = useState(true);
   const [simScanning, setSimScanning] = useState(false);
   const [simSuccess, setSimSuccess] = useState(false);
-  const [simEvent, setSimEvent] = useState<{
+  const [simStudent, setSimStudent] = useState<{
     name: string;
     roll: string;
     class: string;
@@ -434,10 +175,10 @@ export const LandingPage: React.FC = () => {
       const now = new Date();
       const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
-      setSimEvent({
+      setSimStudent({
         ...pick,
         time: timeStr,
-        latencyMs: simMode === 'qr' ? 12 : 8,
+        latencyMs: 12,
       });
       setSimScanning(false);
       setSimSuccess(true);
@@ -485,644 +226,505 @@ export const LandingPage: React.FC = () => {
   };
 
   const selectedStage = ONBOARDING_STAGES[selectedStageIndex];
-  const activeSchool = PREVIEW_SCHOOLS[selectedSchoolIndex];
 
   // Calculated ROI Metrics
   const teacherHoursSavedPerYear = Math.round((studentCount * 0.08 * 220) / 60);
   const paperSavedPages = studentCount * 12 * 4;
 
   return (
-    <div className="min-h-screen bg-canvas text-ink flex flex-col selection:bg-forest-700 selection:text-white hero-mesh-light">
-      {/* Top Floating Navigation */}
-      <header className="sticky top-0 z-50 px-4 sm:px-10 py-3.5 flex items-center justify-between backdrop-blur-2xl bg-surface/85 border-b border-line/80 transition-all shadow-xs">
+    <div className="min-h-screen bg-[#fafbfc] text-[#0f172a] flex flex-col selection:bg-[#15803d] selection:text-white font-sans antialiased">
+      {/* Top Header Navbar */}
+      <header className="sticky top-0 z-50 px-4 sm:px-12 py-4 flex items-center justify-between backdrop-blur-md bg-white/90 border-b border-slate-200/80 transition-all">
+        {/* Brand Logo */}
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 rounded-xl bg-[#14532d] flex items-center justify-center text-white font-black text-sm font-display shadow-md shadow-emerald-900/20 group-hover:scale-105 transition-transform">
+            AZ
+          </div>
+          <span className="text-xl font-black text-[#0f172a] font-display tracking-tight">
+            AttendEase
+          </span>
+        </Link>
+
+        {/* Nav Links */}
+        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
+          <a href="#how-it-works" className="hover:text-[#14532d] transition-colors">
+            How it works
+          </a>
+          <a href="#plans" className="hover:text-[#14532d] transition-colors">
+            Plans
+          </a>
+          <a href="#case-studies" className="hover:text-[#14532d] transition-colors">
+            Case Studies
+          </a>
+          <a href="#roi" className="hover:text-[#14532d] transition-colors">
+            Calculator
+          </a>
+        </nav>
+
+        {/* Action Button */}
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-11 h-11 rounded-2xl bg-forest-700 dark:bg-forest-600 flex items-center justify-center text-white shadow-lg shadow-forest-700/25 group-hover:scale-105 transition-transform">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
-                <path d="M12 6a6 6 0 1 0 6 6 6 6 0 0 0-6-6zm0 10a4 4 0 1 1 4-4 4 4 0 0 1-4 4z" />
-              </svg>
-            </div>
-            <div>
-              <span className="text-2xl font-extrabold text-ink font-display tracking-tight group-hover:text-forest-700 dark:group-hover:text-forest-400 transition-colors">
-                AttendEase
-              </span>
-              <span className="hidden sm:inline-block ml-2 text-xs font-bold text-forest-700 dark:text-forest-400 bg-forest-50 dark:bg-forest-900/40 px-2.5 py-0.5 rounded-full border border-forest-200 dark:border-forest-800/40 font-mono">
-                Smart School OS
-              </span>
-            </div>
-          </Link>
-        </div>
-
-        {/* Language Switcher Pill */}
-        <div className="flex items-center p-1 rounded-full bg-surface-soft border border-line shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setLang('english')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
-              lang === 'english'
-                ? 'bg-forest-700 text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            English
-          </button>
-          <button
-            type="button"
-            onClick={() => setLang('bengalish')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
-              lang === 'bengalish'
-                ? 'bg-forest-700 text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            বাংলা (Bengalish)
-          </button>
-          <button
-            type="button"
-            onClick={() => setLang('hinglish')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
-              lang === 'hinglish'
-                ? 'bg-forest-700 text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink'
-            }`}
-          >
-            Hinglish
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => setDemoModalOpen(true)}
-            className="hidden sm:inline-flex shadow-xs hover:border-forest-600 font-display font-bold px-5"
-          >
-            Request Demo
-          </Button>
-
-          <Link to="/login">
-            <Button
-              variant="primary"
-              size="md"
-              rightIcon={<ArrowRight className="w-4 h-4" />}
-              className="shadow-lg shadow-forest-700/20 font-display font-bold px-5"
-            >
+          <Link to="/login" className="hidden sm:inline-block">
+            <Button variant="ghost" size="sm" className="font-bold text-slate-700 hover:text-[#14532d]">
               School Sign In
             </Button>
           </Link>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setDemoModalOpen(true)}
+            className="bg-[#14532d] hover:bg-[#166534] text-white font-bold rounded-xl px-5 shadow-sm"
+          >
+            Book a Demo
+          </Button>
         </div>
       </header>
 
-      {/* Massive Hero Section */}
-      <section className="relative pt-16 sm:pt-28 pb-20 px-4 sm:px-10 max-w-7xl mx-auto text-center space-y-10 overflow-hidden">
-        {/* Floating Animated Badges on Left and Right (Desktop) */}
-        <motion.div
-          animate={{ y: [0, -10, 0] }}
-          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-          className="hidden xl:flex absolute left-4 top-28 items-center gap-3 p-3.5 rounded-2xl bg-surface/95 border border-line shadow-lg backdrop-blur-md text-left max-w-[240px] z-10"
-        >
-          <div className="w-9 h-9 rounded-xl bg-success-50 text-success-600 flex items-center justify-center shrink-0">
-            <CheckCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-extrabold text-ink font-display">1-Second Roll Call</div>
-            <div className="text-[11px] text-ink-soft">Scan with any simple phone</div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          animate={{ y: [0, 10, 0] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-          className="hidden xl:flex absolute right-4 top-36 items-center gap-3 p-3.5 rounded-2xl bg-surface/95 border border-line shadow-lg backdrop-blur-md text-left max-w-[240px] z-10"
-        >
-          <div className="w-9 h-9 rounded-xl bg-forest-50 dark:bg-forest-900/30 text-forest-700 dark:text-forest-400 flex items-center justify-center shrink-0">
-            <WifiOff className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-extrabold text-ink font-display">100% Zero Internet</div>
-            <div className="text-[11px] text-ink-soft">Power cut? Zero problem</div>
-          </div>
-        </motion.div>
-
-        {/* Top Government Capsule Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-surface border border-line shadow-xs glowing-badge"
-        >
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs font-extrabold text-forest-800 dark:text-forest-300 tracking-wider uppercase font-display">
-            Govt. of India • UDISE+ Standard Compliant
-          </span>
-          <span className="hidden sm:inline-block text-ink-muted text-xs">•</span>
-          <span className="hidden sm:inline-block text-xs font-bold text-ink-soft">
-            Zero Paper Attendance
-          </span>
-        </motion.div>
-
-        {/* Grand Headline (Clear, Non-Technical Plain English) */}
-        <motion.h1
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-4xl sm:text-6xl lg:text-7xl xl:text-8xl font-extrabold text-ink font-display tracking-tight leading-[1.05] max-w-6xl mx-auto"
-        >
-          Attendance infrastructure <br />
-          <span className="bg-gradient-to-r from-forest-700 via-forest-600 to-emerald-600 dark:from-forest-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
-            built for zero-connectivity classrooms.
-          </span>
-        </motion.h1>
-
-        {/* Clear, Warm Subtitle for Non-Technical Teachers */}
-        <motion.p
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="text-lg sm:text-2xl text-ink-soft max-w-4xl mx-auto font-normal leading-relaxed"
-        >
-          Say goodbye to manual paper attendance registers. Teachers scan student cards in <strong>1 second</strong> using any mobile phone. Works 100% without internet and automatically sends SMS arrival alerts to parents.
-        </motion.p>
-
-        {/* Big Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="flex flex-wrap items-center justify-center gap-5 pt-4"
-        >
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={() => setDemoModalOpen(true)}
-            rightIcon={<Sparkles className="w-5 h-5" />}
-            className="shadow-2xl shadow-forest-700/30 px-10 py-4 text-lg font-bold font-display cursor-pointer hover:scale-[1.03] active:scale-[0.98] transition-all"
-          >
-            Request Free School Demo
-          </Button>
-
-          <Link to="/login">
-            <Button
-              variant="secondary"
-              size="lg"
-              className="px-10 py-4 text-lg font-bold font-display cursor-pointer hover:scale-[1.03] active:scale-[0.98] transition-all"
-            >
-              School Sign In
-            </Button>
-          </Link>
-        </motion.div>
-
-        {/* 4 Huge Core Stat Highlights */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.4 }}
-          className="grid grid-cols-2 lg:grid-cols-4 gap-5 pt-10 text-left"
-        >
-          <div className="p-7 rounded-[32px] bg-surface/95 border border-line shadow-xs hover:border-forest-600/50 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                Lightning Speed
-              </span>
-              <Clock className="w-5 h-5 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
+      {/* Hero Section */}
+      <section className="pt-12 sm:pt-20 pb-16 px-4 sm:px-12 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          {/* Hero Left Content */}
+          <div className="lg:col-span-6 text-left space-y-6">
+            {/* Pill Badge */}
+            <div className="inline-block px-3 py-1 rounded-md bg-[#dcfce7] text-[#15803d] font-mono text-xs font-black tracking-wider uppercase">
+              ATTENDEASE ATTENDANCE
             </div>
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-ink font-display mt-3">
-              &lt; 90 Sec
-            </div>
-            <p className="text-sm text-ink-soft mt-2 font-medium">
-              Complete roll call for 40 students
+
+            {/* Main Headline */}
+            <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-black text-[#0f172a] font-display tracking-tight leading-[1.12]">
+              Attendance <br />
+              infrastructure <span className="text-[#15803d]">built</span> <br />
+              <span className="text-[#15803d]">for zero-connectivity</span> <br />
+              <span className="text-[#15803d]">classrooms.</span>
+            </h1>
+
+            {/* Subtext */}
+            <p className="text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-lg">
+              Supercharged offline roll calls for educators. Take morning attendance in 1 second per student using any standard phone camera or smartcard, 100% offline.
             </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-4 pt-2">
+              <Link to="/login">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                  className="bg-[#0f172a] hover:bg-slate-800 text-white rounded-xl px-6 py-3.5 font-bold shadow-md"
+                >
+                  School Sign In
+                </Button>
+              </Link>
+
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => setDemoModalOpen(true)}
+                className="border-slate-300 hover:border-slate-400 bg-white text-slate-800 rounded-xl px-6 py-3.5 font-bold shadow-2xs"
+              >
+                Request a Demo
+              </Button>
+            </div>
           </div>
 
-          <div className="p-7 rounded-[32px] bg-surface/95 border border-line shadow-xs hover:border-forest-600/50 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                Zero Internet Needed
-              </span>
-              <WifiOff className="w-5 h-5 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-forest-700 dark:text-forest-400 font-display mt-3">
-              100% Offline
-            </div>
-            <p className="text-sm text-ink-soft mt-2 font-medium">
-              Never drops a single attendance record
-            </p>
-          </div>
+          {/* Hero Right 3D Visual Mockup */}
+          <div className="lg:col-span-6 relative flex items-center justify-center">
+            {/* 3D Orbit Pedestal Container */}
+            <div className="relative w-full max-w-[480px] aspect-square flex items-center justify-center">
+              {/* Outer Orbit Disc */}
+              <div className="absolute inset-4 rounded-full border-2 border-emerald-400/40 bg-radial from-emerald-500/10 via-emerald-400/5 to-transparent animate-pulse" />
 
-          <div className="p-7 rounded-[32px] bg-surface/95 border border-line shadow-xs hover:border-forest-600/50 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                Parent Peace of Mind
-              </span>
-              <MessageSquareText className="w-5 h-5 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-ink font-display mt-3">
-              Auto SMS
-            </div>
-            <p className="text-sm text-ink-soft mt-2 font-medium">
-              Instant arrival alert to parents' phones
-            </p>
-          </div>
+              {/* Floating Green Spheres */}
+              <motion.div
+                animate={{ y: [0, -12, 0], x: [0, 6, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute top-6 right-12 w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-600 to-lime-400 shadow-lg shadow-emerald-500/40"
+              />
+              <motion.div
+                animate={{ y: [0, 10, 0], x: [0, -8, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                className="absolute bottom-12 left-8 w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-lime-400 shadow-lg shadow-emerald-500/40"
+              />
+              <motion.div
+                animate={{ y: [0, -8, 0] }}
+                transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+                className="absolute bottom-6 right-20 w-4 h-4 rounded-full bg-gradient-to-tr from-emerald-500 to-lime-300 shadow-md shadow-emerald-500/30"
+              />
 
-          <div className="p-7 rounded-[32px] bg-surface/95 border border-line shadow-xs hover:border-forest-600/50 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                Government Ready
-              </span>
-              <FileSpreadsheet className="w-5 h-5 text-forest-700 dark:text-forest-400 group-hover:scale-110 transition-transform" />
+              {/* Floating Pill: 90s Setup */}
+              <motion.div
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute top-10 left-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5"
+              >
+                <Clock className="w-3.5 h-3.5 text-[#15803d]" />
+                <span>90s Setup</span>
+              </motion.div>
+
+              {/* Floating Pill: Offline First */}
+              <motion.div
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
+                className="absolute top-8 right-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5"
+              >
+                <WifiOff className="w-3.5 h-3.5 text-[#15803d]" />
+                <span>Offline First</span>
+              </motion.div>
+
+              {/* Floating Pill: SMS Backup */}
+              <motion.div
+                animate={{ y: [0, -7, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1.2 }}
+                className="absolute bottom-16 left-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5"
+              >
+                <MessageSquareText className="w-3.5 h-3.5 text-[#15803d]" />
+                <span>SMS Backup</span>
+              </motion.div>
+
+              {/* Floating Pill: UDISE+ */}
+              <motion.div
+                animate={{ y: [0, 6, 0] }}
+                transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+                className="absolute bottom-14 right-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5"
+              >
+                <FileCheck className="w-3.5 h-3.5 text-[#15803d]" />
+                <span>UDISE+</span>
+              </motion.div>
+
+              {/* 3D Stack of Attendance Register Cards */}
+              <motion.div
+                animate={{ rotate: [-12, -10, -12], y: [0, -6, 0] }}
+                transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+                className="relative z-10 w-72 sm:w-80 rounded-2xl bg-gradient-to-br from-[#fefce8] to-[#fef08a] p-5 shadow-2xl border border-yellow-200/80 transform -rotate-12"
+              >
+                {/* Underneath stacked paper shadows */}
+                <div className="absolute inset-0 bg-[#fef9c3] rounded-2xl -rotate-3 -z-10 shadow-lg" />
+                <div className="absolute inset-0 bg-[#fef08a] rounded-2xl rotate-4 -z-20 shadow-md" />
+
+                {/* Card Ruled Lines & Header */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-yellow-300/80 pb-2">
+                    <span className="font-mono text-[11px] font-bold text-yellow-900">
+                      DAILY CLASS ATTENDANCE REGISTER
+                    </span>
+                    <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      VERIFIED
+                    </span>
+                  </div>
+
+                  {/* Grid Lines with Tick Marks */}
+                  <div className="space-y-2 font-mono text-[10px] text-yellow-950">
+                    <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
+                      <span>01. Ananya Roy (Roll 14)</span>
+                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
+                      <span>02. Rohan Banerjee (Roll 22)</span>
+                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
+                      <span>03. Pooja Sharma (Roll 07)</span>
+                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>04. Devendra Mahato (Roll 31)</span>
+                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between text-[10px] font-bold text-yellow-800 border-t border-yellow-300/80">
+                    <span>UDISE+ CODE: 19170100101</span>
+                    <span>100% OFFLINE</span>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-ink font-display mt-3">
-              UDISE+ Ready
-            </div>
-            <p className="text-sm text-ink-soft mt-2 font-medium">
-              1-Click download official Excel registers
-            </p>
           </div>
-        </motion.div>
+        </div>
       </section>
 
-      {/* Massive Interactive Live Hardware & QR Simulator */}
-      <section id="simulator" className="py-20 px-4 sm:px-10 max-w-7xl mx-auto w-full space-y-10">
-        <div className="text-center space-y-3 max-w-3xl mx-auto">
-          <Badge variant="forest" size="md">
-            Interactive Test Drive
-          </Badge>
-          <h2 className="text-3xl sm:text-5xl font-extrabold text-ink font-display tracking-tight">
+      {/* Integration Ribbon Bar */}
+      <section className="bg-[#14532d] py-6 px-4 sm:px-12 text-white">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6 opacity-90 text-sm font-semibold">
+          <div className="flex items-center gap-2">
+            <Globe className="w-5 h-5 text-emerald-300" />
+            <span>Google Classroom</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-emerald-300" />
+            <span>Microsoft Teams</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-emerald-300" />
+            <span>Coursera</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Award className="w-5 h-5 text-emerald-300" />
+            <span>Khan Academy</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <School className="w-5 h-5 text-emerald-300" />
+            <span>Govt Education Board</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-emerald-300" />
+            <span>Classwork</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 1: "SOLUTION & METHOD" -> "See How Simple Morning Attendance Is" */}
+      <section id="how-it-works" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center">
+        <div className="space-y-2">
+          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">
+            SOLUTION & METHOD
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">
             See How Simple Morning Attendance Is
           </h2>
-          <p className="text-base sm:text-lg text-ink-soft">
-            Click below to simulate an instant morning roll call under complete power or network blackout conditions.
-          </p>
         </div>
 
-        {/* Big Simulator Console Container */}
-        <div className="rounded-[36px] bg-surface border border-line shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-          {/* Controls Side */}
-          <div className="lg:col-span-5 p-8 sm:p-10 bg-surface-soft border-b lg:border-b-0 lg:border-r border-line space-y-7 text-left">
-            <div>
-              <span className="text-xs font-extrabold text-forest-700 dark:text-forest-400 uppercase tracking-wider font-display">
-                Choose Scanning Method
-              </span>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <button
-                  type="button"
-                  onClick={() => { setSimMode('qr'); setSimSuccess(false); }}
-                  className={`p-4 rounded-2xl text-sm font-bold font-display flex items-center justify-center gap-2.5 border transition-all cursor-pointer ${
-                    simMode === 'qr'
-                      ? 'bg-forest-700 text-white border-forest-800 shadow-md shadow-forest-700/25'
-                      : 'bg-surface text-ink-soft border-line hover:border-forest-600/40'
-                  }`}
-                >
-                  <ScanLine className="w-5 h-5" />
-                  <span>Mobile Camera QR</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setSimMode('rfid'); setSimSuccess(false); }}
-                  className={`p-4 rounded-2xl text-sm font-bold font-display flex items-center justify-center gap-2.5 border transition-all cursor-pointer ${
-                    simMode === 'rfid'
-                      ? 'bg-forest-700 text-white border-forest-800 shadow-md shadow-forest-700/25'
-                      : 'bg-surface text-ink-soft border-line hover:border-forest-600/40'
-                  }`}
-                >
-                  <Radio className="w-5 h-5" />
-                  <span>Student Card Tap</span>
-                </button>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-center max-w-4xl mx-auto">
+          {/* Card 1: AttendEase App (Online/Offline Mode) */}
+          <div className="p-8 sm:p-10 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm flex flex-col items-center space-y-5 hover:shadow-md transition-all">
+            {/* Visual Icon */}
+            <div className="w-20 h-20 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
+              <ScanLine className="w-10 h-10 text-[#15803d]" />
             </div>
 
-            {/* Offline Power & Network Switch */}
-            <div className="p-5 rounded-2xl bg-surface border border-line space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  {simOffline ? (
-                    <WifiOff className="w-5 h-5 text-forest-700 dark:text-forest-400" />
-                  ) : (
-                    <Wifi className="w-5 h-5 text-success-600" />
-                  )}
-                  <span className="text-sm font-bold text-ink font-display">
-                    {simOffline ? '🔴 Internet Cut Off (100% Offline)' : '🟢 Internet Connected'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSimOffline(!simOffline)}
-                  className="px-3.5 py-1.5 rounded-full text-xs font-bold font-mono bg-surface-soft hover:bg-line border border-line text-ink cursor-pointer transition-colors"
-                >
-                  {simOffline ? 'Restore Network' : 'Cut Internet'}
-                </button>
-              </div>
-              <p className="text-xs text-ink-muted leading-relaxed">
-                {simOffline
-                  ? 'All student cards verify instantly inside phone memory. Nothing gets lost even if network is completely dead.'
-                  : 'Attendance automatically streams to Headmaster reports in real time.'}
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-[#0f172a] font-display">
+                AttendEase App <br />
+                (Online/Offline Mode)
+              </h3>
+              <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">
+                Mark your attendance and register in one click. Works without internet inside classrooms with zero latency.
               </p>
             </div>
 
-            {/* Big Trigger Button */}
-            <div>
+            <div className="w-full pt-2">
               <Button
                 variant="primary"
-                size="lg"
+                size="md"
                 onClick={handleSimulateScan}
                 isLoading={simScanning}
-                className="w-full font-display font-bold py-4 text-base shadow-xl shadow-forest-700/25"
-                rightIcon={<Zap className="w-5 h-5" />}
+                className="bg-[#15803d] hover:bg-[#166534] text-white rounded-xl font-bold px-8 py-3 w-full sm:w-auto shadow-sm"
               >
-                {simScanning
-                  ? 'Verifying Student Card...'
-                  : simMode === 'qr'
-                  ? 'Scan Student QR Card'
-                  : 'Tap Student Card at Gate'}
+                {simScanning ? 'Scanning Card...' : 'Scan Student'}
               </Button>
             </div>
-          </div>
 
-          {/* Interactive Screen Preview */}
-          <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-between bg-surface text-left relative overflow-hidden">
-            <div className="space-y-5">
-              <div className="flex items-center justify-between border-b border-line pb-4">
-                <div className="flex items-center gap-2.5 font-mono text-xs text-ink-soft">
-                  <span className="w-2.5 h-2.5 rounded-full bg-forest-600 animate-pulse" />
-                  <span className="font-bold">CLASSROOM: CLASS 8-A MORNING ROLL CALL</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-forest-700 dark:text-forest-400 bg-forest-50 dark:bg-forest-900/40 px-3 py-1 rounded-full font-mono">
-                    1-Second Verified
-                  </span>
-                </div>
-              </div>
-
-              {/* Live Card Screen */}
-              <div className="relative h-64 rounded-2xl bg-canvas border border-line p-6 font-mono text-xs flex flex-col justify-between overflow-hidden">
-                {simScanning && (
-                  <div className="absolute inset-x-0 h-1.5 bg-forest-500 shadow-[0_0_20px_#227b5a] animate-laser-sweep z-10" />
-                )}
-
-                <div className="space-y-3">
-                  <div className="text-ink-muted">
-                    &gt; Scanner Ready: {simMode === 'qr' ? 'Mobile Camera Active' : 'NFC Gate Turnstile Active'}
-                  </div>
-                  <div className="text-ink-muted">
-                    &gt; Network State: {simOffline ? 'Offline (Safe Local Memory)' : 'Online Connected'}
-                  </div>
-
-                  {simSuccess && simEvent && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="p-4 rounded-2xl bg-success-50 dark:bg-success-900/25 border border-success-200 dark:border-success-800/40 space-y-2 mt-2 shadow-xs"
-                    >
-                      <div className="flex items-center justify-between text-success-800 dark:text-success-300 font-bold">
-                        <span className="flex items-center gap-2 text-base font-display">
-                          <CheckCircle2 className="w-5 h-5 text-success-600 shrink-0" />
-                          ATTENDANCE CONFIRMED: {simEvent.name}
-                        </span>
-                        <span className="text-xs font-mono">{simEvent.time}</span>
-                      </div>
-                      <div className="text-xs text-ink-soft flex items-center justify-between">
-                        <span>{simEvent.class} • {simEvent.roll}</span>
-                        <span className="text-forest-700 dark:text-forest-400 font-bold">{simEvent.latencyMs}ms Instant Verification</span>
-                      </div>
-                      <div className="text-xs text-ink-soft bg-surface/90 p-2.5 rounded-xl border border-success-200/60 mt-1">
-                        📩 <strong>SMS Sent to Parents:</strong> "Ananya Roy safely reached school at {simEvent.time}."
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between text-ink-muted pt-3 border-t border-line text-xs font-sans">
-                  <span>Zero paper registers needed</span>
-                  <span className="font-mono font-bold text-forest-700 dark:text-forest-400">
-                    {simOffline ? '100% OFFLINE SAFE' : 'CLOUD SYNCED'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Proof Metrics Bar */}
-            <div className="grid grid-cols-3 gap-4 pt-4 text-center">
-              <div className="p-3 rounded-2xl bg-surface-soft border border-line">
-                <span className="text-[11px] uppercase font-extrabold text-ink-muted font-display block">
-                  Speed
-                </span>
-                <span className="text-sm font-extrabold text-forest-700 dark:text-forest-400 font-display mt-0.5 block">
-                  1 Second / Child
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-surface-soft border border-line">
-                <span className="text-[11px] uppercase font-extrabold text-ink-muted font-display block">
-                  Accuracy
-                </span>
-                <span className="text-sm font-extrabold text-ink font-display mt-0.5 block">
-                  100% Error-Free
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-surface-soft border border-line">
-                <span className="text-[11px] uppercase font-extrabold text-ink-muted font-display block">
-                  Parent SMS
-                </span>
-                <span className="text-sm font-extrabold text-forest-700 dark:text-forest-400 font-display mt-0.5 block">
-                  Instant Automatic
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Why Teachers & Headmasters Love AttendEase */}
-      <section className="py-20 px-4 sm:px-10 bg-surface-soft/70 border-y border-line">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="text-center space-y-3 max-w-3xl mx-auto">
-            <Badge variant="forest" size="md">
-              Built for Teachers
-            </Badge>
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-ink font-display tracking-tight">
-              Designed for Real Classrooms, Not Just Tech Demos
-            </h2>
-            <p className="text-base sm:text-lg text-ink-soft">
-              Every feature was tested with school teachers and headmasters across rural and urban schools.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-7 text-left">
-            <div className="p-8 rounded-[32px] bg-surface border border-line shadow-xs space-y-4 hover:shadow-md transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-forest-50 dark:bg-forest-900/30 text-forest-700 dark:text-forest-400 flex items-center justify-center">
-                <Smartphone className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-ink font-display">Runs on Any Mobile Phone</h3>
-              <p className="text-sm text-ink-soft leading-relaxed font-normal">
-                Teachers do not need expensive computer labs or fingerprint devices. Simply open the app on any Android phone and scan.
-              </p>
-            </div>
-
-            <div className="p-8 rounded-[32px] bg-surface border border-line shadow-xs space-y-4 hover:shadow-md transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-forest-50 dark:bg-forest-900/30 text-forest-700 dark:text-forest-400 flex items-center justify-center">
-                <WifiOff className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-ink font-display">No Internet? Zero Worries</h3>
-              <p className="text-sm text-ink-soft leading-relaxed font-normal">
-                Schools in remote villages with frequent power cuts and poor mobile signal can record full morning attendance without interruption.
-              </p>
-            </div>
-
-            <div className="p-8 rounded-[32px] bg-surface border border-line shadow-xs space-y-4 hover:shadow-md transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-forest-50 dark:bg-forest-900/30 text-forest-700 dark:text-forest-400 flex items-center justify-center">
-                <FileCheck className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-ink font-display">1-Click UDISE+ Government Reports</h3>
-              <p className="text-sm text-ink-soft leading-relaxed font-normal">
-                At the end of the month, Headmasters download pre-formatted Excel sheets ready for direct government submission.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 8-Step Simple School Onboarding Journey */}
-      <section id="journey" className="py-20 px-4 sm:px-10 max-w-7xl mx-auto space-y-10">
-        <div className="text-center space-y-3 max-w-3xl mx-auto">
-          <Badge variant="forest" size="md">
-            Simple 8-Step Setup
-          </Badge>
-          <h2 className="text-3xl sm:text-5xl font-extrabold text-ink font-display tracking-tight">
-            From Discovery to Morning Rollout
-          </h2>
-          <p className="text-base sm:text-lg text-ink-soft">
-            A battle-tested step-by-step roadmap to bring smart attendance to your school in less than a week.
-          </p>
-        </div>
-
-        {/* Stepper Navigation */}
-        <div className="flex items-center gap-2.5 overflow-x-auto pb-4 no-scrollbar">
-          {ONBOARDING_STAGES.map((stage, idx) => {
-            const isSelected = idx === selectedStageIndex;
-            return (
-              <button
-                key={stage.key}
-                type="button"
-                onClick={() => setSelectedStageIndex(idx)}
-                className={`flex items-center gap-2.5 px-5 py-3.5 rounded-2xl text-xs sm:text-sm font-bold font-display whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
-                  isSelected
-                    ? 'bg-forest-700 text-white border-forest-800 shadow-md shadow-forest-700/25'
-                    : 'bg-surface hover:bg-surface text-ink-soft hover:text-ink border-line shadow-2xs'
-                }`}
+            {simSuccess && simStudent && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-3.5 rounded-xl bg-white border border-emerald-300 text-xs text-left w-full space-y-1 shadow-2xs"
               >
-                <span
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${
-                    isSelected ? 'bg-white text-forest-800' : 'bg-surface-soft text-ink-muted'
+                <div className="flex items-center justify-between font-bold text-emerald-800">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Verified: {simStudent.name}
+                  </span>
+                  <span>{simStudent.time}</span>
+                </div>
+                <div className="text-slate-600 flex justify-between">
+                  <span>{simStudent.class} • {simStudent.roll}</span>
+                  <span className="text-emerald-700 font-bold">{simStudent.latencyMs}ms check</span>
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Card 2: Simple Upload (Internet Optional) */}
+          <div className="p-8 sm:p-10 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm flex flex-col items-center space-y-5 hover:shadow-md transition-all">
+            {/* Visual Icon */}
+            <div className="w-20 h-20 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
+              <FileSpreadsheet className="w-10 h-10 text-[#15803d]" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-[#0f172a] font-display">
+                Simple Upload <br />
+                (Internet Optional)
+              </h3>
+              <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">
+                Upload the register to generate reports and auto sync data whenever your mobile device reconnects.
+              </p>
+            </div>
+
+            <div className="w-full pt-2">
+              <Link to="/login">
+                <Button
+                  variant="outline"
+                  size="md"
+                  className="bg-white hover:bg-slate-50 border-emerald-300 text-emerald-800 rounded-xl font-bold px-8 py-3 w-full sm:w-auto shadow-2xs"
+                >
+                  Upload Register
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 2: "CASE STUDY & ROLLOUT" -> "From Discovery to Morning Rollout" */}
+      <section id="case-studies" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center">
+        <div className="space-y-2">
+          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">
+            CASE STUDY & ROLLOUT
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">
+            From Discovery to Morning Rollout <br />
+            <span className="text-slate-500 text-2xl font-bold font-sans">(Our Case Studies)</span>
+          </h2>
+        </div>
+
+        {/* Split Container */}
+        <div className="rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 max-w-5xl mx-auto">
+          {/* Left Side: 3D Lightbulb & Stepper */}
+          <div className="lg:col-span-6 p-8 sm:p-10 bg-slate-50/70 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between space-y-6 text-left">
+            {/* Visual 3D Lightbulb Illustration Container */}
+            <div className="w-full h-44 rounded-2xl bg-gradient-to-b from-emerald-100/60 to-emerald-50 border border-emerald-200/60 flex items-center justify-center relative overflow-hidden">
+              <motion.div
+                animate={{ scale: [1, 1.05, 1], rotate: [0, 2, -2, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-20 h-20 rounded-full bg-emerald-400/30 flex items-center justify-center shadow-lg shadow-emerald-500/20"
+              >
+                <Lightbulb className="w-12 h-12 text-[#15803d]" />
+              </motion.div>
+
+              {/* Little Floating Classroom elements */}
+              <div className="absolute bottom-3 left-4 flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-1 rounded-md border border-emerald-200">
+                <School className="w-3.5 h-3.5 text-[#15803d]" />
+                <span>Classroom Ready</span>
+              </div>
+              <div className="absolute top-3 right-4 flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-1 rounded-md border border-emerald-200">
+                <Clock className="w-3.5 h-3.5 text-[#15803d]" />
+                <span>&lt; 90s Roll Call</span>
+              </div>
+            </div>
+
+            {/* 8-Stage Selectable List */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
+              {ONBOARDING_STAGES.map((st, idx) => (
+                <button
+                  key={st.key}
+                  type="button"
+                  onClick={() => setSelectedStageIndex(idx)}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                    idx === selectedStageIndex
+                      ? 'bg-[#14532d] text-white border-[#14532d] shadow-2xs'
+                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                   }`}
                 >
-                  {stage.step}
-                </span>
-                <span>{stage.title[lang]}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Selected Stage Detail Card */}
-        <motion.div
-          key={selectedStage.key}
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="p-8 sm:p-12 rounded-[36px] bg-surface border border-line shadow-xl grid grid-cols-1 lg:grid-cols-12 gap-10 items-center text-left"
-        >
-          <div className="lg:col-span-7 space-y-5">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-forest-50 dark:bg-forest-900/30 border border-forest-200 dark:border-forest-800/40 flex items-center justify-center shrink-0">
-                {selectedStage.icon}
-              </div>
-              <div>
-                <span className="text-xs font-mono font-extrabold text-forest-700 dark:text-forest-400">
-                  STEP 0{selectedStage.step} OF 08
-                </span>
-                <h3 className="text-2xl sm:text-3xl font-extrabold text-ink font-display leading-tight">
-                  {selectedStage.title[lang]}
-                </h3>
-              </div>
-            </div>
-
-            <p className="text-base sm:text-lg text-ink-soft leading-relaxed font-normal">
-              {selectedStage.subtitle[lang]}
-            </p>
-
-            <div className="space-y-3 pt-2">
-              <span className="text-xs font-extrabold text-ink-muted uppercase tracking-wider font-display">
-                What Happens in This Step:
-              </span>
-              <ul className="space-y-2.5">
-                {selectedStage.details[lang].map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-3 text-sm sm:text-base text-ink">
-                    <CheckCircle2 className="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+                  <span className="truncate">{st.name}</span>
+                  {idx === selectedStageIndex && <Check className="w-3.5 h-3.5 shrink-0 ml-1" />}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="lg:col-span-5 p-7 rounded-3xl bg-surface-soft border border-line space-y-5">
-            <span className="text-xs font-extrabold text-forest-700 dark:text-forest-400 uppercase tracking-wider font-display">
-              Step Deliverable
-            </span>
+          {/* Right Side: Case Study Content & CTA */}
+          <div className="lg:col-span-6 p-8 sm:p-10 flex flex-col justify-between space-y-6 text-left bg-white">
+            <div className="space-y-4">
+              <div className="p-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-medium">
+                Case Study: Model School Kolkata & Rural Vidyalaya
+              </div>
 
-            <div className="text-xl font-bold text-ink font-display">
-              {selectedStage.deliverable[lang]}
+              <h3 className="text-2xl sm:text-3xl font-black text-[#0f172a] font-display">
+                Real Results: School attendance up 150%
+              </h3>
+
+              <p className="text-sm text-slate-600 leading-relaxed font-normal">
+                {selectedStage.subtitle}
+              </p>
+
+              <div className="p-3.5 rounded-xl bg-[#f0fdf4] border border-emerald-200 text-xs text-emerald-900 font-medium">
+                <strong>Deliverable:</strong> {selectedStage.deliverable}
+              </div>
             </div>
 
-            <p className="text-xs sm:text-sm text-ink-soft leading-relaxed">
-              Every step is structured so Headmasters and teachers experience zero confusion or administrative burdens.
-            </p>
-
-            <div className="pt-2">
+            <div>
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => {
-                  if (selectedStageIndex < ONBOARDING_STAGES.length - 1) {
-                    setSelectedStageIndex(selectedStageIndex + 1);
-                  } else {
-                    setDemoModalOpen(true);
-                  }
-                }}
-                rightIcon={<ChevronRight className="w-5 h-5" />}
-                className="w-full font-display font-bold py-3.5"
+                onClick={() => setDemoModalOpen(true)}
+                className="w-full bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl py-3.5 shadow-sm"
               >
-                {selectedStageIndex < ONBOARDING_STAGES.length - 1
-                  ? `Next Step: ${ONBOARDING_STAGES[selectedStageIndex + 1].title[lang]}`
-                  : 'Request Free School Demo'}
+                Request a Proposal
               </Button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </section>
 
-      {/* Impact & ROI Calculator */}
-      <section id="roi" className="py-20 px-4 sm:px-10 max-w-7xl mx-auto space-y-10">
-        <div className="text-center space-y-3 max-w-3xl mx-auto">
-          <Badge variant="forest" size="md">
-            Time & Money Savings
-          </Badge>
-          <h2 className="text-3xl sm:text-5xl font-extrabold text-ink font-display tracking-tight">
-            Calculate Your School's Time & Cost Savings
+      {/* Section 3: "Real Classrooms, Not Just Tech Demos" */}
+      <section className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center">
+        <div className="space-y-2">
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">
+            Real Classrooms, Not Just Tech Demos
           </h2>
-          <p className="text-base sm:text-lg text-ink-soft">
-            See how much time teachers reclaim when replacing manual roll calls with AttendEase.
+          <p className="text-base text-slate-600">
+            Designed for the reality of your school.
           </p>
         </div>
 
-        <div className="p-8 sm:p-12 rounded-[36px] bg-surface border border-line shadow-xl grid grid-cols-1 lg:grid-cols-12 gap-10 items-center text-left">
-          <div className="lg:col-span-6 space-y-7">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-5xl mx-auto">
+          {/* Card 1 */}
+          <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
+              <Smartphone className="w-6 h-6 text-[#15803d]" />
+            </div>
+            <h3 className="text-lg font-bold text-[#0f172a] font-display">
+              Runs on ANY Mobile Phone
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+              Proven compatibility with your phone and accessibility over massive registrations.
+            </p>
+          </div>
+
+          {/* Card 2 */}
+          <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
+              <WifiOff className="w-6 h-6 text-[#15803d]" />
+            </div>
+            <h3 className="text-lg font-bold text-[#0f172a] font-display">
+              No Internet? Zero Worries.
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+              Local storage in memory safe state keeps attendance logs safe and secure.
+            </p>
+          </div>
+
+          {/* Card 3 */}
+          <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
+              <FileCheck className="w-6 h-6 text-[#15803d]" />
+            </div>
+            <h3 className="text-lg font-bold text-[#0f172a] font-display">
+              UDISE+ Government Reports
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+              UDISE+ Government export compliance and automated data preservation for schools.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: "Calculate Your School's Time & Cost Savings" */}
+      <section id="roi" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center">
+        <div className="space-y-2">
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">
+            Calculate Your School's Time <br />
+            & Cost Savings
+          </h2>
+        </div>
+
+        <div className="rounded-3xl bg-white border border-slate-200 shadow-xl p-8 sm:p-12 max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center text-left">
+          {/* Left: Slider */}
+          <div className="lg:col-span-6 space-y-6">
             <div>
-              <label htmlFor="student-slider" className="block text-base font-bold text-ink font-display mb-3">
-                Total Enrolled Students:{' '}
-                <span className="text-forest-700 dark:text-forest-400 font-mono text-2xl font-extrabold">
-                  {studentCount} Students
-                </span>
+              <label htmlFor="student-slider" className="block text-base font-extrabold text-[#0f172a] font-display mb-2">
+                Slider View - <span className="text-[#15803d]">{studentCount} Students</span>
               </label>
               <input
                 id="student-slider"
@@ -1132,121 +734,139 @@ export const LandingPage: React.FC = () => {
                 step="50"
                 value={studentCount}
                 onChange={(e) => setStudentCount(Number(e.target.value))}
-                className="w-full h-3 bg-surface-soft rounded-lg appearance-none cursor-pointer accent-forest-700"
+                className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#15803d]"
               />
-              <div className="flex justify-between text-xs text-ink-muted mt-2 font-mono">
+              <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
                 <span>100 Students</span>
                 <span>1,500</span>
                 <span>3,000 Students</span>
               </div>
             </div>
 
-            <div className="space-y-3.5 text-sm sm:text-base text-ink-soft">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-forest-700 shrink-0" />
-                <span>Reclaims 15 minutes of teacher time per classroom every morning</span>
+            <div className="space-y-3 text-xs sm:text-sm text-slate-600">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
+                <span>Morning roll call finished in &lt; 90 seconds</span>
               </div>
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-forest-700 shrink-0" />
-                <span>Eliminates missing attendance sheets, torn registers, and proxy attendance</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Zap className="w-5 h-5 text-forest-700 shrink-0" />
-                <span>Sends automatic arrival SMS alerts to parents the moment their child enters</span>
+              <div className="flex items-center gap-2.5">
+                <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
+                <span>100% attendance records automatically backed up</span>
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-6 grid grid-cols-2 gap-5">
-            <div className="p-6 rounded-3xl bg-surface-soft border border-line text-left">
-              <div className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                Teacher Time Saved
+          {/* Right: Metrics & Green Callout */}
+          <div className="lg:col-span-6 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200">
+                <div className="text-[11px] font-bold text-slate-500 uppercase">
+                  Feature numbers
+                </div>
+                <div className="text-3xl font-black text-[#0f172a] font-display mt-1">
+                  {teacherHoursSavedPerYear} Hrs
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">/ Year</div>
               </div>
-              <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-forest-700 dark:text-forest-400 font-display mt-2">
-                {teacherHoursSavedPerYear} Hrs
+
+              <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200">
+                <div className="text-[11px] font-bold text-slate-500 uppercase">
+                  Feature sheets
+                </div>
+                <div className="text-3xl font-black text-[#0f172a] font-display mt-1">
+                  {paperSavedPages.toLocaleString()}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">Pages / Year</div>
               </div>
-              <p className="text-xs text-ink-soft mt-1.5">Reclaimed for classroom teaching every year</p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-surface-soft border border-line text-left">
-              <div className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                Register Paper Saved
-              </div>
-              <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-ink font-display mt-2">
-                {paperSavedPages.toLocaleString()} Pages
-              </div>
-              <p className="text-xs text-ink-soft mt-1.5">Zero paper registers to buy or store</p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-surface-soft border border-line text-left col-span-2">
-              <div className="text-xs font-extrabold text-ink-muted uppercase font-display tracking-wider">
-                UDISE+ Government Ready
-              </div>
-              <div className="text-xl font-bold text-ink font-display mt-1 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-success-600 shrink-0" />
-                <span>1-Click Instant State Format Export (CSV & Excel)</span>
-              </div>
-              <p className="text-xs text-ink-soft mt-1.5">
-                No manual counting or late-night register calculations for administrative staff.
-              </p>
+            {/* Green Callout Alert Box */}
+            <div className="p-4 rounded-2xl bg-[#dcfce7] border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5 leading-relaxed font-medium">
+              <Lightbulb className="w-4 h-4 text-[#15803d] shrink-0 mt-0.5" />
+              <span>
+                E.g., {teacherHoursSavedPerYear} hrs saved per year, freeing up instructional time for teachers every single month.
+              </span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Massive Call to Action Section */}
-      <section className="py-24 px-4 sm:px-10 bg-forest-900 text-white mt-auto text-center space-y-8 relative overflow-hidden">
-        <div className="max-w-4xl mx-auto space-y-5">
-          <h2 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold font-display leading-tight">
-            Ready to bring smart attendance to your school?
+      {/* Section 5: Dark Green Banner "NEXT STEPS" */}
+      <section id="plans" className="bg-[#14532d] text-white py-24 px-4 sm:px-12 text-center space-y-8 relative overflow-hidden mt-auto">
+        <div className="max-w-3xl mx-auto space-y-4">
+          <span className="text-xs font-mono font-bold tracking-widest text-emerald-300 uppercase">
+            NEXT STEPS
+          </span>
+          <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight leading-tight">
+            Ready to bring smart attendance <br />
+            to your school?
           </h2>
-          <p className="text-emerald-200/90 text-base sm:text-xl max-w-2xl mx-auto leading-relaxed">
-            Schedule a free, zero-commitment live demonstration for your school management and teachers today.
+          <p className="text-emerald-100 text-base sm:text-lg max-w-xl mx-auto">
+            Schedule a demo or download our guide.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-5 pt-3">
+        <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
           <Button
             variant="secondary"
             size="lg"
             onClick={() => setDemoModalOpen(true)}
-            className="px-10 py-4 text-lg font-bold font-display cursor-pointer shadow-2xl shadow-black/25 hover:scale-105 transition-all"
+            className="bg-white hover:bg-slate-100 text-[#14532d] font-bold rounded-xl px-8 py-3.5 shadow-lg shadow-black/20"
           >
-            Request School Demo
+            Request a Demo
           </Button>
 
           <Link to="/login">
             <Button
               variant="ghost"
               size="lg"
-              className="text-white hover:bg-forest-800 border border-emerald-500/30 px-10 py-4 text-lg font-bold font-display"
+              className="text-white hover:bg-[#166534] border border-emerald-400/40 rounded-xl px-8 py-3.5 font-bold"
             >
               School Sign In
             </Button>
           </Link>
         </div>
-      </section>
 
-      {/* Modern High-Stature Footer */}
-      <footer className="py-10 px-4 sm:px-10 bg-surface border-t border-line text-xs text-ink-muted flex flex-wrap items-center justify-between gap-5">
-        <div className="flex items-center gap-3 font-medium">
-          <span className="font-extrabold text-ink font-display text-sm">AttendEase</span>
-          <span>•</span>
-          <span>Govt. of India UDISE+ Standard</span>
-          <span>•</span>
-          <span>100% Zero-Net Offline Attendance</span>
+        <div className="text-xs text-emerald-200/80 font-medium">
+          Contact our sales team today.
         </div>
 
-        <div className="flex items-center gap-6 font-semibold">
-          <Link to="/login" className="hover:text-ink transition-colors">
-            Teacher Login
-          </Link>
-          <Link to="/login" className="hover:text-ink transition-colors">
-            Headmaster Console
-          </Link>
-          <Link to="/login" className="hover:text-ink transition-colors">
-            School Sign In
-          </Link>
+        {/* Star Sparkle Watermark in Corner */}
+        <div className="absolute right-8 bottom-8 text-emerald-600/30">
+          <Sparkles className="w-16 h-16" />
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-[#0f172a] text-white py-10 px-4 sm:px-12 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6 text-xs text-slate-400">
+          {/* Left Nav */}
+          <div className="flex items-center gap-6 font-semibold">
+            <a href="#how-it-works" className="hover:text-white transition-colors">
+              How it works
+            </a>
+            <a href="#plans" className="hover:text-white transition-colors">
+              Plans
+            </a>
+            <a href="#case-studies" className="hover:text-white transition-colors">
+              Case Studies
+            </a>
+            <Link to="/login" className="hover:text-white transition-colors">
+              School Sign In
+            </Link>
+          </div>
+
+          {/* Center Brand */}
+          <div className="flex items-center gap-2 font-display font-black text-sm text-white">
+            <div className="w-6 h-6 rounded-md bg-[#15803d] flex items-center justify-center text-white text-[10px]">
+              AZ
+            </div>
+            <span>AttendEase</span>
+          </div>
+
+          {/* Right Copyright */}
+          <div>
+            © {new Date().getFullYear()} AttendEase OS. Govt. of India UDISE+ Compliant.
+          </div>
         </div>
       </footer>
 
@@ -1263,12 +883,12 @@ export const LandingPage: React.FC = () => {
       >
         {demoSubmitted ? (
           <div data-testid="demo-success-state" className="text-center py-6 space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-success-50 text-success-600 border border-success-100 dark:border-success-600/30 mx-auto flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-[#dcfce7] text-[#15803d] border border-emerald-200 mx-auto flex items-center justify-center">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h4 className="text-xl font-bold text-ink font-display">Demo Request Received</h4>
-            <p className="text-sm text-ink-soft max-w-sm mx-auto leading-relaxed">
-              Thank you, <span className="font-bold text-ink">{demoForm.name || 'Administrator'}</span>. Our team will contact you at <span className="font-mono font-bold text-ink">{demoForm.phone || '+91-XXXXXXXXXX'}</span> within 4 business hours.
+            <h4 className="text-xl font-bold text-slate-900 font-display">Demo Request Received</h4>
+            <p className="text-sm text-slate-600 max-w-sm mx-auto leading-relaxed">
+              Thank you, <span className="font-bold text-slate-900">{demoForm.name || 'Administrator'}</span>. Our team will contact you at <span className="font-mono font-bold text-slate-900">{demoForm.phone || '+91-XXXXXXXXXX'}</span> within 4 business hours.
             </p>
             <div className="pt-2">
               <Button
@@ -1279,6 +899,7 @@ export const LandingPage: React.FC = () => {
                   setDemoSubmitted(false);
                   setDemoError(null);
                 }}
+                className="bg-[#14532d] hover:bg-[#166534] text-white"
               >
                 Done
               </Button>
@@ -1355,6 +976,7 @@ export const LandingPage: React.FC = () => {
                 size="md"
                 type="submit"
                 isLoading={isSubmittingDemo}
+                className="bg-[#14532d] hover:bg-[#166534] text-white"
               >
                 Submit Request
               </Button>

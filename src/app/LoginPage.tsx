@@ -67,13 +67,9 @@ export const LoginPage: React.FC = () => {
     );
   }, [location.search]);
 
-  const [phoneNumber, setPhoneNumber] = useState(() => {
-    const saved = localStorage.getItem('attendease.remembered_phone');
-    if (saved) return saved;
-    return isDemoMode ? '+919000000000' : '';
-  });
+  const [phoneNumber, setPhoneNumber] = useState(() => (isDemoMode ? '+919000000000' : ''));
   const [password, setPassword] = useState(() => (isDemoMode ? 'SuperSecretAdminPassword123!' : ''));
-  const [rememberMe, setRememberMe] = useState(() => Boolean(localStorage.getItem('attendease.remembered_phone')));
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tickerIndex, setTickerIndex] = useState(0);
@@ -146,11 +142,6 @@ export const LoginPage: React.FC = () => {
         ? phoneNumber.trim()
         : `+91${phoneNumber.trim().replace(/\D/g, '')}`;
 
-      if (rememberMe) {
-        localStorage.setItem('attendease.remembered_phone', phoneNumber);
-      } else {
-        localStorage.removeItem('attendease.remembered_phone');
-      }
 
       const role = await login(normalizedPhone, password, resolvedSchool?.id);
 

@@ -285,10 +285,21 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   }
 });
 
-test('RFID off by default: API returns 404 and RFID operator has no navigation or dashboard access', async ({ page, request }) => {
+test('RFID off by default: API returns 404 and RFID operator has no navigation or dashboard access', async ({ page }) => {
   // 1. Assert API returns 404 when FEATURE_RFID is unset/false
-  const rfidApiRes = await request.get('/api/v1/schools/00000000-0000-0000-0000-000000000001/rfid/readers');
-  expect(rfidApiRes.status()).toBe(404);
+  const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
+  try {
+    const adminLogin = await adminApi.post('/api/v1/auth/login', {
+      data: { phoneNumber: '+919100000001', password: 'SchoolAdminPassword123!' },
+    });
+    expect(adminLogin.ok()).toBeTruthy();
+    const adminMe = await (await adminApi.get('/api/v1/auth/me')).json();
+    const schoolId = adminMe.sessionContext.schoolId || adminMe.sessionContext.memberships[0].schoolId;
+    const rfidApiRes = await adminApi.get(`/api/v1/schools/${schoolId}/rfid/readers`);
+    expect(rfidApiRes.status()).toBe(404);
+  } finally {
+    await adminApi.dispose();
+  }
 
   // 2. Log in as seeded RFID operator
   await page.goto(`${baseUrl}/login`);

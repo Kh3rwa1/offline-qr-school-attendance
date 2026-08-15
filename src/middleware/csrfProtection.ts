@@ -134,11 +134,12 @@ export function clearCsrfCookies(res: Response): void {
 /**
  * Checks if a requested path matches any documented exemption rule.
  */
-export function isRouteExempt(path: string): boolean {
-  if (process.env.FEATURE_RFID === 'true' && /^\/api\/v1\/schools\/[^/]+\/rfid\/scans$/.test(path)) {
+export function isRouteExempt(path: string, originalUrl?: string): boolean {
+  const url = originalUrl || path;
+  if (process.env.FEATURE_RFID === 'true' && (url.includes('/rfid/scans') || path.includes('/rfid/scans'))) {
     return true;
   }
-  return EXEMPT_ROUTES.some((rule) => (rule.exact ? path === rule.path : path.startsWith(rule.path)));
+  return EXEMPT_ROUTES.some((rule) => (rule.exact ? path === rule.path || url === rule.path : path.startsWith(rule.path) || url.startsWith(rule.path)));
 }
 
 /**
@@ -170,7 +171,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   // 2. State-changing requests (POST, PUT, PATCH, DELETE)
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     // Check documented exemption
-    if (isRouteExempt(reqPath)) {
+    if (isRouteExempt(reqPath, req.originalUrl)) {
       return next();
     }
 

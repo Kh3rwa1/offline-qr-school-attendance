@@ -1,5 +1,7 @@
 # School-Site RFID Physical On-Site Hardware Certification Protocol
 
+> **Note**: Historical reference document / not an active product claim. For active feature status, see [STATUS.md](STATUS.md).
+
 ## 1. Scope & Objective
 This document defines the physical hardware commissioning and on-site certification protocol required before commercial RFID attendance service is activated at a school facility.
 

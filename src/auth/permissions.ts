@@ -347,5 +347,12 @@ export function getNavigationForRole(role: UserRole | string | undefined): Navig
     },
   ];
 
-  return allNavItems.filter((item) => item.permissions.length === 0 || hasAnyPermission(role, item.permissions));
+  const isRfidEnabled =
+    (typeof process !== 'undefined' && process.env?.FEATURE_RFID === 'true') ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_RFID === 'true') ||
+    role === 'RFID_OPERATOR';
+
+  return allNavItems
+    .filter((item) => isRfidEnabled || !item.id.startsWith('rfid-'))
+    .filter((item) => item.permissions.length === 0 || hasAnyPermission(role, item.permissions));
 }

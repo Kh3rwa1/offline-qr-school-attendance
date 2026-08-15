@@ -130,3 +130,78 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
     await verificationApi.dispose();
   }
 });
+
+test('bilingual language toggle on login page reflects English and Bengali strings', async ({ page }) => {
+  await page.goto(`${baseUrl}/login`);
+  await page.evaluate(() => navigator.serviceWorker?.ready);
+
+  // Assert English default
+  await expect(page.getByLabel('Select Language')).toHaveValue('en');
+  await expect(page.getByText(/Daily classroom/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Sign In|Log In/i })).toBeVisible();
+
+  // Switch to Bengali
+  await page.getByLabel('Select Language').selectOption('bn');
+
+  // Assert Bengali strings appear
+  await expect(page.getByText(/দৈনিক শ্রেণীকক্ষ/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'লগ ইন করুন' })).toBeVisible();
+  await expect(page.getByText('সম্পূর্ণ অফলাইন সুবিধা')).toBeVisible();
+
+  // Open Help dialog in Bengali
+  await page.getByRole('button', { name: 'সহায়তা' }).click();
+  await expect(page.getByText('লগইন সহায়তা ও নির্দেশিকা')).toBeVisible();
+  await page.getByRole('button', { name: 'বন্ধ করুন' }).click();
+
+  // Switch back to English
+  await page.getByLabel('Select Language').selectOption('en');
+  await expect(page.getByText(/Daily classroom/i)).toBeVisible();
+});
+
+test('camera scanner verifies video element attributes in viewfinder', async ({ page }) => {
+  // Log in as teacher
+  await page.goto(`${baseUrl}/login`);
+  await page.evaluate(() => navigator.serviceWorker?.ready);
+  await page.locator('#login-phone').fill('9100000002');
+  await page.locator('#login-password').fill('TeacherPassword123!');
+  await page.getByRole('button', { name: /Sign In/i }).click();
+
+  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+
+  // Select class and start session
+  const selectEl = page.locator('select');
+  await expect(selectEl).toBeVisible();
+  const optionValues = await selectEl.locator('option').evaluateAll((options) =>
+    options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
+  );
+  if (optionValues.length > 0) {
+    await selectEl.selectOption(optionValues[0]);
+    await page.getByRole('button', { name: 'Download roster' }).click();
+    await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
+
+    const startBtn = page.getByRole('button', { name: 'Start offline session' });
+    if (await startBtn.isVisible()) {
+      await startBtn.click();
+      await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+    }
+  }
+
+  // Verify video element is mounted in viewfinder with playsinline attribute
+  const video = page.locator('video');
+  await expect(video).toBeAttached();
+  await expect(video).toHaveAttribute('playsinline');
+});
+
+test('RFID operator routes and navigation are gated when FEATURE_RFID is false', async ({ page }) => {
+  await page.goto(`${baseUrl}/login`);
+  await page.locator('#login-phone').fill('9100000002');
+  await page.locator('#login-password').fill('TeacherPassword123!');
+  await page.getByRole('button', { name: /Sign In/i }).click();
+
+  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+
+  // Assert RFID links are absent from navigation
+  await expect(page.locator('a[href="/app/rfid"]')).toHaveCount(0);
+  await expect(page.locator('a[href="/app/rfid/readers"]')).toHaveCount(0);
+  await expect(page.locator('a[href="/app/rfid/cards"]')).toHaveCount(0);
+});

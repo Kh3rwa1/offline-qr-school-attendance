@@ -209,6 +209,11 @@ export const TeacherDashboard: React.FC = () => {
     [activeSchoolId, selectedClassId, session, user, t, showFeedback, refreshOutbox]
   );
 
+  const handleScanRef = useRef(handleScan);
+  useEffect(() => {
+    handleScanRef.current = handleScan;
+  }, [handleScan]);
+
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'live' | 'error' | 'permission_denied'>('idle');
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
 
@@ -230,7 +235,7 @@ export const TeacherDashboard: React.FC = () => {
 
     try {
       await cameraScannerRef.current.startScanning(el, (token) => {
-        void handleScan(token, 'CAMERA');
+        void handleScanRef.current(token, 'CAMERA');
       });
       setIsCameraActive(true);
       setCameraStatus('live');
@@ -244,7 +249,7 @@ export const TeacherDashboard: React.FC = () => {
       setCameraStatus(isDenied ? 'permission_denied' : 'error');
       setCameraError(isDenied ? t('cameraDenied') : (err?.message || t('cameraDenied')));
     }
-  }, [handleScan, t]);
+  }, [t]);
 
   const stopCamera = useCallback(() => {
     if (cameraScannerRef.current) {
@@ -254,9 +259,9 @@ export const TeacherDashboard: React.FC = () => {
     setCameraStatus('idle');
   }, []);
 
-  // Manage camera lifecycle based on view mode, video element mount, and session presence
+  const isSessionActive = Boolean(session && (session.status as string) !== 'FINALIZED' && (session.status as string) !== 'FINALIZE_PENDING');
   useEffect(() => {
-    if (viewMode === 'scanner' && videoEl && session && session.status !== 'FINALIZED') {
+    if (viewMode === 'scanner' && videoEl && isSessionActive) {
       void startCamera(videoEl);
     } else {
       stopCamera();
@@ -264,7 +269,7 @@ export const TeacherDashboard: React.FC = () => {
     return () => {
       stopCamera();
     };
-  }, [viewMode, videoEl, session, startCamera, stopCamera]);
+  }, [viewMode, videoEl, isSessionActive, startCamera, stopCamera]);
 
   // Setup USB hardware keyboard-wedge scanner listener
   useEffect(() => {

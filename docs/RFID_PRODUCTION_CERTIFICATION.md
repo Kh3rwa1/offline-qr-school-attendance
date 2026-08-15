@@ -1,4 +1,6 @@
-# RFID Production Certification
+# RFID System Production Certification & Hardware Assurance Scorecard
+
+> **Note**: Historical reference document / not an active product claim. RFID hardware is simulated. For active feature status, see [STATUS.md](STATUS.md).
 
 ## Certification Checklist (20-Point Verification)
 1. [ ] SECURE mode enabled and verified.

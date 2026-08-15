@@ -51,6 +51,9 @@ interface OnboardingStage {
   subtitle: string;
   deliverable: string;
   impact: string;
+  image: string;
+  badge: string;
+  tag: string;
 }
 
 const ONBOARDING_STAGES: OnboardingStage[] = [
@@ -62,6 +65,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'See how simple mobile camera or student smartcards take roll call in 1 second with zero hardware costs.',
     deliverable: 'Platform Architecture & Sample Student Card',
     impact: 'No costly machines needed',
+    image: '/assets/steps/step-1.jpg',
+    badge: '1-Second Camera Scan',
+    tag: 'Classroom Ready',
   },
   {
     step: 2,
@@ -71,6 +77,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'UDISE+ standardized format data exports and strict student privacy guarantees with zero cloud leaks.',
     deliverable: 'UDISE+ & DPDP Compliance Checklist',
     impact: '100% safe & government ready',
+    image: '/assets/steps/step-2.jpg',
+    badge: 'UDISE+ Standard Format',
+    tag: 'Govt Standard',
   },
   {
     step: 3,
@@ -80,6 +89,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'A 15-minute live guided sandbox session for your Headmaster and teachers to test offline roll calls.',
     deliverable: 'Custom Institutional Demo Workspace',
     impact: 'Test offline mode yourself',
+    image: '/assets/steps/step-3.jpg',
+    badge: 'Free School Trial',
+    tag: 'Staff Walkthrough',
   },
   {
     step: 4,
@@ -89,6 +101,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'Straightforward school SLA and governance agreement ensuring your school retains 100% data ownership.',
     deliverable: 'Signed Institutional Agreement',
     impact: 'Zero lock-in commitment',
+    image: '/assets/steps/step-4.jpg',
+    badge: '100% School Ownership',
+    tag: 'Formal SLA',
   },
   {
     step: 5,
@@ -98,6 +113,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'Generate a stable workspace path /s/green-valley — isolated school workspace with phone login.',
     deliverable: 'Isolated School Workspace & Admin Credentials',
     impact: 'Generate a stable workspace path /s/green-valley',
+    image: '/assets/steps/step-5.jpg',
+    badge: '/s/green-valley Portal',
+    tag: 'Safe School Link',
   },
   {
     step: 6,
@@ -107,6 +125,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'Upload your existing Excel spreadsheet to onboard 500 to 5,000 students and generate printable QR cards.',
     deliverable: 'Verified Active Student Directory',
     impact: 'Ready in 2 seconds',
+    image: '/assets/steps/step-6.jpg',
+    badge: 'Excel Batch Upload',
+    tag: 'Auto Card Generator',
   },
   {
     step: 7,
@@ -116,6 +137,9 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'Ultra-simple phone onboarding so any teacher can record full class attendance in under 90 seconds.',
     deliverable: 'Teacher Quick-Start Pocket Cards',
     impact: 'Anyone can use it instantly',
+    image: '/assets/steps/step-7.jpg',
+    badge: '5-Min Mobile Training',
+    tag: 'Easy for Teachers',
   },
   {
     step: 8,
@@ -125,11 +149,14 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     subtitle: 'Simultaneous classroom and gate scanning with automated parent arrival SMS alerts and live dashboard stats.',
     deliverable: '100% Operational School System',
     impact: 'School attendance up 150%',
+    image: '/assets/steps/step-8.jpg',
+    badge: 'Gate & Class Roll Call',
+    tag: 'Real Results',
   },
 ];
 
 export const LandingPage: React.FC = () => {
-  const [selectedStageIndex, setSelectedStageIndex] = useState(4); // Default to stage 5 for quick preview
+  const [selectedStageIndex, setSelectedStageIndex] = useState(4); // Default to Stage 5 Provision School
   const [studentCount, setStudentCount] = useState<number>(750);
 
   // Interactive Simulator State
@@ -328,7 +355,6 @@ export const LandingPage: React.FC = () => {
 
           {/* Hero Right 3D Visual Mockup */}
           <div className="lg:col-span-6 relative flex items-center justify-center">
-            {/* 3D Orbit Pedestal Container */}
             <div className="relative w-full max-w-[480px] aspect-square flex items-center justify-center">
               {/* Outer Orbit Disc */}
               <div className="absolute inset-4 rounded-full border-2 border-emerald-400/40 bg-radial from-emerald-500/10 via-emerald-400/5 to-transparent animate-pulse" />
@@ -396,11 +422,9 @@ export const LandingPage: React.FC = () => {
                 transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
                 className="relative z-10 w-72 sm:w-80 rounded-2xl bg-gradient-to-br from-[#fefce8] to-[#fef08a] p-5 shadow-2xl border border-yellow-200/80 transform -rotate-12"
               >
-                {/* Underneath stacked paper shadows */}
                 <div className="absolute inset-0 bg-[#fef9c3] rounded-2xl -rotate-3 -z-10 shadow-lg" />
                 <div className="absolute inset-0 bg-[#fef08a] rounded-2xl rotate-4 -z-20 shadow-md" />
 
-                {/* Card Ruled Lines & Header */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between border-b border-yellow-300/80 pb-2">
                     <span className="font-mono text-[11px] font-bold text-yellow-900">
@@ -411,7 +435,6 @@ export const LandingPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Grid Lines with Tick Marks */}
                   <div className="space-y-2 font-mono text-[10px] text-yellow-950">
                     <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
                       <span>01. Ananya Roy (Roll 14)</span>
@@ -484,9 +507,8 @@ export const LandingPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-center max-w-4xl mx-auto">
-          {/* Card 1: AttendEase App (Online/Offline Mode) */}
+          {/* Card 1: AttendEase App */}
           <div className="p-8 sm:p-10 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm flex flex-col items-center space-y-5 hover:shadow-md transition-all">
-            {/* Visual Icon */}
             <div className="w-20 h-20 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
               <ScanLine className="w-10 h-10 text-[#15803d]" />
             </div>
@@ -534,9 +556,8 @@ export const LandingPage: React.FC = () => {
             )}
           </div>
 
-          {/* Card 2: Simple Upload (Internet Optional) */}
+          {/* Card 2: Simple Upload */}
           <div className="p-8 sm:p-10 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm flex flex-col items-center space-y-5 hover:shadow-md transition-all">
-            {/* Visual Icon */}
             <div className="w-20 h-20 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
               <FileSpreadsheet className="w-10 h-10 text-[#15803d]" />
             </div>
@@ -580,26 +601,40 @@ export const LandingPage: React.FC = () => {
 
         {/* Split Container */}
         <div className="rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 max-w-5xl mx-auto">
-          {/* Left Side: 3D Lightbulb & Stepper */}
-          <div className="lg:col-span-6 p-8 sm:p-10 bg-slate-50/70 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between space-y-6 text-left">
-            {/* Visual 3D Lightbulb Illustration Container */}
-            <div className="w-full h-44 rounded-2xl bg-gradient-to-b from-emerald-100/60 to-emerald-50 border border-emerald-200/60 flex items-center justify-center relative overflow-hidden">
-              <motion.div
-                animate={{ scale: [1, 1.05, 1], rotate: [0, 2, -2, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-20 h-20 rounded-full bg-emerald-400/30 flex items-center justify-center shadow-lg shadow-emerald-500/20"
-              >
-                <Lightbulb className="w-12 h-12 text-[#15803d]" />
-              </motion.div>
+          {/* Left Side: Dynamic 3D Image Asset Preview + 8 Steps */}
+          <div className="lg:col-span-6 p-6 sm:p-8 bg-slate-50/70 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between space-y-5 text-left">
+            {/* Dynamic Visual 3D Diorama Screen */}
+            <div className="w-full h-52 sm:h-56 rounded-2xl border border-slate-200/80 overflow-hidden relative shadow-inner bg-slate-900 flex items-center justify-center group">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={selectedStage.image}
+                  src={selectedStage.image}
+                  alt={selectedStage.title}
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className="w-full h-full object-cover object-center"
+                />
+              </AnimatePresence>
 
-              {/* Little Floating Classroom elements */}
-              <div className="absolute bottom-3 left-4 flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-1 rounded-md border border-emerald-200">
+              {/* Top Left Status Badge */}
+              <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[11px] font-extrabold text-[#14532d] bg-white/95 backdrop-blur-md px-3 py-1 rounded-full border border-emerald-200 shadow-md">
                 <School className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>Classroom Ready</span>
+                <span>{selectedStage.tag}</span>
               </div>
-              <div className="absolute top-3 right-4 flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-1 rounded-md border border-emerald-200">
+
+              {/* Top Right Metric Badge */}
+              <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 text-[11px] font-extrabold text-slate-800 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200 shadow-md">
                 <Clock className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>&lt; 90s Roll Call</span>
+                <span>{selectedStage.badge}</span>
+              </div>
+
+              {/* Bottom Gradient Overlay for Clarity */}
+              <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent pointer-events-none flex items-end px-3 py-2">
+                <span className="text-white text-xs font-bold font-display drop-shadow-md">
+                  Step 0{selectedStage.step}: {selectedStage.name.replace(/^\d+\.\s*/, '')}
+                </span>
               </div>
             </div>
 
@@ -612,7 +647,7 @@ export const LandingPage: React.FC = () => {
                   onClick={() => setSelectedStageIndex(idx)}
                   className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                     idx === selectedStageIndex
-                      ? 'bg-[#14532d] text-white border-[#14532d] shadow-2xs'
+                      ? 'bg-[#14532d] text-white border-[#14532d] shadow-sm'
                       : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                   }`}
                 >
@@ -669,7 +704,6 @@ export const LandingPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-5xl mx-auto">
-          {/* Card 1 */}
           <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
             <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
               <Smartphone className="w-6 h-6 text-[#15803d]" />
@@ -682,7 +716,6 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Card 2 */}
           <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
             <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
               <WifiOff className="w-6 h-6 text-[#15803d]" />
@@ -695,7 +728,6 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Card 3 */}
           <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
             <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
               <FileCheck className="w-6 h-6 text-[#15803d]" />
@@ -779,7 +811,6 @@ export const LandingPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Green Callout Alert Box */}
             <div className="p-4 rounded-2xl bg-[#dcfce7] border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5 leading-relaxed font-medium">
               <Lightbulb className="w-4 h-4 text-[#15803d] shrink-0 mt-0.5" />
               <span>
@@ -830,7 +861,6 @@ export const LandingPage: React.FC = () => {
           Contact our sales team today.
         </div>
 
-        {/* Star Sparkle Watermark in Corner */}
         <div className="absolute right-8 bottom-8 text-emerald-600/30">
           <Sparkles className="w-16 h-16" />
         </div>
@@ -839,7 +869,6 @@ export const LandingPage: React.FC = () => {
       {/* Footer */}
       <footer className="bg-[#0f172a] text-white py-10 px-4 sm:px-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6 text-xs text-slate-400">
-          {/* Left Nav */}
           <div className="flex items-center gap-6 font-semibold">
             <a href="#how-it-works" className="hover:text-white transition-colors">
               How it works
@@ -855,7 +884,6 @@ export const LandingPage: React.FC = () => {
             </Link>
           </div>
 
-          {/* Center Brand */}
           <div className="flex items-center gap-2 font-display font-black text-sm text-white">
             <div className="w-6 h-6 rounded-md bg-[#15803d] flex items-center justify-center text-white text-[10px]">
               AZ
@@ -863,7 +891,6 @@ export const LandingPage: React.FC = () => {
             <span>AttendEase</span>
           </div>
 
-          {/* Right Copyright */}
           <div>
             © {new Date().getFullYear()} AttendEase OS. Govt. of India UDISE+ Compliant.
           </div>

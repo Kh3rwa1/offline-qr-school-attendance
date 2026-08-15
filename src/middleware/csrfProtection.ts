@@ -135,7 +135,9 @@ export function clearCsrfCookies(res: Response): void {
  * Checks if a requested path matches any documented exemption rule.
  */
 export function isRouteExempt(path: string): boolean {
-  if (path.includes('/rfid/scans')) return true;
+  if (process.env.FEATURE_RFID === 'true' && /^\/api\/v1\/schools\/[^/]+\/rfid\/scans$/.test(path)) {
+    return true;
+  }
   return EXEMPT_ROUTES.some((rule) => (rule.exact ? path === rule.path : path.startsWith(rule.path)));
 }
 

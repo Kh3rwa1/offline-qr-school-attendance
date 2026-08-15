@@ -9,6 +9,21 @@ describe('Injected Scanner Adapter & USB Wedge Integration', () => {
     delete window.__injectedScannerAdapter;
     delete window.__scanQRCode;
     document.body.innerHTML = '';
+
+    const mockTrack = { stop: vi.fn(), kind: 'video' };
+    const mockStream = {
+      getTracks: () => [mockTrack],
+    };
+
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue(mockStream),
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
   });
 
   it('connects injected scanner adapter for simulated camera scanning in automated test environments', async () => {
@@ -20,6 +35,10 @@ describe('Injected Scanner Adapter & USB Wedge Integration', () => {
     };
 
     const mockVideo = document.createElement('video');
+    (scannerService as any).zxingReader = {
+      decodeFromStream: vi.fn().mockResolvedValue(undefined),
+      reset: vi.fn(),
+    };
     await scannerService.startScanning(mockVideo, scanSpy);
 
     // Verify injected adapter hook was attached

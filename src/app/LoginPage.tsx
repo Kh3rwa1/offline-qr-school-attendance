@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { getDefaultRouteForRole } from '../auth/permissions';
 import { Button, TextField, PasswordField, Dialog, Badge, Toast, Skeleton } from '../components/ui';
+import { useLanguage } from './LanguageProvider';
 
 interface TickerItem {
   id: string;
@@ -53,6 +54,7 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { schoolSlug } = useParams<{ schoolSlug?: string }>();
   const { login } = useSession();
+  const { language, setLanguage, t } = useLanguage();
 
   // Public Tenant Resolution State
   const [resolvedSchool, setResolvedSchool] = useState<ResolvedSchool | null>(null);
@@ -192,14 +194,13 @@ export const LoginPage: React.FC = () => {
           <div className="relative inline-flex items-center">
             <Languages className="w-4 h-4 text-ink-muted absolute left-3 pointer-events-none" />
             <select
-              value={selectedLanguage}
-              onChange={(e) => setSelectedLanguage(e.target.value as any)}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
               aria-label="Select Language"
               className="pl-9 pr-8 py-1.5 rounded-full bg-surface border border-line text-xs font-semibold text-ink shadow-2xs outline-none cursor-pointer hover:bg-surface-soft transition-all"
             >
               <option value="en">English</option>
               <option value="bn">বাংলা (Bengali)</option>
-              <option value="hi">हिन्दी (Hindi)</option>
             </select>
           </div>
 
@@ -419,12 +420,12 @@ export const LoginPage: React.FC = () => {
           >
             <div className="space-y-1.5 mb-6">
               <h2 className="text-2xl sm:text-3xl font-extrabold text-ink font-display">
-                Sign In
+                {language === 'bn' ? 'লগ ইন করুন' : 'Sign In'}
               </h2>
               <p className="text-sm text-ink-soft">
                 {resolvedSchool
-                  ? `Sign in to access ${resolvedSchool.name}`
-                  : 'Enter your registered mobile number and password'}
+                  ? (language === 'bn' ? `${resolvedSchool.name} এ প্রবেশ করতে লগ ইন করুন` : `Sign in to access ${resolvedSchool.name}`)
+                  : (language === 'bn' ? 'আপনার নিবন্ধিত মোবাইল নম্বর এবং পাসওয়ার্ড লিখুন' : 'Enter your registered mobile number and password')}
               </p>
             </div>
 
@@ -436,7 +437,7 @@ export const LoginPage: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <TextField
-                label="Mobile Number"
+                label={t('phoneNumber')}
                 type="tel"
                 id="login-phone"
                 required
@@ -445,11 +446,11 @@ export const LoginPage: React.FC = () => {
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="90000 00000"
-                helperText="Authorized teacher, staff, or administrator number"
+                helperText={language === 'bn' ? 'অনুমোদিত শিক্ষক বা প্রশাসকের ফোন নম্বর' : 'Authorized teacher, staff, or administrator number'}
               />
 
               <PasswordField
-                label="Password"
+                label={t('password')}
                 id="login-password"
                 required
                 autoComplete="current-password"
@@ -466,7 +467,7 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="rounded border-line text-forest-700 focus:ring-forest-600 cursor-pointer w-4 h-4"
                   />
-                  <span>Remember mobile number</span>
+                  <span>{language === 'bn' ? 'মোবাইল নম্বর মনে রাখুন' : 'Remember mobile number'}</span>
                 </label>
 
                 <button
@@ -474,7 +475,7 @@ export const LoginPage: React.FC = () => {
                   onClick={() => setForgotPasswordOpen(true)}
                   className="text-xs font-bold text-forest-700 dark:text-forest-400 hover:underline cursor-pointer"
                 >
-                  Forgot password?
+                  {language === 'bn' ? 'পাসওয়ার্ড ভুলে গেছেন?' : 'Forgot password?'}
                 </button>
               </div>
 
@@ -488,7 +489,7 @@ export const LoginPage: React.FC = () => {
                   className="w-full text-base font-bold shadow-lg shadow-forest-700/20"
                   aria-label={resolvedSchool ? `Sign In to ${resolvedSchool.name}` : 'Sign In to Workspace'}
                 >
-                  {resolvedSchool ? `Sign In to ${resolvedSchool.name}` : 'Sign In to Workspace'}
+                  {resolvedSchool ? (language === 'bn' ? `${resolvedSchool.name} - Sign In` : `Sign In to ${resolvedSchool.name}`) : (language === 'bn' ? 'লগ ইন করুন (Sign In)' : 'Sign In to Workspace')}
                 </Button>
               </div>
             </form>

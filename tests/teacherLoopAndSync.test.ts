@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { computeSHA256 } from '../src/services/offlineSyncService';
 import { verifyCsrfToken, generateCsrfToken } from '../src/middleware/csrfProtection';
+import { CameraScannerService } from '../src/services/scannerService';
+import { createApp } from '../server';
 import { db, withSystemContext, withTenantContext } from '../src/db/index';
 import { runMigrations } from '../src/db/migrate';
 import {
@@ -324,6 +326,120 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
           newStatus: 'OPEN',
         })
       ).rejects.toThrow('FINALIZED_SESSION_LOCKED');
+    });
+  });
+
+  describe('CameraScannerService & MediaStream Control', () => {
+    it('requests environment camera, sets playsinline, and stops tracks cleanly', async () => {
+      const trackStopFn = vi.fn();
+      const mockTrack = { stop: trackStopFn, kind: 'video' };
+      const mockStream = {
+        getTracks: vi.fn(() => [mockTrack]),
+      } as unknown as MediaStream;
+
+      const getUserMediaMock = vi.fn().mockResolvedValue(mockStream);
+
+      Object.defineProperty(global, 'navigator', {
+        value: {
+          mediaDevices: {
+            getUserMedia: getUserMediaMock,
+          },
+        },
+        configurable: true,
+        writable: true,
+      });
+
+      const playMock = vi.fn().mockResolvedValue(undefined);
+      const mockVideo = {
+        srcObject: null,
+        setAttribute: vi.fn(),
+        play: playMock,
+        readyState: 4,
+      } as unknown as HTMLVideoElement;
+
+      const scanner = new CameraScannerService();
+      (scanner as any).zxingReader = {
+        decodeFromStream: vi.fn().mockResolvedValue(undefined),
+        reset: vi.fn(),
+      };
+      const onScan = vi.fn();
+
+      await scanner.startScanning(mockVideo, onScan);
+
+      expect(getUserMediaMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          video: expect.objectContaining({ facingMode: 'environment' }),
+          audio: false,
+        })
+      );
+      expect(mockVideo.srcObject).toBe(mockStream);
+      expect(mockVideo.setAttribute).toHaveBeenCalledWith('playsinline', 'true');
+      expect(playMock).toHaveBeenCalled();
+
+      // Stop scanning
+      scanner.stopScanning();
+      expect(trackStopFn).toHaveBeenCalled();
+      expect(mockVideo.srcObject).toBeNull();
+    });
+
+    it('throws error immediately when camera permission is denied or getUserMedia fails', async () => {
+      const permError = new Error('Permission denied');
+      permError.name = 'NotAllowedError';
+
+      Object.defineProperty(global, 'navigator', {
+        value: {
+          mediaDevices: {
+            getUserMedia: vi.fn().mockRejectedValue(permError),
+          },
+        },
+        configurable: true,
+        writable: true,
+      });
+
+      const mockVideo = {
+        srcObject: null,
+        setAttribute: vi.fn(),
+        play: vi.fn(),
+      } as unknown as HTMLVideoElement;
+
+      const scanner = new CameraScannerService();
+      await expect(scanner.startScanning(mockVideo, vi.fn())).rejects.toThrow('Permission denied');
+    });
+
+    it('deduplicates consecutive identical scan tokens within 1500ms', async () => {
+      const scanner = new CameraScannerService();
+      const onScan = vi.fn();
+      (scanner as any).onScanCallback = onScan;
+
+      (scanner as any).emitScan('QR_TOKEN_1');
+      (scanner as any).emitScan('QR_TOKEN_1');
+      expect(onScan).toHaveBeenCalledTimes(1);
+
+      // Distinct token triggers immediately
+      (scanner as any).emitScan('QR_TOKEN_2');
+      expect(onScan).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Feature Flag Isolation', () => {
+    it('returns 404 for RFID routes when FEATURE_RFID is false', async () => {
+      const oldFlag = process.env.FEATURE_RFID;
+      process.env.FEATURE_RFID = 'false';
+      process.env.TEST_SERVER_STATIC = 'true';
+
+      try {
+        const app = await createApp();
+        const server = app.listen(0);
+        const address = server.address() as any;
+        const url = `http://127.0.0.1:${address.port}`;
+
+        const res = await fetch(`${url}/api/v1/schools/dummy-id/rfid/readers`);
+        expect(res.status).toBe(404);
+
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      } finally {
+        process.env.FEATURE_RFID = oldFlag;
+      }
     });
   });
 });

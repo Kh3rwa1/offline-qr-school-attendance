@@ -15,11 +15,11 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await expect(page.locator('#login-phone')).not.toBeVisible();
 
     // Verify Stage 5 honest copy (workspace path instead of fake subdomain)
-    await page.getByRole('button', { name: /5 Provision School/i }).click();
+    await page.getByRole('button', { name: /5\.?\s*Provision School/i }).click();
     await expect(page.getByText('Generate a stable workspace path /s/green-valley')).toBeVisible();
 
     // Click "School Sign In" button on landing page and assert navigation to /login
-    const schoolSignInBtn = page.getByRole('button', { name: 'School Sign In' });
+    const schoolSignInBtn = page.getByRole('button', { name: 'School Sign In' }).first();
     await expect(schoolSignInBtn).toBeVisible();
     await schoolSignInBtn.click();
 

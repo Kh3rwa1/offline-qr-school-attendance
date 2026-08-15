@@ -129,7 +129,17 @@ export function validateKubernetesManifests(k8sDir = path.join(process.cwd(), 'k
         }
       }
 
-      // 3. Deployment & Security Validation
+      // 3. PrometheusRule Validation
+      else if (kind === 'PrometheusRule') {
+        if (apiVersion !== 'monitoring.coreos.com/v1') {
+          issues.push({ file, kind, name, field: 'apiVersion', message: 'PrometheusRule must use monitoring.coreos.com/v1' });
+        }
+        if (!rawDoc.includes('groups:') || !rawDoc.includes('rules:')) {
+          issues.push({ file, kind, name, field: 'spec.groups', message: 'PrometheusRule must specify spec.groups and alert rules' });
+        }
+      }
+
+      // 4. Deployment & Security Validation
       else if (kind === 'Deployment') {
         if (!rawDoc.includes('runAsNonRoot: true')) {
           issues.push({ file, kind, name, field: 'securityContext.runAsNonRoot', message: 'Deployment must specify runAsNonRoot: true' });

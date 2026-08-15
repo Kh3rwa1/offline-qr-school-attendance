@@ -12,7 +12,7 @@ RUN npm run build
 
 # Stage 2: Runtime image
 FROM node:22-alpine AS runner
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates python3 make g++
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates pcsc-lite-libs pcsc-lite ccid python3 make g++
 
 WORKDIR /app
 

@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure strict file creation permissions (0600)
+umask 077
+
 ENV_FILE="${1:-.env}"
 
 if [ ! -f "${ENV_FILE}" ]; then
   if [ -f ".env.example" ]; then
     echo "Creating ${ENV_FILE} from .env.example..."
     cp .env.example "${ENV_FILE}"
+    chmod 0600 "${ENV_FILE}"
   else
     echo "Error: Neither ${ENV_FILE} nor .env.example found." >&2
     exit 1
@@ -17,7 +21,6 @@ generate_secret_32() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 32
   else
-    # Fallback to /dev/urandom
     head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
   fi
 }
@@ -27,7 +30,6 @@ is_placeholder_or_empty() {
   if [ -z "${val}" ]; then
     return 0
   fi
-  # Remove quotes if present
   val="${val%\"}"
   val="${val#\"}"
   val="${val%\'}"
@@ -48,6 +50,7 @@ echo "Auditing and generating cryptographically secure secrets in ${ENV_FILE}...
 
 TEMP_ENV="${ENV_FILE}.tmp.$$"
 cp "${ENV_FILE}" "${TEMP_ENV}"
+chmod 0600 "${TEMP_ENV}"
 
 # List of standalone secret keys to generate
 SECRET_KEYS=(
@@ -90,52 +93,71 @@ set_var() {
   fi
 }
 
+SEEN_SECRETS=""
+
 for key in "${SECRET_KEYS[@]}"; do
   current_val="$(get_var "${key}")"
   if is_placeholder_or_empty "${current_val}"; then
-    new_secret="$(generate_secret_32)"
+    while true; do
+      new_secret="$(generate_secret_32)"
+      if [[ "${SEEN_SECRETS}" != *"${new_secret}"* ]]; then
+        SEEN_SECRETS="${SEEN_SECRETS} ${new_secret}"
+        break
+      fi
+    done
     set_var "${key}" "${new_secret}"
-    echo "  Generated new secret for: ${key}"
+    echo "  Generated secure secret for: ${key}"
+  else
+    SEEN_SECRETS="${SEEN_SECRETS} ${current_val}"
   fi
 done
 
-# Synchronize DB URLs with passwords
-MIG_PASS="$(get_var "MIGRATION_DB_PASSWORD")"
-APP_PASS="$(get_var "APP_DB_PASSWORD")"
-SYS_PASS="$(get_var "SYSTEM_DB_PASSWORD")"
-AUTH_PASS="$(get_var "AUTH_DB_PASSWORD")"
-POSTGRES_DB="$(get_var "POSTGRES_DB")"
-[ -z "${POSTGRES_DB}" ] && POSTGRES_DB="school_attendance"
-
-# Update DATABASE_URL if placeholder
-DB_URL="$(get_var "DATABASE_URL")"
-if is_placeholder_or_empty "${DB_URL}" || [[ "${DB_URL}" == *replace-with-* ]]; then
-  set_var "DATABASE_URL" "postgres://attendance_app:${APP_PASS}@localhost:5432/${POSTGRES_DB}"
-  echo "  Synchronized DATABASE_URL"
+# Synchronize Database Connection URLs with actual generated passwords
+POSTGRES_DB="$(get_var 'POSTGRES_DB')"
+if [ -z "${POSTGRES_DB}" ]; then
+  POSTGRES_DB="school_attendance"
+  set_var "POSTGRES_DB" "${POSTGRES_DB}"
 fi
 
-# Update SYSTEM_DATABASE_URL if placeholder
-SYS_DB_URL="$(get_var "SYSTEM_DATABASE_URL")"
-if is_placeholder_or_empty "${SYS_DB_URL}" || [[ "${SYS_DB_URL}" == *replace-with-* ]]; then
-  set_var "SYSTEM_DATABASE_URL" "postgres://attendance_system:${SYS_PASS}@localhost:5432/${POSTGRES_DB}"
-  echo "  Synchronized SYSTEM_DATABASE_URL"
-fi
+MIGRATION_USER="$(get_var 'MIGRATION_DB_USER')"
+[ -z "${MIGRATION_USER}" ] && MIGRATION_USER="attendance_migration" && set_var "MIGRATION_DB_USER" "${MIGRATION_USER}"
+MIGRATION_PASS="$(get_var 'MIGRATION_DB_PASSWORD')"
 
-# Update AUTH_DATABASE_URL if placeholder
-AUTH_DB_URL="$(get_var "AUTH_DATABASE_URL")"
-if is_placeholder_or_empty "${AUTH_DB_URL}" || [[ "${AUTH_DB_URL}" == *replace-with-* ]]; then
-  set_var "AUTH_DATABASE_URL" "postgres://attendance_auth:${AUTH_PASS}@localhost:5432/${POSTGRES_DB}"
-  echo "  Synchronized AUTH_DATABASE_URL"
-fi
+APP_USER="$(get_var 'APP_DB_USER')"
+[ -z "${APP_USER}" ] && APP_USER="attendance_app" && set_var "APP_DB_USER" "${APP_USER}"
+APP_PASS="$(get_var 'APP_DB_PASSWORD')"
 
-# Ensure BACKUP_CRON and BACKUP_RETAIN_DAYS exist
-if [ -z "$(get_var "BACKUP_CRON")" ]; then
-  set_var "BACKUP_CRON" "18:30"
-fi
-if [ -z "$(get_var "BACKUP_RETAIN_DAYS")" ]; then
-  set_var "BACKUP_RETAIN_DAYS" "14"
-fi
+SYSTEM_USER="$(get_var 'SYSTEM_DB_USER')"
+[ -z "${SYSTEM_USER}" ] && SYSTEM_USER="attendance_system" && set_var "SYSTEM_DB_USER" "${SYSTEM_USER}"
+SYSTEM_PASS="$(get_var 'SYSTEM_DB_PASSWORD')"
 
+AUTH_USER="$(get_var 'AUTH_DB_USER')"
+[ -z "${AUTH_USER}" ] && AUTH_USER="attendance_auth" && set_var "AUTH_DB_USER" "${AUTH_USER}"
+AUTH_PASS="$(get_var 'AUTH_DB_PASSWORD')"
+
+# Update or set application database URLs if empty or containing placeholders
+sync_url() {
+  local key="$1"
+  local user="$2"
+  local pass="$3"
+  local host="$4"
+  local db="$5"
+  local curr="$(get_var "${key}")"
+  if is_placeholder_or_empty "${curr}" || [[ "${curr}" == *replace-with* ]] || [[ "${curr}" == *ci_password* ]] || [ -z "${curr}" ]; then
+    set_var "${key}" "postgres://${user}:${pass}@${host}:5432/${db}"
+  fi
+}
+
+sync_url "DATABASE_URL" "${APP_USER}" "${APP_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+sync_url "SYSTEM_DATABASE_URL" "${SYSTEM_USER}" "${SYSTEM_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+sync_url "AUTH_DATABASE_URL" "${AUTH_USER}" "${AUTH_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+sync_url "PG_RLS_MIGRATION_DATABASE_URL" "${MIGRATION_USER}" "${MIGRATION_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+sync_url "PG_RLS_APPLICATION_DATABASE_URL" "${APP_USER}" "${APP_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+sync_url "PG_RLS_AUTH_DATABASE_URL" "${AUTH_USER}" "${AUTH_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+sync_url "PG_RLS_SYSTEM_DATABASE_URL" "${SYSTEM_USER}" "${SYSTEM_PASS}" "127.0.0.1" "${POSTGRES_DB}"
+
+# Atomically replace target .env and enforce 0600 permissions
 mv "${TEMP_ENV}" "${ENV_FILE}"
-chmod 600 "${ENV_FILE}"
-echo "✅ Secrets audit and generation complete. Secured ${ENV_FILE} (mode 0600)."
+chmod 0600 "${ENV_FILE}"
+
+echo "✅ All secrets audited, generated, and written to ${ENV_FILE} (permissions: 0600)."

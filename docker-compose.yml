@@ -64,7 +64,7 @@ services:
       RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:?RFID_CARD_MASTER_KEY is required}
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:?KMS_MASTER_KEY is required}
     volumes:
-      - backups:/backups:ro
+      - ./backups:/backups:ro
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null']
       interval: 10s
@@ -189,7 +189,7 @@ services:
       BACKUP_CRON: ${BACKUP_CRON:-18:30}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-14}
     volumes:
-      - backups:/backups
+      - ./backups:/backups
       - ./docker/backup-entrypoint.sh:/backup-entrypoint.sh:ro
     entrypoint: ['/bin/sh', '/backup-entrypoint.sh']
     healthcheck:
@@ -245,4 +245,3 @@ services:
 volumes:
   pgdata:
   redisdata:
-  backups:

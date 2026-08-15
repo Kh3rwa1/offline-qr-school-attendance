@@ -40,11 +40,23 @@ systemHealthRouter.get(
       redisStatus = process.env.ALLOW_IN_MEMORY_RATE_LIMITER === 'true' ? 'IN_MEMORY_FALLBACK' : 'DISCONNECTED';
     }
 
-    // Latest backup timestamp: read from filesystem metadata (/backups/LATEST) or environment
+    // 1. Latest backup timestamp & manifest metadata
     let latestBackupTimestamp: string | null = null;
-    const backupLatestPath = process.env.BACKUP_LATEST_PATH || '/backups/LATEST';
+    let backupSizeBytes: number | null = null;
+    let backupChecksumSha256: string | null = null;
+    let backupAgeSeconds: number | null = null;
+
+    const backupDir = process.env.BACKUP_DIR || (fs.existsSync('./backups') ? './backups' : '/backups');
+    const backupLatestPath = `${backupDir}/LATEST`;
+    const manifestLatestPath = `${backupDir}/LATEST_MANIFEST.json`;
+
     try {
-      if (fs.existsSync(backupLatestPath)) {
+      if (fs.existsSync(manifestLatestPath)) {
+        const manifest = JSON.parse(fs.readFileSync(manifestLatestPath, 'utf8'));
+        if (manifest.timestamp) latestBackupTimestamp = manifest.timestamp;
+        if (manifest.sizeBytes) backupSizeBytes = manifest.sizeBytes;
+        if (manifest.checksumSha256) backupChecksumSha256 = manifest.checksumSha256;
+      } else if (fs.existsSync(backupLatestPath)) {
         const rawTimestamp = fs.readFileSync(backupLatestPath, 'utf8').trim();
         if (rawTimestamp && !isNaN(Date.parse(rawTimestamp))) {
           latestBackupTimestamp = new Date(rawTimestamp).toISOString();
@@ -57,20 +69,38 @@ systemHealthRouter.get(
       latestBackupTimestamp = process.env.LATEST_BACKUP_TIMESTAMP;
     }
 
-    // Migration journal version
+    if (latestBackupTimestamp) {
+      backupAgeSeconds = Math.max(0, Math.floor((Date.now() - new Date(latestBackupTimestamp).getTime()) / 1000));
+    }
+
+    // 2. Latest Restore Verification Status
+    let latestRestoreVerifiedTimestamp: string | null = null;
+    let restoreVerificationStatus: string | null = null;
+    const restoreVerifiedPath = `${backupDir}/LATEST_RESTORE_VERIFIED`;
+    try {
+      if (fs.existsSync(restoreVerifiedPath)) {
+        const restoreData = JSON.parse(fs.readFileSync(restoreVerifiedPath, 'utf8'));
+        latestRestoreVerifiedTimestamp = restoreData.verifiedAt || null;
+        restoreVerificationStatus = restoreData.status || null;
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 3. Migration journal version
     const migrationJournalVersion = process.env.SCHEMA_VERSION || '0014_school_slug_tenancy';
 
-    // KMS Provider Mode (Never returns key material)
+    // 4. KMS Provider Mode (Never returns key material)
     const kmsProviderMode = process.env.KMS_PROVIDER
       ? process.env.KMS_PROVIDER
       : process.env.KMS_MASTER_KEY
       ? 'LOCAL_AES_256_GCM'
       : 'LOCAL_SOFTWARE_DERIVED';
 
-    // RFID Card Proof Enforcement State
+    // 5. RFID Card Proof Enforcement State
     const rfidCardProofEnforced = process.env.STRICT_CARD_PROOF !== 'false';
 
-    // Worker Heartbeat age in seconds (from heartbeat file or claimed notification jobs)
+    // 6. Worker Heartbeat age in seconds (from heartbeat file or claimed notification jobs)
     let workerHeartbeatAgeSeconds: number | null = null;
     const heartbeatPath = process.env.WORKER_HEARTBEAT_FILE || '/tmp/worker-heartbeat';
     try {
@@ -100,11 +130,10 @@ systemHealthRouter.get(
     }
 
     // Calculate honest system degradation:
-    // Degraded when: DB down, Redis disconnected, backup older than 36h, worker heartbeat older than 2 minutes (120s)
+    // Degraded when: DB down, Redis disconnected, backup older than 36h, worker heartbeat older than 120s
     let backupIsStale = false;
-    if (latestBackupTimestamp) {
-      const backupAgeMs = Date.now() - new Date(latestBackupTimestamp).getTime();
-      if (backupAgeMs > 36 * 3600 * 1000) {
+    if (backupAgeSeconds !== null) {
+      if (backupAgeSeconds > 36 * 3600) {
         backupIsStale = true;
       }
     } else if (process.env.NODE_ENV === 'production') {
@@ -131,6 +160,11 @@ systemHealthRouter.get(
         db: dbStatus,
         redis: redisStatus,
         latestBackupTimestamp,
+        backupAgeSeconds,
+        backupSizeBytes,
+        backupChecksumSha256,
+        latestRestoreVerifiedTimestamp,
+        restoreVerificationStatus,
         migrationJournalVersion,
         kmsProviderMode,
         rfidCardProofEnforced,

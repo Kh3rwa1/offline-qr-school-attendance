@@ -34,6 +34,31 @@ if [ -z "${BACKUP_ENCRYPTION_KEY:-}" ]; then
   exit 1
 fi
 
+compute_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  fi
+}
+
+# 1. Verify Manifest and Checksum (if manifest exists)
+MANIFEST_FILE="${BACKUP_FILE%.sql.gz.enc}.manifest.json"
+if [ -f "${MANIFEST_FILE}" ]; then
+  echo "📋 Validating SHA-256 integrity from ${MANIFEST_FILE}..."
+  EXPECTED_CHECKSUM=$(node -e "try { const m = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log(m.checksumSha256 || ''); } catch { process.exit(0); }" "${MANIFEST_FILE}")
+  ACTUAL_CHECKSUM=$(compute_sha256 "${BACKUP_FILE}")
+  if [ -n "${EXPECTED_CHECKSUM}" ] && [ "${EXPECTED_CHECKSUM}" != "${ACTUAL_CHECKSUM}" ]; then
+    echo "❌ INTEGRITY CHECK FAILED: Backup checksum mismatch!" >&2
+    echo "  Expected: ${EXPECTED_CHECKSUM}" >&2
+    echo "  Actual:   ${ACTUAL_CHECKSUM}" >&2
+    exit 1
+  fi
+  echo "✅ Checksum verified: ${ACTUAL_CHECKSUM:0:16}..."
+fi
+
 POSTGRES_DB="${POSTGRES_DB:-school_attendance}"
 MIGRATION_DB_USER="${MIGRATION_DB_USER:-attendance_migration}"
 MIGRATION_DB_PASSWORD="${MIGRATION_DB_PASSWORD:-}"

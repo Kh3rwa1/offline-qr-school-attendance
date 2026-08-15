@@ -1,0 +1,100 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: school-attendance-alerts
+  labels:
+    app: school-attendance
+    role: alert-rules
+spec:
+  groups:
+    - name: attendease.rules
+      rules:
+        - alert: AttendEaseAppDown
+          expr: up{job="school-attendance-web"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "AttendEase Web Application is down"
+            description: "AttendEase web instance has been unavailable for more than 1 minute."
+
+        - alert: AttendEasePostgresDown
+          expr: pg_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL Database is unreachable"
+            description: "PostgreSQL database connection has failed for over 1 minute."
+
+        - alert: AttendEaseRedisDown
+          expr: redis_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis Cache & Rate Limiter is unreachable"
+            description: "Redis instance has been down for over 1 minute."
+
+        - alert: AttendEaseSmsWorkerHeartbeatStale
+          expr: attendease_sms_worker_heartbeat_age_seconds > 180
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SMS Worker heartbeat is stale"
+            description: "SMS Worker heartbeat has not been updated in over 3 minutes."
+
+        - alert: AttendEaseSmsQueueBacklogHigh
+          expr: attendease_notification_queue_pending_count > 100
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SMS Notification queue backlog is high"
+            description: "Over 100 SMS notifications pending in queue for > 5 minutes."
+
+        - alert: AttendEaseBackupStale
+          expr: attendease_backup_age_seconds > 108000
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Automated database backup is stale (> 30 hours)"
+            description: "No successful encrypted database backup has been created in the last 30 hours."
+
+        - alert: AttendEaseRestoreVerificationStale
+          expr: attendease_restore_verification_age_seconds > 604800
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Automated restore verification drill is stale (> 7 days)"
+            description: "Disaster recovery isolated restore drill has not been verified within the last 7 days."
+
+        - alert: AttendEaseDiskUsageCritical
+          expr: (node_filesystem_free_bytes / node_filesystem_size_bytes) < 0.15
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Appliance host disk space critical (< 15% free)"
+            description: "Host appliance available disk space has dropped below 15%."
+
+        - alert: AttendEaseRfidGatewayOffline
+          expr: attendease_rfid_gateway_connected == 0
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "RFID/DESFire hardware gateway is offline"
+            description: "RFID smartcard gateway reader has disconnected or failed health checks."
+
+        - alert: AttendEaseCardProofFailureSpike
+          expr: rate(attendease_rfid_card_proof_failures_total[5m]) > 0.1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Spike in DESFire card-proof cryptographic failures"
+            description: "Potential card replay or counterfeit token presentation detected."

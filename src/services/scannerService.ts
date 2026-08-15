@@ -1,8 +1,9 @@
-import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/browser';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 declare global {
   interface Window {
     BarcodeDetector?: any;
+    __ENABLE_TEST_SCANNER_HOOK?: boolean;
     __injectedScannerAdapter?: {
       triggerScan: (token: string) => void;
     };
@@ -13,40 +14,87 @@ declare global {
 export class CameraScannerService {
   private zxingReader: BrowserMultiFormatReader | null = null;
   private videoElement: HTMLVideoElement | null = null;
+  private mediaStream: MediaStream | null = null;
   private isScanning = false;
   private onScanCallback: ((data: string) => void) | null = null;
   private scanInterval: any = null;
+  private lastScanToken = '';
+  private lastScanTime = 0;
 
   constructor() {
     this.zxingReader = new BrowserMultiFormatReader();
+  }
+
+  private emitScan(token: string) {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    const now = Date.now();
+    if (trimmed === this.lastScanToken && now - this.lastScanTime < 1500) {
+      return;
+    }
+    this.lastScanToken = trimmed;
+    this.lastScanTime = now;
+    this.onScanCallback?.(trimmed);
   }
 
   async startScanning(
     videoElement: HTMLVideoElement,
     onScan: (data: string) => void
   ): Promise<void> {
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      throw new Error('CAMERA_UNAVAILABLE: getUserMedia is not supported in this browser environment.');
+    }
+
+    // Stop any existing stream / loop before starting new stream
+    this.stopScanning();
+
     this.videoElement = videoElement;
     this.onScanCallback = onScan;
     this.isScanning = true;
 
-    // Attach global test trigger hook if specified
-    window.__scanQRCode = (token: string) => {
-      if (this.onScanCallback) {
-        this.onScanCallback(token);
-      }
-    };
+    // 1. Request environment-facing camera media stream
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
 
-    if (window.__injectedScannerAdapter) {
-      window.__injectedScannerAdapter.triggerScan = (token: string) => {
-        if (this.onScanCallback) {
-          this.onScanCallback(token);
+    this.mediaStream = stream;
+
+    // 2. Assign stream to video element and await playback
+    videoElement.srcObject = stream;
+    videoElement.setAttribute('playsinline', 'true');
+    videoElement.muted = true;
+    await videoElement.play();
+
+    // 3. Expose test hooks only in test mode or when explicitly enabled
+    if (typeof window !== 'undefined') {
+      const isTestEnv =
+        (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') ||
+        (import.meta as any)?.env?.MODE === 'test' ||
+        window.__ENABLE_TEST_SCANNER_HOOK === true;
+
+      if (isTestEnv) {
+        window.__scanQRCode = (token: string) => {
+          this.emitScan(token);
+        };
+
+        if (!window.__injectedScannerAdapter) {
+          window.__injectedScannerAdapter = {
+            triggerScan: (token: string) => this.emitScan(token),
+          };
+        } else {
+          window.__injectedScannerAdapter.triggerScan = (token: string) => this.emitScan(token);
         }
-      };
+      }
     }
 
-    try {
-      if ('BarcodeDetector' in window) {
-        // Use Native BarcodeDetector API if available
+    // 4. Optical detection loop
+    if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+      try {
         const barcodeDetector = new (window as any).BarcodeDetector({
           formats: ['qr_code'],
         });
@@ -54,44 +102,76 @@ export class CameraScannerService {
         this.scanInterval = setInterval(async () => {
           if (!this.isScanning || !this.videoElement) return;
           try {
-            if (this.videoElement.readyState === this.videoElement.HAVE_ENOUGH_DATA) {
+            if (this.videoElement.readyState >= 2) {
               const barcodes = await barcodeDetector.detect(this.videoElement);
-              if (barcodes.length > 0 && barcodes[0].rawValue) {
-                this.onScanCallback?.(barcodes[0].rawValue);
+              if (barcodes && barcodes.length > 0 && barcodes[0]?.rawValue) {
+                this.emitScan(barcodes[0].rawValue);
               }
             }
-          } catch (err) {
-            // Fallback or retry silently
+          } catch {
+            // Transient frame detection error, continue loop
           }
-        }, 250);
-      } else {
-        // Fallback to ZXing BrowserMultiFormatReader
-        await this.zxingReader?.decodeFromVideoDevice(
-          undefined,
-          videoElement,
-          (result, error) => {
-            if (result && this.isScanning) {
-              this.onScanCallback?.(result.getText());
-            }
-          }
-        );
+        }, 150);
+        return;
+      } catch (detectorErr) {
+        console.warn('BarcodeDetector initialization fallback to ZXing:', detectorErr);
       }
-    } catch (err) {
-      console.warn('Camera scan setup note:', err);
     }
+
+    // Fallback: ZXing BrowserMultiFormatReader decoding directly from video stream
+    if (!this.zxingReader) {
+      this.zxingReader = new BrowserMultiFormatReader();
+    }
+
+    await this.zxingReader.decodeFromStream(
+      stream,
+      videoElement,
+      (result) => {
+        if (result && this.isScanning) {
+          this.emitScan(result.getText());
+        }
+      }
+    );
   }
 
   stopScanning(): void {
     this.isScanning = false;
+
     if (this.scanInterval) {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
-    try {
-      (this.zxingReader as any)?.reset?.();
-    } catch (e) {
-      // ignore
+
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+      });
+      this.mediaStream = null;
     }
+
+    if (this.zxingReader) {
+      try {
+        (this.zxingReader as any).reset?.();
+      } catch {
+        // ignore
+      }
+    }
+
+    if (this.videoElement) {
+      try {
+        this.videoElement.srcObject = null;
+      } catch {
+        // ignore
+      }
+      this.videoElement = null;
+    }
+
+    this.lastScanToken = '';
+    this.lastScanTime = 0;
   }
 }
 

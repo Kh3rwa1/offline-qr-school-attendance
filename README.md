@@ -52,9 +52,7 @@ npm run seed
 npm run dev
 ```
 
-Visit `http://localhost:3000` to log in:
-- **School Admin**: `+919100000001` / `Admin@12345`
-- **Teacher**: `+919200000001` / `Teacher@12345`
+Visit `http://localhost:3000` to log in with your seeded development credentials (see `src/db/seed.ts`).
 
 ---
 

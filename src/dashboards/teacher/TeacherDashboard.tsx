@@ -209,24 +209,40 @@ export const TeacherDashboard: React.FC = () => {
     [activeSchoolId, selectedClassId, session, user, t, showFeedback, refreshOutbox]
   );
 
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'live' | 'error' | 'permission_denied'>('idle');
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+
+  const videoCallbackRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    setVideoEl(node);
+  }, []);
+
   // Start & Stop Camera Scanner
-  const startCamera = useCallback(async () => {
-    if (!videoRef.current) return;
+  const startCamera = useCallback(async (targetEl?: HTMLVideoElement | null) => {
+    const el = targetEl || videoRef.current;
+    if (!el) return;
     setCameraError(null);
+    setCameraStatus('starting');
 
     if (!cameraScannerRef.current) {
       cameraScannerRef.current = new CameraScannerService();
     }
 
     try {
-      await cameraScannerRef.current.startScanning(videoRef.current, (token) => {
+      await cameraScannerRef.current.startScanning(el, (token) => {
         void handleScan(token, 'CAMERA');
       });
       setIsCameraActive(true);
+      setCameraStatus('live');
     } catch (err: any) {
       console.warn('Camera activation error:', err);
       setIsCameraActive(false);
-      setCameraError(t('cameraDenied'));
+      const isDenied =
+        err?.name === 'NotAllowedError' ||
+        err?.name === 'PermissionDeniedError' ||
+        err?.message?.includes('Permission');
+      setCameraStatus(isDenied ? 'permission_denied' : 'error');
+      setCameraError(isDenied ? t('cameraDenied') : (err?.message || t('cameraDenied')));
     }
   }, [handleScan, t]);
 
@@ -235,19 +251,20 @@ export const TeacherDashboard: React.FC = () => {
       cameraScannerRef.current.stopScanning();
     }
     setIsCameraActive(false);
+    setCameraStatus('idle');
   }, []);
 
-  // Manage camera lifecycle based on view mode and session presence
+  // Manage camera lifecycle based on view mode, video element mount, and session presence
   useEffect(() => {
-    if (viewMode === 'scanner' && session && session.status !== 'FINALIZED') {
-      void startCamera();
+    if (viewMode === 'scanner' && videoEl && session && session.status !== 'FINALIZED') {
+      void startCamera(videoEl);
     } else {
       stopCamera();
     }
     return () => {
       stopCamera();
     };
-  }, [viewMode, session, startCamera, stopCamera]);
+  }, [viewMode, videoEl, session, startCamera, stopCamera]);
 
   // Setup USB hardware keyboard-wedge scanner listener
   useEffect(() => {
@@ -744,13 +761,13 @@ export const TeacherDashboard: React.FC = () => {
 
             {/* Video Viewfinder & Error Fallback */}
             <div className="relative aspect-video max-h-[45vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line">
-              <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+              <video ref={videoCallbackRef} className="w-full h-full object-cover" muted playsInline />
               
               {cameraError && (
                 <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
                   <AlertCircle className="w-10 h-10 text-amber-400" />
                   <p className="text-sm font-semibold max-w-xs">{cameraError}</p>
-                  <Button variant="secondary" size="sm" onClick={() => void startCamera()}>
+                  <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)}>
                     {t('retryCamera')}
                   </Button>
                 </div>
@@ -759,10 +776,12 @@ export const TeacherDashboard: React.FC = () => {
               {!cameraError && (
                 <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
                   <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
-                    <span>{isCameraActive ? t('cameraActive') : t('cameraStopped')}</span>
-                    <span className="flex items-center gap-1">
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>HAPTIC_BEEP: ON</span>
+                    <span>
+                      {cameraStatus === 'starting'
+                        ? t('cameraStarting')
+                        : isCameraActive
+                        ? t('cameraActive')
+                        : t('cameraStopped')}
                     </span>
                   </div>
                   {isCameraActive && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSession } from '../app/SessionProvider';
 import { useActiveSchool } from '../app/ActiveSchoolProvider';
 import { useOfflineStatus } from '../app/OfflineStatusProvider';
+import { useLanguage } from '../app/LanguageProvider';
 import { SchoolSwitcher } from './SchoolSwitcher';
 import {
   Search,
@@ -25,6 +26,7 @@ export const TopBar: React.FC = () => {
   const { user, activeRole, logout } = useSession();
   const { activeSchoolName } = useActiveSchool();
   const { isOnline, outboxCount, isSyncing, syncNow, lastSyncedAt } = useOfflineStatus();
+  const { language, setLanguage, t } = useLanguage();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,6 +139,32 @@ export const TopBar: React.FC = () => {
             }`}
           />
         </motion.button>
+
+        {/* Language Switcher Pill */}
+        <div className="inline-flex rounded-full bg-surface-soft border border-line p-0.5 sm:p-1">
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+              language === 'en'
+                ? 'bg-forest-700 text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('bn')}
+            className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+              language === 'bn'
+                ? 'bg-forest-700 text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            বাং
+          </button>
+        </div>
 
         {/* Dark Mode Toggle */}
         <motion.button

@@ -14,6 +14,7 @@ describe('Comprehensive Product Verification Suite', () => {
 
   beforeAll(async () => {
     process.env.TEST_SERVER_STATIC = 'true';
+    process.env.FEATURE_RFID = 'true';
     seeded = await seedDatabase();
 
     const app = await createApp();

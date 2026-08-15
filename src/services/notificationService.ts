@@ -32,8 +32,9 @@ export const DEFAULT_TEMPLATES = {
 };
 
 // 1. Get School SMS Settings
-export async function getSchoolSmsSettings(schoolId: string) {
-  const [existing] = await db
+export async function getSchoolSmsSettings(schoolId: string, tx?: any) {
+  const client = tx || db;
+  const [existing] = await client
     .select()
     .from(schoolSmsSettings)
     .where(eq(schoolSmsSettings.schoolId, schoolId));
@@ -43,7 +44,7 @@ export async function getSchoolSmsSettings(schoolId: string) {
   }
 
   // Insert default settings
-  const [created] = await db
+  const [created] = await client
     .insert(schoolSmsSettings)
     .values({
       schoolId,
@@ -154,7 +155,7 @@ export async function createAbsenceNotificationJobs(params: {
   const client = tx || db;
 
   // Rule: Check school SMS settings. If school SMS is disabled, do not create jobs.
-  const smsSettings = await getSchoolSmsSettings(schoolId);
+  const smsSettings = await getSchoolSmsSettings(schoolId, tx);
   if (!smsSettings.smsEnabled) {
     return {
       status: 'SKIPPED_SCHOOL_SMS_DISABLED',

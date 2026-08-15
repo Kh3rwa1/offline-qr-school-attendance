@@ -77,6 +77,20 @@ export function validateProductionEnv() {
       throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
     }
     if (parsed.COMPONENT === 'web') {
+      const authDbUrl = process.env.AUTH_DATABASE_URL;
+      if (authDbUrl) {
+        try {
+          const parsedAuthUrl = new URL(authDbUrl);
+          if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
+            throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
+          }
+        } catch (err: any) {
+          throw new Error(`FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${err.message}`);
+        }
+      } else {
+        throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
+      }
+
       const csrfSecret = process.env.CSRF_SECRET || parsed.SESSION_SECRET;
       if (!csrfSecret || csrfSecret.length < 32) {
         throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be provided in production mode');
@@ -107,20 +121,6 @@ export function validateProductionEnv() {
       const gcpKmsId = process.env.GCP_KMS_RESOURCE_ID;
       if (!kmsMasterKey && !awsKmsArn && !gcpKmsId) {
         throw new Error('FATAL_KMS_CONFIGURATION: Production mode requires explicit key management. Set KMS_MASTER_KEY, AWS_KMS_KEY_ARN, or GCP_KMS_RESOURCE_ID.');
-      }
-
-      // Auth database isolation: require dedicated auth database in production
-      const authDbUrl = process.env.AUTH_DATABASE_URL;
-      if (!authDbUrl) {
-        throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
-      }
-      try {
-        const parsedAuthUrl = new URL(authDbUrl);
-        if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
-          throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
-        }
-      } catch (err: any) {
-        throw new Error(`FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${err.message}`);
       }
     }
   }

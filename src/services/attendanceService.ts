@@ -26,11 +26,13 @@ export async function verifyTeacherAssignment(params: {
   classSectionId: string;
   actorId: string;
   userRole: string;
+  tx?: any;
 }) {
-  const { schoolId, classSectionId, actorId, userRole } = params;
+  const { schoolId, classSectionId, actorId, userRole, tx } = params;
   if (['SUPER_ADMIN', 'SCHOOL_ADMIN', 'SYSTEM'].includes(userRole)) return;
 
-  const [assignment] = await db
+  const client = tx || db;
+  const [assignment] = await client
     .select({ id: teacherAssignments.id })
     .from(teacherAssignments)
     .where(
@@ -224,7 +226,7 @@ export async function updateSessionStatus(params: {
       throw new Error('SESSION_NOT_FOUND');
     }
 
-    await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole });
+    await verifyTeacherAssignment({ schoolId, classSectionId: session.classSectionId, actorId, userRole, tx });
 
     const currentStatus = session.status as SessionStatus;
 
@@ -300,14 +302,17 @@ export async function updateSessionStatus(params: {
       .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)))
       .returning();
 
-    await createAuditLog({
-      schoolId,
-      actorId,
-      action: `SESSION_STATUS_${newStatus}`,
-      resourceType: 'ATTENDANCE_SESSION',
-      resourceId: sessionId,
-      metadata: { previousStatus: currentStatus, newStatus, reason },
-    });
+    await createAuditLog(
+      {
+        schoolId,
+        actorId,
+        action: `SESSION_STATUS_${newStatus}`,
+        resourceType: 'ATTENDANCE_SESSION',
+        resourceId: sessionId,
+        metadata: { previousStatus: currentStatus, newStatus, reason },
+      },
+      tx
+    );
 
     if (newStatus === 'FINALIZED') {
       // Transactional absence notification creation: commits or rolls back together with finalization

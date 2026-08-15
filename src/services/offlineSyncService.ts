@@ -13,19 +13,18 @@ export async function computeSHA256(text: string): Promise<string> {
     const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  } else if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   } else {
-    // Node.js fallback
     try {
       const cryptoNode = await import('crypto');
       return cryptoNode.createHash('sha256').update(text).digest('hex');
     } catch {
-      // Fallback simple string hash if crypto unavailable
-      let hash = 0;
-      for (let i = 0; i < text.length; i++) {
-        hash = (hash << 5) - hash + text.charCodeAt(i);
-        hash |= 0;
-      }
-      return Math.abs(hash).toString(16);
+      throw new Error('CRYPTO_SHA256_UNAVAILABLE: Secure SHA-256 crypto is required');
     }
   }
 }
@@ -180,10 +179,15 @@ export async function processOfflineQRCode(params: {
 
   // Check for duplicate scan
   if (sessionRosterItem.status === 'PRESENT') {
+    const scanTimeStr = sessionRosterItem.firstScannedAt
+      ? new Date(sessionRosterItem.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      : '';
     return {
       success: true,
       duplicateScan: true,
-      message: `Student ${student.name} already marked PRESENT`,
+      message: scanTimeStr
+        ? `${student.name} (Roll #${student.rollNumber}) already marked PRESENT at ${scanTimeStr}`
+        : `${student.name} (Roll #${student.rollNumber}) already marked PRESENT`,
       student,
       record: {
         studentId: student.studentId,
@@ -197,15 +201,7 @@ export async function processOfflineQRCode(params: {
   const timestamp = clientTimestamp || new Date().toISOString();
   const clientEventId = createClientUuid();
 
-  // Update session roster status locally in Dexie
-  if (sessionRosterItem.id) {
-    await offlineDb.sessionRosters.update(sessionRosterItem.id, {
-      status: 'PRESENT',
-      firstScannedAt: timestamp,
-    });
-  }
-
-  // Add event to Outbox Queue in Dexie
+  // Add event to Outbox Queue and update session roster status atomically in Dexie
   const outboxEvent: OutboxEventItem = {
     clientEventId,
     schoolId,
@@ -227,7 +223,15 @@ export async function processOfflineQRCode(params: {
     createdAt: new Date().toISOString(),
   };
 
-  await offlineDb.syncOutbox.put(outboxEvent);
+  await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+    if (sessionRosterItem.id) {
+      await offlineDb.sessionRosters.update(sessionRosterItem.id, {
+        status: 'PRESENT',
+        firstScannedAt: timestamp,
+      });
+    }
+    await offlineDb.syncOutbox.put(outboxEvent);
+  });
 
   return {
     success: true,

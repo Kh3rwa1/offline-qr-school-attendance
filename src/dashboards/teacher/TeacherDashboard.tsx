@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, RefreshCw, Download, Usb, CheckCircle2, ScanLine, ClipboardCheck, Database, Sparkles } from 'lucide-react';
+import {
+  Camera,
+  RefreshCw,
+  Download,
+  Usb,
+  CheckCircle2,
+  ScanLine,
+  ClipboardCheck,
+  Database,
+  CameraOff,
+  AlertCircle,
+  Volume2,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
@@ -10,19 +21,33 @@ import { EmptyState } from '../../components/shared/EmptyState';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useOfflineStatus } from '../../app/OfflineStatusProvider';
 import { useSession } from '../../app/SessionProvider';
+import { useLanguage } from '../../app/LanguageProvider';
 import {
   createOfflineSession,
   downloadAndStoreRosterPackage,
   processOfflineQRCode,
   syncOutboxEvents,
 } from '../../services/offlineSyncService';
-import { offlineDb, OfflineRosterItem, OfflineSessionItem, OfflineSessionRosterItem, OutboxEventItem } from '../../db/offlineDb';
+import {
+  offlineDb,
+  OfflineRosterItem,
+  OfflineSessionItem,
+  OfflineSessionRosterItem,
+  OutboxEventItem,
+} from '../../db/offlineDb';
+import { CameraScannerService, setupUSBScannerListener } from '../../services/scannerService';
+import {
+  playScanSuccessFeedback,
+  playScanDuplicateFeedback,
+  playScanErrorFeedback,
+} from '../../utils/feedback';
 import { api } from '../../services/api';
 
 export const TeacherDashboard: React.FC = () => {
   const { activeSchoolId } = useActiveSchool();
   const { user } = useSession();
   const { isOnline, outboxCount, isSyncing, syncNow, refreshOutbox } = useOfflineStatus();
+  const { language, setLanguage, t } = useLanguage();
 
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
@@ -39,10 +64,13 @@ export const TeacherDashboard: React.FC = () => {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const [viewMode, setViewMode] = useState<'scanner' | 'review' | 'roster'>('scanner');
   const [finalizing, setFinalizing] = useState(false);
-  const [scanBurst, setScanBurst] = useState<{ id: number; studentName?: string } | null>(null);
+  const [scanBurst, setScanBurst] = useState<{ id: number; studentName?: string; studentNameBn?: string } | null>(null);
 
+  // Camera & Scanner State
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerControls = useRef<{ stop: () => void } | null>(null);
+  const cameraScannerRef = useRef<CameraScannerService | null>(null);
 
   const showFeedback = useCallback((msg: { kind: 'success' | 'warning' | 'error'; text: string }) => {
     setFeedback(msg);
@@ -130,19 +158,119 @@ export const TeacherDashboard: React.FC = () => {
     void loadSession();
   }, [activeSchoolId, selectedClassId]);
 
+  const handleScan = useCallback(
+    async (rawToken: string, source: 'CAMERA' | 'USB') => {
+      if (!activeSchoolId || !selectedClassId || !session || !user?.id) {
+        playScanErrorFeedback();
+        showFeedback({ kind: 'error', text: t('sessionRequired') });
+        return;
+      }
+
+      try {
+        const result = await processOfflineQRCode({
+          schoolId: activeSchoolId,
+          sessionId: session.id,
+          rawToken,
+          actorId: user.id,
+          source,
+        });
+
+        if (result.success && result.student) {
+          if (result.duplicateScan) {
+            playScanDuplicateFeedback();
+            showFeedback({
+              kind: 'warning',
+              text: result.message || `${result.student.name} ${t('alreadyMarked')}`,
+            });
+          } else {
+            playScanSuccessFeedback();
+            setScanBurst({
+              id: Date.now(),
+              studentName: result.student.name,
+              studentNameBn: result.student.nameBn || undefined,
+            });
+            showFeedback({
+              kind: 'success',
+              text: `${result.student.name} (#${result.student.rollNumber}) ${t('markedPresent')}`,
+            });
+            const updated = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
+            setSessionRoster(updated);
+            await refreshOutbox();
+          }
+        } else {
+          playScanErrorFeedback();
+          showFeedback({ kind: 'warning', text: result.message || t('unrecognizedQr') });
+        }
+      } catch (err: any) {
+        playScanErrorFeedback();
+        showFeedback({ kind: 'error', text: err.message || 'Error processing scan' });
+      }
+    },
+    [activeSchoolId, selectedClassId, session, user, t, showFeedback, refreshOutbox]
+  );
+
+  // Start & Stop Camera Scanner
+  const startCamera = useCallback(async () => {
+    if (!videoRef.current) return;
+    setCameraError(null);
+
+    if (!cameraScannerRef.current) {
+      cameraScannerRef.current = new CameraScannerService();
+    }
+
+    try {
+      await cameraScannerRef.current.startScanning(videoRef.current, (token) => {
+        void handleScan(token, 'CAMERA');
+      });
+      setIsCameraActive(true);
+    } catch (err: any) {
+      console.warn('Camera activation error:', err);
+      setIsCameraActive(false);
+      setCameraError(t('cameraDenied'));
+    }
+  }, [handleScan, t]);
+
+  const stopCamera = useCallback(() => {
+    if (cameraScannerRef.current) {
+      cameraScannerRef.current.stopScanning();
+    }
+    setIsCameraActive(false);
+  }, []);
+
+  // Manage camera lifecycle based on view mode and session presence
+  useEffect(() => {
+    if (viewMode === 'scanner' && session && session.status !== 'FINALIZED') {
+      void startCamera();
+    } else {
+      stopCamera();
+    }
+    return () => {
+      stopCamera();
+    };
+  }, [viewMode, session, startCamera, stopCamera]);
+
+  // Setup USB hardware keyboard-wedge scanner listener
+  useEffect(() => {
+    const cleanupUsb = setupUSBScannerListener((scannedText) => {
+      void handleScan(scannedText, 'USB');
+    });
+    return () => {
+      cleanupUsb();
+    };
+  }, [handleScan]);
+
   const handleDownloadRoster = async () => {
     if (!activeSchoolId || !selectedClassId) return;
     try {
-      showFeedback({ kind: 'success', text: 'Downloading class cryptographic roster…' });
+      showFeedback({ kind: 'success', text: t('downloadingRoster') });
       const deviceId = getDeviceIdentifier();
       try {
         await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
       } catch (dlErr: any) {
-        // If device is not yet registered, auto-register and retry download
         try {
           await api(`/api/v1/schools/${activeSchoolId}/devices/register`, {
             method: 'POST',
-            body: JSON.stringify({ deviceIdentifier: deviceId, label: 'Teacher Browser Terminal' }),
+            body: JSON.stringify({ deviceIdentifier: deviceId, label: 'Teacher Mobile Chrome' }),
           });
           await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
         } catch {
@@ -150,7 +278,7 @@ export const TeacherDashboard: React.FC = () => {
         }
       }
       await loadLocalRoster(selectedClassId);
-      showFeedback({ kind: 'success', text: 'Roster and active QR digests downloaded successfully.' });
+      showFeedback({ kind: 'success', text: t('rosterDownloaded') });
     } catch (err: any) {
       showFeedback({ kind: 'error', text: err.message || 'Failed to download roster' });
     }
@@ -159,7 +287,7 @@ export const TeacherDashboard: React.FC = () => {
   const handleStartSession = async () => {
     if (!activeSchoolId || !selectedClassId) return;
     if (!user?.id) {
-      showFeedback({ kind: 'error', text: 'Authentication session required to start attendance' });
+      showFeedback({ kind: 'error', text: t('sessionRequired') });
       return;
     }
     try {
@@ -184,7 +312,8 @@ export const TeacherDashboard: React.FC = () => {
             serverSessionId = res.data.id;
           }
         } catch (serverErr: any) {
-          const isNetworkError = serverErr?.status === 0 || serverErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
+          const isNetworkError =
+            serverErr?.status === 0 || serverErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
           if (isNetworkError) {
             console.warn('Network unavailable, creating offline local session:', serverErr);
           } else {
@@ -209,52 +338,19 @@ export const TeacherDashboard: React.FC = () => {
       setSession(s);
       const sRoster = await offlineDb.sessionRosters.where('sessionId').equals(s.id).toArray();
       setSessionRoster(sRoster);
-      showFeedback({ kind: 'success', text: 'Attendance session initialized and roster loaded.' });
+      showFeedback({ kind: 'success', text: t('sessionOpen') });
     } catch (err: any) {
       showFeedback({ kind: 'error', text: err.message || 'Failed to start session' });
     }
   };
 
-  const handleScan = async (rawToken: string, source: 'CAMERA' | 'USB') => {
-    if (!activeSchoolId || !selectedClassId || !session || !user?.id) {
-      showFeedback({ kind: 'error', text: 'Please start an authenticated offline session first' });
-      return;
-    }
-    try {
-      const result = await processOfflineQRCode({
-        schoolId: activeSchoolId,
-        sessionId: session.id,
-        rawToken,
-        actorId: user.id,
-        source,
-      });
-
-      if (result.success && result.student) {
-        // Signature moment: trigger spring checkmark burst with completion-driven AnimatePresence
-        setScanBurst({ id: Date.now(), studentName: result.student.name });
-
-        showFeedback({ kind: 'success', text: `${result.student.name} (Roll ${result.student.rollNumber}) marked PRESENT` });
-        const updated = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
-        setSessionRoster(updated);
-        await refreshOutbox();
-      } else {
-        showFeedback({ kind: 'warning', text: result.message || 'QR token rejected' });
-      }
-    } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Error processing scan' });
-    }
-  };
-
   const handleManualStatus = async (studentId: string, status: any) => {
     if (!session || !activeSchoolId) return;
+
     const sessionRosterItem = await offlineDb.sessionRosters
       .where('[sessionId+studentId]')
       .equals([session.id, studentId])
       .first();
-
-    if (sessionRosterItem && sessionRosterItem.id) {
-      await offlineDb.sessionRosters.update(sessionRosterItem.id, { status });
-    }
 
     const clientEventId = `manual-${session.id}-${studentId}-${Date.now()}`;
     const timestamp = new Date().toISOString();
@@ -277,7 +373,14 @@ export const TeacherDashboard: React.FC = () => {
       retryCount: 0,
       createdAt: timestamp,
     };
-    await offlineDb.syncOutbox.put(outboxEvent);
+
+    // Atomic Dexie transaction for manual status update and outbox insertion
+    await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+      if (sessionRosterItem && sessionRosterItem.id) {
+        await offlineDb.sessionRosters.update(sessionRosterItem.id, { status });
+      }
+      await offlineDb.syncOutbox.put(outboxEvent);
+    });
 
     const updated = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
     setSessionRoster(updated);
@@ -289,8 +392,44 @@ export const TeacherDashboard: React.FC = () => {
     setFinalizing(true);
     try {
       const deviceId = getDeviceIdentifier();
+      const timestamp = new Date().toISOString();
 
-      // Step 1: Ensure server session exists if online
+      // Step 1: Auto-mark remaining UNMARKED students as ABSENT in Dexie and outbox
+      const unmarkedStudents = sessionRoster.filter((r) => r.status === 'UNMARKED');
+      if (unmarkedStudents.length > 0) {
+        await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+          for (const item of unmarkedStudents) {
+            if (item.id) {
+              await offlineDb.sessionRosters.update(item.id, { status: 'ABSENT' });
+            }
+            const outboxAbsent: OutboxEventItem = {
+              clientEventId: `auto-absent-${session.id}-${item.studentId}-${Date.now()}`,
+              schoolId: activeSchoolId,
+              sessionId: session.id,
+              sessionMetadata: {
+                clientSessionId: session.clientSessionId,
+                classSectionId: session.classSectionId,
+                sessionDate: session.sessionDate,
+                sessionType: session.sessionType,
+              },
+              studentId: item.studentId,
+              eventType: 'MANUAL_STATUS_UPDATE',
+              statusValue: 'ABSENT',
+              clientTimestamp: timestamp,
+              source: 'MANUAL',
+              syncStatus: 'PENDING',
+              retryCount: 0,
+              createdAt: timestamp,
+            };
+            await offlineDb.syncOutbox.put(outboxAbsent);
+          }
+        });
+
+        const refreshedRoster = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
+        setSessionRoster(refreshedRoster);
+      }
+
+      // Step 2: Ensure server session exists if online
       let targetServerSessionId = session.serverSessionId;
       if (!targetServerSessionId && navigator.onLine) {
         try {
@@ -308,27 +447,25 @@ export const TeacherDashboard: React.FC = () => {
           if (res?.data?.id) {
             targetServerSessionId = res.data.id;
             await offlineDb.sessions.update(session.id, { serverSessionId: targetServerSessionId });
-            setSession((prev) => prev ? { ...prev, serverSessionId: targetServerSessionId } : null);
+            setSession((prev) => (prev ? { ...prev, serverSessionId: targetServerSessionId } : null));
           }
         } catch (initErr: any) {
-          const isNetworkError = initErr?.status === 0 || initErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
-          const isAuthOrConflict = [401, 403, 409].includes(initErr?.status);
-          if (!isNetworkError || isAuthOrConflict) {
-            throw initErr;
-          }
+          const isNetworkError =
+            initErr?.status === 0 || initErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
+          if (!isNetworkError) throw initErr;
         }
       }
 
-      // Step 2: Synchronize all outbox events
+      // Step 3: Synchronize all outbox events
       if (navigator.onLine) {
         try {
           await syncOutboxEvents({ schoolId: activeSchoolId, deviceIdentifier: deviceId });
         } catch (syncErr: any) {
-          console.warn('Outbox synchronization warning:', syncErr);
+          console.warn('Outbox synchronization note:', syncErr);
         }
       }
 
-      // Step 3: PATCH server session status
+      // Step 4: Finalize on Server if online
       const effectiveSessionId = targetServerSessionId || session.id;
       if (navigator.onLine && targetServerSessionId) {
         try {
@@ -339,31 +476,29 @@ export const TeacherDashboard: React.FC = () => {
               body: JSON.stringify({
                 status: 'FINALIZED',
                 autoMarkAbsentForUnmarked: true,
-                reason: 'Class teacher finalized roll submission',
+                reason: 'Class teacher finalized daily attendance',
               }),
             }
           );
 
           if (patchRes?.data?.status === 'FINALIZED') {
             await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
-            setSession((prev) => prev ? { ...prev, status: 'FINALIZED' } : null);
-            showFeedback({ kind: 'success', text: 'Attendance finalized and verified on server.' });
+            setSession((prev) => (prev ? { ...prev, status: 'FINALIZED' } : null));
+            showFeedback({ kind: 'success', text: t('finalizedSuccess') });
             setViewMode('scanner');
             return;
           }
         } catch (patchErr: any) {
-          const isNetworkError = patchErr?.status === 0 || patchErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
-          const isAuthOrConflict = [401, 403, 409].includes(patchErr?.status);
-          if (!isNetworkError || isAuthOrConflict) {
-            throw patchErr;
-          }
+          const isNetworkError =
+            patchErr?.status === 0 || patchErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
+          if (!isNetworkError) throw patchErr;
         }
       }
 
-      // Offline fallback: mark FINALIZE_PENDING locally
+      // Offline fallback: mark session locked locally as FINALIZE_PENDING
       await offlineDb.sessions.update(session.id, { status: 'FINALIZE_PENDING' as any });
-      setSession((prev) => prev ? { ...prev, status: 'FINALIZE_PENDING' as any } : null);
-      showFeedback({ kind: 'warning', text: 'Offline: Attendance stored in outbox. Marked FINALIZE_PENDING until connection is restored.' });
+      setSession((prev) => (prev ? { ...prev, status: 'FINALIZE_PENDING' as any } : null));
+      showFeedback({ kind: 'warning', text: t('finalizedOffline') });
     } catch (err: any) {
       showFeedback({ kind: 'error', text: err.message || 'Finalization encountered an error' });
     } finally {
@@ -377,30 +512,57 @@ export const TeacherDashboard: React.FC = () => {
   const leaveExcused = sessionRoster.filter((item) => item.status === 'LEAVE' || item.status === 'EXCUSED').length;
 
   return (
-    <div className="space-y-6 text-left">
+    <div className="space-y-6 text-left" id="teacher-dashboard-view">
+      {/* Header with Title and Language Toggle */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
-            <span>Offline QR Attendance</span>
+            <span>{t('offlineQrAttendance')}</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Classroom Dashboard
+            {t('classroomDashboard')}
           </h1>
           <p className="t-body text-sm text-ink-soft mt-1">
-            Plan, scan, and finalize student attendance with offline QR & barcode wands.
+            {t('classroomSubtitle')}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Language Toggle Pill */}
+          <div className="inline-flex rounded-full bg-surface-soft border border-line p-1">
+            <button
+              type="button"
+              onClick={() => setLanguage('en')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+                language === 'en'
+                  ? 'bg-forest-700 text-white shadow-xs'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage('bn')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+                language === 'bn'
+                  ? 'bg-forest-700 text-white shadow-xs'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              বাংলা
+            </button>
+          </div>
+
           <Button
             variant="primary"
             size="md"
             onClick={handleStartSession}
             disabled={!selectedClassId || (!!session && session.status !== 'FINALIZED')}
-            aria-label={session ? 'Session open' : 'Start offline session'}
+            aria-label={session ? t('sessionOpen') : t('startSession')}
             leftIcon={<CheckCircle2 className="w-4 h-4 text-emerald-300" />}
           >
-            {session ? 'Session open' : 'Start offline session'}
+            {session ? t('sessionOpen') : t('startSession')}
           </Button>
 
           <Button
@@ -408,10 +570,10 @@ export const TeacherDashboard: React.FC = () => {
             size="md"
             onClick={handleDownloadRoster}
             disabled={!isOnline || !selectedClassId}
-            aria-label="Download roster"
+            aria-label={t('downloadRoster')}
             leftIcon={<Download className="w-4 h-4 text-ink-soft" />}
           >
-            Download roster
+            {t('downloadRoster')}
           </Button>
         </div>
       </div>
@@ -425,46 +587,54 @@ export const TeacherDashboard: React.FC = () => {
         />
       )}
 
+      {/* Telemetry Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Present Students"
-          value={`${present} / ${sessionRoster.length || 48}`}
-          trend={{ value: `${sessionRoster.length ? Math.round((present / sessionRoster.length) * 100) : 0}% Attendance`, isPositive: true }}
+          title={t('presentStudents')}
+          value={`${present} / ${sessionRoster.length || 0}`}
+          trend={{
+            value: `${sessionRoster.length ? Math.round((present / sessionRoster.length) * 100) : 0}% Attendance`,
+            isPositive: true,
+          }}
           variant="hero-forest"
           onClick={() => setViewMode('review')}
         />
         <StatCard
-          title="Enrolled in Section"
-          value={sessionRoster.length || 48}
-          trend={{ value: "Class Section Roster", isPositive: true }}
+          title={t('enrolledInSection')}
+          value={sessionRoster.length || roster.length || 0}
+          trend={{ value: t('enrolledInSection'), isPositive: true }}
           variant="default"
           onClick={() => setViewMode('roster')}
         />
         <StatCard
-          title="Offline Outbox"
+          title={t('offlineOutbox')}
           value={outboxCount}
-          trend={{ value: isOnline ? "Synced to Cloud" : "Stored locally", isPositive: outboxCount === 0 }}
+          trend={{
+            value: isOnline ? (outboxCount === 0 ? '✓ Synced' : 'Ready to push') : 'Stored in Dexie',
+            isPositive: outboxCount === 0,
+          }}
           variant="default"
           onClick={() => void syncNow()}
         />
         <StatCard
-          title="Late Arrivals"
+          title={t('lateArrivals')}
           value={late}
-          trend={{ value: "Verified with Passcode", isPositive: false }}
+          trend={{ value: `${leaveExcused} Excused`, isPositive: false }}
           variant="default"
           onClick={() => setViewMode('review')}
         />
       </div>
 
+      {/* Section Selector and Tab Navigation */}
       <div className="app-card p-4 sm:p-5 flex flex-wrap gap-4 items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-64">
-          <span className="text-xs font-bold text-ink font-display">Active Section:</span>
+          <span className="text-xs font-bold text-ink font-display">{t('activeSection')}:</span>
           <select
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            className="flex-1 max-w-xs py-2 px-3 bg-surface-soft border border-line rounded-full text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
+            className="flex-1 max-w-xs py-2.5 px-3.5 bg-surface-soft border border-line rounded-full text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
           >
-            <option value="">Select class section</option>
+            <option value="">{t('selectClassSection')}</option>
             {classes.map((item) => {
               const id = item.classSectionId || item.id;
               return (
@@ -479,15 +649,15 @@ export const TeacherDashboard: React.FC = () => {
         <div className="flex gap-2">
           {(
             [
-              ['scanner', 'Scanner View', <ScanLine className="w-3.5 h-3.5" key="s" />],
-              ['review', 'Review Roster', <ClipboardCheck className="w-3.5 h-3.5" key="r" />],
-              ['roster', 'Cached Roster', <Database className="w-3.5 h-3.5" key="c" />],
+              ['scanner', t('scannerView'), <ScanLine className="w-3.5 h-3.5" key="s" />],
+              ['review', t('reviewRoster'), <ClipboardCheck className="w-3.5 h-3.5" key="r" />],
+              ['roster', t('cachedRoster'), <Database className="w-3.5 h-3.5" key="c" />],
             ] as const
           ).map(([mode, label, icon]) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+              className={`min-h-[44px] inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
                 viewMode === mode
                   ? 'bg-forest-700 text-white shadow-sm'
                   : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
@@ -500,25 +670,26 @@ export const TeacherDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Scanner View Mode */}
       {viewMode === 'scanner' && (
         <section className="grid lg:grid-cols-12 gap-6 items-stretch">
           <div className="lg:col-span-8 app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between relative overflow-hidden">
-            {/* Signature Burst Animation on Scan Success */}
+            {/* Scan Success Animated Burst Overlay */}
             <AnimatePresence>
               {scanBurst && (
                 <motion.div
                   key={scanBurst.id}
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.15 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   onAnimationComplete={() => {
                     setTimeout(() => {
                       setScanBurst((curr) => (curr?.id === scanBurst.id ? null : curr));
-                    }, 200);
+                    }, 400);
                   }}
                   aria-hidden="true"
-                  className="absolute inset-0 z-30 bg-forest-900/85 backdrop-blur-xs flex flex-col items-center justify-center text-white pointer-events-none p-6 text-center"
+                  className="absolute inset-0 z-30 bg-forest-900/90 backdrop-blur-xs flex flex-col items-center justify-center text-white pointer-events-none p-6 text-center"
                 >
                   <motion.div
                     initial={{ scale: 0.5 }}
@@ -530,7 +701,12 @@ export const TeacherDashboard: React.FC = () => {
                     <CheckCircle2 className="w-12 h-12 text-white" strokeWidth={2.5} />
                   </motion.div>
                   <span className="text-xl font-bold font-display">{scanBurst.studentName || 'Verified'}</span>
-                  <span className="text-xs font-mono text-emerald-200 uppercase tracking-widest mt-1">Status: PRESENT</span>
+                  {scanBurst.studentNameBn && (
+                    <span className="text-sm text-emerald-200 font-sans mt-0.5">{scanBurst.studentNameBn}</span>
+                  )}
+                  <span className="text-xs font-mono text-emerald-300 uppercase tracking-widest mt-2 bg-forest-800/80 px-3 py-1 rounded-full border border-emerald-400/30">
+                    STATUS: PRESENT
+                  </span>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -538,27 +714,68 @@ export const TeacherDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Camera className="w-5 h-5 text-forest-700 dark:text-forest-600" />
-                <h3 className="text-base font-extrabold text-ink font-display">Optical Camera & Barcode Wand HUD</h3>
+                <h3 className="text-base font-extrabold text-ink font-display">{t('cameraHud')}</h3>
               </div>
-              <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 border border-success-100 dark:border-success-600/30 px-3 py-1 rounded-full font-mono">
-                {session ? `${present}/${sessionRoster.length} Scanned` : 'Session Offline'}
-              </span>
+              <div className="flex items-center gap-2">
+                {isCameraActive ? (
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full cursor-pointer hover:bg-amber-100 font-display"
+                  >
+                    <CameraOff className="w-3.5 h-3.5" />
+                    <span>{t('stopCamera')}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void startCamera()}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full cursor-pointer hover:bg-emerald-100 font-display"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{t('startCamera')}</span>
+                  </button>
+                )}
+                <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 border border-success-100 dark:border-success-600/30 px-3 py-1 rounded-full font-mono">
+                  {session ? `${present}/${sessionRoster.length} Scanned` : 'Session Offline'}
+                </span>
+              </div>
             </div>
 
+            {/* Video Viewfinder & Error Fallback */}
             <div className="relative aspect-video max-h-[45vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line">
               <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-              <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
-                <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
-                  <span>CAMERA_STATE: ACTIVE</span>
-                  <span>AES-CMAC DECODE: AUTO</span>
+              
+              {cameraError && (
+                <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
+                  <AlertCircle className="w-10 h-10 text-amber-400" />
+                  <p className="text-sm font-semibold max-w-xs">{cameraError}</p>
+                  <Button variant="secondary" size="sm" onClick={() => void startCamera()}>
+                    {t('retryCamera')}
+                  </Button>
                 </div>
-                <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
-                <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
-                  Align Student QR Badge inside Viewfinder
+              )}
+
+              {!cameraError && (
+                <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
+                  <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
+                    <span>{isCameraActive ? t('cameraActive') : t('cameraStopped')}</span>
+                    <span className="flex items-center gap-1">
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span>HAPTIC_BEEP: ON</span>
+                    </span>
+                  </div>
+                  {isCameraActive && (
+                    <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
+                  )}
+                  <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
+                    {t('alignQrCode')}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
+            {/* USB / Manual Token Input Field */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -573,50 +790,55 @@ export const TeacherDashboard: React.FC = () => {
                 <input
                   value={scanInput}
                   onChange={(e) => setScanInput(e.target.value)}
-                  placeholder="USB scanner token (press Enter)"
+                  placeholder={t('usbScannerPlaceholder')}
                   className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                 />
               </div>
-              <Button type="submit" variant="primary" size="md" className="w-full sm:w-auto justify-center">
-                Scan Token
+              <Button type="submit" variant="primary" size="md" className="min-h-[44px] w-full sm:w-auto justify-center">
+                {t('scanToken')}
               </Button>
             </form>
           </div>
 
+          {/* Right Side Telemetry Card */}
           <div className="lg:col-span-4 app-card p-6 sm:p-7 space-y-5 flex flex-col justify-between">
             <div className="space-y-4">
-              <h3 className="text-base font-extrabold text-ink font-display">Session Telemetry</h3>
+              <h3 className="text-base font-extrabold text-ink font-display">{t('sessionTelemetry')}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
                 <div className="bg-surface-soft rounded-2xl p-3 border border-line">
-                  <span className="block text-2xl font-extrabold text-ink font-display t-data">{sessionRoster.length || 48}</span>
-                  <span className="t-label text-ink-muted block mt-1">Roster</span>
+                  <span className="block text-2xl font-extrabold text-ink font-display t-data">
+                    {sessionRoster.length || 0}
+                  </span>
+                  <span className="t-label text-ink-muted block mt-1">{t('enrolledInSection')}</span>
                 </div>
                 <div className="bg-success-50 rounded-2xl p-3 border border-success-100 dark:border-success-600/30">
                   <span className="block text-2xl font-extrabold text-success-800 font-display t-data">
                     <RollingNumber value={present} />
                   </span>
-                  <span className="t-label text-success-600 block mt-1">Present</span>
+                  <span className="t-label text-success-600 block mt-1">{t('present')}</span>
                 </div>
                 <div className="bg-warning-50 rounded-2xl p-3 border border-warning-100 dark:border-warning-600/30">
                   <span className="block text-2xl font-extrabold text-warning-800 font-display t-data">
                     <RollingNumber value={outboxCount} />
                   </span>
-                  <span className="t-label text-warning-600 block mt-1">Outbox</span>
+                  <span className="t-label text-warning-600 block mt-1">{t('offlineOutbox')}</span>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-surface-soft border border-line space-y-2.5 text-xs">
                 <div className="flex justify-between text-ink-soft">
-                  <span>Late arrivals</span>
+                  <span>{t('lateArrivals')}</span>
                   <span className="font-bold text-warning-800 font-mono t-data">{late}</span>
                 </div>
                 <div className="flex justify-between text-ink-soft">
-                  <span>Excused leaves</span>
+                  <span>{t('excusedLeaves')}</span>
                   <span className="font-bold text-ink font-mono t-data">{leaveExcused}</span>
                 </div>
                 <div className="flex justify-between text-ink-soft">
-                  <span>Unmarked / Absent</span>
-                  <span className="font-bold text-danger-800 font-mono t-data">{Math.max(0, sessionRoster.length - present - late - leaveExcused)}</span>
+                  <span>{t('unmarkedAbsent')}</span>
+                  <span className="font-bold text-danger-800 font-mono t-data">
+                    {Math.max(0, sessionRoster.length - present - late - leaveExcused)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -627,10 +849,10 @@ export const TeacherDashboard: React.FC = () => {
                 size="md"
                 onClick={() => void syncNow()}
                 disabled={!isOnline || outboxCount === 0 || isSyncing}
-                className="w-full justify-center"
+                className="w-full justify-center min-h-[44px]"
                 leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
               >
-                {isSyncing ? 'Synchronizing Outbox…' : 'Push Local Outbox'}
+                {isSyncing ? t('syncingOutbox') : t('pushOutbox')}
               </Button>
 
               <Button
@@ -638,21 +860,22 @@ export const TeacherDashboard: React.FC = () => {
                 size="md"
                 onClick={() => setViewMode('review')}
                 disabled={!session}
-                className="w-full justify-center"
+                className="w-full justify-center min-h-[44px]"
               >
-                Review & Finalize Attendance
+                {t('reviewAndFinalize')}
               </Button>
             </div>
           </div>
         </section>
       )}
 
+      {/* Review and Finalize View Mode */}
       {viewMode === 'review' && (
         <section className="app-card p-6 sm:p-7 space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h3 className="text-xl font-extrabold text-ink font-display">Review & Finalize Attendance</h3>
-              <p className="t-body text-xs text-ink-soft mt-0.5">Verify individual student check-ins before publishing to state database</p>
+              <h3 className="text-xl font-extrabold text-ink font-display">{t('reviewAndFinalize')}</h3>
+              <p className="t-body text-xs text-ink-soft mt-0.5">{t('reviewSubtitle')}</p>
             </div>
 
             <div className="flex gap-2">
@@ -661,8 +884,9 @@ export const TeacherDashboard: React.FC = () => {
                 size="sm"
                 onClick={() => setViewMode('scanner')}
                 disabled={finalizing}
+                className="min-h-[40px]"
               >
-                Back to Scanner
+                {t('backToScanner')}
               </Button>
               <Button
                 variant="primary"
@@ -670,8 +894,9 @@ export const TeacherDashboard: React.FC = () => {
                 onClick={() => void handleFinalize()}
                 disabled={finalizing}
                 isLoading={finalizing}
+                className="min-h-[40px]"
               >
-                Publish & Finalize
+                {finalizing ? t('finalizing') : t('publishAndFinalize')}
               </Button>
             </div>
           </div>
@@ -679,9 +904,9 @@ export const TeacherDashboard: React.FC = () => {
           {sessionRoster.length === 0 ? (
             <EmptyState
               kind="roster"
-              title="No session roster loaded"
-              description="Start an attendance session or download the class roster to begin reviewing students."
-              actionText="Back to Scanner"
+              title={t('noRosterFound')}
+              description={t('downloadRosterPrompt')}
+              actionText={t('backToScanner')}
               onAction={() => setViewMode('scanner')}
             />
           ) : (
@@ -691,17 +916,24 @@ export const TeacherDashboard: React.FC = () => {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-surface-soft border-b border-line text-left text-ink-muted uppercase font-bold font-display">
-                      <th className="p-3.5">Roll</th>
-                      <th className="p-3.5">Student Name</th>
-                      <th className="p-3.5">Status</th>
-                      <th className="p-3.5">Override Action</th>
+                      <th className="p-3.5">{t('roll')}</th>
+                      <th className="p-3.5">{t('studentName')}</th>
+                      <th className="p-3.5">{t('status')}</th>
+                      <th className="p-3.5">{t('overrideAction')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line bg-surface">
                     {sessionRoster.map((item) => (
                       <tr key={item.studentId} className="table-row-hover">
                         <td className="p-3.5 font-mono font-bold text-ink">#{item.rollNumber}</td>
-                        <td className="p-3.5 font-bold text-ink font-display">{item.studentName}</td>
+                        <td className="p-3.5 font-bold text-ink font-display">
+                          <div>
+                            <span>{item.studentName}</span>
+                            {item.studentNameBn && (
+                              <span className="block text-xs font-normal text-ink-soft">{item.studentNameBn}</span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-3.5">
                           <span
                             className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
@@ -711,10 +943,12 @@ export const TeacherDashboard: React.FC = () => {
                                 ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
                                 : item.status === 'LATE'
                                 ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                                : item.status === 'LEAVE' || item.status === 'EXCUSED'
+                                ? 'bg-purple-50 text-purple-800 border-purple-200'
                                 : 'bg-surface-soft text-ink-soft border-line'
                             }`}
                           >
-                            {item.status}
+                            {t((item.status?.toLowerCase() as any) || 'unmarked')}
                           </span>
                         </td>
                         <td className="p-3.5">
@@ -727,13 +961,13 @@ export const TeacherDashboard: React.FC = () => {
                                   type="button"
                                   aria-pressed={isSelected}
                                   onClick={() => void handleManualStatus(item.studentId, st)}
-                                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer font-display focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2 ${
+                                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer font-display focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2 ${
                                     isSelected
                                       ? 'bg-forest-700 text-white shadow-sm'
                                       : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
                                   }`}
                                 >
-                                  {st}
+                                  {t(st.toLowerCase() as any)}
                                 </button>
                               );
                             })}
@@ -753,6 +987,9 @@ export const TeacherDashboard: React.FC = () => {
                       <div>
                         <span className="text-xs font-mono font-bold text-ink-muted">#{item.rollNumber}</span>
                         <h4 className="text-sm font-bold text-ink font-display">{item.studentName}</h4>
+                        {item.studentNameBn && (
+                          <p className="text-xs text-ink-soft">{item.studentNameBn}</p>
+                        )}
                       </div>
                       <span
                         className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
@@ -762,10 +999,12 @@ export const TeacherDashboard: React.FC = () => {
                             ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
                             : item.status === 'LATE'
                             ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                            : item.status === 'LEAVE' || item.status === 'EXCUSED'
+                            ? 'bg-purple-50 text-purple-800 border-purple-200'
                             : 'bg-surface-soft text-ink-soft border-line'
                         }`}
                       >
-                        {item.status}
+                        {t((item.status?.toLowerCase() as any) || 'unmarked')}
                       </span>
                     </div>
 
@@ -784,7 +1023,7 @@ export const TeacherDashboard: React.FC = () => {
                                 : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
                             }`}
                           >
-                            {st}
+                            {t(st.toLowerCase() as any)}
                           </button>
                         );
                       })}
@@ -797,21 +1036,22 @@ export const TeacherDashboard: React.FC = () => {
         </section>
       )}
 
+      {/* Cached Roster View Mode */}
       {viewMode === 'roster' && (
         <section className="app-card p-6 sm:p-7 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-extrabold text-ink font-display">Offline Cached Student Roster</h3>
+            <h3 className="text-xl font-extrabold text-ink font-display">{t('cachedRoster')}</h3>
             <span className="text-xs font-bold text-ink-soft bg-surface-soft px-3 py-1 rounded-full border border-line">
-              {roster.length} Records In Storage
+              {roster.length} {t('recordsInStorage')}
             </span>
           </div>
 
           {roster.length === 0 ? (
             <EmptyState
               kind="roster"
-              title="No cached roster found"
-              description="Download the class roster package while online to enable full offline QR verification."
-              actionText="Download Roster Now"
+              title={t('noRosterFound')}
+              description={t('downloadRosterPrompt')}
+              actionText={t('downloadRoster')}
               onAction={handleDownloadRoster}
             />
           ) : (
@@ -821,10 +1061,10 @@ export const TeacherDashboard: React.FC = () => {
                 <table className="w-full text-xs text-left">
                   <thead>
                     <tr className="bg-surface-soft border-b border-line text-ink-muted uppercase font-bold font-display">
-                      <th className="p-3.5">Roll</th>
-                      <th className="p-3.5">Student Name</th>
-                      <th className="p-3.5">Bengali Name</th>
-                      <th className="p-3.5">Student Code</th>
+                      <th className="p-3.5">{t('roll')}</th>
+                      <th className="p-3.5">{t('studentName')}</th>
+                      <th className="p-3.5">{t('bengaliName')}</th>
+                      <th className="p-3.5">{t('studentCode')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line bg-surface">

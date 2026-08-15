@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { LanguageProvider } from './app/LanguageProvider';
 import { SessionProvider } from './app/SessionProvider';
 import { ActiveSchoolProvider } from './app/ActiveSchoolProvider';
 import { OfflineStatusProvider } from './app/OfflineStatusProvider';
@@ -9,15 +10,17 @@ import { AppRouter } from './app/AppRouter';
 export default function App() {
   return (
     <BrowserRouter>
-      <QueryProvider>
-        <SessionProvider>
-          <ActiveSchoolProvider>
-            <OfflineStatusProvider>
-              <AppRouter />
-            </OfflineStatusProvider>
-          </ActiveSchoolProvider>
-        </SessionProvider>
-      </QueryProvider>
+      <LanguageProvider>
+        <QueryProvider>
+          <SessionProvider>
+            <ActiveSchoolProvider>
+              <OfflineStatusProvider>
+                <AppRouter />
+              </OfflineStatusProvider>
+            </ActiveSchoolProvider>
+          </SessionProvider>
+        </QueryProvider>
+      </LanguageProvider>
     </BrowserRouter>
   );
 }

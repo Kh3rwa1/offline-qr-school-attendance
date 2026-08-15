@@ -1,5 +1,5 @@
 # Stage 1: Build application
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 RUN apk upgrade --no-cache && apk add --no-cache ca-certificates python3 make g++
 
 WORKDIR /app
@@ -11,7 +11,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Runtime image
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 RUN apk upgrade --no-cache && apk add --no-cache ca-certificates pcsc-lite-libs pcsc-lite ccid python3 make g++
 
 WORKDIR /app

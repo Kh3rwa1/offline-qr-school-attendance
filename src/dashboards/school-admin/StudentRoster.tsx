@@ -377,71 +377,110 @@ export const StudentRoster: React.FC = () => {
 
           {/* Table */}
           <div className="app-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                  <tr>
-                    <th className="py-4 px-6">Roll #</th>
-                    <th className="py-4 px-6">Student</th>
-                    <th className="py-4 px-6">Student Code / Portal ID</th>
-                    <th className="py-4 px-6">Class Section</th>
-                    <th className="py-4 px-6 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+            {filteredStudents.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  kind="roster"
+                  title="No students found"
+                  description="Enroll students individually or use the bulk XLSX import to populate your classroom rosters."
+                  actionText="Enroll Student"
+                  onAction={() => setIsAddOpen(true)}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+                      <tr>
+                        <th className="py-4 px-6">Roll #</th>
+                        <th className="py-4 px-6">Student</th>
+                        <th className="py-4 px-6">Student Code / Portal ID</th>
+                        <th className="py-4 px-6">Class Section</th>
+                        <th className="py-4 px-6 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+                      {filteredStudents.map((st) => (
+                        <tr key={st.id} className="table-row-hover">
+                          <td className="py-4 px-6 font-mono font-bold text-ink">
+                            #{st.enrollment?.rollNumber ?? '—'}
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold text-xs font-display">
+                                {st.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-extrabold text-ink text-xs font-display">{st.name}</p>
+                                {st.nameBn && <p className="text-[11px] text-ink-muted">{st.nameBn}</p>}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 font-mono text-[11px] text-ink-soft">
+                            <div className="font-bold text-ink">{st.studentCode}</div>
+                            {st.banglarShikshaId && (
+                              <div className="text-[11px] text-forest-700 dark:text-forest-600">BS: {st.banglarShikshaId}</div>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 font-bold text-ink">
+                            {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : 'Unassigned'}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display ${
+                              st.status === 'ACTIVE'
+                                ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
+                                : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                            }`}>
+                              {st.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Stacked Cards */}
+                <div className="md:hidden divide-y divide-line">
                   {filteredStudents.map((st) => (
-                    <tr key={st.id} className="table-row-hover">
-                      <td className="py-4 px-6 font-mono font-bold text-ink">
-                        #{st.enrollment?.rollNumber ?? '—'}
-                      </td>
-                      <td className="py-4 px-6">
+                    <div key={st.id} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold text-xs font-display">
+                          <div className="w-9 h-9 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold text-xs font-display shrink-0">
                             {st.name.charAt(0)}
                           </div>
                           <div>
-                            <p className="font-extrabold text-ink text-xs font-display">{st.name}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold text-ink-muted">#{st.enrollment?.rollNumber ?? '—'}</span>
+                              <h4 className="font-extrabold text-ink text-sm font-display">{st.name}</h4>
+                            </div>
                             {st.nameBn && <p className="text-[11px] text-ink-muted">{st.nameBn}</p>}
                           </div>
                         </div>
-                      </td>
-                      <td className="py-4 px-6 font-mono text-[11px] text-ink-soft">
-                        <div className="font-bold text-ink">{st.studentCode}</div>
-                        {st.banglarShikshaId && (
-                          <div className="text-[11px] text-forest-700 dark:text-forest-600">BS: {st.banglarShikshaId}</div>
-                        )}
-                      </td>
-                      <td className="py-4 px-6 font-bold text-ink">
-                        {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : 'Unassigned'}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display ${
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display shrink-0 ${
                           st.status === 'ACTIVE'
                             ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
                             : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
                         }`}>
                           {st.status}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
+                      </div>
 
-                  {filteredStudents.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8">
-                        <EmptyState
-                          kind="roster"
-                          title="No students found"
-                          description="Enroll students individually or use the bulk XLSX import to populate your classroom rosters."
-                          actionText="Enroll Student"
-                          onAction={() => setIsAddOpen(true)}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-line text-ink-soft">
+                        <span className="font-bold text-ink">
+                          {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : 'Unassigned'}
+                        </span>
+                        <span className="font-mono text-[11px] text-ink-muted">
+                          {st.studentCode}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

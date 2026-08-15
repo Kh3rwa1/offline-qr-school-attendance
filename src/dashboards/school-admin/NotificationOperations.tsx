@@ -204,34 +204,85 @@ export const NotificationOperations: React.FC = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-              <tr>
-                <th className="px-6 py-4">Student & Guardian</th>
-                <th className="px-6 py-4">Language</th>
-                <th className="px-6 py-4">Message Content</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Queued At / Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+        {jobs.length === 0 ? (
+          <div className="p-8">
+            <EmptyState
+              kind="notifications"
+              title="No SMS jobs in queue"
+              description="When absence rolls are submitted, parent notifications are queued here automatically."
+            />
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+                  <tr>
+                    <th className="px-6 py-4">Student & Guardian</th>
+                    <th className="px-6 py-4">Language</th>
+                    <th className="px-6 py-4">Message Content</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Queued At / Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+                  {jobs.map((sms) => (
+                    <tr key={sms.id} className="table-row-hover">
+                      <td className="px-6 py-4">
+                        <p className="font-extrabold text-ink text-sm font-display">
+                          {sms.studentName || 'Student'}
+                        </p>
+                        <p className="text-[11px] font-mono text-ink-muted font-bold">{sms.recipientPhone}</p>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-ink-soft uppercase font-mono">
+                        {sms.language}
+                      </td>
+                      <td className="px-6 py-4 max-w-sm text-ink-soft truncate">
+                        {sms.messageText}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                          sms.status === 'DELIVERED'
+                            ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                            : sms.status === 'QUEUED' || sms.status === 'PROCESSING'
+                            ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                            : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                        }`}>
+                          {sms.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {sms.status === 'PERMANENT_FAILURE' || sms.status === 'FAILED' ? (
+                          <button
+                            type="button"
+                            onClick={() => retryMutation.mutate(sms.id)}
+                            className="px-3 py-1 rounded-full text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
+                          >
+                            Retry Job
+                          </button>
+                        ) : (
+                          <span className="font-mono text-ink-muted text-[11px]">
+                            {new Date(sms.queuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="md:hidden divide-y divide-line">
               {jobs.map((sms) => (
-                <tr key={sms.id} className="table-row-hover">
-                  <td className="px-6 py-4">
-                    <p className="font-extrabold text-ink text-sm font-display">
-                      {sms.studentName || 'Student'}
-                    </p>
-                    <p className="text-[11px] font-mono text-ink-muted font-bold">{sms.recipientPhone}</p>
-                  </td>
-                  <td className="px-6 py-4 font-bold text-ink-soft uppercase font-mono">
-                    {sms.language}
-                  </td>
-                  <td className="px-6 py-4 max-w-sm text-ink-soft truncate">
-                    {sms.messageText}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                <div key={sms.id} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="font-extrabold text-ink text-sm font-display">{sms.studentName || 'Student'}</h4>
+                      <span className="text-xs font-mono font-bold text-ink-muted block mt-0.5">{sms.recipientPhone}</span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
                       sms.status === 'DELIVERED'
                         ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                         : sms.status === 'QUEUED' || sms.status === 'PROCESSING'
@@ -240,39 +291,33 @@ export const NotificationOperations: React.FC = () => {
                     }`}>
                       {sms.status}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
+                  </div>
+
+                  <p className="text-xs text-ink-soft line-clamp-2 bg-surface-soft p-2.5 rounded-xl border border-line">
+                    {sms.messageText}
+                  </p>
+
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-line text-ink-soft">
+                    <span className="font-mono text-[11px] text-ink-muted uppercase">Lang: {sms.language}</span>
                     {sms.status === 'PERMANENT_FAILURE' || sms.status === 'FAILED' ? (
                       <button
                         type="button"
                         onClick={() => retryMutation.mutate(sms.id)}
-                        className="px-3 py-1 rounded-full text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
+                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer flex items-center"
                       >
                         Retry Job
                       </button>
                     ) : (
                       <span className="font-mono text-ink-muted text-[11px]">
-                        {new Date(sms.queuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        Queued: {new Date(sms.queuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-
-              {jobs.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8">
-                    <EmptyState
-                      kind="notifications"
-                      title="No SMS jobs in queue"
-                      description="When absence rolls are submitted, parent notifications are queued here automatically."
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

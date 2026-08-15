@@ -171,51 +171,90 @@ export const AuditOverview: React.FC = () => {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                <tr>
-                  <th className="px-6 py-4">Action Taken</th>
-                  <th className="px-6 py-4">Actor</th>
-                  <th className="px-6 py-4">Institution</th>
-                  <th className="px-6 py-4">Metadata</th>
-                  <th className="px-6 py-4">IP Address</th>
-                  <th className="px-6 py-4 text-right">Timestamp</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                {logs.map((log) => (
-                  <tr key={log.id} className="table-row-hover">
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-mono">
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-extrabold text-ink text-sm font-display">
-                        {log.actorName || 'System Process'}
-                      </p>
-                      <p className="text-[11px] text-ink-muted font-mono">
-                        {log.actorUserId ? log.actorUserId.slice(0, 8) + '…' : '—'}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-ink">
-                      {log.schoolName || (log.schoolId ? `School (${log.schoolId.slice(0, 8)}…)` : 'Platform HQ')}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-[11px] text-ink-soft max-w-xs truncate">
-                      {log.details ? JSON.stringify(log.details) : '—'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-ink-muted">
-                      {log.ipAddress || '127.0.0.1'}
-                    </td>
-                    <td className="px-6 py-4 text-right font-mono text-ink-muted">
-                      {new Date(log.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
-                    </td>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+                  <tr>
+                    <th className="px-6 py-4">Action Taken</th>
+                    <th className="px-6 py-4">Actor</th>
+                    <th className="px-6 py-4">Institution</th>
+                    <th className="px-6 py-4">Metadata</th>
+                    <th className="px-6 py-4">IP Address</th>
+                    <th className="px-6 py-4 text-right">Timestamp</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="table-row-hover">
+                      <td className="px-6 py-4">
+                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-mono">
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-extrabold text-ink text-sm font-display">
+                          {log.actorName || 'System Process'}
+                        </p>
+                        <p className="text-[11px] text-ink-muted font-mono">
+                          {log.actorUserId ? log.actorUserId.slice(0, 8) + '…' : '—'}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-ink">
+                        {log.schoolName || (log.schoolId ? `School (${log.schoolId.slice(0, 8)}…)` : 'Platform HQ')}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-[11px] text-ink-soft max-w-xs truncate">
+                        {log.details ? JSON.stringify(log.details) : '—'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-ink-muted">
+                        {log.ipAddress || '127.0.0.1'}
+                      </td>
+                      <td className="px-6 py-4 text-right font-mono text-ink-muted">
+                        {new Date(log.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="md:hidden divide-y divide-line">
+              {logs.map((log) => (
+                <div key={log.id} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-mono">
+                      {log.action}
+                    </span>
+                    <span className="text-[11px] font-mono text-ink-muted">
+                      {new Date(log.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-extrabold text-ink text-sm font-display">{log.actorName || 'System Process'}</h4>
+                    <p className="text-xs text-ink-soft mt-0.5 font-bold">
+                      {log.schoolName || (log.schoolId ? `School (${log.schoolId.slice(0, 8)}…)` : 'Platform HQ')}
+                    </p>
+                  </div>
+
+                  <details className="text-xs text-ink-soft bg-surface-soft p-2 rounded-xl border border-line cursor-pointer">
+                    <summary className="font-bold text-ink select-none font-display">Technical Details & Metadata</summary>
+                    <div className="mt-2 space-y-1 font-mono text-[11px]">
+                      <div><span className="text-ink-muted">IP:</span> {log.ipAddress || '127.0.0.1'}</div>
+                      <div><span className="text-ink-muted">Actor ID:</span> {log.actorUserId || 'System'}</div>
+                      {log.details && (
+                        <div className="break-all pt-1 border-t border-line text-ink-muted">
+                          {JSON.stringify(log.details)}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

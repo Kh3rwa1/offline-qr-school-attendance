@@ -182,38 +182,122 @@ export const CardOperations: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-              <tr>
-                <th className="px-6 py-4">Card Digest</th>
-                <th className="px-6 py-4">Assigned Student</th>
-                <th className="px-6 py-4">Security Standard</th>
-                <th className="px-6 py-4">Issue Date</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+        {filteredCards.length === 0 ? (
+          <div className="p-8">
+            <EmptyState
+              kind="generic"
+              title="No smartcards found"
+              description="Enroll new smartcards or adjust your search filter."
+            />
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+                  <tr>
+                    <th className="px-6 py-4">Card Digest</th>
+                    <th className="px-6 py-4">Assigned Student</th>
+                    <th className="px-6 py-4">Security Standard</th>
+                    <th className="px-6 py-4">Issue Date</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+                  {filteredCards.map((c) => (
+                    <tr key={c.id} className="table-row-hover">
+                      <td className="px-6 py-4 font-mono font-bold text-ink">
+                        <span className="bg-surface-soft px-2.5 py-1 rounded-lg border border-line">
+                          {c.credentialDigest}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-extrabold text-ink text-sm font-display">
+                        {c.studentName || 'Unassigned'}
+                        {c.studentCode && <span className="block text-[11px] text-ink-muted font-mono">Code: {c.studentCode}</span>}
+                      </td>
+                      <td className="px-6 py-4 text-ink-soft font-medium font-mono">
+                        {c.securityMode} (v{c.keyVersion})
+                      </td>
+                      <td className="px-6 py-4 text-ink-muted font-mono">
+                        {new Date(c.issuedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                          c.status === 'ACTIVE'
+                            ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                            : c.status === 'SUSPENDED'
+                            ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                            : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                        }`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {c.status === 'ACTIVE' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCard(c);
+                                setActionType('SUSPEND');
+                                setActionReason('');
+                                setActionError(null);
+                              }}
+                              className="px-3 py-1 rounded-full text-[11px] font-bold text-warning-800 bg-warning-50 hover:bg-warning-100 border border-warning-100 dark:border-warning-600/30 font-display cursor-pointer"
+                            >
+                              Suspend
+                            </button>
+                          )}
+
+                          {c.status === 'SUSPENDED' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCard(c);
+                                setActionType('REACTIVATE');
+                                setActionReason('');
+                                setActionError(null);
+                              }}
+                              className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+
+                          {c.status !== 'REVOKED' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCard(c);
+                                setActionType('REVOKE');
+                                setActionReason('');
+                                setActionError(null);
+                              }}
+                              className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="md:hidden divide-y divide-line">
               {filteredCards.map((c) => (
-                <tr key={c.id} className="table-row-hover">
-                  <td className="px-6 py-4 font-mono font-bold text-ink">
-                    <span className="bg-surface-soft px-2.5 py-1 rounded-lg border border-line">
-                      {c.credentialDigest}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-extrabold text-ink text-sm font-display">
-                    {c.studentName || 'Unassigned'}
-                    {c.studentCode && <span className="block text-[11px] text-ink-muted font-mono">Code: {c.studentCode}</span>}
-                  </td>
-                  <td className="px-6 py-4 text-ink-soft font-medium font-mono">
-                    {c.securityMode} (v{c.keyVersion})
-                  </td>
-                  <td className="px-6 py-4 text-ink-muted font-mono">
-                    {new Date(c.issuedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                <div key={c.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-extrabold text-ink text-sm font-display">{c.studentName || 'Unassigned Student'}</h4>
+                      <span className="text-[11px] text-ink-muted font-mono block mt-0.5">{c.studentCode ? `Code: ${c.studentCode}` : c.credentialDigest}</span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
                       c.status === 'ACTIVE'
                         ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                         : c.status === 'SUSPENDED'
@@ -222,72 +306,66 @@ export const CardOperations: React.FC = () => {
                     }`}>
                       {c.status}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {c.status === 'ACTIVE' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setActionType('SUSPEND');
-                            setActionReason('');
-                            setActionError(null);
-                          }}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-warning-800 bg-warning-50 hover:bg-warning-100 border border-warning-100 dark:border-warning-600/30 font-display cursor-pointer"
-                        >
-                          Suspend
-                        </button>
-                      )}
+                  </div>
 
-                      {c.status === 'SUSPENDED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setActionType('REACTIVATE');
-                            setActionReason('');
-                            setActionError(null);
-                          }}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
-                        >
-                          Reactivate
-                        </button>
-                      )}
+                  <div className="flex items-center justify-between text-xs pt-1 text-ink-soft">
+                    <span className="font-mono text-[11px]">{c.securityMode} (v{c.keyVersion})</span>
+                    <span className="font-mono text-[11px] text-ink-muted">
+                      {new Date(c.issuedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
 
-                      {c.status !== 'REVOKED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setActionType('REVOKE');
-                            setActionReason('');
-                            setActionError(null);
-                          }}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
+                    {c.status === 'ACTIVE' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCard(c);
+                          setActionType('SUSPEND');
+                          setActionReason('');
+                          setActionError(null);
+                        }}
+                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-warning-800 bg-warning-50 hover:bg-warning-100 border border-warning-100 dark:border-warning-600/30 font-display cursor-pointer flex items-center"
+                      >
+                        Suspend
+                      </button>
+                    )}
+
+                    {c.status === 'SUSPENDED' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCard(c);
+                          setActionType('REACTIVATE');
+                          setActionReason('');
+                          setActionError(null);
+                        }}
+                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer flex items-center"
+                      >
+                        Reactivate
+                      </button>
+                    )}
+
+                    {c.status !== 'REVOKED' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCard(c);
+                          setActionType('REVOKE');
+                          setActionReason('');
+                          setActionError(null);
+                        }}
+                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer flex items-center"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
-
-              {filteredCards.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8">
-                    <EmptyState
-                      kind="generic"
-                      title="No smartcards found"
-                      description="No smartcards found in this registry matching your filter."
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Action Confirmation Modal */}

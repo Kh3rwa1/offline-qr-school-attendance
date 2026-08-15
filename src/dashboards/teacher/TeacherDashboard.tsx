@@ -39,7 +39,7 @@ export const TeacherDashboard: React.FC = () => {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const [viewMode, setViewMode] = useState<'scanner' | 'review' | 'roster'>('scanner');
   const [finalizing, setFinalizing] = useState(false);
-  const [scanBurst, setScanBurst] = useState<{ active: boolean; studentName?: string } | null>(null);
+  const [scanBurst, setScanBurst] = useState<{ id: number; studentName?: string } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerControls = useRef<{ stop: () => void } | null>(null);
@@ -230,9 +230,8 @@ export const TeacherDashboard: React.FC = () => {
       });
 
       if (result.success && result.student) {
-        // Signature moment: trigger spring checkmark burst
-        setScanBurst({ active: true, studentName: result.student.name });
-        setTimeout(() => setScanBurst(null), 300);
+        // Signature moment: trigger spring checkmark burst with completion-driven AnimatePresence
+        setScanBurst({ id: Date.now(), studentName: result.student.name });
 
         showFeedback({ kind: 'success', text: `${result.student.name} (Roll ${result.student.rollNumber}) marked PRESENT` });
         const updated = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
@@ -504,17 +503,30 @@ export const TeacherDashboard: React.FC = () => {
           <div className="lg:col-span-8 app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between relative overflow-hidden">
             {/* Signature Burst Animation on Scan Success */}
             <AnimatePresence>
-              {scanBurst?.active && (
+              {scanBurst && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1.1 }}
-                  exit={{ opacity: 0, scale: 1.3 }}
-                  transition={{ duration: 0.28, ease: 'easeOut' }}
-                  className="absolute inset-0 z-30 bg-forest-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-white pointer-events-none"
+                  key={scanBurst.id}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.15 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  onAnimationComplete={() => {
+                    setTimeout(() => {
+                      setScanBurst((curr) => (curr?.id === scanBurst.id ? null : curr));
+                    }, 200);
+                  }}
+                  aria-hidden="true"
+                  className="absolute inset-0 z-30 bg-forest-900/85 backdrop-blur-xs flex flex-col items-center justify-center text-white pointer-events-none p-6 text-center"
                 >
-                  <div className="w-20 h-20 rounded-full bg-forest-600 flex items-center justify-center shadow-2xl mb-3">
+                  <motion.div
+                    initial={{ scale: 0.5 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0.9 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="w-20 h-20 rounded-full bg-forest-600 flex items-center justify-center shadow-2xl mb-3"
+                  >
                     <CheckCircle2 className="w-12 h-12 text-white" strokeWidth={2.5} />
-                  </div>
+                  </motion.div>
                   <span className="text-xl font-bold font-display">{scanBurst.studentName || 'Verified'}</span>
                   <span className="text-xs font-mono text-emerald-200 uppercase tracking-widest mt-1">Status: PRESENT</span>
                 </motion.div>
@@ -531,7 +543,7 @@ export const TeacherDashboard: React.FC = () => {
               </span>
             </div>
 
-            <div className="relative aspect-video rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line">
+            <div className="relative aspect-video max-h-[45vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line">
               <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
               <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
                 <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
@@ -552,7 +564,7 @@ export const TeacherDashboard: React.FC = () => {
                 setScanInput('');
                 if (value) void handleScan(value, 'USB');
               }}
-              className="flex gap-3 pt-2"
+              className="flex flex-col sm:flex-row gap-3 pt-2"
             >
               <div className="relative flex-1">
                 <Usb className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
@@ -563,7 +575,7 @@ export const TeacherDashboard: React.FC = () => {
                   className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                 />
               </div>
-              <Button type="submit" variant="primary" size="md">
+              <Button type="submit" variant="primary" size="md" className="w-full sm:w-auto justify-center">
                 Scan Token
               </Button>
             </form>
@@ -572,7 +584,7 @@ export const TeacherDashboard: React.FC = () => {
           <div className="lg:col-span-4 app-card p-6 sm:p-7 space-y-5 flex flex-col justify-between">
             <div className="space-y-4">
               <h3 className="text-base font-extrabold text-ink font-display">Session Telemetry</h3>
-              <div className="grid grid-cols-3 gap-2.5 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
                 <div className="bg-surface-soft rounded-2xl p-3 border border-line">
                   <span className="block text-2xl font-extrabold text-ink font-display t-data">{sessionRoster.length || 48}</span>
                   <span className="t-label text-ink-muted block mt-1">Roster</span>
@@ -671,63 +683,114 @@ export const TeacherDashboard: React.FC = () => {
               onAction={() => setViewMode('scanner')}
             />
           ) : (
-            <div className="overflow-x-auto border border-line rounded-3xl overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-surface-soft border-b border-line text-left text-ink-muted uppercase font-bold font-display">
-                    <th className="p-3.5">Roll</th>
-                    <th className="p-3.5">Student Name</th>
-                    <th className="p-3.5">Status</th>
-                    <th className="p-3.5">Override Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line bg-surface">
-                  {sessionRoster.map((item) => (
-                    <tr key={item.studentId} className="table-row-hover">
-                      <td className="p-3.5 font-mono font-bold text-ink">#{item.rollNumber}</td>
-                      <td className="p-3.5 font-bold text-ink font-display">{item.studentName}</td>
-                      <td className="p-3.5">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
-                            item.status === 'PRESENT'
-                              ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
-                              : item.status === 'ABSENT'
-                              ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
-                              : item.status === 'LATE'
-                              ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
-                              : 'bg-surface-soft text-ink-soft border-line'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="flex gap-1.5">
-                          {(['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const).map((st) => {
-                            const isSelected = item.status === st;
-                            return (
-                              <button
-                                key={st}
-                                type="button"
-                                aria-pressed={isSelected}
-                                onClick={() => void handleManualStatus(item.studentId, st)}
-                                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer font-display focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2 ${
-                                  isSelected
-                                    ? 'bg-forest-700 text-white shadow-sm'
-                                    : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
-                                }`}
-                              >
-                                {st}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </td>
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto border border-line rounded-3xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-surface-soft border-b border-line text-left text-ink-muted uppercase font-bold font-display">
+                      <th className="p-3.5">Roll</th>
+                      <th className="p-3.5">Student Name</th>
+                      <th className="p-3.5">Status</th>
+                      <th className="p-3.5">Override Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-line bg-surface">
+                    {sessionRoster.map((item) => (
+                      <tr key={item.studentId} className="table-row-hover">
+                        <td className="p-3.5 font-mono font-bold text-ink">#{item.rollNumber}</td>
+                        <td className="p-3.5 font-bold text-ink font-display">{item.studentName}</td>
+                        <td className="p-3.5">
+                          <span
+                            className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
+                              item.status === 'PRESENT'
+                                ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
+                                : item.status === 'ABSENT'
+                                ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
+                                : item.status === 'LATE'
+                                ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                                : 'bg-surface-soft text-ink-soft border-line'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="flex gap-1.5">
+                            {(['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const).map((st) => {
+                              const isSelected = item.status === st;
+                              return (
+                                <button
+                                  key={st}
+                                  type="button"
+                                  aria-pressed={isSelected}
+                                  onClick={() => void handleManualStatus(item.studentId, st)}
+                                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer font-display focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2 ${
+                                    isSelected
+                                      ? 'bg-forest-700 text-white shadow-sm'
+                                      : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
+                                  }`}
+                                >
+                                  {st}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Stacked Card View */}
+              <div className="md:hidden space-y-3">
+                {sessionRoster.map((item) => (
+                  <div key={item.studentId} className="app-card p-4 space-y-3 border border-line">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-mono font-bold text-ink-muted">#{item.rollNumber}</span>
+                        <h4 className="text-sm font-bold text-ink font-display">{item.studentName}</h4>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
+                          item.status === 'PRESENT'
+                            ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
+                            : item.status === 'ABSENT'
+                            ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
+                            : item.status === 'LATE'
+                            ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                            : 'bg-surface-soft text-ink-soft border-line'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-line">
+                      {(['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const).map((st) => {
+                        const isSelected = item.status === st;
+                        return (
+                          <button
+                            key={st}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => void handleManualStatus(item.studentId, st)}
+                            className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-display flex items-center justify-center focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2 ${
+                              isSelected
+                                ? 'bg-forest-700 text-white shadow-sm'
+                                : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
+                            }`}
+                          >
+                            {st}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
       )}
@@ -750,28 +813,49 @@ export const TeacherDashboard: React.FC = () => {
               onAction={handleDownloadRoster}
             />
           ) : (
-            <div className="overflow-x-auto border border-line rounded-3xl overflow-hidden">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-surface-soft border-b border-line text-ink-muted uppercase font-bold font-display">
-                    <th className="p-3.5">Roll</th>
-                    <th className="p-3.5">Student Name</th>
-                    <th className="p-3.5">Bengali Name</th>
-                    <th className="p-3.5">Student Code</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line bg-surface">
-                  {roster.map((s) => (
-                    <tr key={s.studentId} className="table-row-hover">
-                      <td className="p-3.5 font-mono font-bold text-ink">#{s.rollNumber}</td>
-                      <td className="p-3.5 font-bold text-ink font-display">{s.name}</td>
-                      <td className="p-3.5 text-ink-soft">{s.nameBn || '—'}</td>
-                      <td className="p-3.5 font-mono text-ink-muted">{s.studentCode}</td>
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto border border-line rounded-3xl overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-surface-soft border-b border-line text-ink-muted uppercase font-bold font-display">
+                      <th className="p-3.5">Roll</th>
+                      <th className="p-3.5">Student Name</th>
+                      <th className="p-3.5">Bengali Name</th>
+                      <th className="p-3.5">Student Code</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-line bg-surface">
+                    {roster.map((s) => (
+                      <tr key={s.studentId} className="table-row-hover">
+                        <td className="p-3.5 font-mono font-bold text-ink">#{s.rollNumber}</td>
+                        <td className="p-3.5 font-bold text-ink font-display">{s.name}</td>
+                        <td className="p-3.5 text-ink-soft">{s.nameBn || '—'}</td>
+                        <td className="p-3.5 font-mono text-ink-muted">{s.studentCode}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Stacked Card View */}
+              <div className="md:hidden space-y-3">
+                {roster.map((s) => (
+                  <div key={s.studentId} className="app-card p-4 flex items-center justify-between border border-line">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-ink-muted">#{s.rollNumber}</span>
+                        <h4 className="text-sm font-bold text-ink font-display">{s.name}</h4>
+                      </div>
+                      {s.nameBn && <p className="text-xs text-ink-soft mt-0.5">{s.nameBn}</p>}
+                    </div>
+                    <span className="text-[11px] font-mono font-bold text-ink-muted bg-surface-soft px-2.5 py-1 rounded-lg border border-line">
+                      {s.studentCode}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
       )}

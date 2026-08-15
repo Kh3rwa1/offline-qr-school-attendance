@@ -274,51 +274,139 @@ export const UserManagement: React.FC = () => {
 
           {/* Staff Table */}
           <div className="app-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
-                    <th className="py-4 px-6">Faculty Member</th>
-                    <th className="py-4 px-6">Role & Status</th>
-                    <th className="py-4 px-6">Phone Number</th>
-                    <th className="py-4 px-6">Member Since</th>
-                    <th className="py-4 px-6 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line text-xs">
+            {filteredUsers.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  kind="generic"
+                  title="No faculty members found"
+                  description="Add new staff members or clear your search query."
+                />
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
+                        <th className="py-4 px-6">Faculty Member</th>
+                        <th className="py-4 px-6">Role & Status</th>
+                        <th className="py-4 px-6">Phone Number</th>
+                        <th className="py-4 px-6">Member Since</th>
+                        <th className="py-4 px-6 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line text-xs">
+                      {filteredUsers.map((user) => (
+                        <tr key={user.userId} className="table-row-hover">
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold font-display">
+                                {user.fullName.charAt(0)}
+                              </div>
+                              <div>
+                                <span className="font-extrabold text-ink block font-display">
+                                  {user.fullName}
+                                </span>
+                                <span className="text-[11px] text-ink-muted font-mono">
+                                  ID: {user.userId.slice(0, 8)}…
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                                {user.role.replace('_', ' ')}
+                              </span>
+                              <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-success-600' : 'bg-danger-600'}`} />
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 font-mono font-bold text-ink">
+                            {user.phoneNumber}
+                          </td>
+                          <td className="py-4 px-6 text-ink-muted">
+                            {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {user.status === 'ACTIVE' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRoleModalUser(user);
+                                      setSelectedNewRole(user.role);
+                                      setRoleChangeReason('');
+                                      setActionError(null);
+                                    }}
+                                    className="px-3 py-1 rounded-full text-[11px] font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display"
+                                  >
+                                    Change Role
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
+                                    onClick={() => {
+                                      setSuspendModalUser(user);
+                                      setSuspendReason('');
+                                      setActionError(null);
+                                    }}
+                                    className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer disabled:opacity-30 font-display"
+                                    title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
+                                  >
+                                    Suspend
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReactivateModalUser(user);
+                                    setReactivateReason('');
+                                    setActionError(null);
+                                  }}
+                                  className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display"
+                                >
+                                  Reactivate
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Stacked Cards */}
+                <div className="md:hidden divide-y divide-line">
                   {filteredUsers.map((user) => (
-                    <tr key={user.userId} className="table-row-hover">
-                      <td className="py-4 px-6">
+                    <div key={user.userId} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold font-display">
+                          <div className="w-10 h-10 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold font-display shrink-0">
                             {user.fullName.charAt(0)}
                           </div>
                           <div>
-                            <span className="font-extrabold text-ink block font-display">
-                              {user.fullName}
-                            </span>
-                            <span className="text-[11px] text-ink-muted font-mono">
-                              ID: {user.userId.slice(0, 8)}…
-                            </span>
+                            <h4 className="font-extrabold text-ink text-sm font-display">{user.fullName}</h4>
+                            <span className="text-xs font-mono font-bold text-ink-soft block mt-0.5">{user.phoneNumber}</span>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                             {user.role.replace('_', ' ')}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-success-600' : 'bg-danger-600'}`} />
                         </div>
-                      </td>
-                      <td className="py-4 px-6 font-mono font-bold text-ink">
-                        {user.phoneNumber}
-                      </td>
-                      <td className="py-4 px-6 text-ink-muted">
-                        {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-line">
+                        <span className="text-[11px] text-ink-muted">
+                          Joined {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                        </span>
+
+                        <div className="flex items-center gap-2">
                           {user.status === 'ACTIVE' ? (
                             <>
                               <button
@@ -329,7 +417,7 @@ export const UserManagement: React.FC = () => {
                                   setRoleChangeReason('');
                                   setActionError(null);
                                 }}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display"
+                                className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display flex items-center"
                               >
                                 Change Role
                               </button>
@@ -341,8 +429,7 @@ export const UserManagement: React.FC = () => {
                                   setSuspendReason('');
                                   setActionError(null);
                                 }}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer disabled:opacity-30 font-display"
-                                title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
+                                className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer disabled:opacity-30 font-display flex items-center"
                               >
                                 Suspend
                               </button>
@@ -355,30 +442,18 @@ export const UserManagement: React.FC = () => {
                                 setReactivateReason('');
                                 setActionError(null);
                               }}
-                              className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display"
+                              className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display flex items-center"
                             >
                               Reactivate
                             </button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   ))}
-
-                  {filteredUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8">
-                        <EmptyState
-                          kind="generic"
-                          title="No faculty members match your search"
-                          description="Try adjusting your filter or search query."
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

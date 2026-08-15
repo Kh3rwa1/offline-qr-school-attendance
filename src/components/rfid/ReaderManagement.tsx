@@ -134,36 +134,106 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
       </div>
 
       <div className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
-                <th className="py-4 px-6">Terminal / Location</th>
-                <th className="py-4 px-6">Direction Mode</th>
-                <th className="py-4 px-6">Status</th>
-                <th className="py-4 px-6">Hardware Security</th>
-                <th className="py-4 px-6">Sequence Counter</th>
-                <th className="py-4 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line bg-surface">
+        {readers.length === 0 ? (
+          <div className="p-8">
+            <EmptyState
+              kind="generic"
+              title="No physical gate readers registered"
+              description="Click 'Provision New Reader' to register an ESP32 or Raspberry Pi terminal."
+            />
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
+                    <th className="py-4 px-6">Terminal / Location</th>
+                    <th className="py-4 px-6">Direction Mode</th>
+                    <th className="py-4 px-6">Status</th>
+                    <th className="py-4 px-6">Hardware Security</th>
+                    <th className="py-4 px-6">Sequence Counter</th>
+                    <th className="py-4 px-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line bg-surface">
+                  {readers.map((r) => (
+                    <tr key={r.id} className="table-row-hover">
+                      <td className="py-4 px-6">
+                        <span className="font-extrabold text-ink block font-display text-sm">
+                          {r.name}
+                        </span>
+                        <span className="text-[11px] text-ink-muted font-medium">
+                          {r.location || 'Entrance Turnstile'} • Device ID: <span className="font-mono">{r.deviceId}</span>
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 font-semibold text-ink">
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
+                          {r.directionMode}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                          r.status === 'APPROVED' || r.status === 'ACTIVE'
+                            ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                            : r.status === 'PENDING'
+                            ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                            : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-ink-soft">
+                        <span className="font-mono text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-2.5 py-0.5 rounded-full border border-success-100 dark:border-success-600/30">
+                          {r.securityCapability || 'DESFIRE_EV2_EV3'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 font-mono text-ink font-bold">
+                        #{r.lastSequenceNumber || 0}
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {r.status === 'PENDING' && (
+                            <button
+                              type="button"
+                              onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
+                              className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                          )}
+                          {r.status !== 'REVOKED' ? (
+                            <button
+                              type="button"
+                              onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
+                              className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-ink-muted font-bold font-display">Revoked</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="md:hidden divide-y divide-line">
               {readers.map((r) => (
-                <tr key={r.id} className="table-row-hover">
-                  <td className="py-4 px-6">
-                    <span className="font-extrabold text-ink block font-display text-sm">
-                      {r.name}
-                    </span>
-                    <span className="text-[11px] text-ink-muted font-medium">
-                      {r.location || 'Entrance Turnstile'} • Device ID: <span className="font-mono">{r.deviceId}</span>
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 font-semibold text-ink">
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
-                      {r.directionMode}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                <div key={r.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-extrabold text-ink text-sm font-display">{r.name}</h4>
+                      <p className="text-[11px] text-ink-muted mt-0.5">
+                        {r.location || 'Entrance Turnstile'} • <span className="font-mono">{r.deviceId}</span>
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
                       r.status === 'APPROVED' || r.status === 'ACTIVE'
                         ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                         : r.status === 'PENDING'
@@ -172,56 +242,42 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                     }`}>
                       {r.status}
                     </span>
-                  </td>
-                  <td className="py-4 px-6 text-ink-soft">
-                    <span className="font-mono text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-2.5 py-0.5 rounded-full border border-success-100 dark:border-success-600/30">
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-1 text-ink-soft">
+                    <span className="font-mono text-[11px] text-forest-700 dark:text-forest-600 font-bold bg-success-50 px-2 py-0.5 rounded-md border border-success-100 dark:border-success-600/30">
                       {r.securityCapability || 'DESFIRE_EV2_EV3'}
                     </span>
-                  </td>
-                  <td className="py-4 px-6 font-mono text-ink font-bold">
-                    #{r.lastSequenceNumber || 0}
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {r.status === 'PENDING' && (
-                        <button
-                          type="button"
-                          onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {r.status !== 'REVOKED' ? (
-                        <button
-                          type="button"
-                          onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
-                        >
-                          Revoke
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-ink-muted font-bold font-display">Revoked</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <span className="font-mono text-[11px] text-ink-muted">Seq #{r.lastSequenceNumber || 0}</span>
+                  </div>
 
-              {readers.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8">
-                    <EmptyState
-                      kind="generic"
-                      title="No physical gate readers registered"
-                      description="Click 'Provision New Reader' to register an ESP32 or Raspberry Pi terminal."
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
+                    {r.status === 'PENDING' && (
+                      <button
+                        type="button"
+                        onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
+                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer flex items-center"
+                      >
+                        Approve
+                      </button>
+                    )}
+                    {r.status !== 'REVOKED' ? (
+                      <button
+                        type="button"
+                        onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
+                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer flex items-center"
+                      >
+                        Revoke
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-ink-muted font-bold font-display">Revoked</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Provision Reader Modal */}

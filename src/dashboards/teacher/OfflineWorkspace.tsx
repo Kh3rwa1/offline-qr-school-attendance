@@ -99,55 +99,100 @@ export const OfflineWorkspace: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                <tr>
-                  <th className="px-6 py-4">Client Event ID</th>
-                  <th className="px-6 py-4">Student ID</th>
-                  <th className="px-6 py-4">Capture Source</th>
-                  <th className="px-6 py-4">Local Timestamp</th>
-                  <th className="px-6 py-4 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                {events.map((e) => (
-                  <tr key={e.clientEventId} className="table-row-hover">
-                    <td className="px-6 py-4 font-mono font-bold text-ink">{e.clientEventId.slice(0, 12)}…</td>
-                    <td className="px-6 py-4 font-mono font-bold text-ink">{e.studentId ? `${e.studentId.slice(0, 10)}…` : '—'}</td>
-                    <td className="px-6 py-4">
-                      <span className="bg-surface-soft px-2.5 py-1 rounded-lg border border-line text-[11px] font-bold">
-                        {e.source || 'CAMERA'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-ink-muted font-mono">
-                      {e.clientTimestamp ? new Date(e.clientTimestamp).toLocaleTimeString() : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display ${
-                        e.syncStatus === 'SYNCED'
-                          ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
-                          : e.syncStatus === 'SYNCING'
-                          ? 'bg-info-50 text-info-800 border-info-100 dark:border-info-600/30'
-                          : e.syncStatus === 'CONFLICT'
-                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                          : e.syncStatus === 'FAILED' || e.syncStatus === 'PERMANENT_FAILURE'
-                          ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
-                          : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
-                      }`}>
-                        {e.syncStatus || 'PENDING'}
-                      </span>
-                      {e.syncError && (
-                        <span className="block text-[11px] text-danger-600 mt-0.5 font-mono" title={e.syncError}>
-                          {e.syncError.slice(0, 20)}…
-                        </span>
-                      )}
-                    </td>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+                  <tr>
+                    <th className="px-6 py-4">Client Event ID</th>
+                    <th className="px-6 py-4">Student ID</th>
+                    <th className="px-6 py-4">Capture Source</th>
+                    <th className="px-6 py-4">Local Timestamp</th>
+                    <th className="px-6 py-4 text-right">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
+                  {events.map((e) => (
+                    <tr key={e.clientEventId} className="table-row-hover">
+                      <td className="px-6 py-4 font-mono font-bold text-ink">{e.clientEventId.slice(0, 12)}…</td>
+                      <td className="px-6 py-4 font-mono font-bold text-ink">{e.studentId ? `${e.studentId.slice(0, 10)}…` : '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className="bg-surface-soft px-2.5 py-1 rounded-lg border border-line text-[11px] font-bold">
+                          {e.source || 'CAMERA'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-ink-muted font-mono">
+                        {e.clientTimestamp ? new Date(e.clientTimestamp).toLocaleTimeString() : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display ${
+                          e.syncStatus === 'SYNCED'
+                            ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
+                            : e.syncStatus === 'SYNCING'
+                            ? 'bg-info-50 text-info-800 border-info-100 dark:border-info-600/30'
+                            : e.syncStatus === 'CONFLICT'
+                            ? 'bg-purple-50 text-purple-800 border-purple-200'
+                            : e.syncStatus === 'FAILED' || e.syncStatus === 'PERMANENT_FAILURE'
+                            ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
+                            : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                        }`}>
+                          {e.syncStatus || 'PENDING'}
+                        </span>
+                        {e.syncError && (
+                          <span className="block text-[11px] text-danger-600 mt-0.5 font-mono" title={e.syncError}>
+                            {e.syncError.slice(0, 20)}…
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="md:hidden divide-y divide-line">
+              {events.map((e) => (
+                <div key={e.clientEventId} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-xs font-bold text-ink block">{e.clientEventId.slice(0, 12)}…</span>
+                      <span className="text-[11px] text-ink-muted font-mono mt-0.5 block">
+                        Student: {e.studentId ? `${e.studentId.slice(0, 10)}…` : '—'}
+                      </span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display shrink-0 ${
+                      e.syncStatus === 'SYNCED'
+                        ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
+                        : e.syncStatus === 'SYNCING'
+                        ? 'bg-info-50 text-info-800 border-info-100 dark:border-info-600/30'
+                        : e.syncStatus === 'CONFLICT'
+                        ? 'bg-purple-50 text-purple-800 border-purple-200'
+                        : e.syncStatus === 'FAILED' || e.syncStatus === 'PERMANENT_FAILURE'
+                        ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
+                        : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                    }`}>
+                      {e.syncStatus || 'PENDING'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-line text-ink-soft">
+                    <span className="font-mono text-[11px]">Source: {e.source || 'CAMERA'}</span>
+                    <span className="font-mono text-[11px] text-ink-muted">
+                      {e.clientTimestamp ? new Date(e.clientTimestamp).toLocaleTimeString() : '—'}
+                    </span>
+                  </div>
+
+                  {e.syncError && (
+                    <p className="text-[11px] text-danger-600 font-mono bg-danger-50 p-2 rounded-lg border border-danger-100 dark:border-danger-600/30">
+                      Error: {e.syncError}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

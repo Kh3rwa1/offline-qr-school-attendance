@@ -207,34 +207,88 @@ export const DailyReports: React.FC = () => {
 
           {/* Student Roll Table */}
           <div className="app-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
-                    <th className="py-4 px-6">Roll #</th>
-                    <th className="py-4 px-6">Student Name</th>
-                    <th className="py-4 px-6">Attendance Status</th>
-                    <th className="py-4 px-6">First Scan Time</th>
-                    <th className="py-4 px-6">Mid-Day Meal</th>
-                    <th className="py-4 px-6 text-right">Method</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line text-xs">
+            {records.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  kind="generic"
+                  title="No attendance records found"
+                  description={`No attendance records found for this class section on ${selectedDate}.`}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
+                        <th className="py-4 px-6">Roll #</th>
+                        <th className="py-4 px-6">Student Name</th>
+                        <th className="py-4 px-6">Attendance Status</th>
+                        <th className="py-4 px-6">First Scan Time</th>
+                        <th className="py-4 px-6">Mid-Day Meal</th>
+                        <th className="py-4 px-6 text-right">Method</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line text-xs">
+                      {records.map((student) => (
+                        <tr key={student.studentId} className="table-row-hover">
+                          <td className="py-4 px-6 font-mono font-bold text-ink">
+                            #{student.rollNumber || '—'}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="font-extrabold text-ink block font-display">
+                              {student.fullName}
+                            </span>
+                            <span className="text-[11px] text-ink-muted font-mono">
+                              ID: {student.studentId.slice(0, 8)}…
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                              student.status === 'PRESENT'
+                                ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                                : student.status === 'LATE'
+                                ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                                : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                            }`}>
+                              {student.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 font-mono text-ink-muted">
+                            {student.firstScannedAt
+                              ? new Date(student.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                              : '—'}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
+                              student.status !== 'ABSENT' ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30' : 'bg-surface-soft text-ink-muted border border-line'
+                            }`}>
+                              {student.status !== 'ABSENT' ? 'Eligible' : 'Not Eligible'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-right font-medium text-ink-soft">
+                            {student.source || 'Optical QR / RFID'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Stacked Cards */}
+                <div className="md:hidden divide-y divide-line">
                   {records.map((student) => (
-                    <tr key={student.studentId} className="table-row-hover">
-                      <td className="py-4 px-6 font-mono font-bold text-ink">
-                        #{student.rollNumber || '—'}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="font-extrabold text-ink block font-display">
-                          {student.fullName}
-                        </span>
-                        <span className="text-[11px] text-ink-muted font-mono">
-                          ID: {student.studentId.slice(0, 8)}…
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                    <div key={student.studentId} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-mono font-bold text-ink-muted">#{student.rollNumber || '—'}</span>
+                            <span className="font-extrabold text-ink text-sm font-display">{student.fullName}</span>
+                          </div>
+                          <span className="text-[11px] text-ink-muted font-mono">ID: {student.studentId.slice(0, 8)}…</span>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
                           student.status === 'PRESENT'
                             ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                             : student.status === 'LATE'
@@ -243,39 +297,29 @@ export const DailyReports: React.FC = () => {
                         }`}>
                           {student.status}
                         </span>
-                      </td>
-                      <td className="py-4 px-6 font-mono text-ink-muted">
-                        {student.firstScannedAt
-                          ? new Date(student.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                          : '—'}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
-                          student.status !== 'ABSENT' ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30' : 'bg-surface-soft text-ink-muted border border-line'
-                        }`}>
-                          {student.status !== 'ABSENT' ? 'Eligible' : 'Not Eligible'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-right font-medium text-ink-soft">
-                        {student.source || 'Optical QR / RFID'}
-                      </td>
-                    </tr>
-                  ))}
+                      </div>
 
-                  {records.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-8">
-                        <EmptyState
-                          kind="generic"
-                          title="No attendance records found"
-                          description={`No attendance records found for this class section on ${selectedDate}.`}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-1.5 border-t border-line text-ink-soft">
+                        <div>
+                          <span className="t-label text-ink-muted block">First Scan</span>
+                          <span className="font-mono text-[11px] text-ink font-semibold">
+                            {student.firstScannedAt
+                              ? new Date(student.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                              : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="t-label text-ink-muted block">Mid-Day Meal</span>
+                          <span className={`font-semibold text-[11px] ${student.status !== 'ABSENT' ? 'text-success-800' : 'text-ink-muted'}`}>
+                            {student.status !== 'ABSENT' ? 'Eligible' : 'Not Eligible'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

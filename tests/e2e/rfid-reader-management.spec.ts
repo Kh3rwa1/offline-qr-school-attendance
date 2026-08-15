@@ -30,7 +30,7 @@ test.describe('RFID Reader Management E2E Suite', () => {
       await page.getByRole('button', { name: 'Register Reader' }).click();
 
       // 6. Verify reader appears in list
-      await expect(page.getByText(uniqueDeviceId)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(uniqueDeviceId).first()).toBeVisible({ timeout: 5000 });
     }
   });
 });

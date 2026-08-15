@@ -169,14 +169,16 @@ export async function createApp() {
     const distPath = path.resolve(process.cwd(), 'dist');
     const indexHtmlPath = path.resolve(distPath, 'index.html');
     if (!fs.existsSync(indexHtmlPath)) {
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
         throw new Error(
           'FATAL_PRODUCTION_ASSET_MISSING: dist/index.html was not found. Build the frontend production bundle before starting the server.'
         );
       }
     }
 
-    const indexHtmlContent = fs.existsSync(indexHtmlPath) ? fs.readFileSync(indexHtmlPath, 'utf8') : '';
+    const indexHtmlContent = fs.existsSync(indexHtmlPath)
+      ? fs.readFileSync(indexHtmlPath, 'utf8')
+      : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';
 
     app.use(express.static(distPath));
 

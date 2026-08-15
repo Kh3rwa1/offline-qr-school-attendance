@@ -28,7 +28,7 @@ export async function verifyTeacherAssignment(params: {
   userRole: string;
 }) {
   const { schoolId, classSectionId, actorId, userRole } = params;
-  if (['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) return;
+  if (['SUPER_ADMIN', 'SCHOOL_ADMIN', 'SYSTEM'].includes(userRole)) return;
 
   const [assignment] = await db
     .select({ id: teacherAssignments.id })

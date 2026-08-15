@@ -4,6 +4,18 @@ An enterprise-grade hybrid attendance platform supporting school-issued QR crede
 
 ---
 
+## ⚡ Appliance Operations (Install-and-Forget)
+
+```bash
+Install: cp .env.example .env && ./scripts/install.sh
+Update:  git pull && ./scripts/update.sh
+Backup:  Automatic nightly (18:30 IST); encrypted AES-256 files in ./backups
+Restore: CONFIRM=yes ./scripts/restore.sh ./backups/attendease-YYYYMMDD-HHMMSS.sql.gz.enc
+Logs:    docker compose logs -f app sms-worker backup
+```
+
+---
+
 ## 🚀 Quality Gates & Verification
 
 ```bash

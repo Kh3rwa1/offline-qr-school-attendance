@@ -101,8 +101,8 @@ export async function createApp() {
     return res.send(result.content);
   });
 
-  // Health and Readiness Probes
-  app.get(['/api/v1/health', '/healthz'], async (_req, res) => {
+  // Health, Liveness, and Readiness Probes
+  app.get(['/api/v1/health', '/healthz', '/livez'], async (_req, res) => {
     res.status(200).json({ status: 'ok', service: 'school-attendance-backend', timestamp: new Date().toISOString() });
   });
 

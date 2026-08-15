@@ -45,6 +45,31 @@ export function validateProductionEnv() {
     if (process.env.ALLOW_TEST_BYPASS === 'true') {
       throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_TEST_BYPASS is strictly prohibited in production mode');
     }
+    if (process.env.ALLOW_FAKE_SMS_IN_PRODUCTION === 'true') {
+      throw new Error('FATAL_SECURITY_CONFIGURATION: ALLOW_FAKE_SMS_IN_PRODUCTION is strictly prohibited in production mode');
+    }
+
+    const secretVars = [
+      'SESSION_SECRET',
+      'CSRF_SECRET',
+      'REDIS_KEY_HMAC_SECRET',
+      'METRICS_AUTH_TOKEN',
+      'RFID_HMAC_SECRET',
+      'RFID_CARD_MASTER_KEY',
+      'KMS_MASTER_KEY',
+      'BACKUP_ENCRYPTION_KEY',
+      'MIGRATION_DB_PASSWORD',
+      'APP_DB_PASSWORD',
+      'SYSTEM_DB_PASSWORD',
+      'AUTH_DB_PASSWORD',
+    ];
+    for (const varName of secretVars) {
+      const val = process.env[varName];
+      if (val && (val.includes('replace-with') || val.includes('placeholder') || val.includes('changeme'))) {
+        throw new Error(`FATAL_SECURITY_CONFIGURATION: ${varName} contains an insecure example placeholder. Generate a real random secret before starting in production.`);
+      }
+    }
+
     if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
       throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
     }

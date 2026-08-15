@@ -312,7 +312,8 @@ export const TeacherDashboard: React.FC = () => {
           }
         } catch (initErr: any) {
           const isNetworkError = initErr?.status === 0 || initErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
-          if (!isNetworkError) {
+          const isAuthOrConflict = [401, 403, 409].includes(initErr?.status);
+          if (!isNetworkError || isAuthOrConflict) {
             throw initErr;
           }
         }
@@ -352,7 +353,8 @@ export const TeacherDashboard: React.FC = () => {
           }
         } catch (patchErr: any) {
           const isNetworkError = patchErr?.status === 0 || patchErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
-          if (!isNetworkError) {
+          const isAuthOrConflict = [401, 403, 409].includes(patchErr?.status);
+          if (!isNetworkError || isAuthOrConflict) {
             throw patchErr;
           }
         }

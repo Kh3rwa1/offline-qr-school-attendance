@@ -1,5 +1,7 @@
 # Production Certification Gap Matrix & Evidence Register
 
+> **Note**: Historical reference document / not an active product claim. For active feature status, see [STATUS.md](STATUS.md).
+
 **Repository**: `Kh3rwa1/offline-qr-school-attendance`  
 **Audit Date**: 2026-08-13  
 **Auditor**: Principal SRE, Performance, Security & Kubernetes Architecture Team  

@@ -1,6 +1,7 @@
 process.env.NODE_ENV = 'test';
 process.env.TEST_SERVER_STATIC = 'true';
 process.env.PORT = '3100';
+process.env.FEATURE_RFID = process.env.FEATURE_RFID || 'true';
 process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'ci_rfid_hmac_secret_key_32bytes_long';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-session-secret-01234567890123456789';
 process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'ci_redis_hmac_secret_32bytes_long';

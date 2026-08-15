@@ -79,14 +79,14 @@ We maintain complete honesty about feature maturity. See [`docs/STATUS.md`](docs
 
 | Module | Status | Notes |
 | :--- | :--- | :--- |
-| **Bilingual UI (EN / বাংলা)** | ✅ **Working** | Full dictionary toggle in header; teacher-friendly Bengali terminology |
-| **Phone Camera QR Scanner** | ✅ **Working** | HTML5 camera scanner with active viewfinder & permission error alerts |
+| **Bilingual UI (EN / বাংলা)** | ✅ **Working** | One-tap language toggle; localized Bengali login and classroom dashboard |
+| **Phone Camera QR Scanner** | ✅ **Working** | Live `getUserMedia` stream with active viewfinder & permission error recovery |
 | **USB / OTG Barcode Scanner** | ✅ **Working** | Keyboard-wedge hardware listener with audio & haptic feedback |
 | **Offline IndexedDB Outbox** | ✅ **Working** | Atomic Dexie transactions with SHA-256 token digest validation |
-| **Session Finalize & Auto-Absent** | ✅ **Working** | Atomic database transaction creating absence SMS jobs on finalize |
-| **Indian DLT SMS Queue** | ✅ **Working** | DLT template rendering with segment estimation & carrier webhook callbacks |
-| **PostgreSQL RLS & Tenant Guard** | ✅ **Working** | 100% enforced in PostgreSQL with fail-closed security invariants |
-| **Encrypted Backups (AES-256 / R2)** | ✅ **Working** | Automated AES-256-CBC PBKDF2 encryption & Cloudflare R2 upload drills |
+| **Session Finalize & Auto-Absent** | ✅ **Working** | Atomic database transaction creating parent absence SMS jobs on finalize |
+| **Indian DLT SMS Gateway** | ⚠️ *Simulated* | Database absence queue works; live telecom carrier dispatch is simulated unless provider credentials are set |
+| **PostgreSQL RLS & Tenant Guard** | ✅ **Working** | Enforced in PostgreSQL with fail-closed security invariants |
+| **Encrypted Backups (AES-256 / R2)** | ✅ **Working** | Automated AES-256-CBC local dumps; Cloudflare R2 replication requires bucket config |
 | **RFID / DESFire Card Gateway** | ⚠️ *Simulated* | Frozen / emulation mode. Feature-flagged **OFF** (`FEATURE_RFID=false`) by default for the QR pilot |
 
 ---

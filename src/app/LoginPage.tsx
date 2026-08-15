@@ -24,15 +24,6 @@ import { getDefaultRouteForRole } from '../auth/permissions';
 import { Button, TextField, PasswordField, Dialog, Badge, Toast, Skeleton } from '../components/ui';
 import { useLanguage } from './LanguageProvider';
 
-interface TickerItem {
-  id: string;
-  student: string;
-  classSection: string;
-  roll: number;
-  time: string;
-  method: 'QR' | 'DESFire' | 'Sync';
-}
-
 interface ResolvedSchool {
   id: string;
   name: string;
@@ -41,13 +32,6 @@ interface ResolvedSchool {
   status: string;
   preferredLanguage?: string;
 }
-
-const mockTickerData: TickerItem[] = [
-  { id: '1', student: 'Rahul Banerjee', classSection: 'VIII-A', roll: 14, time: '08:32 AM', method: 'QR' },
-  { id: '2', student: 'Priya Mukherjee', classSection: 'X-B', roll: 3, time: '08:31 AM', method: 'DESFire' },
-  { id: '3', student: 'Amit Das', classSection: 'IX-A', roll: 27, time: '08:30 AM', method: 'QR' },
-  { id: '4', student: 'Ananya Roy', classSection: 'VII-B', roll: 9, time: '08:29 AM', method: 'Sync' },
-];
 
 export const LoginPage: React.FC = () => {
   const location = useLocation();
@@ -74,7 +58,6 @@ export const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [tickerIndex, setTickerIndex] = useState(0);
 
   // Dialog States
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
@@ -82,7 +65,6 @@ export const LoginPage: React.FC = () => {
   const [adminContactOpen, setAdminContactOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'bn' | 'hi'>('en');
 
   // 1. Live Public Tenant Resolution
   useEffect(() => {
@@ -121,13 +103,6 @@ export const LoginPage: React.FC = () => {
       isMounted = false;
     };
   }, [schoolSlug]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTickerIndex((prev) => (prev + 1) % mockTickerData.length);
-    }, 2800);
-    return () => clearInterval(timer);
-  }, []);
 
   const handleQuickSelect = (phone: string, pass: string) => {
     setPhoneNumber(phone);
@@ -297,90 +272,30 @@ export const LoginPage: React.FC = () => {
             transition={{ duration: 0.45 }}
             className="lg:col-span-7 space-y-6 text-left"
           >
-            {/* Brand & Standard Badge */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge variant="forest" size="md" dot pulse>
-                Govt. of India • UDISE+ Standard
-              </Badge>
-              {resolvedSchool && (
-                <Badge variant="neutral" size="md" icon={<SchoolIcon className="w-3.5 h-3.5" />}>
-                  {resolvedSchool.district} District
-                </Badge>
-              )}
-            </div>
-
             {/* Clean, Non-Technical Typography */}
             <div className="space-y-3">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-ink font-display leading-[1.12]">
                 {resolvedSchool ? (
                   <>
-                    Welcome to <br />
+                    {language === 'bn' ? 'স্বাগতম' : 'Welcome to'} <br />
                     <span className="text-forest-700 dark:text-forest-500">{resolvedSchool.name}</span>
                   </>
                 ) : (
                   <>
-                    Daily attendance <br />
-                    <span className="text-forest-700 dark:text-forest-500">infrastructure for schools.</span>
+                    {language === 'bn' ? 'দৈনিক শ্রেণীকক্ষ' : 'Daily classroom'} <br />
+                    <span className="text-forest-700 dark:text-forest-500">
+                      {language === 'bn' ? 'উপস্থিতি ব্যবস্থাপনা।' : 'attendance infrastructure.'}
+                    </span>
                   </>
                 )}
               </h1>
               <p className="text-sm sm:text-base text-ink-soft font-normal leading-relaxed max-w-xl">
                 {resolvedSchool
-                  ? `Sign in to manage today’s school attendance for ${resolvedSchool.name} (${resolvedSchool.district}).`
-                  : 'Sign in to manage today’s school attendance. Offline QR verification and smartcards with automatic ledger synchronization.'}
+                  ? (language === 'bn'
+                    ? `${resolvedSchool.name} (${resolvedSchool.district}) এর দৈনিক উপস্থিতি পরিচালনা করতে লগ ইন করুন।`
+                    : `Sign in to manage today’s school attendance for ${resolvedSchool.name} (${resolvedSchool.district}).`)
+                  : t('loginHeroSubtitle')}
               </p>
-            </div>
-
-            {/* Live Attendance Ticker */}
-            <div className="p-5 rounded-[28px] bg-surface border border-line shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-ink-soft font-display uppercase tracking-wider">
-                  <ScanLine className="w-4 h-4 text-forest-700 dark:text-forest-500" />
-                  <span>Live Verification Stream</span>
-                </div>
-                <Badge variant="success" size="sm" dot pulse>
-                  Active School Ledger
-                </Badge>
-              </div>
-
-              <div className="space-y-2">
-                <AnimatePresence mode="popLayout">
-                  {mockTickerData.map((item, idx) => {
-                    const isCurrent = idx === tickerIndex;
-                    return (
-                      <motion.div
-                        key={item.id}
-                        layout
-                        initial={{ opacity: 0.4 }}
-                        animate={{
-                          opacity: isCurrent ? 1 : 0.45,
-                          scale: isCurrent ? 1.01 : 1,
-                          backgroundColor: isCurrent ? 'var(--surface-soft)' : 'transparent',
-                        }}
-                        transition={{ duration: 0.3 }}
-                        className="flex items-center justify-between p-2.5 rounded-2xl text-xs sm:text-sm"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-xl bg-forest-700/10 text-forest-700 dark:text-forest-400 flex items-center justify-center font-bold text-xs">
-                            {item.roll}
-                          </div>
-                          <div>
-                            <p className="font-bold text-ink">{item.student}</p>
-                            <p className="text-xs text-ink-muted">Class {item.classSection}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Badge variant={item.method === 'DESFire' ? 'forest' : 'success'} size="sm">
-                            {item.method}
-                          </Badge>
-                          <span className="font-mono text-xs text-ink-muted hidden sm:inline">{item.time}</span>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
             </div>
 
             {/* Feature Highlight Cards */}
@@ -388,25 +303,25 @@ export const LoginPage: React.FC = () => {
               <div className="p-4 rounded-2xl bg-surface border border-line shadow-2xs text-left">
                 <div className="flex items-center gap-2 text-forest-700 dark:text-forest-500 mb-1 font-bold">
                   <Wifi className="w-4 h-4" />
-                  <span className="text-sm font-display">Offline First</span>
+                  <span className="text-sm font-display">{t('featureOfflineTitle')}</span>
                 </div>
-                <p className="text-xs text-ink-soft leading-normal">Zero-latency classroom scanning</p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-surface border border-line shadow-2xs text-left">
-                <div className="flex items-center gap-2 text-forest-700 dark:text-forest-500 mb-1 font-bold">
-                  <Radio className="w-4 h-4" />
-                  <span className="text-sm font-display">DESFire EV3</span>
-                </div>
-                <p className="text-xs text-ink-soft leading-normal">Tamper-proof smartcards</p>
+                <p className="text-xs text-ink-soft leading-normal">{t('featureOfflineDesc')}</p>
               </div>
 
               <div className="p-4 rounded-2xl bg-surface border border-line shadow-2xs text-left">
                 <div className="flex items-center gap-2 text-forest-700 dark:text-forest-500 mb-1 font-bold">
                   <ShieldCheck className="w-4 h-4" />
-                  <span className="text-sm font-display">Data Privacy</span>
+                  <span className="text-sm font-display">{t('featurePrivacyTitle')}</span>
                 </div>
-                <p className="text-xs text-ink-soft leading-normal">Encrypted tenant isolation</p>
+                <p className="text-xs text-ink-soft leading-normal">{t('featurePrivacyDesc')}</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-surface border border-line shadow-2xs text-left">
+                <div className="flex items-center gap-2 text-forest-700 dark:text-forest-500 mb-1 font-bold">
+                  <Languages className="w-4 h-4" />
+                  <span className="text-sm font-display">{t('featureBilingualTitle')}</span>
+                </div>
+                <p className="text-xs text-ink-soft leading-normal">{t('featureBilingualDesc')}</p>
               </div>
             </div>
           </motion.div>
@@ -487,9 +402,9 @@ export const LoginPage: React.FC = () => {
                   isLoading={isSubmitting}
                   rightIcon={<ArrowRight className="w-4 h-4" />}
                   className="w-full text-base font-bold shadow-lg shadow-forest-700/20"
-                  aria-label={resolvedSchool ? `Sign In to ${resolvedSchool.name}` : 'Sign In to Workspace'}
+                  aria-label={resolvedSchool ? `Sign In to ${resolvedSchool.name}` : (language === 'bn' ? 'লগ ইন করুন' : 'Sign In to Workspace')}
                 >
-                  {resolvedSchool ? (language === 'bn' ? `${resolvedSchool.name} - Sign In` : `Sign In to ${resolvedSchool.name}`) : (language === 'bn' ? 'লগ ইন করুন (Sign In)' : 'Sign In to Workspace')}
+                  {resolvedSchool ? (language === 'bn' ? `${resolvedSchool.name} এ লগ ইন` : `Sign In to ${resolvedSchool.name}`) : (language === 'bn' ? 'লগ ইন করুন' : 'Sign In to Workspace')}
                 </Button>
               </div>
             </form>
@@ -555,7 +470,7 @@ export const LoginPage: React.FC = () => {
                 className="hover:text-ink flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
-                <span>Account Help</span>
+                <span>{t('accountHelp')}</span>
               </button>
 
               <button
@@ -564,7 +479,7 @@ export const LoginPage: React.FC = () => {
                 className="hover:text-ink flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <PhoneCall className="w-3.5 h-3.5" />
-                <span>Contact School Admin</span>
+                <span>{t('contactAdmin')}</span>
               </button>
             </div>
           </motion.div>
@@ -575,7 +490,7 @@ export const LoginPage: React.FC = () => {
       <footer className="w-full max-w-6xl mt-6 pt-4 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-muted z-10">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-forest-700 dark:text-forest-400" />
-          <span>AES-256 Encrypted Session • DPDP Act (2023) Compliant</span>
+          <span>{t('appName')} • {language === 'bn' ? 'পশ্চিমবঙ্গ' : 'West Bengal'}</span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -584,7 +499,7 @@ export const LoginPage: React.FC = () => {
             onClick={() => setPrivacyOpen(true)}
             className="hover:text-ink transition-colors cursor-pointer"
           >
-            Privacy Policy
+            {t('privacyPolicy')}
           </button>
           <span>•</span>
           <button
@@ -592,10 +507,8 @@ export const LoginPage: React.FC = () => {
             onClick={() => setTermsOpen(true)}
             className="hover:text-ink transition-colors cursor-pointer"
           >
-            Terms of Service
+            {t('termsOfService')}
           </button>
-          <span>•</span>
-          <span>AttendEase OS v1.2</span>
         </div>
       </footer>
 
@@ -603,33 +516,23 @@ export const LoginPage: React.FC = () => {
       <Dialog
         isOpen={forgotPasswordOpen}
         onClose={() => setForgotPasswordOpen(false)}
-        title="Reset Account Password"
-        description="Password recovery workflow for institutional users"
+        title={t('resetPasswordTitle')}
+        description={t('resetPasswordDesc')}
       >
         <div className="space-y-4 text-left">
           <div className="p-4 rounded-2xl bg-surface-soft border border-line space-y-2">
             <div className="flex items-center gap-2 font-bold text-sm text-ink">
               <SchoolIcon className="w-4 h-4 text-forest-700" />
-              <span>Contact Your School Administrator</span>
+              <span>{t('contactAdmin')}</span>
             </div>
             <p className="text-xs text-ink-soft leading-relaxed">
-              In accordance with state education security protocols, password resets for teachers and staff are managed directly by your institution's Headmaster or designated Administrator.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-surface-soft border border-line space-y-2">
-            <div className="flex items-center gap-2 font-bold text-sm text-ink">
-              <PhoneCall className="w-4 h-4 text-forest-700" />
-              <span>State Education Support Helpline</span>
-            </div>
-            <p className="text-xs text-ink-soft leading-relaxed">
-              Toll Free: <strong className="text-ink">1800-112-9876</strong> (Mon–Sat, 08:00 AM – 06:00 PM IST)
+              {t('resetPasswordInstruction')}
             </p>
           </div>
 
           <div className="pt-2 flex justify-end">
             <Button variant="secondary" onClick={() => setForgotPasswordOpen(false)}>
-              Close
+              {t('close')}
             </Button>
           </div>
         </div>
@@ -639,26 +542,26 @@ export const LoginPage: React.FC = () => {
       <Dialog
         isOpen={accountHelpOpen}
         onClose={() => setAccountHelpOpen(false)}
-        title="Account & Login Troubleshooting"
-        description="Common solutions for sign-in difficulties"
+        title={t('accountHelpTitle')}
+        description={t('accountHelpDesc')}
       >
         <div className="space-y-3.5 text-left text-xs">
           <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
-            <h4 className="font-bold text-ink mb-1">1. Number Format</h4>
-            <p className="text-ink-soft">Enter your 10-digit Indian mobile number registered with UDISE+ without country code prefixes.</p>
+            <h4 className="font-bold text-ink mb-1">{t('accountHelp1Title')}</h4>
+            <p className="text-ink-soft">{t('accountHelp1Desc')}</p>
           </div>
           <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
-            <h4 className="font-bold text-ink mb-1">2. Offline Mode Notice</h4>
-            <p className="text-ink-soft">If your mobile device is offline, you can continue scanning with existing stored credentials.</p>
+            <h4 className="font-bold text-ink mb-1">{t('accountHelp2Title')}</h4>
+            <p className="text-ink-soft">{t('accountHelp2Desc')}</p>
           </div>
           <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
-            <h4 className="font-bold text-ink mb-1">3. Locked Account</h4>
-            <p className="text-ink-soft">After 5 consecutive incorrect password attempts, account access is temporarily paused for 15 minutes.</p>
+            <h4 className="font-bold text-ink mb-1">{t('accountHelp3Title')}</h4>
+            <p className="text-ink-soft">{t('accountHelp3Desc')}</p>
           </div>
 
           <div className="pt-2 flex justify-end">
             <Button variant="secondary" onClick={() => setAccountHelpOpen(false)}>
-              Got It
+              {t('close')}
             </Button>
           </div>
         </div>
@@ -668,20 +571,16 @@ export const LoginPage: React.FC = () => {
       <Dialog
         isOpen={adminContactOpen}
         onClose={() => setAdminContactOpen(false)}
-        title="Contact School Administrator"
-        description="Direct contact information for your school office"
+        title={t('contactAdminTitle')}
+        description={t('contactAdminDesc')}
       >
         <div className="space-y-4 text-left">
           <p className="text-xs text-ink-soft leading-relaxed">
-            Please reach out to your school's designated headmaster or IT coordinator for card re-issuance, roster updates, or credential management.
+            {t('contactAdminDesc')}
           </p>
-          <div className="p-4 rounded-2xl bg-surface-soft border border-line space-y-1.5 font-mono text-xs">
-            <div className="text-ink font-bold">State Command Center: support@attendease.gov.in</div>
-            <div className="text-ink-muted">Emergency Dispatch: +91 33 2289 0000</div>
-          </div>
           <div className="pt-2 flex justify-end">
             <Button variant="secondary" onClick={() => setAdminContactOpen(false)}>
-              Close
+              {t('close')}
             </Button>
           </div>
         </div>
@@ -691,23 +590,31 @@ export const LoginPage: React.FC = () => {
       <Dialog
         isOpen={privacyOpen}
         onClose={() => setPrivacyOpen(false)}
-        title="Privacy Policy & Student Data Protection"
-        description="Compliance with the Digital Personal Data Protection (DPDP) Act 2023"
+        title={t('privacyPolicy')}
+        description={language === 'bn' ? 'শিক্ষার্থী তথ্যের সুরক্ষা নীতি' : 'Student data privacy and protection principles'}
       >
         <div className="space-y-3.5 text-left text-xs max-h-[60vh] overflow-y-auto pr-1">
           <p className="text-ink-soft leading-relaxed">
-            AttendEase is designed with strict data minimization principles for institutional child safety and attendance accounting.
+            {language === 'bn'
+              ? 'অটেন্ডইজ শিক্ষার্থীদের তথ্যের গোপনীয়তা ও সুরক্ষায় সর্বোচ্চ গুরুত্ব দেয়।'
+              : 'AttendEase prioritizes student privacy and data security.'}
           </p>
-          <h4 className="font-bold text-ink">1. Zero Cloud Biometrics</h4>
-          <p className="text-ink-soft leading-relaxed">No fingerprint or facial biometric data is ever collected, transmitted, or stored on remote servers.</p>
-          <h4 className="font-bold text-ink">2. Cryptographic Pseudonymization</h4>
-          <p className="text-ink-soft leading-relaxed">QR cards use HMAC-SHA256 authenticated secret keys. Scanning cards reveals no PII without authorized school ledger credentials.</p>
-          <h4 className="font-bold text-ink">3. Row-Level Tenant Isolation</h4>
-          <p className="text-ink-soft leading-relaxed">PostgreSQL RLS guarantees strict isolation between schools and administrative districts.</p>
+          <h4 className="font-bold text-ink">1. {language === 'bn' ? 'লোকাল এনক্রিপশন' : 'Local Encryption'}</h4>
+          <p className="text-ink-soft leading-relaxed">
+            {language === 'bn'
+              ? 'সকল অফলাইন উপস্থিতি তথ্য ডিভাইসে নিরাপদে সংরক্ষিত হয়।'
+              : 'All offline attendance records are securely stored on the device.'}
+          </p>
+          <h4 className="font-bold text-ink">2. {language === 'bn' ? 'স্কুল আইসোলেশন' : 'Tenant Isolation'}</h4>
+          <p className="text-ink-soft leading-relaxed">
+            {language === 'bn'
+              ? 'পোস্টগ্রেসকিউএল রো-লেভেল সিকিউরিটির মাধ্যমে প্রতিটি বিদ্যালয়ের তথ্য সম্পূর্ণ আলাদা রাখা হয়।'
+              : 'PostgreSQL Row-Level Security guarantees strict data isolation between schools.'}
+          </p>
 
           <div className="pt-2 flex justify-end">
             <Button variant="secondary" onClick={() => setPrivacyOpen(false)}>
-              Acknowledge
+              {t('close')}
             </Button>
           </div>
         </div>
@@ -717,21 +624,18 @@ export const LoginPage: React.FC = () => {
       <Dialog
         isOpen={termsOpen}
         onClose={() => setTermsOpen(false)}
-        title="Terms of Service"
-        description="Standard institutional software agreement"
+        title={t('termsOfService')}
+        description={language === 'bn' ? 'সফটওয়্যার ব্যবহারের নীতিমালা' : 'Authorized educational use terms'}
       >
         <div className="space-y-3.5 text-left text-xs max-h-[60vh] overflow-y-auto pr-1">
           <p className="text-ink-soft leading-relaxed">
-            By signing in to AttendEase, you agree to operate the attendance system solely for authorized governmental or educational purposes.
+            {language === 'bn'
+              ? 'এই অ্যাপ্লিকেশনটি কেবলমাত্র অনুমোদিত শিক্ষক ও বিদ্যালয় কর্মীদের ব্যবহারের জন্য।'
+              : 'This application is exclusively for authorized teachers and school administrators.'}
           </p>
-          <h4 className="font-bold text-ink">1. Authorized Operators</h4>
-          <p className="text-ink-soft leading-relaxed">Only appointed teachers, administrators, and verified staff may operate scanner terminals.</p>
-          <h4 className="font-bold text-ink">2. Audit Logging</h4>
-          <p className="text-ink-soft leading-relaxed">All roster modifications, card re-issuances, and synchronization events are immutably audited for government compliance.</p>
-
           <div className="pt-2 flex justify-end">
             <Button variant="secondary" onClick={() => setTermsOpen(false)}>
-              Accept
+              {t('close')}
             </Button>
           </div>
         </div>

@@ -1,5 +1,7 @@
 # Production Engineering Certification & Operational Scorecard
 
+> **Note**: Historical reference document / not an active product claim. For active feature status, see [STATUS.md](STATUS.md).
+
 **Repository**: `Kh3rwa1/offline-qr-school-attendance`  
 **Certification Date**: 2026-08-13  
 **Engineering Rating**: **9.6 / 10** (*Engineering Complete & Green CI; Pending External Admin Credentials & Dedicated Runner Artifacts*)  

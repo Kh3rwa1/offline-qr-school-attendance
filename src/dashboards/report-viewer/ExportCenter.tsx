@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileSpreadsheet, FileText, CheckCircle2, ShieldCheck, Calendar, AlertCircle } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, ShieldCheck } from 'lucide-react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { api } from '../../services/api';
 import { StatCard } from '../../components/shared/StatCard';
-import { motion } from 'motion/react';
+import { Button } from '../../components/shared/Button';
+import { Toast } from '../../components/shared/Toast';
 
 interface ClassItem {
   id: string;
@@ -82,7 +83,6 @@ export const ExportCenter: React.FC = () => {
         throw new Error(errJson.error || errJson.message || `Export failed with status ${response.status}`);
       }
 
-      // Check Content-Disposition header for filename
       let filename = `${fallbackFilename}-${new Date().toISOString().split('T')[0]}.${format}`;
       const disposition = response.headers.get('content-disposition');
       if (disposition) {
@@ -109,34 +109,33 @@ export const ExportCenter: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8" id="export-center-view">
+    <div className="space-y-8 text-left" id="export-center-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Government Export & Audit Center
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Generate and stream real UDISE+, Banglar Shiksha, and Mid-Day Meal statutory data files for {activeSchoolName}.
           </p>
         </div>
       </div>
 
       {exportError && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{exportError}</span>
+        <div className="mb-4">
+          <Toast kind="error" message={exportError} onDismiss={() => setExportError(null)} autoDismiss={false} />
         </div>
       )}
 
       {/* Parameter Controls Bar */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs flex flex-wrap items-center gap-4 text-xs font-bold text-slate-700">
+      <div className="app-card p-4 flex flex-wrap items-center gap-4 text-xs font-bold text-ink">
         <div className="flex items-center gap-2">
-          <span className="text-slate-500 font-display">Class Section:</span>
+          <span className="text-ink-soft font-display">Class Section:</span>
           <select
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+            className="px-3.5 py-1.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display"
           >
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -147,21 +146,21 @@ export const ExportCenter: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-slate-500 font-display">Date:</span>
+          <span className="text-ink-soft font-display">Date:</span>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+            className="px-3.5 py-1.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-slate-500 font-display">Month/Year:</span>
+          <span className="text-ink-soft font-display">Month/Year:</span>
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+            className="px-3.5 py-1.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display"
           >
             {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, idx) => (
               <option key={idx + 1} value={idx + 1}>{m}</option>
@@ -170,7 +169,7 @@ export const ExportCenter: React.FC = () => {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:border-[#144e39] cursor-pointer"
+            className="px-3.5 py-1.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono"
           >
             <option value={2025}>2025</option>
             <option value={2026}>2026</option>
@@ -213,33 +212,33 @@ export const ExportCenter: React.FC = () => {
         <div className="app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-[#144e39] text-white flex items-center justify-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#144e39] border border-emerald-200">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                 School Roll
               </span>
             </div>
             <div>
-              <h3 className="font-extrabold text-lg text-slate-900 font-display">Daily School Attendance Roll</h3>
-              <p className="text-xs text-slate-500 font-medium leading-relaxed mt-1">
+              <h3 className="font-extrabold text-lg text-ink font-display">Daily School Attendance Roll</h3>
+              <p className="t-body text-xs text-ink-soft leading-relaxed mt-1">
                 Full snapshot of daily classroom sessions, teacher sign-offs, and attendance percentages across all grades.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 font-mono">Format: .CSV</span>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+          <div className="pt-4 border-t border-line flex items-center justify-between">
+            <span className="text-xs font-bold text-ink-muted font-mono">Format: .CSV</span>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => handleExport('daily-school', 'csv', 'daily-school-attendance')}
               disabled={downloadingType === 'daily-school'}
-              className="btn-forest-primary text-xs font-display cursor-pointer disabled:opacity-50"
+              isLoading={downloadingType === 'daily-school'}
+              leftIcon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
-              <span>{downloadingType === 'daily-school' ? 'Streaming…' : 'Download Roll CSV'}</span>
-            </motion.button>
+              {downloadingType === 'daily-school' ? 'Streaming…' : 'Download Roll CSV'}
+            </Button>
           </div>
         </div>
 
@@ -247,33 +246,33 @@ export const ExportCenter: React.FC = () => {
         <div className="app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-[#144e39] text-white flex items-center justify-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#144e39] border border-emerald-200">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                 Monthly Register
               </span>
             </div>
             <div>
-              <h3 className="font-extrabold text-lg text-slate-900 font-display">Monthly Attendance Register</h3>
-              <p className="text-xs text-slate-500 font-medium leading-relaxed mt-1">
+              <h3 className="font-extrabold text-lg text-ink font-display">Monthly Attendance Register</h3>
+              <p className="t-body text-xs text-ink-soft leading-relaxed mt-1">
                 Official statutory monthly register containing student day-by-day attendance codes (P, A, L, E) and monthly totals.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 font-mono">Format: .CSV / .XLSX</span>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+          <div className="pt-4 border-t border-line flex items-center justify-between">
+            <span className="text-xs font-bold text-ink-muted font-mono">Format: .CSV / .XLSX</span>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => handleExport('monthly-register', 'csv', 'monthly-class-register')}
               disabled={downloadingType === 'monthly-register' || !selectedClassId}
-              className="btn-forest-primary text-xs font-display cursor-pointer disabled:opacity-50"
+              isLoading={downloadingType === 'monthly-register'}
+              leftIcon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
-              <span>{downloadingType === 'monthly-register' ? 'Streaming…' : 'Download Register'}</span>
-            </motion.button>
+              {downloadingType === 'monthly-register' ? 'Streaming…' : 'Download Register'}
+            </Button>
           </div>
         </div>
 
@@ -281,33 +280,33 @@ export const ExportCenter: React.FC = () => {
         <div className="app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-[#144e39] text-white flex items-center justify-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
                 <FileText className="w-6 h-6" />
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#144e39] border border-emerald-200">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                 Guardian Audit
               </span>
             </div>
             <div>
-              <h3 className="font-extrabold text-lg text-slate-900 font-display">Chronic & Daily Absenteeism Report</h3>
-              <p className="text-xs text-slate-500 font-medium leading-relaxed mt-1">
+              <h3 className="font-extrabold text-lg text-ink font-display">Chronic & Daily Absenteeism Report</h3>
+              <p className="t-body text-xs text-ink-soft leading-relaxed mt-1">
                 Comprehensive audit of consecutive absences, guardian notifications dispatched, and DLT SMS delivery receipts.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 font-mono">Format: .CSV</span>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+          <div className="pt-4 border-t border-line flex items-center justify-between">
+            <span className="text-xs font-bold text-ink-muted font-mono">Format: .CSV</span>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => handleExport('absentee', 'csv', 'absentee-report')}
               disabled={downloadingType === 'absentee'}
-              className="btn-forest-primary text-xs font-display cursor-pointer disabled:opacity-50"
+              isLoading={downloadingType === 'absentee'}
+              leftIcon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
-              <span>{downloadingType === 'absentee' ? 'Streaming…' : 'Download Absentee Report'}</span>
-            </motion.button>
+              {downloadingType === 'absentee' ? 'Streaming…' : 'Download Absentee Report'}
+            </Button>
           </div>
         </div>
 
@@ -315,33 +314,33 @@ export const ExportCenter: React.FC = () => {
         <div className="app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-[#144e39] text-white flex items-center justify-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
                 <ShieldCheck className="w-6 h-6" />
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#144e39] border border-emerald-200">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                 Administrative Audit
               </span>
             </div>
             <div>
-              <h3 className="font-extrabold text-lg text-slate-900 font-display">Correction & Override Ledger</h3>
-              <p className="text-xs text-slate-500 font-medium leading-relaxed mt-1">
+              <h3 className="font-extrabold text-lg text-ink font-display">Correction & Override Ledger</h3>
+              <p className="t-body text-xs text-ink-soft leading-relaxed mt-1">
                 Immutable audit of all manual punches, status overrides, headmaster reason notes, and timestamp adjustments.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 font-mono">Format: .CSV</span>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+          <div className="pt-4 border-t border-line flex items-center justify-between">
+            <span className="text-xs font-bold text-ink-muted font-mono">Format: .CSV</span>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => handleExport('corrections', 'csv', 'corrections-ledger')}
               disabled={downloadingType === 'corrections'}
-              className="btn-forest-primary text-xs font-display cursor-pointer disabled:opacity-50"
+              isLoading={downloadingType === 'corrections'}
+              leftIcon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
-              <span>{downloadingType === 'corrections' ? 'Streaming…' : 'Download Override Ledger'}</span>
-            </motion.button>
+              {downloadingType === 'corrections' ? 'Streaming…' : 'Download Override Ledger'}
+            </Button>
           </div>
         </div>
       </div>

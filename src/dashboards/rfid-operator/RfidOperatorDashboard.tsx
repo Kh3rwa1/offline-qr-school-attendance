@@ -7,48 +7,47 @@ import CardStatusPanel from '../../components/rfid/CardStatusPanel';
 import BulkEnrollment from '../../components/rfid/BulkEnrollment';
 import RfidReports from '../../components/rfid/RfidReports';
 import { StatCard } from '../../components/shared/StatCard';
-import { motion } from 'motion/react';
-import { Radio, Plus, ShieldCheck, Download, RefreshCw, Cpu } from 'lucide-react';
+import { Button } from '../../components/shared/Button';
+import { EmptyState } from '../../components/shared/EmptyState';
+import { Plus } from 'lucide-react';
 
 export const RfidOperatorDashboard: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   const [subView, setSubView] = useState<'dashboard' | 'readers' | 'cards' | 'enroll' | 'bulk' | 'reports'>('dashboard');
 
   return (
-    <div className="space-y-8" id="rfid-operator-dashboard-view">
-      {/* Top Header Row with Big Buttons (Reference Image match) */}
+    <div className="space-y-8 text-left" id="rfid-operator-dashboard-view">
+      {/* Top Header Row with Buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-extrabold text-[#144e39] uppercase tracking-wider mb-2 font-display">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
             <span>MIFARE DESFire EV2 Operator Console</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Smartcard Operations
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Plan, provision, and monitor MIFARE DESFire EV3 hardware readers for {activeSchoolName}.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => setSubView('enroll')}
-            className="btn-forest-primary text-sm font-display"
+            leftIcon={<Plus className="w-4 h-4" />}
           >
-            <Plus className="w-4 h-4" />
-            <span>Enroll Smartcard</span>
-          </motion.button>
+            Enroll Smartcard
+          </Button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => setSubView('bulk')}
-            className="btn-pill-secondary text-sm font-display shadow-2xs"
           >
-            <span>Bulk Provision</span>
-          </motion.button>
+            Bulk Provision
+          </Button>
         </div>
       </div>
 
@@ -100,10 +99,10 @@ export const RfidOperatorDashboard: React.FC = () => {
             <button
               key={key}
               onClick={() => setSubView(key)}
-              className={`px-4 py-2 rounded-full text-xs font-bold font-display transition-all ${
+              className={`px-4 py-2 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
                 subView === key
-                  ? 'bg-[#144e39] text-white shadow-sm'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-100'
+                  ? 'bg-forest-700 text-white shadow-2xs'
+                  : 'bg-transparent text-ink-soft hover:bg-surface-soft hover:text-ink'
               }`}
             >
               {label}
@@ -111,8 +110,8 @@ export const RfidOperatorDashboard: React.FC = () => {
           ))}
         </div>
 
-        <div className="px-3 text-xs font-bold text-slate-400">
-          PC/SC Subsystem: <span className="text-emerald-700 font-bold">READY</span>
+        <div className="px-3 text-xs font-bold text-ink-muted font-mono">
+          PC/SC Subsystem: <span className="text-forest-700 dark:text-forest-600 font-bold">READY</span>
         </div>
       </div>
 
@@ -127,8 +126,12 @@ export const RfidOperatorDashboard: React.FC = () => {
           {subView === 'reports' && <RfidReports schoolId={activeSchoolId} />}
         </div>
       ) : (
-        <div className="p-12 text-center app-card text-sm text-slate-500 font-medium">
-          Please select an active school to access RFID operations.
+        <div className="py-8">
+          <EmptyState
+            kind="generic"
+            title="No active school selected"
+            description="Please select an active school to access RFID operations."
+          />
         </div>
       )}
     </div>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
-import { Shield, ShieldAlert, Wifi, Search, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Shield, ShieldAlert, Search, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Button } from '../shared/Button';
+import { Toast } from '../shared/Toast';
 
 interface StudentItem {
   id: string;
@@ -65,7 +66,6 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
   const students = studentsData || [];
 
   const handleGenerateDigest = () => {
-    // Generate a compliant 32-character hex digest for authorized testing
     const array = new Uint8Array(16);
     crypto.getRandomValues(array);
     const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -82,21 +82,20 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
   };
 
   return (
-    <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm max-w-2xl mx-auto text-left">
-      <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+    <div className="app-card p-6 sm:p-8 max-w-2xl mx-auto text-left">
+      <div className="flex items-center justify-between pb-4 mb-6 border-b border-line">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 font-display">DESFire Smartcard Enrollment</h2>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">Step {step} of 3 • AES-CMAC Key Personalization</p>
+          <h2 className="text-xl font-extrabold text-ink font-display">DESFire Smartcard Enrollment</h2>
+          <p className="t-body text-xs text-ink-soft mt-0.5">Step {step} of 3 • AES-CMAC Key Personalization</p>
         </div>
-        <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#144e39]/10 text-[#144e39] font-display">
+        <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
           Hardware Security Module
         </span>
       </div>
 
       {formError && (
-        <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{formError}</span>
+        <div className="mb-5">
+          <Toast kind="error" message={formError} onDismiss={() => setFormError(null)} autoDismiss={false} />
         </div>
       )}
 
@@ -104,22 +103,22 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
       {step === 1 && (
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+            <label className="block t-label text-ink mb-1.5 font-display">
               1. Search Student from Registry
             </label>
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={studentSearch}
                 onChange={(e) => setStudentSearch(e.target.value)}
                 placeholder="Type student name or roll number"
-                className="w-full pl-10 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                className="w-full pl-11 pr-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
               />
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl max-h-56 overflow-y-auto">
+          <div className="divide-y divide-line border border-line rounded-2xl max-h-56 overflow-y-auto bg-surface">
             {students.map((st) => (
               <button
                 key={st.id}
@@ -129,44 +128,44 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
                   setFormError(null);
                 }}
                 className={`w-full p-3 flex items-center justify-between text-left transition-colors cursor-pointer ${
-                  selectedStudent?.id === st.id ? 'bg-[#144e39]/10 border-l-4 border-[#144e39]' : 'hover:bg-slate-50'
+                  selectedStudent?.id === st.id ? 'bg-success-50/70 border-l-4 border-forest-700' : 'hover:bg-surface-soft'
                 }`}
               >
                 <div>
-                  <span className="font-extrabold text-slate-900 block text-xs font-display">{st.fullName}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">
+                  <span className="font-extrabold text-ink block text-xs font-display">{st.fullName}</span>
+                  <span className="text-[11px] text-ink-muted font-medium">
                     {st.className ? `${st.className} – ${st.sectionName}` : 'Enrolled Student'} • Roll: #{st.rollNumber || '—'}
                   </span>
                 </div>
                 {selectedStudent?.id === st.id && (
-                  <CheckCircle2 className="w-4 h-4 text-[#144e39]" />
+                  <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
                 )}
               </button>
             ))}
 
             {studentSearch.trim().length >= 2 && students.length === 0 && !isSearching && (
-              <div className="p-4 text-center text-xs text-slate-400 font-medium">
+              <div className="p-4 text-center text-xs text-ink-muted font-medium">
                 No matching students found in this school registry.
               </div>
             )}
 
             {studentSearch.trim().length < 2 && (
-              <div className="p-4 text-center text-xs text-slate-400 font-medium">
+              <div className="p-4 text-center text-xs text-ink-muted font-medium">
                 Type at least 2 characters to search student directory.
               </div>
             )}
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-slate-100">
-            <button
-              type="button"
+          <div className="flex justify-end pt-4 border-t border-line">
+            <Button
+              variant="primary"
+              size="md"
               disabled={!selectedStudent}
               onClick={() => setStep(2)}
-              className="btn-forest-primary text-xs font-display px-6 py-2.5 shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              rightIcon={<ArrowRight className="w-4 h-4" />}
             >
-              <span>Next: Security Mode</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+              Next: Security Mode
+            </Button>
           </div>
         </div>
       )}
@@ -175,7 +174,7 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
       {step === 2 && (
         <div className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-2 font-display">
+            <label className="block t-label text-ink mb-2 font-display">
               2. Select Smartcard Cryptographic Standard
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -184,15 +183,15 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
                 onClick={() => setSecurityMode('SECURE')}
                 className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                   securityMode === 'SECURE'
-                    ? 'border-[#144e39] bg-emerald-50/50 shadow-2xs'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-forest-700 bg-success-50/50 shadow-2xs'
+                    : 'border-line hover:border-forest-600/50 bg-surface'
                 }`}
               >
-                <div className="flex items-center gap-2 text-[#144e39] mb-2 font-extrabold font-display text-sm">
+                <div className="flex items-center gap-2 text-forest-700 dark:text-forest-600 mb-2 font-extrabold font-display text-sm">
                   <Shield className="w-5 h-5" />
                   <span>SECURE (AES-CMAC)</span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="t-body text-xs text-ink-soft">
                   Hardware EV2/EV3 CMAC proof with diversified master keys. Zero clone vulnerability.
                 </p>
               </button>
@@ -202,38 +201,38 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
                 onClick={() => setSecurityMode('UID_LEGACY')}
                 className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                   securityMode === 'UID_LEGACY'
-                    ? 'border-amber-500 bg-amber-50/50 shadow-2xs'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-warning-600 bg-warning-50/50 shadow-2xs'
+                    : 'border-line hover:border-warning-600/50 bg-surface'
                 }`}
               >
-                <div className="flex items-center gap-2 text-amber-700 mb-2 font-extrabold font-display text-sm">
+                <div className="flex items-center gap-2 text-warning-800 mb-2 font-extrabold font-display text-sm">
                   <ShieldAlert className="w-5 h-5" />
                   <span>UID_LEGACY (Fallback)</span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="t-body text-xs text-ink-soft">
                   Plain UID read without crypto challenges. For legacy migration only.
                 </p>
               </button>
             </div>
           </div>
 
-          <div className="flex justify-between pt-4 border-t border-slate-100">
-            <button
-              type="button"
+          <div className="flex justify-between pt-4 border-t border-line">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setStep(1)}
-              className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display flex items-center gap-1.5 cursor-pointer"
+              leftIcon={<ArrowLeft className="w-4 h-4" />}
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
-            </button>
-            <button
-              type="button"
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => setStep(3)}
-              className="btn-forest-primary text-xs font-display px-6 py-2.5 shadow-md flex items-center gap-2 cursor-pointer"
+              rightIcon={<ArrowRight className="w-4 h-4" />}
             >
-              <span>Next: Read Card</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+              Next: Read Card
+            </Button>
           </div>
         </div>
       )}
@@ -242,10 +241,10 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
       {step === 3 && (
         <div className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+            <label className="block t-label text-ink mb-1 font-display">
               3. Transceive Card Digest
             </label>
-            <p className="text-xs text-slate-500 mb-3">
+            <p className="t-body text-xs text-ink-soft mb-3">
               Tap the physical smartcard against the enrollment USB reader or generate a test digest.
             </p>
 
@@ -256,14 +255,14 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
                 value={credentialDigest}
                 onChange={(e) => setCredentialDigest(e.target.value)}
                 placeholder="e.g. 7F3A9C8E4D2B1A0F"
-                className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 font-mono focus:bg-white focus:border-[#144e39] outline-none"
+                className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink font-mono focus:bg-surface focus:border-forest-700 outline-none"
               />
 
               {Boolean((import.meta as any).env?.DEV) && (
                 <button
                   type="button"
                   onClick={handleGenerateDigest}
-                  className="text-xs font-bold text-amber-700 hover:underline font-display flex items-center gap-1.5 cursor-pointer"
+                  className="text-xs font-bold text-warning-800 hover:underline font-display flex items-center gap-1.5 cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>[DEV SIMULATION] Generate Test Card Digest</span>
@@ -272,38 +271,39 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+          <div className="p-4 rounded-2xl bg-surface-soft border border-line text-xs space-y-1">
             <div className="flex justify-between">
-              <span className="text-slate-500">Target Student:</span>
-              <strong className="text-slate-900">{selectedStudent?.fullName}</strong>
+              <span className="text-ink-muted">Target Student:</span>
+              <strong className="text-ink font-display">{selectedStudent?.fullName}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Security Mode:</span>
-              <strong className="text-[#144e39]">{securityMode}</strong>
+              <span className="text-ink-muted">Security Mode:</span>
+              <strong className="text-forest-700 dark:text-forest-600 font-display">{securityMode}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Key Version:</span>
-              <strong className="text-slate-900">v{keyVersion}</strong>
+              <span className="text-ink-muted">Key Version:</span>
+              <strong className="text-ink font-mono">v{keyVersion}</strong>
             </div>
           </div>
 
-          <div className="flex justify-between pt-4 border-t border-slate-100">
-            <button
-              type="button"
+          <div className="flex justify-between pt-4 border-t border-line">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setStep(2)}
-              className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display flex items-center gap-1.5 cursor-pointer"
+              leftIcon={<ArrowLeft className="w-4 h-4" />}
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
-            </button>
-            <button
-              type="button"
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               disabled={enrollMutation.isPending || !credentialDigest.trim()}
+              isLoading={enrollMutation.isPending}
               onClick={() => enrollMutation.mutate()}
-              className="btn-forest-primary text-xs font-display px-6 py-2.5 shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {enrollMutation.isPending ? 'Enrolling in Database…' : 'Enroll Smartcard'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -311,24 +311,24 @@ export default function CardEnrollmentWizard({ schoolId }: { schoolId: string })
       {/* Step 4: Success Screen */}
       {step === 4 && (
         <div className="py-8 text-center space-y-4">
-          <div className="w-14 h-14 rounded-full bg-emerald-100 text-[#144e39] flex items-center justify-center mx-auto">
+          <div className="w-14 h-14 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-extrabold text-slate-900 font-display">
+          <h3 className="text-xl font-extrabold text-ink font-display">
             Card Enrolled Successfully!
           </h3>
-          <p className="text-xs text-slate-600 max-w-sm mx-auto">
+          <p className="t-body text-xs text-ink-soft max-w-sm mx-auto">
             Student <strong>{selectedStudent?.fullName}</strong> is now linked to smartcard digest <span className="font-mono">{credentialDigest}</span>.
           </p>
 
           <div className="pt-4">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={handleReset}
-              className="btn-forest-primary text-xs font-display px-6 py-2.5 shadow-md cursor-pointer"
             >
               Enroll Another Card
-            </button>
+            </Button>
           </div>
         </div>
       )}

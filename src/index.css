@@ -1,20 +1,139 @@
 @import "tailwindcss";
 
+@theme {
+  --color-forest-900: var(--forest-900);
+  --color-forest-800: var(--forest-800);
+  --color-forest-700: var(--forest-700);
+  --color-forest-600: var(--forest-600);
+  --color-forest-500: var(--forest-500);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+
+  --color-success-50: var(--success-50);
+  --color-success-100: var(--success-100);
+  --color-success-600: var(--success-600);
+  --color-success-800: var(--success-800);
+
+  --color-warning-50: var(--warning-50);
+  --color-warning-100: var(--warning-100);
+  --color-warning-600: var(--warning-600);
+  --color-warning-800: var(--warning-800);
+
+  --color-danger-50: var(--danger-50);
+  --color-danger-100: var(--danger-100);
+  --color-danger-600: var(--danger-600);
+  --color-danger-800: var(--danger-800);
+
+  --color-info-50: var(--info-50);
+  --color-info-100: var(--info-100);
+  --color-info-600: var(--info-600);
+  --color-info-800: var(--info-800);
+}
+
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+
+    /* Forest Accent Palette */
+    --forest-900: #0d3828;
+    --forest-800: #104331;
+    --forest-700: #144e39;
+    --forest-600: #1a6247;
+    --forest-500: #227b5a;
+
+    /* Canvas & Surfaces (Donezo Light) */
+    --canvas: #eef2f5;
+    --surface: #ffffff;
+    --surface-soft: #f8fafc;
+    --ink: #0f172a;
+    --ink-soft: #475569;
+    --ink-muted: #94a3b8;
+    --line: #e2e8f0;
+    --line-soft: #f1f5f9;
+
+    /* Semantic Success */
+    --success-50: #f0fdf4;
+    --success-100: #dcfce7;
+    --success-600: #16a34a;
+    --success-800: #166534;
+
+    /* Semantic Warning */
+    --warning-50: #fffbeb;
+    --warning-100: #fef3c7;
+    --warning-600: #d97706;
+    --warning-800: #92400e;
+
+    /* Semantic Danger */
+    --danger-50: #fef2f2;
+    --danger-100: #fee2e2;
+    --danger-600: #dc2626;
+    --danger-800: #991b1b;
+
+    /* Semantic Info */
+    --info-50: #f0f9ff;
+    --info-100: #e0f2fe;
+    --info-600: #0284c7;
+    --info-800: #075985;
+  }
+
+  .dark {
+    /* Dark Mode Canvas & Surfaces */
+    --canvas: #0b1512;
+    --surface: #122019;
+    --surface-soft: #182c23;
+    --ink: #f1f5f9;
+    --ink-soft: #94a3b8;
+    --ink-muted: #64748b;
+    --line: #1f382c;
+    --line-soft: #1a3026;
+
+    /* Brightened Forest Accent for WCAG AA in Dark Mode */
+    --forest-900: #144e39;
+    --forest-800: #1c5e46;
+    --forest-700: #2e8b62;
+    --forest-600: #38a374;
+    --forest-500: #46bf89;
+
+    /* Semantic Tokens in Dark Mode */
+    --success-50: rgba(22, 163, 74, 0.15);
+    --success-100: rgba(22, 163, 74, 0.25);
+    --success-600: #4ade80;
+    --success-800: #86efac;
+
+    --warning-50: rgba(217, 119, 6, 0.15);
+    --warning-100: rgba(217, 119, 6, 0.25);
+    --warning-600: #fbbf24;
+    --warning-800: #fde68a;
+
+    --danger-50: rgba(220, 38, 38, 0.15);
+    --danger-100: rgba(220, 38, 38, 0.25);
+    --danger-600: #f87171;
+    --danger-800: #fca5a5;
+
+    --info-50: rgba(2, 132, 199, 0.15);
+    --info-100: rgba(2, 132, 199, 0.25);
+    --info-600: #38bdf8;
+    --info-800: #7dd3fc;
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #eef2f5;
-    color: #0f172a;
+    background-color: var(--canvas);
+    color: var(--ink);
     overflow-x: hidden;
     letter-spacing: -0.011em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   h1, h2, h3, h4, .font-display {
@@ -25,13 +144,72 @@
   code, pre, .font-mono {
     font-family: var(--font-mono);
   }
+
+  /* Global Accessibility Focus Ring */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--forest-600);
+  }
+
+  /* Prefers Reduced Motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
-/* Donezo Light UI Surface Tokens */
+/* Typographic Hierarchy Utility Scale */
+.t-display {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 2.5rem;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+}
+
+.t-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.t-body {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.t-label {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.t-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Surface Token Cards & Containers */
 .app-card {
-  background: #ffffff;
+  background-color: var(--surface);
   border-radius: 28px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid var(--line);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02), 0 1px 3px rgba(0, 0, 0, 0.03);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -39,11 +217,11 @@
 .app-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.05);
-  border-color: rgba(20, 78, 57, 0.15);
+  border-color: var(--forest-600);
 }
 
 .hero-forest-card {
-  background: linear-gradient(135deg, #144e39 0%, #0d3828 100%);
+  background: linear-gradient(135deg, var(--forest-700) 0%, var(--forest-900) 100%);
   color: #ffffff;
   border-radius: 28px;
   box-shadow: 0 12px 30px rgba(20, 78, 57, 0.25);
@@ -62,9 +240,14 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
 }
 
-/* Big Button Styles */
+.dark .dark-tracker-card {
+  background: linear-gradient(135deg, #122019 0%, #0b1512 100%);
+  border: 1px solid var(--line);
+}
+
+/* Big Button Backward-Compatible Classes */
 .btn-forest-primary {
-  background-color: #144e39;
+  background-color: var(--forest-700);
   color: #ffffff;
   font-weight: 700;
   border-radius: 9999px;
@@ -77,7 +260,7 @@
 }
 
 .btn-forest-primary:hover {
-  background-color: #0f3d2c;
+  background-color: var(--forest-800);
   transform: scale(1.02);
   box-shadow: 0 6px 20px rgba(20, 78, 57, 0.35);
 }
@@ -87,10 +270,10 @@
 }
 
 .btn-pill-secondary {
-  background-color: #ffffff;
-  color: #1e293b;
+  background-color: var(--surface);
+  color: var(--ink);
   font-weight: 700;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 9999px;
   padding: 12px 24px;
   display: inline-flex;
@@ -100,8 +283,8 @@
 }
 
 .btn-pill-secondary:hover {
-  background-color: #f8fafc;
-  border-color: #cbd5e1;
+  background-color: var(--surface-soft);
+  border-color: var(--ink-muted);
   transform: scale(1.02);
 }
 
@@ -115,17 +298,17 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--canvas);
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--line);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--ink-muted);
 }
 
-/* Micro-animation Utilities */
+/* Micro-animations */
 @keyframes barGrow {
   0% { transform: scaleY(0.1); opacity: 0.5; }
   100% { transform: scaleY(1); opacity: 1; }
@@ -168,7 +351,29 @@
   animation: fadeInRise 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Micro-interaction enhancements */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--line-soft) 25%,
+    var(--surface) 37%,
+    var(--line-soft) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmerWave 1.4s ease infinite;
+}
+
+.dark .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--line-soft) 25%,
+    var(--surface-soft) 37%,
+    var(--line-soft) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmerWave 1.4s ease infinite;
+}
+
+/* Micro-interactions */
 .interactive-hover {
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -181,17 +386,18 @@
   transform: scale(0.97);
 }
 
-/* Table Row Smooth Micro-Interaction */
+/* Clean Table Row Hover */
+.table-row-hover,
 tbody tr {
   transition: background-color 0.15s ease, transform 0.15s ease;
 }
 
+.table-row-hover:hover,
 tbody tr:hover {
-  background-color: rgba(241, 245, 249, 0.8) !important;
+  background-color: var(--surface-soft);
 }
 
 /* Gauge Stroke Animation */
 .gauge-arc-path {
   transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-

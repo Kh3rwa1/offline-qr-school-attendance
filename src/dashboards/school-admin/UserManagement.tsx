@@ -5,8 +5,11 @@ import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
+import { Button } from '../../components/shared/Button';
+import { Toast } from '../../components/shared/Toast';
+import { EmptyState } from '../../components/shared/EmptyState';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, UserPlus, Phone, ShieldCheck, Mail, CheckCircle2, X, AlertCircle, UserX, Shield, ShieldAlert, Edit, RefreshCw } from 'lucide-react';
+import { Search, UserPlus, ShieldCheck, X, RefreshCw, ShieldAlert } from 'lucide-react';
 import { UserRole } from '../../auth/permissions';
 
 interface MemberItem {
@@ -172,249 +175,246 @@ export const UserManagement: React.FC = () => {
   const teacherCount = members.filter((m) => m.role === 'TEACHER').length;
   const adminCount = members.filter((m) => m.role === 'SCHOOL_ADMIN' && m.status === 'ACTIVE').length;
   const rfidCount = members.filter((m) => m.role === 'RFID_OPERATOR').length;
-  const viewerCount = members.filter((m) => m.role === 'REPORT_VIEWER').length;
 
   return (
-    <div className="space-y-8" id="user-management-view">
+    <div className="space-y-8 text-left" id="user-management-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             School User Management
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Authorized teachers, turnstile operators, and administrators at {activeSchoolName}.
           </p>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <Button
+          variant="primary"
+          size="md"
           onClick={() => {
             setIsInviteOpen(true);
             setFormError(null);
           }}
-          className="btn-forest-primary text-sm font-display shadow-md cursor-pointer"
+          leftIcon={<UserPlus className="w-4 h-4" />}
         >
-          <UserPlus className="w-4 h-4" />
-          <span>Add Staff Member</span>
-        </motion.button>
+          Add Staff Member
+        </Button>
       </div>
 
       {isLoading ? (
-        <LoadingState message="Loading staff directory…" />
+        <LoadingState type="table" message="Loading staff directory…" />
       ) : error ? (
         <ErrorState message={(error as any)?.message || 'Failed to load staff roster'} onRetry={() => refetch()} />
       ) : (
         <>
+          {actionError && (
+            <div className="mb-4">
+              <Toast kind="error" message={actionError} onDismiss={() => setActionError(null)} autoDismiss={false} />
+            </div>
+          )}
 
-      {actionError && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
-          <span>{actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} className="text-rose-500 hover:text-rose-700 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Total Staff"
-          value={`${members.length} Members`}
-          trend={{ value: `${members.filter((m) => m.status === 'ACTIVE').length} Active`, isPositive: true }}
-          variant="hero-forest"
-        />
-        <StatCard
-          title="Classroom Teachers"
-          value={`${teacherCount} Active`}
-          trend={{ value: "Class Sessions Assigned", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="Gate RFID Operators"
-          value={`${rfidCount} Active`}
-          trend={{ value: "Turnstiles In-Charge", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="School Administrators"
-          value={`${adminCount} In-Charge`}
-          trend={{ value: "Headmaster & Officers", isPositive: true }}
-          variant="default"
-        />
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="app-card p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1 min-w-72">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search faculty by name or phone…"
-              className="w-full pl-10 pr-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+          {/* Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <StatCard
+              title="Total Staff"
+              value={`${members.length} Members`}
+              trend={{ value: `${members.filter((m) => m.status === 'ACTIVE').length} Active`, isPositive: true }}
+              variant="hero-forest"
+            />
+            <StatCard
+              title="Classroom Teachers"
+              value={`${teacherCount} Active`}
+              trend={{ value: "Class Sessions Assigned", isPositive: true }}
+              variant="default"
+            />
+            <StatCard
+              title="Gate RFID Operators"
+              value={`${rfidCount} Active`}
+              trend={{ value: "Turnstiles In-Charge", isPositive: true }}
+              variant="default"
+            />
+            <StatCard
+              title="School Administrators"
+              value={`${adminCount} In-Charge`}
+              trend={{ value: "Headmaster & Officers", isPositive: true }}
+              variant="default"
             />
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-[#144e39] transition-all cursor-pointer"
-          >
-            <option value="ALL">All Roles</option>
-            <option value="SCHOOL_ADMIN">Headmaster / Admin</option>
-            <option value="TEACHER">Teacher</option>
-            <option value="RFID_OPERATOR">Gate Operator</option>
-            <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
-          </select>
-        </div>
-      </div>
+          {/* Filter and Search Bar */}
+          <div className="app-card p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-72">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search faculty by name or phone…"
+                  className="w-full pl-11 pr-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
+                />
+              </div>
+            </div>
 
-      {/* Staff Table */}
-      <div className="app-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 font-display">
-                <th className="py-4 px-6">Faculty Member</th>
-                <th className="py-4 px-6">Role & Status</th>
-                <th className="py-4 px-6">Phone Number</th>
-                <th className="py-4 px-6">Member Since</th>
-                <th className="py-4 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {filteredUsers.map((user) => (
-                <tr key={user.userId} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-2xl bg-[#144e39]/10 text-[#144e39] flex items-center justify-center font-extrabold font-display">
-                        {user.fullName.charAt(0)}
-                      </div>
-                      <div>
-                        <span className="font-extrabold text-slate-900 block font-display">
-                          {user.fullName}
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-mono">
-                          ID: {user.userId.slice(0, 8)}…
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-[#144e39]/10 text-[#144e39] border border-[#144e39]/20 font-display">
-                        {user.role.replace('_', ' ')}
-                      </span>
-                      <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 font-mono font-bold text-slate-700">
-                    {user.phoneNumber}
-                  </td>
-                  <td className="py-4 px-6 text-slate-500">
-                    {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {user.status === 'ACTIVE' ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRoleModalUser(user);
-                              setSelectedNewRole(user.role);
-                              setRoleChangeReason('');
-                              setActionError(null);
-                            }}
-                            className="px-2.5 py-1 rounded-full text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer font-display"
-                          >
-                            Change Role
-                          </button>
-                          <button
-                            type="button"
-                            disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
-                            onClick={() => {
-                              setSuspendModalUser(user);
-                              setSuspendReason('');
-                              setActionError(null);
-                            }}
-                            className="px-2.5 py-1 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer disabled:opacity-30 font-display"
-                            title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
-                          >
-                            Suspend
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReactivateModalUser(user);
-                            setReactivateReason('');
-                            setActionError(null);
-                          }}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
-                        >
-                          Reactivate
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <div className="flex items-center gap-2">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 transition-all cursor-pointer font-display"
+              >
+                <option value="ALL">All Roles</option>
+                <option value="SCHOOL_ADMIN">Headmaster / Admin</option>
+                <option value="TEACHER">Teacher</option>
+                <option value="RFID_OPERATOR">Gate Operator</option>
+                <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
+              </select>
+            </div>
+          </div>
 
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
-                    No faculty members match your filter criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  )}
+          {/* Staff Table */}
+          <div className="app-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
+                    <th className="py-4 px-6">Faculty Member</th>
+                    <th className="py-4 px-6">Role & Status</th>
+                    <th className="py-4 px-6">Phone Number</th>
+                    <th className="py-4 px-6">Member Since</th>
+                    <th className="py-4 px-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line text-xs">
+                  {filteredUsers.map((user) => (
+                    <tr key={user.userId} className="table-row-hover">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold font-display">
+                            {user.fullName.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-ink block font-display">
+                              {user.fullName}
+                            </span>
+                            <span className="text-[11px] text-ink-muted font-mono">
+                              ID: {user.userId.slice(0, 8)}…
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                            {user.role.replace('_', ' ')}
+                          </span>
+                          <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-success-600' : 'bg-danger-600'}`} />
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 font-mono font-bold text-ink">
+                        {user.phoneNumber}
+                      </td>
+                      <td className="py-4 px-6 text-ink-muted">
+                        {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {user.status === 'ACTIVE' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRoleModalUser(user);
+                                  setSelectedNewRole(user.role);
+                                  setRoleChangeReason('');
+                                  setActionError(null);
+                                }}
+                                className="px-3 py-1 rounded-full text-[11px] font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display"
+                              >
+                                Change Role
+                              </button>
+                              <button
+                                type="button"
+                                disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
+                                onClick={() => {
+                                  setSuspendModalUser(user);
+                                  setSuspendReason('');
+                                  setActionError(null);
+                                }}
+                                className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer disabled:opacity-30 font-display"
+                                title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
+                              >
+                                Suspend
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReactivateModalUser(user);
+                                setReactivateReason('');
+                                setActionError(null);
+                              }}
+                              className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8">
+                        <EmptyState
+                          kind="generic"
+                          title="No faculty members match your search"
+                          description="Try adjusting your filter or search query."
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Add Staff Modal */}
       <AnimatePresence>
         {isInviteOpen && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-xl font-extrabold text-slate-900 font-display">
+                <h3 className="text-xl font-extrabold text-ink font-display">
                   Add Faculty / Staff
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsInviteOpen(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {formError && (
-                <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{formError}</span>
+                <div className="mb-4">
+                  <Toast kind="error" message={formError} onDismiss={() => setFormError(null)} autoDismiss={false} />
                 </div>
               )}
 
               <form onSubmit={handleInviteSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Full Name *
                   </label>
                   <input
@@ -423,12 +423,12 @@ export const UserManagement: React.FC = () => {
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     placeholder="e.g. Smt. Ananya Mukherjee"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Mobile Number *
                   </label>
                   <input
@@ -437,18 +437,18 @@ export const UserManagement: React.FC = () => {
                     value={formData.phoneNumber}
                     onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                     placeholder="+919830012345"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none font-mono"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Role in School *
                   </label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none"
                   >
                     <option value="TEACHER">Classroom Teacher</option>
                     <option value="SCHOOL_ADMIN">Headmaster / School Admin</option>
@@ -458,7 +458,7 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Designation
                   </label>
                   <input
@@ -466,12 +466,12 @@ export const UserManagement: React.FC = () => {
                     value={formData.designation}
                     onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                     placeholder="e.g. Assistant Teacher (Maths)"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Initial Password (min 8 chars) *
                   </label>
                   <input
@@ -481,7 +481,7 @@ export const UserManagement: React.FC = () => {
                     value={formData.temporaryPassword}
                     onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
                     placeholder="••••••••••••"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
 
@@ -491,28 +491,30 @@ export const UserManagement: React.FC = () => {
                     id="reactivateExisting"
                     checked={formData.reactivateExisting}
                     onChange={(e) => setFormData({ ...formData, reactivateExisting: e.target.checked })}
-                    className="w-4 h-4 rounded text-[#144e39] focus:ring-[#144e39] border-slate-300"
+                    className="w-4 h-4 rounded text-forest-700 focus:ring-forest-700 border-line"
                   />
-                  <label htmlFor="reactivateExisting" className="text-xs font-medium text-slate-600 cursor-pointer">
+                  <label htmlFor="reactivateExisting" className="text-xs font-medium text-ink-soft cursor-pointer">
                     Explicitly reactivate if user was previously suspended in this school
                   </label>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setIsInviteOpen(false)}
-                    className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
-                    disabled={inviteMutation.isPending}
-                    className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
+                    variant="primary"
+                    size="sm"
+                    isLoading={inviteMutation.isPending}
                   >
                     {inviteMutation.isPending ? 'Adding Member…' : 'Add to Staff'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </motion.div>
@@ -521,16 +523,16 @@ export const UserManagement: React.FC = () => {
 
         {/* Change Role Modal */}
         {roleModalUser && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-slate-900">
-                  <ShieldCheck className="w-5 h-5 text-[#144e39]" />
+                <div className="flex items-center gap-2 text-ink">
+                  <ShieldCheck className="w-5 h-5 text-forest-700 dark:text-forest-600" />
                   <h3 className="text-lg font-extrabold font-display">
                     Change Faculty Role
                   </h3>
@@ -538,25 +540,25 @@ export const UserManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setRoleModalUser(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-600 mb-4">
+              <p className="t-body text-xs text-ink-soft mb-4">
                 Update permissions and responsibilities for <strong>{roleModalUser.fullName}</strong>.
               </p>
 
               <div className="space-y-4 mb-5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     New Role *
                   </label>
                   <select
                     value={selectedNewRole}
                     onChange={(e) => setSelectedNewRole(e.target.value as UserRole)}
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none"
                   >
                     <option value="TEACHER">Classroom Teacher</option>
                     <option value="SCHOOL_ADMIN">Headmaster / School Admin</option>
@@ -566,7 +568,7 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Reason for Role Change
                   </label>
                   <input
@@ -574,27 +576,29 @@ export const UserManagement: React.FC = () => {
                     value={roleChangeReason}
                     onChange={(e) => setRoleChangeReason(e.target.value)}
                     placeholder="e.g. Promoted to administrator or reassigned to gate duty"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-medium text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setRoleModalUser(null)}
-                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  disabled={roleMutation.isPending}
+                  variant="primary"
+                  size="sm"
+                  isLoading={roleMutation.isPending}
                   onClick={() => roleMutation.mutate({ userId: roleModalUser.userId, newRole: selectedNewRole, reason: roleChangeReason.trim() })}
-                  className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
                 >
                   {roleMutation.isPending ? 'Updating…' : 'Confirm Role Change'}
-                </button>
+                </Button>
               </div>
             </motion.div>
           </div>
@@ -602,15 +606,15 @@ export const UserManagement: React.FC = () => {
 
         {/* Reactivate Confirmation Modal */}
         {reactivateModalUser && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-emerald-700">
+                <div className="flex items-center gap-2 text-success-800">
                   <RefreshCw className="w-5 h-5" />
                   <h3 className="text-lg font-extrabold font-display">
                     Reactivate Faculty Member
@@ -619,18 +623,18 @@ export const UserManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setReactivateModalUser(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-600 mb-4">
+              <p className="t-body text-xs text-ink-soft mb-4">
                 Reactivate attendance scanning and console access for <strong>{reactivateModalUser.fullName}</strong>.
               </p>
 
               <div className="mb-5">
-                <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                <label className="block t-label text-ink mb-1 font-display">
                   Reason for Reactivation
                 </label>
                 <input
@@ -638,26 +642,28 @@ export const UserManagement: React.FC = () => {
                   value={reactivateReason}
                   onChange={(e) => setReactivateReason(e.target.value)}
                   placeholder="e.g. Returned from leave or re-instated"
-                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                  className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-medium text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setReactivateModalUser(null)}
-                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  disabled={reactivateMutation.isPending}
+                  variant="primary"
+                  size="sm"
+                  isLoading={reactivateMutation.isPending}
                   onClick={() => reactivateMutation.mutate({ userId: reactivateModalUser.userId, reason: reactivateReason.trim() })}
-                  className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
                 >
                   {reactivateMutation.isPending ? 'Reactivating…' : 'Confirm Reactivation'}
-                </button>
+                </Button>
               </div>
             </motion.div>
           </div>
@@ -665,15 +671,15 @@ export const UserManagement: React.FC = () => {
 
         {/* Suspend Confirmation Modal */}
         {suspendModalUser && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-rose-700">
+                <div className="flex items-center gap-2 text-danger-800">
                   <ShieldAlert className="w-5 h-5" />
                   <h3 className="text-lg font-extrabold font-display">
                     Suspend Faculty Access
@@ -682,18 +688,18 @@ export const UserManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSuspendModalUser(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-600 mb-4">
+              <p className="t-body text-xs text-ink-soft mb-4">
                 Are you sure you want to suspend attendance scanning and console access for <strong>{suspendModalUser.fullName}</strong> ({suspendModalUser.phoneNumber})?
               </p>
 
               <div className="mb-5">
-                <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                <label className="block t-label text-ink mb-1 font-display">
                   Reason for Suspension (Mandatory)
                 </label>
                 <textarea
@@ -702,26 +708,29 @@ export const UserManagement: React.FC = () => {
                   value={suspendReason}
                   onChange={(e) => setSuspendReason(e.target.value)}
                   placeholder="e.g. Transferred to another institution, on extended medical leave, or credentials compromised…"
-                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:border-rose-600 outline-none"
+                  className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-medium text-ink focus:bg-surface focus:border-danger-600 outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setSuspendModalUser(null)}
-                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="danger"
+                  size="sm"
                   disabled={suspendMutation.isPending || suspendReason.trim().length < 3}
+                  isLoading={suspendMutation.isPending}
                   onClick={() => suspendMutation.mutate({ userId: suspendModalUser.userId, reason: suspendReason.trim() })}
-                  className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs font-display shadow-md cursor-pointer disabled:opacity-50"
                 >
                   {suspendMutation.isPending ? 'Suspending…' : 'Confirm Suspension'}
-                </button>
+                </Button>
               </div>
             </motion.div>
           </div>

@@ -5,7 +5,7 @@ interface FooterProps {
   language: Language;
 }
 
-export const Footer: React.FC<FooterProps> = ({ language }) => {
+export const Footer: React.FC<FooterProps> = () => {
   const [timeString, setTimeString] = useState('');
 
   useEffect(() => {
@@ -26,15 +26,17 @@ export const Footer: React.FC<FooterProps> = ({ language }) => {
   }, []);
 
   return (
-    <footer className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
-      <div>Version 1.2.4-stable-offline</div>
+    <footer className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 text-ink-muted text-[11px] font-semibold uppercase tracking-wider font-mono">
+      <div>AttendEase OS • Stable Offline Runtime</div>
       <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
         <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-          <span>Storage: 4.2 MB Used (IndexedDB)</span>
+          <div className="w-1.5 h-1.5 bg-success-600 rounded-full animate-pulse"></div>
+          <span>Storage: IndexedDB Active</span>
         </div>
         <div>Asia/Kolkata: {timeString || '12:44:02 PM'}</div>
       </div>
     </footer>
   );
 };
+
+export default Footer;

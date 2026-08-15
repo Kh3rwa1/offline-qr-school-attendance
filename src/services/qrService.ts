@@ -227,8 +227,8 @@ export async function generateA4PrintSheetHtml(params: {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           margin: 0;
           padding: 0;
-          background: #ffffff;
-          color: #111827;
+          background: rgb(255, 255, 255);
+          color: rgb(17, 24, 39);
         }
         .sheet-grid {
           display: grid;
@@ -236,10 +236,10 @@ export async function generateA4PrintSheetHtml(params: {
           gap: 12px;
         }
         .qr-card {
-          border: 1.5px solid #1e293b;
+          border: 1.5px solid rgb(30, 41, 59);
           border-radius: 8px;
           padding: 10px;
-          background: #fafafa;
+          background: rgb(250, 250, 250);
           box-shadow: none;
           page-break-inside: avoid;
           display: flex;
@@ -249,7 +249,7 @@ export async function generateA4PrintSheetHtml(params: {
           box-sizing: border-box;
         }
         .card-header {
-          border-bottom: 1px solid #cbd5e1;
+          border-bottom: 1px solid rgb(203, 213, 225);
           padding-bottom: 4px;
           margin-bottom: 6px;
           text-align: center;
@@ -257,13 +257,13 @@ export async function generateA4PrintSheetHtml(params: {
         .school-title {
           font-size: 13px;
           font-weight: 700;
-          color: #0f172a;
+          color: rgb(15, 23, 42);
           text-transform: uppercase;
         }
         .card-badge {
           font-size: 9px;
           letter-spacing: 0.5px;
-          color: #475569;
+          color: rgb(71, 85, 105);
         }
         .card-body {
           display: flex;
@@ -274,13 +274,13 @@ export async function generateA4PrintSheetHtml(params: {
         .photo-box {
           width: 50px;
           height: 60px;
-          border: 1px dashed #94a3b8;
+          border: 1px dashed rgb(148, 163, 184);
           border-radius: 4px;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
-          background: #f1f5f9;
+          background: rgb(241, 245, 249);
         }
         .student-photo {
           width: 100%;
@@ -289,7 +289,7 @@ export async function generateA4PrintSheetHtml(params: {
         }
         .photo-placeholder {
           font-size: 8px;
-          color: #64748b;
+          color: rgb(100, 116, 139);
           font-weight: 600;
         }
         .student-details {
@@ -300,15 +300,15 @@ export async function generateA4PrintSheetHtml(params: {
         .student-name {
           font-weight: 700;
           font-size: 13px;
-          color: #0284c7;
+          color: rgb(20, 78, 57);
         }
         .student-name-bn {
           font-size: 11px;
-          color: #334155;
+          color: rgb(51, 65, 85);
           margin-bottom: 2px;
         }
         .meta-row {
-          color: #334155;
+          color: rgb(51, 65, 85);
         }
         .qr-box {
           width: 80px;

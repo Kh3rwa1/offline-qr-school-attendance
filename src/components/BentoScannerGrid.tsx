@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Student, ClassSession, Language, NetworkStatus } from '../types';
-import { Camera, Usb, Check, AlertCircle, RefreshCw, UserCheck, ShieldCheck, UserX } from 'lucide-react';
+import { Camera, Usb, Check, AlertCircle, RefreshCw, UserCheck, ShieldCheck } from 'lucide-react';
+import { RollingNumber } from './shared/RollingNumber';
+import { Button } from './shared/Button';
 
 interface BentoScannerGridProps {
   session: ClassSession;
@@ -29,7 +31,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
   scanFeedback,
 }) => {
   const [usbInput, setUsbInput] = useState('');
-  const [isScanningActive, setIsScanningActive] = useState(true);
+  const [isScanningActive] = useState(true);
 
   const totalStudents = students.length;
   const presentCount = students.filter((s) => s.status === 'PRESENT' || s.status === 'LATE').length;
@@ -40,8 +42,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
   const handleUsbSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!usbInput.trim()) return;
-    
-    // Find student matching input QR or roll or code
+
     const found = students.find(
       (s) =>
         s.qrDigest.toLowerCase() === usbInput.trim().toLowerCase() ||
@@ -51,74 +52,70 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
 
     if (found) {
       onScanStudent(found.id, 'USB');
-    } else {
     }
     setUsbInput('');
   };
 
   return (
-    <main className="grid grid-cols-1 md:grid-cols-12 md:grid-rows-6 gap-4 flex-1">
+    <main className="grid grid-cols-1 md:grid-cols-12 md:grid-rows-6 gap-4 flex-1 text-left">
       {/* SECTION 1: Current Session Info */}
-      <section className="col-span-12 md:col-span-3 md:row-span-2 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
+      <section className="col-span-12 md:col-span-3 md:row-span-2 app-card p-6 flex flex-col justify-between">
         <div>
-          <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">
+          <p className="t-label text-forest-700 dark:text-forest-600 mb-1">
             {language === 'bn' ? 'বর্তমান সেশন' : 'Current Session'}
           </p>
-          <h2 className="text-3xl font-black text-slate-800">
+          <h2 className="text-3xl font-extrabold text-ink font-display">
             {session.className}-{session.section}
           </h2>
-          <p className="text-lg text-slate-500 font-medium">
+          <p className="text-sm text-ink-soft font-medium">
             {language === 'bn' ? 'শ্রেণী: অষ্টম-ক' : 'Class VIII-A'}
           </p>
         </div>
-        <div className="space-y-1 mt-4 md:mt-0">
-          <p className="text-sm text-slate-400">
+        <div className="space-y-1 mt-4 md:mt-0 text-xs">
+          <p className="text-ink-soft">
             {language === 'bn' ? 'শিক্ষক:' : 'Teacher:'}{' '}
-            <span className="text-slate-700 font-bold">{session.teacherName}</span>
+            <span className="text-ink font-bold">{session.teacherName}</span>
           </p>
-          <p className="text-sm text-slate-400">
+          <p className="text-ink-soft">
             {language === 'bn' ? 'তারিখ:' : 'Date:'}{' '}
-            <span className="text-slate-700 font-bold">{session.date}</span>
+            <span className="text-ink font-bold font-mono">{session.date}</span>
           </p>
         </div>
       </section>
 
       {/* SECTION 2: Camera & USB Scanner Viewport */}
-      <section className="col-span-12 md:col-span-6 md:row-span-4 bg-slate-900 rounded-3xl relative overflow-hidden flex flex-col items-center justify-center border-4 border-white shadow-2xl min-h-[340px] p-4">
-        {/* Subtle radial dark canvas background */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-800 to-slate-950 opacity-80"></div>
-
+      <section className="col-span-12 md:col-span-6 md:row-span-4 bg-slate-950 rounded-[28px] relative overflow-hidden flex flex-col items-center justify-center border-4 border-surface shadow-2xl min-h-[340px] p-4">
         {/* Feedback Alert Overlay */}
         {scanFeedback && (
           <div
-            className={`absolute top-4 left-4 right-4 z-20 px-4 py-3 rounded-2xl flex items-center gap-3 backdrop-blur-md shadow-lg transition-all animate-bounce ${
+            className={`absolute top-4 left-4 right-4 z-20 px-4 py-3 rounded-2xl flex items-center gap-3 backdrop-blur-md shadow-lg transition-all ${
               scanFeedback.type === 'DUPLICATE'
-                ? 'bg-amber-500/90 text-white border border-amber-300'
+                ? 'bg-warning-800/90 text-white border border-warning-600'
                 : scanFeedback.type === 'SUCCESS'
-                ? 'bg-emerald-500/90 text-white border border-emerald-300'
-                : 'bg-rose-500/90 text-white border border-rose-300'
+                ? 'bg-success-800/90 text-white border border-success-600'
+                : 'bg-danger-800/90 text-white border border-danger-600'
             }`}
           >
             {scanFeedback.type === 'DUPLICATE' ? (
-              <AlertCircle className="w-5 h-5 shrink-0" />
+              <AlertCircle className="w-5 h-5 shrink-0 text-amber-300" />
             ) : (
-              <Check className="w-5 h-5 shrink-0" />
+              <Check className="w-5 h-5 shrink-0 text-emerald-300" />
             )}
             <div className="text-xs font-bold leading-snug">{scanFeedback.message}</div>
           </div>
         )}
 
         {/* Reticle Target Frame */}
-        <div className="z-10 border-2 border-dashed border-blue-400/50 w-56 h-56 sm:w-64 sm:h-64 rounded-2xl flex items-center justify-center relative my-2">
+        <div className="z-10 border-2 border-dashed border-emerald-400/40 w-56 h-56 sm:w-64 sm:h-64 rounded-2xl flex items-center justify-center relative my-2">
           {/* Reticle Corners */}
-          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-400 rounded-tl-lg"></div>
-          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-400 rounded-tr-lg"></div>
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-400 rounded-bl-lg"></div>
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-400 rounded-br-lg"></div>
+          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg"></div>
+          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg"></div>
+          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg"></div>
+          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-lg"></div>
 
           {/* Animated Laser Scan Line */}
           {isScanningActive && (
-            <div className="w-full h-1 bg-blue-400/80 shadow-[0_0_15px_rgba(96,165,250,0.9)] absolute top-1/2 animate-pulse"></div>
+            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(52,211,153,0.8)] absolute top-1/2 animate-pulse"></div>
           )}
 
           <div className="text-slate-400 text-[11px] font-mono tracking-widest uppercase text-center px-4">
@@ -128,16 +125,15 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
 
         {/* Scan Actions & Hardware Indicators */}
         <div className="z-10 mt-2 flex flex-wrap gap-2 justify-center items-center">
-          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs flex items-center gap-1.5">
-            <Camera className="w-3.5 h-3.5 text-blue-400" />
+          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs flex items-center gap-1.5 font-mono">
+            <Camera className="w-3.5 h-3.5 text-emerald-400" />
             <span>Camera: ON</span>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs flex items-center gap-1.5">
+          <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs flex items-center gap-1.5 font-mono">
             <Usb className="w-3.5 h-3.5 text-emerald-400" />
             <span>USB Scanner: Ready</span>
           </div>
-
         </div>
 
         {/* Quick USB Wedge Input Form */}
@@ -148,106 +144,108 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
               value={usbInput}
               onChange={(e) => setUsbInput(e.target.value)}
               placeholder={language === 'bn' ? 'USB স্ক্যানার কীস্ট্রোক...' : 'USB Scanner Buffer / Roll No...'}
-              className="w-full bg-slate-800/90 text-white text-xs px-3 py-1.5 pl-8 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-400 placeholder:text-slate-500"
+              className="w-full bg-slate-900/90 text-white text-xs px-3 py-2 pl-8 rounded-full border border-slate-700 focus:outline-none focus:border-forest-600 placeholder:text-slate-500 font-mono"
             />
-            <Usb className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+            <Usb className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
           </div>
         </form>
       </section>
 
       {/* SECTION 3: Total Attendance Summary */}
-      <section className="col-span-12 md:col-span-3 md:row-span-2 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+      <section className="col-span-12 md:col-span-3 md:row-span-2 app-card p-6 flex flex-col justify-center items-center text-center">
+        <p className="t-label text-ink-muted mb-2">
           {language === 'bn' ? 'মোট উপস্থিতি' : 'Total Attendance'}
         </p>
-        <div className="text-5xl lg:text-6xl font-black text-slate-800 leading-tight">
-          {presentCount}
-          <span className="text-slate-300 text-3xl lg:text-4xl mx-1">/</span>
-          {totalStudents}
+        <div className="text-5xl lg:text-6xl font-black text-ink leading-tight t-data">
+          <RollingNumber value={presentCount} />
+          <span className="text-ink-muted text-3xl lg:text-4xl mx-1 font-light">/</span>
+          <span>{totalStudents}</span>
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+          <span className="text-xs font-bold text-success-800 bg-success-50 px-2.5 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display">
             {presentPercentage}% {language === 'bn' ? 'উপস্থিত' : 'Present'}
           </span>
         </div>
       </section>
 
       {/* SECTION 4: Last Scanned Student Card */}
-      <section className="col-span-12 md:col-span-3 md:row-span-2 bg-blue-600 rounded-3xl p-6 shadow-sm text-white flex flex-col justify-between">
+      <section className="col-span-12 md:col-span-3 md:row-span-2 hero-forest-card p-6 text-white flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-widest opacity-80">
+          <p className="t-label text-emerald-200 uppercase tracking-widest">
             {language === 'bn' ? 'সর্বশেষ স্ক্যান করা হয়েছে' : 'Last Scanned'}
           </p>
-          <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold">
+          <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] font-mono font-bold">
             {lastScannedStudent?.scannedAt || 'JUST NOW'}
           </span>
         </div>
 
         {lastScannedStudent ? (
           <div className="my-2">
-            <h3 className="text-2xl font-bold leading-snug">{lastScannedStudent.name}</h3>
+            <h3 className="text-2xl font-bold leading-snug font-display">{lastScannedStudent.name}</h3>
             <p className="text-sm opacity-90 font-medium">{lastScannedStudent.nameBn}</p>
             <div className="flex items-center gap-2 mt-2">
               <span className="text-xs font-mono bg-black/20 px-2 py-1 rounded font-bold">
                 ROLL: {String(lastScannedStudent.rollNumber).padStart(4, '0')}
               </span>
-              <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded">
+              <span className="text-[11px] font-mono font-bold bg-white/20 px-2 py-1 rounded">
                 {lastScannedStudent.studentCode}
               </span>
             </div>
           </div>
         ) : (
           <div className="my-2">
-            <h3 className="text-xl font-bold opacity-80">No scan yet</h3>
-            <p className="text-xs opacity-70">Scan a student card to verify profile</p>
+            <h3 className="text-lg font-bold opacity-90 font-display">No scan yet</h3>
+            <p className="text-xs opacity-75">Scan a student card to verify profile</p>
           </div>
         )}
 
-        <div className="h-10 w-10 bg-white rounded-full border-2 border-blue-400 self-end overflow-hidden flex items-center justify-center text-slate-400 shrink-0">
-          <UserCheck className="w-5 h-5 text-blue-600" />
+        <div className="h-10 w-10 bg-white/20 rounded-full self-end overflow-hidden flex items-center justify-center text-white shrink-0 shadow-inner">
+          <UserCheck className="w-5 h-5 text-white" />
         </div>
       </section>
 
       {/* SECTION 5: Sync Status Card */}
-      <section className="col-span-12 md:col-span-3 md:row-span-2 bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
+      <section className="col-span-12 md:col-span-3 md:row-span-2 app-card p-6 flex flex-col justify-between">
         <div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+          <p className="t-label text-ink-muted mb-3">
             {language === 'bn' ? 'সিঙ্ক স্ট্যাটাস' : 'Sync Status'}
           </p>
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-slate-600">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-medium text-ink-soft">
                 {language === 'bn' ? 'অপেক্ষারত স্ক্যান' : 'Pending Scans'}
               </span>
-              <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
+              <span className="px-2.5 py-0.5 bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30 rounded-full font-mono font-bold t-data">
                 {pendingSyncCount}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-slate-600">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-medium text-ink-soft">
                 {language === 'bn' ? 'লোকাল স্টোরেজ' : 'Local Health'}
               </span>
-              <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                EXCELLENT
+              <span className="font-bold text-success-800 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-success-600" />
+                HEALTHY
               </span>
             </div>
           </div>
         </div>
 
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onSyncNow}
-          className="w-full py-3 mt-3 bg-slate-100 text-slate-800 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+          className="w-full justify-center mt-3"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>{language === 'bn' ? 'সিঙ্ক করুন' : 'Sync Now'}</span>
-        </button>
+          {language === 'bn' ? 'সিঙ্ক করুন' : 'Sync Now'}
+        </Button>
       </section>
 
       {/* SECTION 6: Review & Finish Call to Action */}
-      <section className="col-span-12 md:col-span-6 md:row-span-2 bg-emerald-500 rounded-3xl p-6 shadow-lg shadow-emerald-200 text-white flex flex-wrap items-center justify-between gap-4">
+      <section className="col-span-12 md:col-span-6 md:row-span-2 hero-forest-card p-6 text-white flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col">
-          <h3 className="text-2xl sm:text-3xl font-black mb-0.5">
+          <h3 className="text-2xl sm:text-3xl font-extrabold font-display mb-0.5">
             {language === 'bn' ? 'পর্যালোচনা এবং সম্পন্ন' : 'Review & Finish'}
           </h3>
           <p className="text-sm opacity-90 font-medium">
@@ -255,7 +253,7 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
               ? 'অনুপস্থিত ছাত্র নিশ্চিত করুন এবং সাবমিট করুন'
               : 'Review unmarked students & submit final list'}
           </p>
-          <p className="text-xs mt-3 font-bold uppercase tracking-widest bg-white/20 self-start px-3 py-1 rounded-full">
+          <p className="text-[11px] mt-3 font-bold uppercase tracking-widest bg-white/20 self-start px-3 py-1 rounded-full font-display">
             {unmarkedCount} {language === 'bn' ? 'জন বাকী আছে' : 'Students Unmarked'}
           </p>
         </div>
@@ -263,22 +261,22 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
         <div className="flex gap-3">
           <button
             onClick={onOpenManualModal}
-            className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-2xl flex flex-col items-center justify-center border border-white/30 hover:bg-white/30 transition-all cursor-pointer"
+            className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 rounded-2xl flex flex-col items-center justify-center border border-white/20 hover:bg-white/20 transition-all cursor-pointer"
           >
             <UserCheck className="w-5 h-5 mb-1" />
-            <span className="text-[10px] font-black uppercase">
+            <span className="text-[11px] font-bold uppercase font-display">
               {language === 'bn' ? 'ম্যানুয়াল' : 'Manual'}
             </span>
           </button>
 
           <button
             onClick={onFinalizeSession}
-            className="w-32 sm:w-40 h-16 sm:h-20 bg-white text-emerald-700 rounded-2xl flex flex-col items-center justify-center shadow-xl shadow-emerald-900/10 hover:bg-slate-50 transition-all cursor-pointer"
+            className="w-32 sm:w-40 h-16 sm:h-20 bg-white text-forest-900 rounded-2xl flex flex-col items-center justify-center shadow-xl hover:bg-surface-soft transition-all cursor-pointer font-display"
           >
-            <span className="text-base sm:text-lg font-black uppercase">
+            <span className="text-base sm:text-lg font-extrabold uppercase">
               {language === 'bn' ? 'জমা দিন' : 'Submit'}
             </span>
-            <span className="text-[10px] font-bold opacity-70">
+            <span className="text-[11px] font-semibold opacity-80">
               {language === 'bn' ? 'চূড়ান্ত উপস্থিতি' : 'Finalize Attendance'}
             </span>
           </button>
@@ -287,3 +285,5 @@ export const BentoScannerGrid: React.FC<BentoScannerGridProps> = ({
     </main>
   );
 };
+
+export default BentoScannerGrid;

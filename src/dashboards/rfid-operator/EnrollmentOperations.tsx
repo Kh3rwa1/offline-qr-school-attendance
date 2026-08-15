@@ -2,19 +2,17 @@ import React from 'react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import CardEnrollmentWizard from '../../components/rfid/CardEnrollmentWizard';
 import { StatCard } from '../../components/shared/StatCard';
-import { motion } from 'motion/react';
-import { CreditCard, Sparkles, Key, CheckCircle2 } from 'lucide-react';
 
 export const EnrollmentOperations: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   return (
-    <div className="space-y-8" id="enrollment-operations-view">
+    <div className="space-y-8 text-left" id="enrollment-operations-view">
       {/* Header */}
       <div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
           Card Personalization & Key Injection
         </h1>
-        <p className="text-sm font-medium text-slate-500 mt-1">
+        <p className="t-body text-sm text-ink-soft mt-1">
           Issue brand-new MIFARE DESFire EV3 smartcards with AES-128 student keys at {activeSchoolName}.
         </p>
       </div>

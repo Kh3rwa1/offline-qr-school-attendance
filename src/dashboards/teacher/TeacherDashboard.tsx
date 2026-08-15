@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, RefreshCw, Download, Usb, CheckCircle2 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Camera, RefreshCw, Download, Usb, CheckCircle2, ScanLine, ClipboardCheck, Database, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { StatCard } from '../../components/shared/StatCard';
+import { Button } from '../../components/shared/Button';
+import { Toast } from '../../components/shared/Toast';
+import { RollingNumber } from '../../components/shared/RollingNumber';
+import { EmptyState } from '../../components/shared/EmptyState';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useOfflineStatus } from '../../app/OfflineStatusProvider';
 import { useSession } from '../../app/SessionProvider';
@@ -13,11 +17,10 @@ import {
   syncOutboxEvents,
 } from '../../services/offlineSyncService';
 import { offlineDb, OfflineRosterItem, OfflineSessionItem, OfflineSessionRosterItem, OutboxEventItem } from '../../db/offlineDb';
-import { estimateSmsSegments } from '../../services/sms/smsUtils';
 import { api } from '../../services/api';
 
 export const TeacherDashboard: React.FC = () => {
-  const { activeSchoolId, activeSchoolName } = useActiveSchool();
+  const { activeSchoolId } = useActiveSchool();
   const { user } = useSession();
   const { isOnline, outboxCount, isSyncing, syncNow, refreshOutbox } = useOfflineStatus();
 
@@ -36,13 +39,13 @@ export const TeacherDashboard: React.FC = () => {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const [viewMode, setViewMode] = useState<'scanner' | 'review' | 'roster'>('scanner');
   const [finalizing, setFinalizing] = useState(false);
+  const [scanBurst, setScanBurst] = useState<{ active: boolean; studentName?: string } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerControls = useRef<{ stop: () => void } | null>(null);
 
   const showFeedback = useCallback((msg: { kind: 'success' | 'warning' | 'error'; text: string }) => {
     setFeedback(msg);
-    setTimeout(() => setFeedback(null), 4500);
   }, []);
 
   function getDeviceIdentifier() {
@@ -181,12 +184,10 @@ export const TeacherDashboard: React.FC = () => {
             serverSessionId = res.data.id;
           }
         } catch (serverErr: any) {
-          // If genuine network failure (status === 0 or code === 'NETWORK_UNAVAILABLE'), allow offline creation
           const isNetworkError = serverErr?.status === 0 || serverErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
           if (isNetworkError) {
             console.warn('Network unavailable, creating offline local session:', serverErr);
           } else {
-            // Re-throw genuine server authorization/validation/conflict error (401, 403, 409, 422)
             showFeedback({ kind: 'error', text: serverErr.message || 'Server error creating attendance session' });
             return;
           }
@@ -229,6 +230,10 @@ export const TeacherDashboard: React.FC = () => {
       });
 
       if (result.success && result.student) {
+        // Signature moment: trigger spring checkmark burst
+        setScanBurst({ active: true, studentName: result.student.name });
+        setTimeout(() => setScanBurst(null), 300);
+
         showFeedback({ kind: 'success', text: `${result.student.name} (Roll ${result.student.rollNumber}) marked PRESENT` });
         const updated = await offlineDb.sessionRosters.where('sessionId').equals(session.id).toArray();
         setSessionRoster(updated);
@@ -308,10 +313,7 @@ export const TeacherDashboard: React.FC = () => {
           }
         } catch (initErr: any) {
           const isNetworkError = initErr?.status === 0 || initErr?.code === 'NETWORK_UNAVAILABLE' || !navigator.onLine;
-          if (isNetworkError) {
-            // Degrade to offline finalize path
-          } else {
-            // Re-throw authentic server error (401/403/404/409/422)
+          if (!isNetworkError) {
             throw initErr;
           }
         }
@@ -374,63 +376,52 @@ export const TeacherDashboard: React.FC = () => {
   const leaveExcused = sessionRoster.filter((item) => item.status === 'LEAVE' || item.status === 'EXCUSED').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-left">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-extrabold text-[#144e39] uppercase tracking-wider mb-2 font-display">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
             <span>Offline QR Attendance</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Classroom Dashboard
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Plan, scan, and finalize student attendance with offline QR & barcode wands.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             onClick={handleStartSession}
             disabled={!selectedClassId || (!!session && session.status !== 'FINALIZED')}
             aria-label={session ? 'Session open' : 'Start offline session'}
-            className="btn-forest-primary text-sm font-display disabled:opacity-50"
+            leftIcon={<CheckCircle2 className="w-4 h-4 text-emerald-300" />}
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-            <span>{session ? 'Session open' : 'Start offline session'}</span>
-          </motion.button>
+            {session ? 'Session open' : 'Start offline session'}
+          </Button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="secondary"
+            size="md"
             onClick={handleDownloadRoster}
             disabled={!isOnline || !selectedClassId}
             aria-label="Download roster"
-            className="btn-pill-secondary text-sm font-display shadow-2xs disabled:opacity-50"
+            leftIcon={<Download className="w-4 h-4 text-ink-soft" />}
           >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Download Roster</span>
-          </motion.button>
+            Download roster
+          </Button>
         </div>
       </div>
 
       {feedback && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          role="status"
-          className={`rounded-2xl p-4 font-bold text-xs shadow-sm flex items-center gap-2 border ${
-            feedback.kind === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : feedback.kind === 'warning'
-              ? 'bg-amber-50 text-amber-800 border-amber-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
-          }`}
-        >
-          <span>{feedback.kind === 'success' ? '✅' : feedback.kind === 'warning' ? '⚠️' : '❌'}</span>
-          <span>{feedback.text}</span>
-        </motion.div>
+        <Toast
+          kind={feedback.kind}
+          message={feedback.text}
+          onDismiss={() => setFeedback(null)}
+          autoDismiss={true}
+        />
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -464,13 +455,13 @@ export const TeacherDashboard: React.FC = () => {
         />
       </div>
 
-      <div className="app-card p-5 flex flex-wrap gap-4 items-center justify-between">
+      <div className="app-card p-4 sm:p-5 flex flex-wrap gap-4 items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-64">
-          <span className="text-xs font-bold text-slate-700 font-display">Active Section:</span>
+          <span className="text-xs font-bold text-ink font-display">Active Section:</span>
           <select
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            className="flex-1 max-w-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-full text-xs font-bold text-slate-800 focus:bg-white focus:border-[#144e39] outline-none"
+            className="flex-1 max-w-xs py-2 px-3 bg-surface-soft border border-line rounded-full text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
           >
             <option value="">Select class section</option>
             {classes.map((item) => {
@@ -487,21 +478,22 @@ export const TeacherDashboard: React.FC = () => {
         <div className="flex gap-2">
           {(
             [
-              ['scanner', '📷 Scanner View'],
-              ['review', '📝 Review Roster'],
-              ['roster', '📋 Cached Roster'],
+              ['scanner', 'Scanner View', <ScanLine className="w-3.5 h-3.5" key="s" />],
+              ['review', 'Review Roster', <ClipboardCheck className="w-3.5 h-3.5" key="r" />],
+              ['roster', 'Cached Roster', <Database className="w-3.5 h-3.5" key="c" />],
             ] as const
-          ).map(([mode, label]) => (
+          ).map(([mode, label, icon]) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`px-4 py-2 rounded-full text-xs font-bold font-display transition-all ${
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
                 viewMode === mode
-                  ? 'bg-[#144e39] text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-forest-700 text-white shadow-sm'
+                  : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
               }`}
             >
-              {label}
+              {icon}
+              <span>{label}</span>
             </button>
           ))}
         </div>
@@ -509,26 +501,45 @@ export const TeacherDashboard: React.FC = () => {
 
       {viewMode === 'scanner' && (
         <section className="grid lg:grid-cols-12 gap-6 items-stretch">
-          <div className="lg:col-span-8 app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between">
+          <div className="lg:col-span-8 app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between relative overflow-hidden">
+            {/* Signature Burst Animation on Scan Success */}
+            <AnimatePresence>
+              {scanBurst?.active && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1.1 }}
+                  exit={{ opacity: 0, scale: 1.3 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                  className="absolute inset-0 z-30 bg-forest-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-white pointer-events-none"
+                >
+                  <div className="w-20 h-20 rounded-full bg-forest-600 flex items-center justify-center shadow-2xl mb-3">
+                    <CheckCircle2 className="w-12 h-12 text-white" strokeWidth={2.5} />
+                  </div>
+                  <span className="text-xl font-bold font-display">{scanBurst.studentName || 'Verified'}</span>
+                  <span className="text-xs font-mono text-emerald-200 uppercase tracking-widest mt-1">Status: PRESENT</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Camera className="w-5 h-5 text-[#144e39]" />
-                <h3 className="text-base font-extrabold text-slate-900 font-display">Optical Camera & Barcode Wand HUD</h3>
+                <Camera className="w-5 h-5 text-forest-700 dark:text-forest-600" />
+                <h3 className="text-base font-extrabold text-ink font-display">Optical Camera & Barcode Wand HUD</h3>
               </div>
-              <span className="text-xs font-bold text-[#144e39] bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full font-mono">
+              <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 border border-success-100 dark:border-success-600/30 px-3 py-1 rounded-full font-mono">
                 {session ? `${present}/${sessionRoster.length} Scanned` : 'Session Offline'}
               </span>
             </div>
 
-            <div className="relative aspect-video rounded-3xl bg-slate-900 overflow-hidden flex items-center justify-center border border-slate-800">
+            <div className="relative aspect-video rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line">
               <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
               <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
-                <div className="flex justify-between items-center text-[10px] font-mono text-emerald-400 font-bold">
+                <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
                   <span>CAMERA_STATE: ACTIVE</span>
                   <span>AES-CMAC DECODE: AUTO</span>
                 </div>
                 <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
-                <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30">
+                <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
                   Align Student QR Badge inside Viewfinder
                 </div>
               </div>
@@ -544,79 +555,79 @@ export const TeacherDashboard: React.FC = () => {
               className="flex gap-3 pt-2"
             >
               <div className="relative flex-1">
-                <Usb className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                <Usb className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
                 <input
                   value={scanInput}
                   onChange={(e) => setScanInput(e.target.value)}
                   placeholder="USB scanner token (press Enter)"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-full text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#144e39] outline-none"
+                  className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
                 />
               </div>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                type="submit"
-                className="btn-forest-primary text-xs font-display"
-              >
+              <Button type="submit" variant="primary" size="md">
                 Scan Token
-              </motion.button>
+              </Button>
             </form>
           </div>
 
           <div className="lg:col-span-4 app-card p-6 sm:p-7 space-y-5 flex flex-col justify-between">
             <div className="space-y-4">
-              <h3 className="text-base font-extrabold text-slate-900 font-display">Session Telemetry</h3>
+              <h3 className="text-base font-extrabold text-ink font-display">Session Telemetry</h3>
               <div className="grid grid-cols-3 gap-2.5 text-center">
-                <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
-                  <span className="block text-2xl font-extrabold text-slate-900 font-display">{sessionRoster.length || 48}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roster</span>
+                <div className="bg-surface-soft rounded-2xl p-3 border border-line">
+                  <span className="block text-2xl font-extrabold text-ink font-display t-data">{sessionRoster.length || 48}</span>
+                  <span className="t-label text-ink-muted block mt-1">Roster</span>
                 </div>
-                <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-200">
-                  <span className="block text-2xl font-extrabold text-emerald-800 font-display">{present}</span>
-                  <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Present</span>
+                <div className="bg-success-50 rounded-2xl p-3 border border-success-100 dark:border-success-600/30">
+                  <span className="block text-2xl font-extrabold text-success-800 font-display t-data">
+                    <RollingNumber value={present} />
+                  </span>
+                  <span className="t-label text-success-600 block mt-1">Present</span>
                 </div>
-                <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200">
-                  <span className="block text-2xl font-extrabold text-amber-800 font-display">{outboxCount}</span>
-                  <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Outbox</span>
+                <div className="bg-warning-50 rounded-2xl p-3 border border-warning-100 dark:border-warning-600/30">
+                  <span className="block text-2xl font-extrabold text-warning-800 font-display t-data">
+                    <RollingNumber value={outboxCount} />
+                  </span>
+                  <span className="t-label text-warning-600 block mt-1">Outbox</span>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
-                <div className="flex justify-between text-slate-600">
+              <div className="p-4 rounded-2xl bg-surface-soft border border-line space-y-2.5 text-xs">
+                <div className="flex justify-between text-ink-soft">
                   <span>Late arrivals</span>
-                  <span className="font-bold text-amber-700">{late}</span>
+                  <span className="font-bold text-warning-800 font-mono t-data">{late}</span>
                 </div>
-                <div className="flex justify-between text-slate-600">
+                <div className="flex justify-between text-ink-soft">
                   <span>Excused leaves</span>
-                  <span className="font-bold text-slate-700">{leaveExcused}</span>
+                  <span className="font-bold text-ink font-mono t-data">{leaveExcused}</span>
                 </div>
-                <div className="flex justify-between text-slate-600">
+                <div className="flex justify-between text-ink-soft">
                   <span>Unmarked / Absent</span>
-                  <span className="font-bold text-rose-700">{Math.max(0, sessionRoster.length - present - late - leaveExcused)}</span>
+                  <span className="font-bold text-danger-800 font-mono t-data">{Math.max(0, sessionRoster.length - present - late - leaveExcused)}</span>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2.5 pt-2">
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => void syncNow()}
                 disabled={!isOnline || outboxCount === 0 || isSyncing}
-                className="btn-pill-secondary w-full justify-center text-xs font-display disabled:opacity-50"
+                className="w-full justify-center"
+                leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>{isSyncing ? 'Synchronizing Outbox…' : 'Push Local Outbox'}</span>
-              </motion.button>
+                {isSyncing ? 'Synchronizing Outbox…' : 'Push Local Outbox'}
+              </Button>
 
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => setViewMode('review')}
                 disabled={!session}
-                className="btn-forest-primary w-full justify-center text-xs font-display disabled:opacity-50"
+                className="w-full justify-center"
               >
-                <span>Review & Finalize Attendance</span>
-              </motion.button>
+                Review & Finalize Attendance
+              </Button>
             </div>
           </div>
         </section>
@@ -626,115 +637,142 @@ export const TeacherDashboard: React.FC = () => {
         <section className="app-card p-6 sm:p-7 space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h3 className="text-xl font-extrabold text-slate-900 font-display">Review & Finalize Attendance</h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Verify individual student check-ins before publishing to state database</p>
+              <h3 className="text-xl font-extrabold text-ink font-display">Review & Finalize Attendance</h3>
+              <p className="t-body text-xs text-ink-soft mt-0.5">Verify individual student check-ins before publishing to state database</p>
             </div>
 
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setViewMode('scanner')}
                 disabled={finalizing}
-                className="btn-pill-secondary text-xs font-display"
               >
                 Back to Scanner
-              </button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => void handleFinalize()}
                 disabled={finalizing}
-                className="btn-forest-primary text-xs font-display"
+                isLoading={finalizing}
               >
-                {finalizing ? 'Finalizing…' : 'Publish & Finalize'}
-              </motion.button>
+                Publish & Finalize
+              </Button>
             </div>
           </div>
 
-          <div className="overflow-x-auto border border-slate-200 rounded-3xl overflow-hidden">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-left text-slate-500 uppercase font-bold font-display">
-                  <th className="p-3.5">Roll</th>
-                  <th className="p-3.5">Student Name</th>
-                  <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Override Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {sessionRoster.map((item) => (
-                  <tr key={item.studentId} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3.5 font-mono font-bold text-slate-700">#{item.rollNumber}</td>
-                    <td className="p-3.5 font-bold text-slate-900 font-display">{item.studentName}</td>
-                    <td className="p-3.5">
-                      <span
-                        className={`px-3 py-1 rounded-full text-[10px] font-extrabold border ${
-                          item.status === 'PRESENT'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : item.status === 'ABSENT'
-                            ? 'bg-rose-50 text-rose-800 border-rose-200'
-                            : item.status === 'LATE'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="p-3.5">
-                      <div className="flex gap-1.5">
-                        {(['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const).map((st) => (
-                          <button
-                            key={st}
-                            onClick={() => void handleManualStatus(item.studentId, st)}
-                            className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all ${
-                              item.status === st 
-                                ? 'bg-[#144e39] text-white shadow-sm' 
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }`}
-                          >
-                            {st}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
+          {sessionRoster.length === 0 ? (
+            <EmptyState
+              kind="roster"
+              title="No session roster loaded"
+              description="Start an attendance session or download the class roster to begin reviewing students."
+              actionText="Back to Scanner"
+              onAction={() => setViewMode('scanner')}
+            />
+          ) : (
+            <div className="overflow-x-auto border border-line rounded-3xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-surface-soft border-b border-line text-left text-ink-muted uppercase font-bold font-display">
+                    <th className="p-3.5">Roll</th>
+                    <th className="p-3.5">Student Name</th>
+                    <th className="p-3.5">Status</th>
+                    <th className="p-3.5">Override Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-line bg-surface">
+                  {sessionRoster.map((item) => (
+                    <tr key={item.studentId} className="table-row-hover">
+                      <td className="p-3.5 font-mono font-bold text-ink">#{item.rollNumber}</td>
+                      <td className="p-3.5 font-bold text-ink font-display">{item.studentName}</td>
+                      <td className="p-3.5">
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
+                            item.status === 'PRESENT'
+                              ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
+                              : item.status === 'ABSENT'
+                              ? 'bg-danger-50 text-danger-800 border-danger-100 dark:border-danger-600/30'
+                              : item.status === 'LATE'
+                              ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
+                              : 'bg-surface-soft text-ink-soft border-line'
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex gap-1.5">
+                          {(['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const).map((st) => {
+                            const isSelected = item.status === st;
+                            return (
+                              <button
+                                key={st}
+                                type="button"
+                                aria-pressed={isSelected}
+                                onClick={() => void handleManualStatus(item.studentId, st)}
+                                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer font-display focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2 ${
+                                  isSelected
+                                    ? 'bg-forest-700 text-white shadow-sm'
+                                    : 'bg-surface-soft text-ink-soft hover:bg-surface border border-line'
+                                }`}
+                              >
+                                {st}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 
       {viewMode === 'roster' && (
         <section className="app-card p-6 sm:p-7 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-extrabold text-slate-900 font-display">Offline Cached Student Roster</h3>
-            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            <h3 className="text-xl font-extrabold text-ink font-display">Offline Cached Student Roster</h3>
+            <span className="text-xs font-bold text-ink-soft bg-surface-soft px-3 py-1 rounded-full border border-line">
               {roster.length} Records In Storage
             </span>
           </div>
-          <div className="overflow-x-auto border border-slate-200 rounded-3xl overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold font-display">
-                  <th className="p-3.5">Roll</th>
-                  <th className="p-3.5">Student Name</th>
-                  <th className="p-3.5">Bengali Name</th>
-                  <th className="p-3.5">Guardian Mobile</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {roster.map((s) => (
-                  <tr key={s.studentId} className="hover:bg-slate-50">
-                    <td className="p-3.5 font-mono font-bold text-slate-700">#{s.rollNumber}</td>
-                    <td className="p-3.5 font-bold text-slate-900 font-display">{s.name}</td>
-                    <td className="p-3.5 text-slate-600">{s.nameBn || '—'}</td>
-                    <td className="p-3.5 font-mono text-slate-500">{s.studentCode}</td>
+
+          {roster.length === 0 ? (
+            <EmptyState
+              kind="roster"
+              title="No cached roster found"
+              description="Download the class roster package while online to enable full offline QR verification."
+              actionText="Download Roster Now"
+              onAction={handleDownloadRoster}
+            />
+          ) : (
+            <div className="overflow-x-auto border border-line rounded-3xl overflow-hidden">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-surface-soft border-b border-line text-ink-muted uppercase font-bold font-display">
+                    <th className="p-3.5">Roll</th>
+                    <th className="p-3.5">Student Name</th>
+                    <th className="p-3.5">Bengali Name</th>
+                    <th className="p-3.5">Student Code</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-line bg-surface">
+                  {roster.map((s) => (
+                    <tr key={s.studentId} className="table-row-hover">
+                      <td className="p-3.5 font-mono font-bold text-ink">#{s.rollNumber}</td>
+                      <td className="p-3.5 font-bold text-ink font-display">{s.name}</td>
+                      <td className="p-3.5 text-ink-soft">{s.nameBn || '—'}</td>
+                      <td className="p-3.5 font-mono text-ink-muted">{s.studentCode}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
     </div>

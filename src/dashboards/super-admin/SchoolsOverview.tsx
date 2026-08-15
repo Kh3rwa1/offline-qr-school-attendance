@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
+import { Button } from '../../components/shared/Button';
+import { EmptyState } from '../../components/shared/EmptyState';
+import { Toast } from '../../components/shared/Toast';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, Building2, MapPin, CheckCircle2, AlertCircle, X, ShieldAlert, ExternalLink, Archive, RefreshCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Building2, MapPin, CheckCircle2, X, ShieldAlert, ExternalLink, Archive, RefreshCw } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SchoolItem {
   id: string;
@@ -26,6 +29,7 @@ interface SchoolItem {
 export const SchoolsOverview: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const { switchSchool } = useActiveSchool();
   const [searchTerm, setSearchTerm] = useState('');
   const [districtFilter, setDistrictFilter] = useState('ALL');
@@ -37,6 +41,12 @@ export const SchoolsOverview: React.FC = () => {
   const [confirmName, setConfirmName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if ((location.state as any)?.openRegister) {
+      setIsRegisterOpen(true);
+    }
+  }, [location.state]);
 
   // Edit School State
   const [editingSchool, setEditingSchool] = useState<SchoolItem | null>(null);
@@ -77,6 +87,8 @@ export const SchoolsOverview: React.FC = () => {
     },
   });
 
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+
   // Mutation: Register School
   const registerMutation = useMutation({
     mutationFn: async (payload: typeof formData) => {
@@ -105,6 +117,7 @@ export const SchoolsOverview: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['schools'] });
       queryClient.invalidateQueries({ queryKey: ['super-admin-summary'] });
       setIsRegisterOpen(false);
+      setSuccessToast('School Provisioned Successfully!');
       setFormData({
         name: '',
         udiseCode: '',
@@ -213,31 +226,40 @@ export const SchoolsOverview: React.FC = () => {
   const suspendedCount = schools.filter((s) => s.status === 'SUSPENDED').length;
   const archivedCount = schools.filter((s) => s.status === 'ARCHIVED').length;
 
-  if (isLoading && !data) return <LoadingState message="Loading registered school tenants…" />;
+  if (isLoading && !data) return <LoadingState type="table" message="Loading registered school tenants…" />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load school directory'} onRetry={() => refetch()} />;
 
   return (
-    <div className="space-y-8" id="schools-overview-view">
+    <div className="space-y-8 text-left" id="schools-overview-view">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {successToast && (
+          <div className="fixed top-6 right-6 z-50">
+            <Toast kind="success" message={successToast} onDismiss={() => setSuccessToast(null)} />
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Affiliated Schools Directory
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Official government institutions with verified UDISE+ codes and dedicated database tenant contexts.
           </p>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <Button
+          variant="primary"
+          size="md"
           onClick={() => setIsRegisterOpen(true)}
-          className="btn-forest-primary text-sm font-display shadow-md cursor-pointer"
+          aria-label="Register School"
+          leftIcon={<Plus className="w-4 h-4" />}
         >
-          <Plus className="w-4 h-4" />
-          <span>Register New School</span>
-        </motion.button>
+          Register School
+        </Button>
       </div>
 
       {/* Stat Cards */}
@@ -269,15 +291,15 @@ export const SchoolsOverview: React.FC = () => {
       </div>
 
       {/* Controls Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center bg-surface p-4 rounded-3xl border border-line shadow-2xs">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search by school name or 11-digit UDISE…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-[#144e39] focus:ring-2 focus:ring-[#144e39]/10 outline-none transition-all"
+            className="w-full pl-11 pr-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
           />
         </div>
 
@@ -285,7 +307,7 @@ export const SchoolsOverview: React.FC = () => {
           <select
             value={districtFilter}
             onChange={(e) => setDistrictFilter(e.target.value)}
-            className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-[#144e39] transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 transition-all cursor-pointer font-display"
           >
             <option value="ALL">All Districts</option>
             <option value="Murshidabad">Murshidabad</option>
@@ -299,7 +321,7 @@ export const SchoolsOverview: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-[#144e39] transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 transition-all cursor-pointer font-display"
           >
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">Active</option>
@@ -317,51 +339,51 @@ export const SchoolsOverview: React.FC = () => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: idx * 0.05 }}
-            className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+            className="app-card p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
           >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#144e39] flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-bold">
                   <Building2 className="w-5 h-5" />
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase ${
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
                   school.status === 'ACTIVE'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                     : school.status === 'SUSPENDED'
-                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                    : 'bg-slate-100 text-slate-700 border border-slate-300'
+                    ? 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
+                    : 'bg-surface-soft text-ink-soft border border-line'
                 }`}>
                   {school.status}
                 </span>
               </div>
 
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 font-display">
+                <h3 className="text-base font-extrabold text-ink font-display">
                   {school.name}
                 </h3>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">
+                <p className="text-xs text-ink-muted font-mono mt-0.5">
                   UDISE: {school.udiseCode || 'Unassigned'}
                 </p>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
+              <div className="space-y-2 pt-2 border-t border-line text-xs text-ink-soft">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                  <MapPin className="w-3.5 h-3.5 text-ink-muted" />
                   <span>{school.district}{school.block ? `, ${school.block}` : ''}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Tenant ID: <span className="font-mono text-[10px]">{school.id.slice(0, 8)}…</span></span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
+                  <span>Tenant ID: <span className="font-mono text-[11px]">{school.id.slice(0, 8)}…</span></span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+            <div className="pt-5 mt-4 border-t border-line flex items-center justify-between gap-2">
               <button
                 type="button"
                 disabled={school.status !== 'ACTIVE' || switchingId === school.id}
                 onClick={() => handleOpenSchool(school)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold text-[#144e39] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display disabled:opacity-40"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display disabled:opacity-40"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>{switchingId === school.id ? 'Opening…' : 'Open School'}</span>
@@ -382,7 +404,7 @@ export const SchoolsOverview: React.FC = () => {
                     });
                     setEditError(null);
                   }}
-                  className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer font-display"
+                  className="px-3 py-1.5 rounded-full text-[11px] font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display"
                 >
                   Edit
                 </button>
@@ -396,7 +418,7 @@ export const SchoolsOverview: React.FC = () => {
                       setStatusReason('');
                       setConfirmName('');
                     }}
-                    className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer font-display"
+                    className="px-3 py-1.5 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer font-display"
                   >
                     Suspend
                   </button>
@@ -412,7 +434,7 @@ export const SchoolsOverview: React.FC = () => {
                         setStatusReason('');
                         setConfirmName('');
                       }}
-                      className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display"
                     >
                       Reactivate
                     </button>
@@ -424,7 +446,7 @@ export const SchoolsOverview: React.FC = () => {
                         setStatusReason('');
                         setConfirmName('');
                       }}
-                      className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer font-display"
+                      className="px-3 py-1.5 rounded-full text-[11px] font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display"
                     >
                       Archive
                     </button>
@@ -440,7 +462,7 @@ export const SchoolsOverview: React.FC = () => {
                       setStatusReason('');
                       setConfirmName('');
                     }}
-                    className="px-2.5 py-1.5 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer font-display"
+                    className="px-3 py-1.5 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display"
                   >
                     Reactivate
                   </button>
@@ -451,10 +473,14 @@ export const SchoolsOverview: React.FC = () => {
         ))}
 
         {schools.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-slate-200">
-            <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800 font-display">No schools match your search</h3>
-            <p className="text-xs text-slate-500 mt-1">Try adjusting your search filters or register a new institution.</p>
+          <div className="col-span-full py-8">
+            <EmptyState
+              kind="schools"
+              title="No schools match your search"
+              description="Try adjusting your search filters or register a new institution."
+              actionText="Register School"
+              onAction={() => setIsRegisterOpen(true)}
+            />
           </div>
         )}
       </div>
@@ -462,41 +488,40 @@ export const SchoolsOverview: React.FC = () => {
       {/* Register New School Modal */}
       <AnimatePresence>
         {isRegisterOpen && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
+              className="app-card shadow-2xl max-w-xl w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-display">
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-ink font-display">
                     Register New School Tenant
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  <p className="t-body text-xs text-ink-soft mt-0.5">
                     Provisions school record, headmaster credentials, and academic year.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsRegisterOpen(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {formError && (
-                <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{formError}</span>
+                <div className="mb-5">
+                  <Toast kind="error" message={formError} onDismiss={() => setFormError(null)} autoDismiss={false} />
                 </div>
               )}
 
               <form onSubmit={handleRegisterSubmit} className="space-y-4 text-left">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+                  <label className="block t-label text-ink mb-1.5 font-display">
                     School Full Name *
                   </label>
                   <input
@@ -504,14 +529,14 @@ export const SchoolsOverview: React.FC = () => {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g. Rampur High School (HS)"
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                    placeholder="e.g. Bishnupur High School"
+                    className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+                    <label className="block t-label text-ink mb-1.5 font-display">
                       11-Digit UDISE+ Code *
                     </label>
                     <input
@@ -520,32 +545,28 @@ export const SchoolsOverview: React.FC = () => {
                       maxLength={11}
                       value={formData.udiseCode}
                       onChange={(e) => setFormData({ ...formData, udiseCode: e.target.value })}
-                      placeholder="19060100101"
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 font-mono focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                      placeholder="e.g. 19010100101"
+                      className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink font-mono placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+                    <label className="block t-label text-ink mb-1.5 font-display">
                       District *
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      required
                       value={formData.district}
                       onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
-                    >
-                      <option value="Murshidabad">Murshidabad</option>
-                      <option value="Nadia">Nadia</option>
-                      <option value="North 24 Parganas">North 24 Parganas</option>
-                      <option value="South 24 Parganas">South 24 Parganas</option>
-                      <option value="Kolkata">Kolkata</option>
-                      <option value="Howrah">Howrah</option>
-                    </select>
+                      placeholder="e.g. Bankura"
+                      className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none transition-all"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 font-display">
+                  <label className="block t-label text-ink mb-1.5 font-display">
                     Block / Sub-Division
                   </label>
                   <input
@@ -553,18 +574,18 @@ export const SchoolsOverview: React.FC = () => {
                     value={formData.block}
                     onChange={(e) => setFormData({ ...formData, block: e.target.value })}
                     placeholder="e.g. Raninagar-I"
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                    className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
                   />
                 </div>
 
-                <div className="pt-2 border-t border-slate-100">
-                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-3 font-display">
+                <div className="pt-2 border-t border-line">
+                  <h4 className="t-label text-ink mb-3 font-display">
                     Initial Headmaster / Administrator Account
                   </h4>
 
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                      <label className="block t-label text-ink mb-1 font-display">
                         Administrator Full Name *
                       </label>
                       <input
@@ -572,14 +593,14 @@ export const SchoolsOverview: React.FC = () => {
                         required
                         value={formData.adminName}
                         onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                        placeholder="e.g. Dr. Pradip Sengupta"
-                        className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                        placeholder="e.g. Dr. A. Banerjee"
+                        className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
                       />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                        <label className="block t-label text-ink mb-1 font-display">
                           Mobile Number *
                         </label>
                         <input
@@ -587,13 +608,13 @@ export const SchoolsOverview: React.FC = () => {
                           required
                           value={formData.adminPhone}
                           onChange={(e) => setFormData({ ...formData, adminPhone: e.target.value })}
-                          placeholder="+919434012345"
-                          className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                          placeholder="e.g. +91 98765 43210"
+                          className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                        <label className="block t-label text-ink mb-1 font-display">
                           Initial Password (min 8 chars) *
                         </label>
                         <input
@@ -602,8 +623,8 @@ export const SchoolsOverview: React.FC = () => {
                           minLength={8}
                           value={formData.adminPassword}
                           onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
-                          placeholder="••••••••••••"
-                          className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none transition-all"
+                          placeholder="Minimum 12 characters"
+                          className="w-full px-4 py-3 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
                         />
                       </div>
                     </div>
@@ -614,31 +635,34 @@ export const SchoolsOverview: React.FC = () => {
                         id="linkExistingUser"
                         checked={formData.linkExistingUser}
                         onChange={(e) => setFormData({ ...formData, linkExistingUser: e.target.checked })}
-                        className="w-4 h-4 rounded text-[#144e39] focus:ring-[#144e39] border-slate-300"
+                        className="w-4 h-4 rounded text-forest-700 focus:ring-forest-700 border-line"
                       />
-                      <label htmlFor="linkExistingUser" className="text-xs font-medium text-slate-600 cursor-pointer">
+                      <label htmlFor="linkExistingUser" className="text-xs font-medium text-ink-soft cursor-pointer">
                         Link existing user if this phone number is already registered in the platform
                       </label>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="md"
                     onClick={() => setIsRegisterOpen(false)}
-                    className="px-5 py-2.5 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all font-display cursor-pointer"
                   >
                     Cancel
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
                     type="submit"
-                    disabled={registerMutation.isPending}
-                    className="btn-forest-primary text-xs font-display px-6 py-2.5 shadow-md cursor-pointer disabled:opacity-50"
+                    variant="primary"
+                    size="md"
+                    isLoading={registerMutation.isPending}
+                    aria-label="Register & Provision School"
                   >
-                    {registerMutation.isPending ? 'Provisioning School…' : 'Provision School Tenant'}
-                  </button>
+                    {registerMutation.isPending ? 'Provisioning School…' : 'Register & Provision School'}
+                  </Button>
                 </div>
               </form>
             </motion.div>
@@ -649,27 +673,27 @@ export const SchoolsOverview: React.FC = () => {
       {/* Status Transition Dialog (Suspend / Archive / Reactivate) */}
       <AnimatePresence>
         {statusModalSchool && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
             >
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${
                 targetStatus === 'ACTIVE'
-                  ? 'bg-emerald-50 text-emerald-600'
+                  ? 'bg-success-50 text-success-800'
                   : targetStatus === 'ARCHIVED'
-                  ? 'bg-slate-100 text-slate-700'
-                  : 'bg-rose-50 text-rose-600'
+                  ? 'bg-surface-soft text-ink'
+                  : 'bg-danger-50 text-danger-800'
               }`}>
                 {targetStatus === 'ACTIVE' ? <RefreshCw className="w-6 h-6" /> : targetStatus === 'ARCHIVED' ? <Archive className="w-6 h-6" /> : <ShieldAlert className="w-6 h-6" />}
               </div>
 
-              <h3 className="text-lg font-extrabold text-slate-900 font-display">
+              <h3 className="text-lg font-extrabold text-ink font-display">
                 {targetStatus === 'ACTIVE' ? 'Reactivate' : targetStatus === 'ARCHIVED' ? 'Archive' : 'Suspend'} School: {statusModalSchool.name}
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="t-body text-xs text-ink-soft mt-1">
                 {targetStatus === 'ACTIVE'
                   ? 'Reactivating will restore operational status and enable attendance scanning.'
                   : targetStatus === 'ARCHIVED'
@@ -679,7 +703,7 @@ export const SchoolsOverview: React.FC = () => {
 
               <div className="space-y-4 my-5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Mandatory Reason (min 5 chars) *
                   </label>
                   <textarea
@@ -688,52 +712,49 @@ export const SchoolsOverview: React.FC = () => {
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
                     placeholder="Provide compliance or administrative reason…"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                   />
                 </div>
 
                 {(targetStatus === 'SUSPENDED' || targetStatus === 'ARCHIVED') && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
-                      Type <span className="font-mono text-rose-600">{statusModalSchool.name}</span> to confirm:
+                    <label className="block t-label text-ink mb-1 font-display">
+                      Type <span className="font-mono text-danger-600">{statusModalSchool.name}</span> to confirm:
                     </label>
                     <input
                       type="text"
                       value={confirmName}
                       onChange={(e) => setConfirmName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-rose-500"
+                      className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:bg-surface focus:border-danger-600"
                     />
                   </div>
                 )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setStatusModalSchool(null)}
-                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant={targetStatus === 'ACTIVE' ? 'primary' : targetStatus === 'ARCHIVED' ? 'secondary' : 'danger'}
+                  size="sm"
                   disabled={
                     statusMutation.isPending ||
                     statusReason.trim().length < 5 ||
                     ((targetStatus === 'SUSPENDED' || targetStatus === 'ARCHIVED') && confirmName !== statusModalSchool.name)
                   }
+                  isLoading={statusMutation.isPending}
                   onClick={() => statusMutation.mutate({
                     schoolId: statusModalSchool.id,
                     status: targetStatus,
                     reason: statusReason.trim(),
                   })}
-                  className={`px-5 py-2 rounded-full text-xs font-bold text-white disabled:opacity-40 font-display cursor-pointer shadow-md ${
-                    targetStatus === 'ACTIVE'
-                      ? 'bg-[#144e39] hover:bg-[#0f3d2c]'
-                      : targetStatus === 'ARCHIVED'
-                      ? 'bg-slate-800 hover:bg-slate-900'
-                      : 'bg-rose-600 hover:bg-rose-700'
-                  }`}
                 >
                   {statusMutation.isPending
                     ? 'Updating…'
@@ -742,7 +763,7 @@ export const SchoolsOverview: React.FC = () => {
                     : targetStatus === 'ARCHIVED'
                     ? 'Confirm Archive'
                     : 'Confirm Suspension'}
-                </button>
+                </Button>
               </div>
             </motion.div>
           </div>
@@ -750,41 +771,40 @@ export const SchoolsOverview: React.FC = () => {
 
         {/* Edit School Modal */}
         {editingSchool && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
+              className="app-card shadow-2xl max-w-lg w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-xl font-extrabold text-slate-900 font-display">
+                  <h2 className="text-xl font-extrabold text-ink font-display">
                     Edit School Institution
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  <p className="t-body text-xs text-ink-soft mt-0.5">
                     Update school institutional parameters and national portal synchronization.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditingSchool(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {editError && (
-                <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{editError}</span>
+                <div className="mb-5">
+                  <Toast kind="error" message={editError} onDismiss={() => setEditError(null)} autoDismiss={false} />
                 </div>
               )}
 
               <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     School Full Name *
                   </label>
                   <input
@@ -792,13 +812,13 @@ export const SchoolsOverview: React.FC = () => {
                     required
                     value={editFormData.name}
                     onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                    className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    <label className="block t-label text-ink mb-1 font-display">
                       UDISE+ Code (11 digits)
                     </label>
                     <input
@@ -806,17 +826,17 @@ export const SchoolsOverview: React.FC = () => {
                       maxLength={11}
                       value={editFormData.udiseCode}
                       onChange={(e) => setEditFormData({ ...editFormData, udiseCode: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                      className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-mono font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    <label className="block t-label text-ink mb-1 font-display">
                       District *
                     </label>
                     <select
                       value={editFormData.district}
                       onChange={(e) => setEditFormData({ ...editFormData, district: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                      className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                     >
                       <option value="Murshidabad">Murshidabad</option>
                       <option value="Nadia">Nadia</option>
@@ -833,7 +853,7 @@ export const SchoolsOverview: React.FC = () => {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    <label className="block t-label text-ink mb-1 font-display">
                       Block
                     </label>
                     <input
@@ -841,17 +861,17 @@ export const SchoolsOverview: React.FC = () => {
                       value={editFormData.block}
                       onChange={(e) => setEditFormData({ ...editFormData, block: e.target.value })}
                       placeholder="e.g. Domkal"
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                      className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    <label className="block t-label text-ink mb-1 font-display">
                       Language
                     </label>
                     <select
                       value={editFormData.preferredLanguage}
                       onChange={(e) => setEditFormData({ ...editFormData, preferredLanguage: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                      className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                     >
                       <option value="bn">Bengali (বাংলা)</option>
                       <option value="en">English</option>
@@ -859,33 +879,35 @@ export const SchoolsOverview: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                    <label className="block t-label text-ink mb-1 font-display">
                       Timezone
                     </label>
                     <input
                       type="text"
                       value={editFormData.timezone}
                       onChange={(e) => setEditFormData({ ...editFormData, timezone: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-[#144e39]"
+                      className="w-full px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-mono font-semibold text-ink outline-none focus:bg-surface focus:border-forest-700"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setEditingSchool(null)}
-                    className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
-                    disabled={editMutation.isPending}
-                    className="btn-forest-primary text-xs font-display shadow-md cursor-pointer disabled:opacity-50"
+                    variant="primary"
+                    size="sm"
+                    isLoading={editMutation.isPending}
                   >
                     {editMutation.isPending ? 'Saving…' : 'Save Changes'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </motion.div>

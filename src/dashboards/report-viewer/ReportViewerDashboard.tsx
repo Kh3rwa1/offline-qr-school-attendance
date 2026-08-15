@@ -2,21 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { StatCard } from '../../components/shared/StatCard';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
+import { Button } from '../../components/shared/Button';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
-  Plus, 
-  BarChart3, 
-  Calendar, 
   Download, 
-  TrendingUp, 
-  AlertTriangle, 
-  FileSpreadsheet, 
-  ArrowRight, 
-  ShieldCheck, 
-  Clock, 
   Play, 
   Square 
 } from 'lucide-react';
@@ -65,49 +57,47 @@ export const ReportViewerDashboard: React.FC = () => {
     return `${hrs}:${mins}:${secs}`;
   };
 
-  if (loading) return <LoadingState message="Connecting to state reporting & analytics engine…" />;
+  if (loading) return <LoadingState type="stat-cards" message="Connecting to state reporting & analytics engine…" />;
   if (error) return <ErrorState message={error} onRetry={fetchAnalytics} />;
 
   return (
-    <div className="space-y-8" id="report-viewer-dashboard-view">
-      {/* Top Header Row with Big Buttons (Reference Image match) */}
+    <div className="space-y-8 text-left" id="report-viewer-dashboard-view">
+      {/* Top Header Row with Buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-extrabold text-[#144e39] uppercase tracking-wider font-display">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider font-display">
               Attendance Reports & Analytics
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider font-mono">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-soft border border-line text-[11px] font-bold text-ink-muted uppercase tracking-wider font-mono">
               AUDITOR ACCESS: READ ONLY
             </span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Reports & Analytics
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Plan, inspect, and export state-compliant attendance datasets for {activeSchoolName}.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => navigate('/app/reports/exports')}
-            className="btn-forest-primary text-sm font-display"
+            leftIcon={<Download className="w-4 h-4" />}
           >
-            <Download className="w-4 h-4" />
-            <span>Export State Report</span>
-          </motion.button>
+            Export State Report
+          </Button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => navigate('/app/reports/daily')}
-            className="btn-pill-secondary text-sm font-display shadow-2xs"
           >
-            <span>Daily Log</span>
-          </motion.button>
+            Daily Log
+          </Button>
         </div>
       </div>
 
@@ -148,10 +138,10 @@ export const ReportViewerDashboard: React.FC = () => {
         {/* Column 1: Weekly Attendance Distribution Chart (5 cols) */}
         <div className="lg:col-span-5 app-card p-6 sm:p-7 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Attendance Distribution
             </h3>
-            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+            <span className="text-xs font-bold text-ink-muted bg-surface-soft px-2.5 py-1 rounded-full font-display">
               Weekly
             </span>
           </div>
@@ -168,64 +158,64 @@ export const ReportViewerDashboard: React.FC = () => {
             ].map((col, idx) => (
               <div key={idx} className="flex flex-col items-center gap-2 h-full justify-end group relative">
                 {col.active && (
-                  <span className="absolute -top-7 bg-white text-slate-800 border border-slate-200 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+                  <span className="absolute -top-7 bg-surface text-ink border border-line text-[11px] font-bold px-1.5 py-0.5 rounded shadow-2xs font-mono">
                     {col.pct}%
                   </span>
                 )}
-                <div className="w-full bg-slate-100 rounded-full h-full flex items-end p-0.5 overflow-hidden">
+                <div className="w-full bg-surface-soft rounded-full h-full flex items-end p-0.5 overflow-hidden">
                   <div
                     className={`w-full rounded-full transition-all duration-500 ${
                       col.dark
-                        ? 'bg-[#144e39]'
+                        ? 'bg-forest-700'
                         : col.active
-                        ? 'bg-emerald-400'
+                        ? 'bg-forest-600'
                         : col.filled
-                        ? 'bg-[#144e39]/80'
-                        : 'bg-emerald-600/40'
+                        ? 'bg-forest-700/80'
+                        : 'bg-forest-600/40'
                     }`}
                     style={{ height: `${col.pct || 15}%` }}
                   />
                 </div>
-                <span className="text-xs font-bold text-slate-400 font-display">{col.day}</span>
+                <span className="text-xs font-bold text-ink-muted font-display">{col.day}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Column 2: Reminders Card with Big Action Button (3 cols) */}
+        {/* Column 2: Reminders Card (3 cols) */}
         <div className="lg:col-span-3 app-card p-6 sm:p-7 flex flex-col justify-between">
           <div>
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Statutory Reminder
             </h3>
             <div className="mt-4 space-y-1">
-              <h4 className="text-sm font-extrabold text-slate-900 leading-snug">
+              <h4 className="text-sm font-extrabold text-ink leading-snug">
                 Monthly UDISE+ Export for District Office
               </h4>
-              <p className="text-xs font-medium text-slate-400">
+              <p className="t-body text-xs text-ink-muted">
                 Deadline : 05:00 pm Friday
               </p>
             </div>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => navigate('/app/reports/exports')}
-            className="w-full mt-6 py-3 px-4 rounded-full bg-[#144e39] hover:bg-[#0f3d2c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-[#144e39]/20 transition-all font-display"
+            leftIcon={<Download className="w-4 h-4 text-emerald-300" />}
+            className="w-full mt-6 justify-center"
           >
-            <Download className="w-4 h-4 text-emerald-300" />
-            <span>Download CSV</span>
-          </motion.button>
+            Download CSV
+          </Button>
         </div>
 
         {/* Column 3: Reports Navigation List (4 cols) */}
         <div className="lg:col-span-4 app-card p-6 sm:p-7 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Report Modules
             </h3>
-            <span className="text-xs font-bold text-slate-400">3 Available</span>
+            <span className="text-xs font-medium text-ink-muted font-display">3 Available</span>
           </div>
 
           <div className="mt-4 space-y-3">
@@ -237,13 +227,13 @@ export const ReportViewerDashboard: React.FC = () => {
               <div 
                 key={i} 
                 onClick={() => navigate(mod.href)}
-                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-surface-soft transition-colors cursor-pointer border border-line"
               >
                 <div>
-                  <p className="text-xs font-bold text-slate-900">{mod.name}</p>
-                  <p className="text-[11px] text-slate-400">{mod.desc}</p>
+                  <p className="text-xs font-bold text-ink font-display">{mod.name}</p>
+                  <p className="text-[11px] text-ink-muted">{mod.desc}</p>
                 </div>
-                <span className="text-[11px] font-bold text-[#144e39] bg-emerald-50 px-2.5 py-1 rounded-full">
+                <span className="text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-2.5 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display">
                   {mod.due}
                 </span>
               </div>
@@ -257,12 +247,12 @@ export const ReportViewerDashboard: React.FC = () => {
         {/* Column 1: Class Breakdown (5 cols) */}
         <div className="lg:col-span-5 app-card p-6 sm:p-7">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Class Attendance Roster
             </h3>
             <button
               onClick={() => navigate('/app/reports/daily')}
-              className="text-xs font-bold px-3 py-1 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="text-xs font-bold px-3 py-1 rounded-full border border-line text-ink-soft hover:bg-surface-soft transition-colors cursor-pointer font-display"
             >
               View Full
             </button>
@@ -270,22 +260,22 @@ export const ReportViewerDashboard: React.FC = () => {
 
           <div className="space-y-3">
             {[
-              { name: 'Class 10 - Section A', stats: '48 Students • 96% Present', status: 'Completed', tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-              { name: 'Class 10 - Section B', stats: '46 Students • 94% Present', status: 'Completed', tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-              { name: 'Class 9 - Section A', stats: '50 Students • 92% Present', status: 'In Progress', tagColor: 'bg-amber-50 text-amber-700 border-amber-200' },
-              { name: 'Class 8 - Section A', stats: '52 Students • 89% Present', status: 'In Progress', tagColor: 'bg-amber-50 text-amber-700 border-amber-200' },
+              { name: 'Class 10 - Section A', stats: '48 Students • 96% Present', status: 'Completed', tagColor: 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30' },
+              { name: 'Class 10 - Section B', stats: '46 Students • 94% Present', status: 'Completed', tagColor: 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30' },
+              { name: 'Class 9 - Section A', stats: '50 Students • 92% Present', status: 'In Progress', tagColor: 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30' },
+              { name: 'Class 8 - Section A', stats: '52 Students • 89% Present', status: 'In Progress', tagColor: 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30' },
             ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-2 rounded-2xl hover:bg-slate-50 transition-colors">
+              <div key={i} className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-surface-soft transition-colors border border-line">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#144e39] text-white flex items-center justify-center text-xs font-extrabold shadow-sm">
+                  <div className="w-9 h-9 rounded-full bg-forest-700 text-white flex items-center justify-center text-xs font-extrabold shadow-2xs font-display">
                     {item.name.charAt(6)}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{item.name}</p>
-                    <p className="text-[11px] text-slate-400 font-medium">{item.stats}</p>
+                    <p className="text-xs font-bold text-ink font-display">{item.name}</p>
+                    <p className="text-[11px] text-ink-muted">{item.stats}</p>
                   </div>
                 </div>
-                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${item.tagColor}`}>
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border font-display ${item.tagColor}`}>
                   {item.status}
                 </span>
               </div>
@@ -296,26 +286,25 @@ export const ReportViewerDashboard: React.FC = () => {
         {/* Column 2: Progress Radial Gauge (4 cols) */}
         <div className="lg:col-span-4 app-card p-6 sm:p-7 flex flex-col justify-between items-center text-center">
           <div className="w-full flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Overall Compliance
             </h3>
-            <span className="text-xs font-bold text-slate-400">100% Calculated</span>
+            <span className="text-xs font-medium text-ink-muted">100% Calculated</span>
           </div>
 
           <div className="relative my-4 flex flex-col items-center justify-center">
-            {/* Upright Half Gauge SVG with Animated Stroke */}
             <svg className="w-52 h-32" viewBox="0 0 200 110">
               <path
                 d="M 20 100 A 80 80 0 0 1 180 100"
                 fill="none"
-                stroke="#e2e8f0"
+                stroke="var(--line)"
                 strokeWidth="18"
                 strokeLinecap="round"
               />
               <motion.path
                 d="M 20 100 A 80 80 0 0 1 180 100"
                 fill="none"
-                stroke="#144e39"
+                stroke="var(--forest-700)"
                 strokeWidth="18"
                 strokeDasharray="251.2"
                 initial={{ strokeDashoffset: 251.2 }}
@@ -330,31 +319,31 @@ export const ReportViewerDashboard: React.FC = () => {
               transition={{ delay: 0.3, duration: 0.5 }}
               className="absolute top-12 flex flex-col items-center"
             >
-              <span className="text-4xl font-extrabold text-slate-900 font-display tracking-tight">
+              <span className="text-4xl font-extrabold text-ink font-display tracking-tight t-data">
                 95.4%
               </span>
-              <span className="text-xs font-bold text-slate-400 mt-0.5">Attendance Score</span>
+              <span className="text-xs font-medium text-ink-soft mt-0.5">Attendance Score</span>
             </motion.div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 text-xs font-bold text-slate-500">
+          <div className="flex items-center justify-center gap-4 text-xs font-bold text-ink-soft">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#144e39]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-forest-700" />
               <span>Present</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-warning-600" />
               <span>Late</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+              <span className="w-2.5 h-2.5 rounded-full bg-surface-soft border border-line" />
               <span>Absent</span>
             </div>
           </div>
         </div>
 
         {/* Column 3: Live Audit Timer Stream (3 cols) */}
-        <div className="lg:col-span-3 dark-tracker-card p-6 sm:p-7 flex flex-col justify-between text-white relative overflow-hidden">
+        <div className="lg:col-span-3 dark-tracker-card p-6 sm:p-7 flex flex-col justify-between text-white relative overflow-hidden rounded-[28px]">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-emerald-300/90 font-display">Auditor Sync Stream</p>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -374,7 +363,7 @@ export const ReportViewerDashboard: React.FC = () => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsTimerRunning(!isTimerRunning)}
-              className="w-12 h-12 rounded-full bg-white text-[#144e39] flex items-center justify-center shadow-lg transition-transform"
+              className="w-12 h-12 rounded-full bg-white text-forest-700 flex items-center justify-center shadow-lg transition-transform cursor-pointer"
             >
               {isTimerRunning ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
             </motion.button>
@@ -383,7 +372,7 @@ export const ReportViewerDashboard: React.FC = () => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setSeconds(0)}
-              className="w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg transition-transform"
+              className="w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg transition-transform cursor-pointer"
             >
               <div className="w-3.5 h-3.5 rounded-xs bg-white" />
             </motion.button>

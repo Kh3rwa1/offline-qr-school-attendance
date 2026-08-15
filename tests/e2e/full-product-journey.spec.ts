@@ -21,7 +21,8 @@ test.describe('End-to-End Product Journeys Matrix', () => {
       await page.locator('input[placeholder="e.g. Bishnupur High School"]').fill(`Journey Test School ${Date.now()}`);
       await page.locator('input[placeholder="e.g. Bankura"]').fill('Bankura');
       await page.locator('input[placeholder="e.g. Dr. A. Banerjee"]').fill('Principal Test');
-      await page.locator('input[placeholder="e.g. +91 98765 43210"]').fill('+919876543210');
+      const uniquePhone = `+9198765${Math.floor(10000 + Math.random() * 90000)}`;
+      await page.locator('input[placeholder="e.g. +91 98765 43210"]').fill(uniquePhone);
       await page.locator('input[placeholder="Minimum 12 characters"]').fill('StrongAdminPassword123!');
 
       await page.getByRole('button', { name: 'Register & Provision School' }).click();

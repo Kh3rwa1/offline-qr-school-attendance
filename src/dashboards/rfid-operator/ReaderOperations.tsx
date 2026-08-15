@@ -2,20 +2,18 @@ import React from 'react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import ReaderManagement from '../../components/rfid/ReaderManagement';
 import { StatCard } from '../../components/shared/StatCard';
-import { motion } from 'motion/react';
-import { Radio, Plus, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 export const ReaderOperations: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   return (
-    <div className="space-y-8" id="reader-operations-view">
+    <div className="space-y-8 text-left" id="reader-operations-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Physical Gate Readers
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Configure ESP32 / PN532 and Raspberry Pi smartcard gate terminals at {activeSchoolName}.
           </p>
         </div>

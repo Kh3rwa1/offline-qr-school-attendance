@@ -5,8 +5,10 @@ import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
-import { motion } from 'motion/react';
-import { MessageSquare, CheckCircle2, Phone, RefreshCw, Send, AlertTriangle, Languages, Play } from 'lucide-react';
+import { Button } from '../../components/shared/Button';
+import { Toast } from '../../components/shared/Toast';
+import { EmptyState } from '../../components/shared/EmptyState';
+import { RefreshCw, Languages, Play } from 'lucide-react';
 
 interface NotificationJobItem {
   id: string;
@@ -85,53 +87,46 @@ export const NotificationOperations: React.FC = () => {
   const jobs = data?.jobs || [];
   const summary = data?.summary || { total: 0, delivered: 0, failed: 0, queued: 0 };
 
-  if (isLoading) return <LoadingState message="Loading guardian notification queue…" />;
+  if (isLoading) return <LoadingState type="table" message="Loading guardian notification queue…" />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load notification queue'} onRetry={() => refetch()} />;
 
   return (
-    <div className="space-y-8" id="notification-operations-view">
+    <div className="space-y-8 text-left" id="notification-operations-view">
       {/* Toast Notification */}
       {successToast && (
-        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-xl flex items-center gap-3 text-xs font-bold font-display">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span>{successToast}</span>
+        <div className="fixed top-6 right-6 z-50">
+          <Toast kind="success" message={successToast} onDismiss={() => setSuccessToast(null)} />
         </div>
       )}
 
       {actionError && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{actionError}</span>
-          </div>
-          <button type="button" onClick={() => setActionError(null)} className="text-rose-700 font-bold text-xs">
-            Dismiss
-          </button>
+        <div className="mb-4">
+          <Toast kind="error" message={actionError} onDismiss={() => setActionError(null)} autoDismiss={false} />
         </div>
       )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Guardian SMS Dispatch Console
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Automated, CDAC DLT-compliant SMS notifications dispatched to parents for {activeSchoolName}.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             disabled={processMutation.isPending}
+            isLoading={processMutation.isPending}
             onClick={() => processMutation.mutate()}
-            className="btn-forest-primary text-sm font-display flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            leftIcon={<Play className="w-4 h-4" />}
           >
-            <Play className="w-4 h-4" />
-            <span>{processMutation.isPending ? 'Processing Queue…' : 'Run Worker Now'}</span>
-          </motion.button>
+            {processMutation.isPending ? 'Processing Queue…' : 'Run Worker Now'}
+          </Button>
         </div>
       </div>
 
@@ -167,26 +162,26 @@ export const NotificationOperations: React.FC = () => {
       <div className="app-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Languages className="w-4 h-4 text-[#144e39]" />
-            <h3 className="font-extrabold text-sm text-slate-900 font-display">Multi-lingual DLT Message Templates (Preview)</h3>
+            <Languages className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+            <h3 className="font-extrabold text-sm text-ink font-display">Multi-lingual DLT Message Templates (Preview)</h3>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="t-body text-xs text-ink-soft mt-1">
             Preview standard CDAC templates. Live SMS notifications are automatically dispatched in each student's preferred language configured in school registry.
           </p>
-          <p className="text-xs text-slate-700 font-medium mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <p className="text-xs text-ink font-medium mt-2 bg-surface-soft p-2.5 rounded-2xl border border-line">
             {selectedLang === 'EN' && 'English: "Dear Parent, [Student Name] (Roll: [Roll]) was marked ABSENT today at [School Name]. Please contact school if unexpected."'}
             {selectedLang === 'BN' && 'বাংলা: "প্রিয় অভিভাবক, [ছাত্র/ছাত্রীর নাম] আজ বিদ্যালয়ে অনুপস্থিত রয়েছে। প্রয়োজনে প্রধান শিক্ষকের সাথে যোগাযোগ করুন।"'}
-            {selectedLang === 'HI' && 'हिन्दी: "प्रिय अभिभावक, आपका बच्चा [छात्र का नाम] आज विद्यालय में अनुपस्थित है।"'}
+            {selectedLang === 'HI' && 'हिन्दी: "प्रिय अभिभावक, आपका बच्चा [छात्र का नाम] আজ विद्यालय में अनुपस्थित है।"'}
           </p>
         </div>
 
-        <div className="flex gap-1.5 p-1 bg-slate-100 rounded-full border border-slate-200">
+        <div className="flex gap-1.5 p-1 bg-surface-soft rounded-full border border-line">
           {(['EN', 'BN', 'HI'] as const).map((lang) => (
             <button
               key={lang}
               onClick={() => setSelectedLang(lang)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold font-display transition-all cursor-pointer ${
-                selectedLang === lang ? 'bg-[#144e39] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+                selectedLang === lang ? 'bg-forest-700 text-white shadow-2xs' : 'text-ink-soft hover:text-ink'
               }`}
             >
               {lang === 'EN' ? 'English' : lang === 'BN' ? 'বাংলা' : 'हिन्दी'}
@@ -197,12 +192,12 @@ export const NotificationOperations: React.FC = () => {
 
       {/* SMS Queue Table */}
       <div className="app-card overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-lg font-extrabold text-slate-900 font-display">Live SMS Dispatch Queue</h3>
+        <div className="p-6 border-b border-line flex items-center justify-between">
+          <h3 className="text-lg font-extrabold text-ink font-display">Live SMS Dispatch Queue</h3>
           <button
             type="button"
             onClick={() => refetch()}
-            className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-600 transition-all cursor-pointer"
+            className="p-2 rounded-full bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink transition-all cursor-pointer border border-line"
             title="Refresh queue"
           >
             <RefreshCw className="w-4 h-4" />
@@ -211,7 +206,7 @@ export const NotificationOperations: React.FC = () => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase font-display">
+            <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
               <tr>
                 <th className="px-6 py-4">Student & Guardian</th>
                 <th className="px-6 py-4">Language</th>
@@ -220,28 +215,28 @@ export const NotificationOperations: React.FC = () => {
                 <th className="px-6 py-4 text-right">Queued At / Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+            <tbody className="divide-y divide-line font-medium text-ink bg-surface">
               {jobs.map((sms) => (
-                <tr key={sms.id} className="hover:bg-slate-50/80 transition-colors">
+                <tr key={sms.id} className="table-row-hover">
                   <td className="px-6 py-4">
-                    <p className="font-extrabold text-slate-900 text-sm font-display">
+                    <p className="font-extrabold text-ink text-sm font-display">
                       {sms.studentName || 'Student'}
                     </p>
-                    <p className="text-[11px] font-mono text-slate-400 font-bold">{sms.recipientPhone}</p>
+                    <p className="text-[11px] font-mono text-ink-muted font-bold">{sms.recipientPhone}</p>
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-600 uppercase font-mono">
+                  <td className="px-6 py-4 font-bold text-ink-soft uppercase font-mono">
                     {sms.language}
                   </td>
-                  <td className="px-6 py-4 max-w-sm text-slate-600 truncate">
+                  <td className="px-6 py-4 max-w-sm text-ink-soft truncate">
                     {sms.messageText}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase font-display ${
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
                       sms.status === 'DELIVERED'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                         : sms.status === 'QUEUED' || sms.status === 'PROCESSING'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                        : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
                     }`}>
                       {sms.status}
                     </span>
@@ -251,12 +246,12 @@ export const NotificationOperations: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => retryMutation.mutate(sms.id)}
-                        className="px-3 py-1 rounded-full text-[11px] font-bold text-[#144e39] bg-[#144e39]/10 hover:bg-[#144e39]/20 font-display cursor-pointer"
+                        className="px-3 py-1 rounded-full text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
                       >
                         Retry Job
                       </button>
                     ) : (
-                      <span className="font-mono text-slate-400 text-[11px]">
+                      <span className="font-mono text-ink-muted text-[11px]">
                         {new Date(sms.queuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
@@ -266,8 +261,12 @@ export const NotificationOperations: React.FC = () => {
 
               {jobs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
-                    No SMS jobs in queue. When absence rolls are submitted, parent notifications are queued here automatically.
+                  <td colSpan={5} className="py-8">
+                    <EmptyState
+                      kind="notifications"
+                      title="No SMS jobs in queue"
+                      description="When absence rolls are submitted, parent notifications are queued here automatically."
+                    />
                   </td>
                 </tr>
               )}

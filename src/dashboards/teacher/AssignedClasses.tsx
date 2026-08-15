@@ -4,9 +4,10 @@ import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
-import { motion } from 'motion/react';
+import { Button } from '../../components/shared/Button';
+import { EmptyState } from '../../components/shared/EmptyState';
 import { useNavigate } from 'react-router-dom';
-import { QrCode, ArrowRight, School, Users } from 'lucide-react';
+import { QrCode, ArrowRight } from 'lucide-react';
 import { offlineDb } from '../../db/offlineDb';
 
 export const AssignedClasses: React.FC = () => {
@@ -55,27 +56,27 @@ export const AssignedClasses: React.FC = () => {
     navigate('/app/teacher');
   };
 
-  if (loading) return <LoadingState message="Loading your assigned classes…" />;
+  if (loading) return <LoadingState type="stat-cards" message="Loading your assigned classes…" />;
   if (error) return <ErrorState message={error} />;
 
   const totalStudents = classes.reduce((sum, c) => sum + (c.studentCount || 0), 0);
 
   return (
-    <div className="space-y-8" id="assigned-classes-view">
+    <div className="space-y-8 text-left" id="assigned-classes-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             My Classroom Teaching Duty
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Classes designated for your daily optical QR scanning and attendance roll sign-off at {activeSchoolName}.
           </p>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <Button
+          variant="primary"
+          size="md"
           onClick={() => {
             if (classes.length > 0) {
               handleOpenClassScanner(classes[0].classSectionId);
@@ -83,11 +84,10 @@ export const AssignedClasses: React.FC = () => {
               navigate('/app/teacher');
             }
           }}
-          className="btn-forest-primary text-sm font-display cursor-pointer"
+          leftIcon={<QrCode className="w-4 h-4" />}
         >
-          <QrCode className="w-4 h-4" />
-          <span>Launch Scanner Station</span>
-        </motion.button>
+          Launch Scanner Station
+        </Button>
       </div>
 
       {/* Stat Cards */}
@@ -124,47 +124,45 @@ export const AssignedClasses: React.FC = () => {
           <div key={cls.classSectionId} className="app-card p-6 sm:p-7 space-y-4 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-2xl bg-[#144e39] text-white flex items-center justify-center font-extrabold text-sm shadow-xs font-display">
+                <div className="w-10 h-10 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-sm shadow-2xs font-display">
                   {cls.className?.replace('Class ', '') || 'C'}
                 </div>
-                <span className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-emerald-50 text-[#144e39] border border-emerald-200 uppercase tracking-wider">
+                <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 uppercase tracking-wider font-display">
                   Active Roll
                 </span>
               </div>
 
               <div className="mt-4">
-                <h3 className="font-extrabold text-lg text-slate-900 font-display">
+                <h3 className="font-extrabold text-lg text-ink font-display">
                   {cls.className} - {cls.sectionName}
                 </h3>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Enrolled Students: <span className="font-bold text-slate-900">{cls.studentCount || 0} Students</span>
+                <p className="t-body text-xs text-ink-soft mt-1">
+                  Enrolled Students: <span className="font-bold text-ink font-mono">{cls.studentCount || 0} Students</span>
                 </p>
               </div>
             </div>
 
-            <div className="space-y-2.5 pt-2 border-t border-slate-100">
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
+            <div className="space-y-2.5 pt-2 border-t border-line">
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => handleOpenClassScanner(cls.classSectionId)}
-                className="w-full mt-3 py-3 rounded-full bg-[#144e39] hover:bg-[#0f3d2c] text-white font-bold text-xs shadow-md shadow-[#144e39]/20 transition-all font-display flex items-center justify-center gap-1.5 cursor-pointer"
+                rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
+                className="w-full justify-center mt-3"
               >
-                <span>Open Scanner HUD</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </motion.button>
+                Open Scanner HUD
+              </Button>
             </div>
           </div>
         ))}
 
         {classes.length === 0 && (
-          <div className="col-span-full py-16 text-center app-card space-y-3">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
-              <School className="w-6 h-6" />
-            </div>
-            <p className="text-base font-extrabold text-slate-800 font-display">No Classes Assigned</p>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto font-medium">
-              School Admin has not assigned teaching duties for your account at {activeSchoolName}.
-            </p>
+          <div className="col-span-full py-8">
+            <EmptyState
+              kind="roster"
+              title="No Classes Assigned"
+              description={`School Admin has not assigned teaching duties for your account at ${activeSchoolName}.`}
+            />
           </div>
         )}
       </div>

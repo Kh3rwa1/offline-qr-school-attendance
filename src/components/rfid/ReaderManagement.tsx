@@ -3,7 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { LoadingState } from '../shared/LoadingState';
 import { ErrorState } from '../shared/ErrorState';
-import { Radio, CheckCircle2, AlertTriangle, ShieldCheck, Plus, X, RefreshCw } from 'lucide-react';
+import { Button } from '../shared/Button';
+import { Toast } from '../shared/Toast';
+import { EmptyState } from '../shared/EmptyState';
+import { Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ReaderItem {
@@ -103,44 +106,38 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
   const readers = readersData || [];
 
-  if (isLoading) return <LoadingState message="Loading gate reader terminals…" />;
+  if (isLoading) return <LoadingState type="table" message="Loading gate reader terminals…" />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load readers'} onRetry={() => refetch()} />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-left">
       {actionError && (
-        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{actionError}</span>
-          </div>
-          <button type="button" onClick={() => setActionError(null)} className="text-rose-700 font-bold text-xs">
-            Dismiss
-          </button>
+        <div className="mb-4">
+          <Toast kind="error" message={actionError} onDismiss={() => setActionError(null)} autoDismiss={false} />
         </div>
       )}
 
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 font-display">Gate Reader Fleet</h2>
-          <p className="text-xs text-slate-500 font-medium">Physical hardware terminals bound by mTLS certificates and sequence counters.</p>
+          <h2 className="text-xl font-extrabold text-ink font-display">Gate Reader Fleet</h2>
+          <p className="t-body text-xs text-ink-soft">Physical hardware terminals bound by mTLS certificates and sequence counters.</p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => setIsProvisionOpen(true)}
-          className="btn-forest-primary text-xs font-display flex items-center gap-2 cursor-pointer"
+          leftIcon={<Plus className="w-4 h-4" />}
         >
-          <Plus className="w-4 h-4" />
-          <span>Provision New Reader</span>
-        </button>
+          Provision New Reader
+        </Button>
       </div>
 
       <div className="app-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/50 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 font-display">
+              <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
                 <th className="py-4 px-6">Terminal / Location</th>
                 <th className="py-4 px-6">Direction Mode</th>
                 <th className="py-4 px-6">Status</th>
@@ -149,39 +146,39 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line bg-surface">
               {readers.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                <tr key={r.id} className="table-row-hover">
                   <td className="py-4 px-6">
-                    <span className="font-extrabold text-slate-900 block font-display text-sm">
+                    <span className="font-extrabold text-ink block font-display text-sm">
                       {r.name}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium">
+                    <span className="text-[11px] text-ink-muted font-medium">
                       {r.location || 'Entrance Turnstile'} • Device ID: <span className="font-mono">{r.deviceId}</span>
                     </span>
                   </td>
-                  <td className="py-4 px-6 font-semibold text-slate-700">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                  <td className="py-4 px-6 font-semibold text-ink">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
                       {r.directionMode}
                     </span>
                   </td>
                   <td className="py-4 px-6">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase font-display ${
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
                       r.status === 'APPROVED' || r.status === 'ACTIVE'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
                         : r.status === 'PENDING'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                        : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
                     }`}>
                       {r.status}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-slate-600">
-                    <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
+                  <td className="py-4 px-6 text-ink-soft">
+                    <span className="font-mono text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-2.5 py-0.5 rounded-full border border-success-100 dark:border-success-600/30">
                       {r.securityCapability || 'DESFIRE_EV2_EV3'}
                     </span>
                   </td>
-                  <td className="py-4 px-6 font-mono text-slate-700 font-bold">
+                  <td className="py-4 px-6 font-mono text-ink font-bold">
                     #{r.lastSequenceNumber || 0}
                   </td>
                   <td className="py-4 px-6 text-right">
@@ -190,7 +187,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                         <button
                           type="button"
                           onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 font-display cursor-pointer"
+                          className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
                         >
                           Approve
                         </button>
@@ -199,12 +196,12 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                         <button
                           type="button"
                           onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
-                          className="px-3 py-1 rounded-full text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 font-display cursor-pointer"
+                          className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
                         >
                           Revoke
                         </button>
                       ) : (
-                        <span className="text-[11px] text-slate-400 font-bold">Revoked</span>
+                        <span className="text-[11px] text-ink-muted font-bold font-display">Revoked</span>
                       )}
                     </div>
                   </td>
@@ -213,8 +210,12 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
               {readers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
-                    No physical gate readers registered. Click "Add Reader Terminal" to provision an ESP32 or Raspberry Pi terminal.
+                  <td colSpan={6} className="py-8">
+                    <EmptyState
+                      kind="generic"
+                      title="No physical gate readers registered"
+                      description="Click 'Provision New Reader' to register an ESP32 or Raspberry Pi terminal."
+                    />
                   </td>
                 </tr>
               )}
@@ -226,36 +227,35 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
       {/* Provision Reader Modal */}
       <AnimatePresence>
         {isProvisionOpen && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-xl font-extrabold text-slate-900 font-display">
+                <h3 className="text-xl font-extrabold text-ink font-display">
                   Register Gate Reader Terminal
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsProvisionOpen(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {formError && (
-                <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{formError}</span>
+                <div className="mb-4">
+                  <Toast kind="error" message={formError} onDismiss={() => setFormError(null)} autoDismiss={false} />
                 </div>
               )}
 
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Hardware Device ID *
                   </label>
                   <input
@@ -264,12 +264,12 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                     value={provisionForm.deviceId}
                     onChange={(e) => setProvisionForm({ ...provisionForm, deviceId: e.target.value })}
                     placeholder="e.g. ESP32-GATE-01"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 font-mono focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink font-mono focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Terminal Friendly Name *
                   </label>
                   <input
@@ -278,12 +278,12 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                     value={provisionForm.name}
                     onChange={(e) => setProvisionForm({ ...provisionForm, name: e.target.value })}
                     placeholder="e.g. Main Gate Turnstile 1"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 font-display">
+                  <label className="block t-label text-ink mb-1 font-display">
                     Physical Location
                   </label>
                   <input
@@ -291,25 +291,27 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                     value={provisionForm.location}
                     onChange={(e) => setProvisionForm({ ...provisionForm, location: e.target.value })}
                     placeholder="e.g. North Gate Entrance"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-[#144e39] outline-none"
+                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setIsProvisionOpen(false)}
-                    className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-100 font-display cursor-pointer"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
+                    variant="primary"
+                    size="sm"
                     disabled={registerMutation.isPending}
-                    className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
+                    isLoading={registerMutation.isPending}
                   >
                     {registerMutation.isPending ? 'Registering…' : 'Register Reader'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </motion.div>

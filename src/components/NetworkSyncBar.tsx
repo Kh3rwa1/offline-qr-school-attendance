@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, CloudUpload, CheckCircle2 } from 'lucide-react';
 import { getOutboxStatus, syncOutboxEvents } from '../services/offlineSyncService';
+import { Button } from './shared/Button';
 
 interface NetworkSyncBarProps {
   schoolId?: string;
@@ -79,40 +80,40 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
       id="network-sync-bar"
       className={`w-full py-2 px-4 flex items-center justify-between text-xs font-medium border-b transition-colors ${
         !isOnline
-          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+          ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
           : unsyncedCount > 0
-          ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20'
-          : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+          ? 'bg-info-50 text-info-800 border-info-100 dark:border-info-600/30'
+          : 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
       }`}
     >
       <div className="flex items-center gap-2">
         {!isOnline ? (
-          <span className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-400">
-            <WifiOff className="w-4 h-4 text-amber-600" />
-            <span id="pwa-status-pill" className="bg-amber-500/20 px-2 py-0.5 rounded text-[11px]">
+          <span className="flex items-center gap-1.5 font-semibold text-warning-800">
+            <WifiOff className="w-4 h-4 text-warning-600" />
+            <span id="pwa-status-pill" className="bg-warning-100 px-2 py-0.5 rounded text-[11px] font-mono font-bold">
               OFFLINE
             </span>
-            <span className="hidden sm:inline">Local scans will queue in outbox</span>
+            <span className="hidden sm:inline text-xs">Local scans will queue in outbox</span>
           </span>
         ) : (
-          <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-            <Wifi className="w-4 h-4 text-emerald-600" />
-            <span id="pwa-status-pill" className="bg-emerald-500/20 px-2 py-0.5 rounded text-[11px] font-semibold">
+          <span className="flex items-center gap-1.5 text-success-800">
+            <Wifi className="w-4 h-4 text-success-600" />
+            <span id="pwa-status-pill" className="bg-success-100 px-2 py-0.5 rounded text-[11px] font-mono font-bold">
               ONLINE
             </span>
           </span>
         )}
 
         {unsyncedCount > 0 && (
-          <span id="unsynced-outbox-pill" className="ml-2 bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-            <CloudUpload className="w-3 h-3" />
+          <span id="unsynced-outbox-pill" className="ml-2 bg-warning-100 text-warning-800 px-2.5 py-0.5 rounded-full font-mono font-bold text-[11px] flex items-center gap-1">
+            <CloudUpload className="w-3.5 h-3.5" />
             {unsyncedCount} Pending Scan{unsyncedCount > 1 ? 's' : ''}
           </span>
         )}
 
         {lastSyncStatus && (
-          <span className="ml-2 text-slate-500 dark:text-slate-400 flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+          <span className="ml-2 text-ink-soft flex items-center gap-1 text-[11px]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
             {lastSyncStatus}
           </span>
         )}
@@ -123,7 +124,7 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
           id="sync-now-button"
           onClick={handleTriggerSync}
           disabled={!isOnline || isSyncing || unsyncedCount === 0}
-          className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-medium shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 px-3 py-1 bg-forest-700 hover:bg-forest-800 disabled:opacity-50 text-white rounded-full text-xs font-bold shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed font-display"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
           {isSyncing ? 'Syncing...' : 'Sync Now'}
@@ -132,3 +133,5 @@ export const NetworkSyncBar: React.FC<NetworkSyncBarProps> = ({
     </div>
   );
 };
+
+export default NetworkSyncBar;

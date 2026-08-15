@@ -5,6 +5,7 @@ import { ShieldCheck, Database, RefreshCw, CheckCircle2, AlertTriangle, KeyRound
 import { StatCard } from '../../components/shared/StatCard';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
+import { Button } from '../../components/shared/Button';
 
 interface SystemHealthResponse {
   success: boolean;
@@ -30,7 +31,7 @@ export const SecurityOverview: React.FC = () => {
     refetchInterval: 30000,
   });
 
-  if (isLoading && !data) return <LoadingState message="Loading platform security telemetry…" />;
+  if (isLoading && !data) return <LoadingState type="stat-cards" message="Loading platform security telemetry…" />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load security telemetry'} onRetry={() => refetch()} />;
 
   const telemetry = data?.telemetry;
@@ -40,26 +41,26 @@ export const SecurityOverview: React.FC = () => {
   const hasBackup = Boolean(telemetry?.latestBackupTimestamp);
 
   return (
-    <div className="space-y-8" id="security-overview-view">
+    <div className="space-y-8 text-left" id="security-overview-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Data Privacy & Security Governance
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Government of India Digital Personal Data Protection (DPDP) and state school tenant security telemetry.
           </p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="md"
           onClick={() => refetch()}
-          className="btn-forest-secondary text-xs font-display flex items-center gap-2 cursor-pointer"
+          leftIcon={<RefreshCw className="w-4 h-4" />}
         >
-          <RefreshCw className="w-4 h-4" />
-          <span>Refresh Telemetry</span>
-        </button>
+          Refresh Telemetry
+        </Button>
       </div>
 
       {/* Telemetry Stat Cards */}
@@ -94,26 +95,26 @@ export const SecurityOverview: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="app-card p-6 sm:p-7 space-y-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl ${isDbConnected ? 'bg-[#144e39]' : 'bg-rose-600'} text-white flex items-center justify-center shadow-xs`}>
+            <div className={`w-10 h-10 rounded-2xl ${isDbConnected ? 'bg-forest-700' : 'bg-danger-600'} text-white flex items-center justify-center shadow-xs`}>
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900 font-display">Tenant Boundary Isolation (RLS)</h3>
-              <p className="text-xs text-slate-400 font-medium">PostgreSQL tenant separation</p>
+              <h3 className="font-extrabold text-base text-ink font-display">Tenant Boundary Isolation (RLS)</h3>
+              <p className="t-body text-xs text-ink-muted">PostgreSQL tenant separation</p>
             </div>
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+          <p className="t-body text-xs text-ink-soft leading-relaxed">
             PostgreSQL database-level Row-Level Security prevents teachers and administrators from viewing attendance records of any other institution. Each query is cryptographically bound to the active school identifier.
           </p>
           <div className="pt-2">
             {isDbConnected ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-display">
+                <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
                 <span>DB Engine Connected ({telemetry?.migrationJournalVersion || 'Active'})</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30 font-display">
+                <AlertTriangle className="w-3.5 h-3.5 text-danger-600" />
                 <span>Database Connection DEGRADED</span>
               </span>
             )}
@@ -122,20 +123,20 @@ export const SecurityOverview: React.FC = () => {
 
         <div className="app-card p-6 sm:p-7 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900 font-display">Student Token & Card Cryptography</h3>
-              <p className="text-xs text-slate-400 font-medium">Hardware-based authentication</p>
+              <h3 className="font-extrabold text-base text-ink font-display">Student Token & Card Cryptography</h3>
+              <p className="t-body text-xs text-ink-muted">Hardware-based authentication</p>
             </div>
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+          <p className="t-body text-xs text-ink-soft leading-relaxed">
             Student QR identity badges and NFC smartcards generate dynamic AES-CMAC challenge-response signatures. Replay attacks and photocopied QR badges are automatically rejected by monotonic counters.
           </p>
           <div className="pt-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-              <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-display">
+              <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
               <span>KMS Mode: {telemetry?.kmsProviderMode || 'UNKNOWN'}</span>
             </span>
           </div>
@@ -143,20 +144,20 @@ export const SecurityOverview: React.FC = () => {
 
         <div className="app-card p-6 sm:p-7 space-y-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl ${isRedisActive ? 'bg-amber-500' : 'bg-slate-600'} text-white flex items-center justify-center shadow-xs`}>
+            <div className={`w-10 h-10 rounded-2xl ${isRedisActive ? 'bg-warning-600' : 'bg-surface-soft'} text-white flex items-center justify-center shadow-xs`}>
               <Server className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900 font-display">Rate Limiting & Denial-of-Service Defense</h3>
-              <p className="text-xs text-slate-400 font-medium">Distributed protection against spam scans</p>
+              <h3 className="font-extrabold text-base text-ink font-display">Rate Limiting & Denial-of-Service Defense</h3>
+              <p className="t-body text-xs text-ink-muted">Distributed protection against spam scans</p>
             </div>
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+          <p className="t-body text-xs text-ink-soft leading-relaxed">
             Sliding-window rate limiters prevent reader buffer overflows during rush-hour morning gate check-in spikes. Offline batch sync endpoints use cryptographic envelope hashing to detect duplicate uploads.
           </p>
           <div className="pt-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-              <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30 font-display">
+              <CheckCircle2 className="w-3.5 h-3.5 text-warning-600" />
               <span>Cache Layer: {telemetry?.redis || 'UNKNOWN'}</span>
             </span>
           </div>
@@ -164,26 +165,26 @@ export const SecurityOverview: React.FC = () => {
 
         <div className="app-card p-6 sm:p-7 space-y-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl ${hasBackup ? 'bg-purple-600' : 'bg-slate-500'} text-white flex items-center justify-center shadow-xs`}>
+            <div className={`w-10 h-10 rounded-2xl ${hasBackup ? 'bg-forest-700' : 'bg-surface-soft'} text-white flex items-center justify-center shadow-xs`}>
               <Database className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900 font-display">Automated Encrypted Backups</h3>
-              <p className="text-xs text-slate-400 font-medium">Disaster recovery for state student data</p>
+              <h3 className="font-extrabold text-base text-ink font-display">Automated Encrypted Backups</h3>
+              <p className="t-body text-xs text-ink-muted">Disaster recovery for state student data</p>
             </div>
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+          <p className="t-body text-xs text-ink-soft leading-relaxed">
             Continuous Write-Ahead Log archiving and daily snapshots encrypted with AES-256-GCM ensure zero data loss even in the event of hardware failure at local school gateways.
           </p>
           <div className="pt-2">
             {hasBackup ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-display">
+                <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
                 <span>Last Snapshot: {new Date(telemetry!.latestBackupTimestamp!).toLocaleString()}</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                <AlertTriangle className="w-3.5 h-3.5 text-slate-500" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
+                <AlertTriangle className="w-3.5 h-3.5 text-ink-muted" />
                 <span>Backup Evidence: UNKNOWN / MANUAL</span>
               </span>
             )}

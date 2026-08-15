@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Upload, AlertTriangle, CheckCircle2, AlertCircle, FileText, RefreshCw } from 'lucide-react';
+import { Upload, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
+import { Button } from '../shared/Button';
+import { Toast } from '../shared/Toast';
 
 export default function BulkEnrollment() {
   const { activeSchoolId } = useActiveSchool();
@@ -87,111 +89,111 @@ export default function BulkEnrollment() {
   });
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm max-w-3xl mx-auto border border-slate-200 text-left">
-      <h2 className="text-xl font-extrabold text-slate-900 font-display mb-2">Bulk Smartcard Provisioning</h2>
-      <p className="text-xs text-slate-500 mb-6 font-medium">Batch-enroll DESFire smartcards for multiple students simultaneously.</p>
+    <div className="app-card p-6 max-w-3xl mx-auto text-left">
+      <h2 className="text-xl font-extrabold text-ink font-display mb-2">Bulk Smartcard Provisioning</h2>
+      <p className="t-body text-xs text-ink-soft mb-6 font-medium">Batch-enroll DESFire smartcards for multiple students simultaneously.</p>
 
-      <div className="bg-amber-50 p-4 rounded-xl flex gap-3 mb-6 border border-amber-200">
-        <AlertTriangle className="text-amber-600 flex-shrink-0 w-5 h-5" />
-        <div className="text-xs text-amber-800">
-          <p className="font-bold">Cryptographic Digest Requirement</p>
+      <div className="bg-warning-50 p-4 rounded-2xl flex gap-3 mb-6 border border-warning-100 dark:border-warning-600/30">
+        <AlertTriangle className="text-warning-800 shrink-0 w-5 h-5" />
+        <div className="text-xs text-warning-800">
+          <p className="font-bold font-display">Cryptographic Digest Requirement</p>
           <p className="mt-0.5">Upload pre-computed SHA-256 card digests. Never transmit raw un-diversified master keys.</p>
         </div>
       </div>
 
       {parseError && (
-        <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{parseError}</span>
+        <div className="mb-5">
+          <Toast kind="error" message={parseError} onDismiss={() => setParseError(null)} autoDismiss={false} />
         </div>
       )}
 
       {results.length === 0 ? (
         <div className="space-y-4">
-          <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50">
-            <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-            <p className="text-xs text-slate-700 font-bold mb-1 font-display">Select JSON or CSV Batch File</p>
-            <p className="text-[11px] text-slate-400 mb-3">Columns: studentId, credentialDigest, securityMode, keyVersion</p>
+          <div className="border-2 border-dashed border-line rounded-2xl p-8 text-center bg-surface-soft">
+            <Upload className="w-8 h-8 text-ink-muted mx-auto mb-2" />
+            <p className="text-xs text-ink font-bold mb-1 font-display">Select JSON or CSV Batch File</p>
+            <p className="text-[11px] text-ink-muted mb-3 font-mono">Columns: studentId, credentialDigest, securityMode, keyVersion</p>
             <input
               type="file"
               onChange={handleUpload}
-              className="text-xs text-slate-500 cursor-pointer"
+              className="text-xs text-ink-soft cursor-pointer"
               accept=".csv,.json"
             />
           </div>
 
           {parsedEntries.length > 0 && (
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+            <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold text-slate-900 font-display">Ready for Provisioning</p>
-                <p className="text-[11px] text-slate-500">{parsedEntries.length} valid credential records parsed</p>
+                <p className="text-xs font-bold text-ink font-display">Ready for Provisioning</p>
+                <p className="text-[11px] text-ink-muted font-mono">{parsedEntries.length} valid credential records parsed</p>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={bulkMutation.isPending}
+                isLoading={bulkMutation.isPending}
                 onClick={() => bulkMutation.mutate()}
-                className="btn-forest-primary text-xs font-display px-5 py-2 shadow-md cursor-pointer disabled:opacity-50"
               >
                 {bulkMutation.isPending ? 'Enrolling Batch…' : `Enroll ${parsedEntries.length} Cards`}
-              </button>
+              </Button>
             </div>
           )}
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center">
-              <div className="text-xl font-extrabold text-slate-900 font-display">{results.length}</div>
-              <div className="text-[11px] text-slate-500 font-bold">Total Batch</div>
+            <div className="bg-surface-soft p-3 rounded-2xl border border-line text-center">
+              <div className="text-xl font-extrabold text-ink font-display font-mono">{results.length}</div>
+              <div className="text-[11px] text-ink-muted font-bold">Total Batch</div>
             </div>
-            <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-200 text-center">
-              <div className="text-xl font-extrabold text-[#144e39] font-display">{results.filter(r => r.success).length}</div>
-              <div className="text-[11px] text-emerald-700 font-bold">Enrolled</div>
+            <div className="bg-success-50 p-3 rounded-2xl border border-success-100 dark:border-success-600/30 text-center">
+              <div className="text-xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">{results.filter(r => r.success).length}</div>
+              <div className="text-[11px] text-forest-700 dark:text-forest-600 font-bold">Enrolled</div>
             </div>
-            <div className="bg-rose-50 p-3 rounded-2xl border border-rose-200 text-center">
-              <div className="text-xl font-extrabold text-rose-700 font-display">{results.filter(r => !r.success).length}</div>
-              <div className="text-[11px] text-rose-600 font-bold">Failed / Duplicate</div>
+            <div className="bg-danger-50 p-3 rounded-2xl border border-danger-100 dark:border-danger-600/30 text-center">
+              <div className="text-xl font-extrabold text-danger-800 font-display font-mono">{results.filter(r => !r.success).length}</div>
+              <div className="text-[11px] text-danger-800 font-bold">Failed / Duplicate</div>
             </div>
           </div>
 
-          <div className="max-h-64 overflow-auto border border-slate-200 rounded-2xl">
+          <div className="max-h-64 overflow-auto border border-line rounded-2xl">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase sticky top-0 font-display">
+              <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase sticky top-0 font-display">
                 <tr>
                   <th className="p-3">Student ID</th>
                   <th className="p-3">Result</th>
                   <th className="p-3">Message / Error</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              <tbody className="divide-y divide-line font-medium text-ink bg-surface">
                 {results.map((r, i) => (
-                  <tr key={i}>
-                    <td className="p-3 font-mono text-slate-900">{r.studentId}</td>
+                  <tr key={i} className="table-row-hover">
+                    <td className="p-3 font-mono text-ink">{r.studentId}</td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-display ${
-                        r.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
+                        r.success ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30' : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
                       }`}>
                         {r.success ? 'Success' : 'Failed'}
                       </span>
                     </td>
-                    <td className="p-3 text-slate-500">{r.error || (r.success ? 'Enrolled in database' : 'Failed')}</td>
+                    <td className="p-3 text-ink-soft">{r.error || (r.success ? 'Enrolled in database' : 'Failed')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => {
               setResults([]);
               setParsedEntries([]);
               setFile(null);
             }}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-full font-bold text-xs font-display text-slate-700 cursor-pointer"
           >
             Upload Another Batch
-          </button>
+          </Button>
         </div>
       )}
     </div>

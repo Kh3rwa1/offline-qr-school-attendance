@@ -5,8 +5,9 @@ import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { StatCard } from '../../components/shared/StatCard';
-import { ShieldAlert, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Button } from '../../components/shared/Button';
+import { EmptyState } from '../../components/shared/EmptyState';
+import { RefreshCw } from 'lucide-react';
 
 interface IncidentItem {
   id: string;
@@ -35,30 +36,30 @@ export const RfidIncidentQueue: React.FC = () => {
 
   const incidents = incidentsData || [];
 
-  if (isLoading) return <LoadingState message="Loading gate anomaly stream…" />;
+  if (isLoading) return <LoadingState type="table" message="Loading gate anomaly stream…" />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load gate incidents'} onRetry={() => refetch()} />;
 
   return (
-    <div className="space-y-8" id="rfid-incident-queue-view">
+    <div className="space-y-8 text-left" id="rfid-incident-queue-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Gate Anomaly & Incident Queue
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Real-time rejection telemetry, unverified smartcard taps, and security events for {activeSchoolName}.
           </p>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="md"
           onClick={() => refetch()}
-          className="btn-forest-primary text-sm font-display flex items-center gap-2 cursor-pointer"
+          leftIcon={<RefreshCw className="w-4 h-4" />}
         >
-          <RefreshCw className="w-4 h-4" />
-          <span>Refresh Incidents</span>
-        </button>
+          Refresh Incidents
+        </Button>
       </div>
 
       {/* Stat Cards */}
@@ -91,16 +92,16 @@ export const RfidIncidentQueue: React.FC = () => {
 
       {/* Incidents Table */}
       <div className="app-card overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-lg font-extrabold text-slate-900 font-display">Recent Gate Anomalies</h3>
-          <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+        <div className="p-6 border-b border-line flex items-center justify-between">
+          <h3 className="text-lg font-extrabold text-ink font-display">Recent Gate Anomalies</h3>
+          <span className="text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-3 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display">
             Database WAL Stream
           </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase font-display">
+            <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
               <tr>
                 <th className="px-6 py-4">Rejection Code</th>
                 <th className="px-6 py-4">Reader Terminal</th>
@@ -109,24 +110,24 @@ export const RfidIncidentQueue: React.FC = () => {
                 <th className="px-6 py-4 text-right">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+            <tbody className="divide-y divide-line font-medium text-ink bg-surface">
               {incidents.map((inc) => (
-                <tr key={inc.id} className="hover:bg-slate-50/80 transition-colors">
+                <tr key={inc.id} className="table-row-hover">
                   <td className="px-6 py-4">
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200 font-mono">
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30 font-mono">
                       {inc.rejectionCode || inc.decision}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-mono font-bold text-slate-800">
+                  <td className="px-6 py-4 font-mono font-bold text-ink">
                     {inc.readerId ? inc.readerId.slice(0, 8) + '…' : 'Gate 1'}
                   </td>
-                  <td className="px-6 py-4 font-mono text-slate-700">
+                  <td className="px-6 py-4 font-mono text-ink-soft">
                     {inc.credentialDigest ? inc.credentialDigest.slice(0, 12) + '…' : '—'}
                   </td>
-                  <td className="px-6 py-4 font-semibold text-slate-700">
+                  <td className="px-6 py-4 font-semibold text-ink">
                     {inc.direction || 'IN'}
                   </td>
-                  <td className="px-6 py-4 text-right font-mono text-slate-500">
+                  <td className="px-6 py-4 text-right font-mono text-ink-muted">
                     {new Date(inc.scanTimestamp).toLocaleString('en-IN', { timeStyle: 'medium', dateStyle: 'short' })}
                   </td>
                 </tr>
@@ -134,8 +135,12 @@ export const RfidIncidentQueue: React.FC = () => {
 
               {incidents.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
-                    No rejected scans or gate anomalies recorded. Gate terminals are operating cleanly.
+                  <td colSpan={5} className="py-8">
+                    <EmptyState
+                      kind="generic"
+                      title="No gate anomalies recorded"
+                      description="No rejected scans or gate anomalies recorded. Gate terminals are operating cleanly."
+                    />
                   </td>
                 </tr>
               )}

@@ -2,24 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { StatCard } from '../../components/shared/StatCard';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
+import { Button } from '../../components/shared/Button';
+import { RollingNumber } from '../../components/shared/RollingNumber';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
-  Plus, 
-  ArrowUpRight, 
-  Users, 
-  BookOpen, 
-  Radio, 
-  MessageSquare, 
-  ArrowRight, 
   CheckCircle2, 
-  Calendar, 
-  Clock, 
   Sparkles,
   Download,
-  FileSpreadsheet,
   QrCode
 } from 'lucide-react';
 
@@ -61,44 +53,42 @@ export const SchoolAdminDashboard: React.FC = () => {
     { day: 'Today', fullDay: 'Today (Live)', pct: 92.0, present: 924, total: 1005, isCurrent: true },
   ];
 
-  if (loading) return <LoadingState message="Loading school operations & roster intelligence…" />;
+  if (loading) return <LoadingState type="stat-cards" message="Loading school operations & roster intelligence…" />;
   if (error) return <ErrorState message={error} onRetry={fetchSummary} />;
 
   const attendancePct = summary?.todayAttendancePercentage ?? 92;
 
   return (
-    <div className="space-y-8" id="school-admin-dashboard-view">
-      {/* Top Header Row with Big Buttons */}
+    <div className="space-y-8 text-left" id="school-admin-dashboard-view">
+      {/* Top Header Row with Buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-display">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             School Administration & Operations
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             Overview of daily attendance, class rolls, and Mid-Day Meal distribution for {activeSchoolName}.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => navigate('/app/teacher')}
-            className="btn-forest-primary text-sm font-display"
+            leftIcon={<QrCode className="w-4 h-4" />}
           >
-            <QrCode className="w-4 h-4" />
-            <span>Open Attendance Station</span>
-          </motion.button>
+            Open Attendance Station
+          </Button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => navigate('/app/reports/exports')}
-            className="btn-pill-secondary text-sm font-display shadow-2xs"
+            leftIcon={<Download className="w-4 h-4 text-ink-soft" />}
           >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Download Daily Sheet</span>
-          </motion.button>
+            Download Daily Sheet
+          </Button>
         </div>
       </div>
 
@@ -140,12 +130,12 @@ export const SchoolAdminDashboard: React.FC = () => {
         <div className="lg:col-span-5 app-card p-6 sm:p-7 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 font-display">
+              <h3 className="text-base font-extrabold text-ink font-display">
                 Weekly Attendance Record
               </h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">Schoolwide turnout percentage by day</p>
+              <p className="t-body text-xs text-ink-soft mt-0.5">Schoolwide turnout percentage by day</p>
             </div>
-            <span className="text-xs font-bold text-[#144e39] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+            <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-3 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display">
               This Week
             </span>
           </div>
@@ -161,30 +151,30 @@ export const SchoolAdminDashboard: React.FC = () => {
                   <motion.div 
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute -top-10 bg-slate-900 text-white text-[11px] font-bold px-2 py-1 rounded-lg shadow-md whitespace-nowrap z-20 flex flex-col items-center pointer-events-none"
+                    className="absolute -top-10 bg-slate-950 text-white text-[11px] font-bold px-2 py-1 rounded-lg shadow-md whitespace-nowrap z-20 flex flex-col items-center pointer-events-none"
                   >
                     <span>{col.pct}%</span>
-                    <span className="text-[9px] text-emerald-300 font-normal">{col.present} present</span>
-                    <div className="w-2 h-2 bg-slate-900 rotate-45 -mb-1 mt-0.5" />
+                    <span className="text-[11px] text-emerald-300 font-normal">{col.present} present</span>
+                    <div className="w-2 h-2 bg-slate-950 rotate-45 -mb-1 mt-0.5" />
                   </motion.div>
                 )}
 
                 <div className={`w-full rounded-2xl h-full flex items-end p-1 transition-all duration-300 ${
-                  activeDayIndex === idx ? 'bg-emerald-100/70 ring-2 ring-[#144e39]/30' : 'bg-slate-100 hover:bg-slate-200/70'
+                  activeDayIndex === idx ? 'bg-success-50 ring-2 ring-forest-700/30' : 'bg-surface-soft hover:bg-surface'
                 }`}>
                   <div
                     className={`w-full rounded-xl transition-all duration-500 ${
                       activeDayIndex === idx
-                        ? 'bg-[#144e39] shadow-sm'
+                        ? 'bg-forest-700 shadow-sm'
                         : col.isHighest
-                        ? 'bg-emerald-600'
-                        : 'bg-[#144e39]/70'
+                        ? 'bg-forest-600'
+                        : 'bg-forest-700/70'
                     }`}
                     style={{ height: `${col.pct}%` }}
                   />
                 </div>
                 <span className={`text-xs font-bold font-display transition-colors ${
-                  activeDayIndex === idx ? 'text-[#144e39] font-extrabold' : 'text-slate-500'
+                  activeDayIndex === idx ? 'text-forest-700 dark:text-forest-600 font-extrabold' : 'text-ink-soft'
                 }`}>
                   {col.day}
                 </span>
@@ -193,52 +183,52 @@ export const SchoolAdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Column 2: Reminders Card with Big Action Button (3 cols) */}
+        {/* Column 2: Reminders Card (3 cols) */}
         <div className="lg:col-span-3 app-card p-6 sm:p-7 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold text-slate-900 font-display">
+              <h3 className="text-base font-extrabold text-ink font-display">
                 Headmaster Task
               </h3>
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="w-2 h-2 rounded-full bg-success-600 animate-pulse" />
             </div>
 
-            <div className="mt-4 p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200/60 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[#144e39]">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <div className="mt-4 p-3.5 bg-success-50 rounded-2xl border border-success-100 dark:border-success-600/30 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-forest-700 dark:text-forest-600 font-display">
+                <Sparkles className="w-3.5 h-3.5 text-forest-600" />
                 <span>Mid-Day Meal Headcount</span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              <p className="t-body text-xs text-ink-soft leading-relaxed">
                 Today's kitchen requisition: 924 meals required. Certification ready for district portal.
               </p>
             </div>
 
-            <div className="mt-3 text-xs text-slate-500 flex justify-between font-medium">
+            <div className="mt-3 text-xs text-ink-soft flex justify-between font-medium">
               <span>Assembly Finished:</span>
-              <span className="font-bold text-slate-800">09:15 AM</span>
+              <span className="font-bold text-ink font-mono">09:15 AM</span>
             </div>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => navigate('/app/reports/daily')}
-            className="w-full mt-6 py-3.5 px-4 rounded-full bg-[#144e39] hover:bg-[#0f3d2c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-[#144e39]/20 transition-all font-display"
+            leftIcon={<CheckCircle2 className="w-4 h-4 text-emerald-300" />}
+            className="w-full mt-6 justify-center"
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-            <span>Approve Meal Count</span>
-          </motion.button>
+            Approve Meal Count
+          </Button>
         </div>
 
         {/* Column 3: Academic Sections List (4 cols) */}
         <div className="lg:col-span-4 app-card p-6 sm:p-7 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Class Sections
             </h3>
             <button
               onClick={() => navigate('/app/school-admin/academics')}
-              className="text-xs font-bold px-3 py-1 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="text-xs font-bold px-3 py-1 rounded-full border border-line text-ink-soft hover:bg-surface-soft transition-colors cursor-pointer font-display"
             >
               All Classes
             </button>
@@ -246,22 +236,22 @@ export const SchoolAdminDashboard: React.FC = () => {
 
           <div className="mt-4 space-y-2.5">
             {[
-              { name: 'Class X - Section A', teacher: 'Pradip Sengupta', due: '46/48 Present (95.8%)', color: 'bg-[#144e39]' },
-              { name: 'Class IX - Section B', teacher: 'Ananya Mukherjee', due: '44/46 Present (95.6%)', color: 'bg-emerald-600' },
-              { name: 'Class VIII - Section A', teacher: 'Debashis Roy', due: '42/45 Present (93.3%)', color: 'bg-emerald-700' },
-              { name: 'Class VII - Section C', teacher: 'Rina Karmakar', due: '45/48 Present (93.7%)', color: 'bg-emerald-800' },
+              { name: 'Class X - Section A', teacher: 'Pradip Sengupta', due: '46/48 Present (95.8%)' },
+              { name: 'Class IX - Section B', teacher: 'Ananya Mukherjee', due: '44/46 Present (95.6%)' },
+              { name: 'Class VIII - Section A', teacher: 'Debashis Roy', due: '42/45 Present (93.3%)' },
+              { name: 'Class VII - Section C', teacher: 'Rina Karmakar', due: '45/48 Present (93.7%)' },
             ].map((cls, i) => (
-              <div key={i} className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-slate-50 transition-colors">
+              <div key={i} className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-surface-soft transition-colors border border-line">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[#144e39] text-white flex items-center justify-center text-xs font-extrabold shadow-xs">
+                  <div className="w-8 h-8 rounded-full bg-forest-700 text-white flex items-center justify-center text-xs font-extrabold shadow-2xs font-display">
                     {cls.name.charAt(6)}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{cls.name}</p>
-                    <p className="text-[11px] text-slate-400 font-medium">Teacher: {cls.teacher}</p>
+                    <p className="text-xs font-bold text-ink font-display">{cls.name}</p>
+                    <p className="text-[11px] text-ink-muted">Teacher: {cls.teacher}</p>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-[#144e39] bg-emerald-50 px-2.5 py-1 rounded-full">
+                <span className="text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-2.5 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-mono">
                   {cls.due}
                 </span>
               </div>
@@ -276,14 +266,14 @@ export const SchoolAdminDashboard: React.FC = () => {
         <div className="lg:col-span-5 app-card p-6 sm:p-7">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 font-display">
+              <h3 className="text-base font-extrabold text-ink font-display">
                 Faculty & Staff Attendance
               </h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">24 of 25 Teaching Staff Present</p>
+              <p className="t-body text-xs text-ink-soft mt-0.5">24 of 25 Teaching Staff Present</p>
             </div>
             <button
               onClick={() => navigate('/app/school-admin/users')}
-              className="text-xs font-bold px-3 py-1 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="text-xs font-bold px-3 py-1 rounded-full border border-line text-ink-soft hover:bg-surface-soft transition-colors cursor-pointer font-display"
             >
               Staff Directory
             </button>
@@ -291,22 +281,22 @@ export const SchoolAdminDashboard: React.FC = () => {
 
           <div className="space-y-3">
             {[
-              { name: 'Sujata Banerjee', role: 'Mathematics Teacher', status: 'Present (08:45 AM)', tagColor: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-              { name: 'Arindam Ghosh', role: 'Science & Lab In-charge', status: 'Present (08:50 AM)', tagColor: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-              { name: 'Kavita Sharma', role: 'Bengali & Literature', status: 'Present (08:55 AM)', tagColor: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-              { name: 'Bikram Mondal', role: 'Physical Education', status: 'On Leave (Medical)', tagColor: 'bg-amber-50 text-amber-800 border-amber-200' },
+              { name: 'Sujata Banerjee', role: 'Mathematics Teacher', status: 'Present (08:45 AM)', tagColor: 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30' },
+              { name: 'Arindam Ghosh', role: 'Science & Lab In-charge', status: 'Present (08:50 AM)', tagColor: 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30' },
+              { name: 'Kavita Sharma', role: 'Bengali & Literature', status: 'Present (08:55 AM)', tagColor: 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30' },
+              { name: 'Bikram Mondal', role: 'Physical Education', status: 'On Leave (Medical)', tagColor: 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30' },
             ].map((member, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-slate-100">
+              <div key={i} className="flex items-center justify-between p-3 rounded-2xl hover:bg-surface-soft transition-colors border border-line">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[#144e39] text-white flex items-center justify-center text-xs font-extrabold shadow-xs">
+                  <div className="w-8 h-8 rounded-full bg-forest-700 text-white flex items-center justify-center text-xs font-extrabold shadow-2xs font-display">
                     {member.name.charAt(0)}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{member.name}</p>
-                    <p className="text-[11px] text-slate-400 font-medium">{member.role}</p>
+                    <p className="text-xs font-bold text-ink font-display">{member.name}</p>
+                    <p className="text-[11px] text-ink-muted">{member.role}</p>
                   </div>
                 </div>
-                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${member.tagColor}`}>
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border font-display ${member.tagColor}`}>
                   {member.status}
                 </span>
               </div>
@@ -317,30 +307,27 @@ export const SchoolAdminDashboard: React.FC = () => {
         {/* Column 2: Progress Radial Gauge (4 cols) */}
         <div className="lg:col-span-4 app-card p-6 sm:p-7 flex flex-col justify-between items-center text-center">
           <div className="w-full flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-slate-900 font-display">
+            <h3 className="text-base font-extrabold text-ink font-display">
               Today's Attendance Rate
             </h3>
-            <span className="text-xs font-bold text-[#144e39] bg-emerald-50 px-2.5 py-0.5 rounded-full">
+            <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 border border-success-100 dark:border-success-600/30 px-2.5 py-0.5 rounded-full font-display">
               924 / 1,005
             </span>
           </div>
 
-          {/* Correct Upright Semi-Circle Gauge with Smooth Animated Stroke */}
           <div className="relative my-4 flex flex-col items-center justify-center">
             <svg className="w-52 h-32" viewBox="0 0 200 110">
-              {/* Background Track (Top Arc from Left to Right) */}
               <path
                 d="M 20 100 A 80 80 0 0 1 180 100"
                 fill="none"
-                stroke="#e2e8f0"
+                stroke="var(--line)"
                 strokeWidth="18"
                 strokeLinecap="round"
               />
-              {/* Foreground Value (Top Arc) with micro-animation */}
               <motion.path
                 d="M 20 100 A 80 80 0 0 1 180 100"
                 fill="none"
-                stroke="#144e39"
+                stroke="var(--forest-700)"
                 strokeWidth="18"
                 strokeDasharray="251.2"
                 initial={{ strokeDashoffset: 251.2 }}
@@ -355,43 +342,43 @@ export const SchoolAdminDashboard: React.FC = () => {
               transition={{ delay: 0.3, duration: 0.5 }}
               className="absolute top-12 flex flex-col items-center"
             >
-              <span className="text-4xl font-extrabold text-slate-900 font-display tracking-tight">
+              <span className="text-4xl font-extrabold text-ink font-display tracking-tight t-data">
                 {attendancePct}%
               </span>
-              <span className="text-xs font-bold text-slate-400 mt-0.5">Students Present</span>
+              <span className="text-xs font-medium text-ink-soft mt-0.5">Students Present</span>
             </motion.div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 text-xs font-bold text-slate-600">
+          <div className="flex items-center justify-center gap-4 text-xs font-bold text-ink-soft">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#144e39]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-forest-700" />
               <span>Present: 924</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-warning-600" />
               <span>Late: 42</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-danger-600" />
               <span>Absent: 39</span>
             </div>
           </div>
         </div>
 
         {/* Column 3: Live Gate Terminal Status (3 cols) */}
-        <div className="lg:col-span-3 dark-tracker-card p-6 sm:p-7 flex flex-col justify-between text-white relative overflow-hidden">
+        <div className="lg:col-span-3 dark-tracker-card p-6 sm:p-7 flex flex-col justify-between text-white relative overflow-hidden rounded-[28px]">
           <div>
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-emerald-300 font-display">Gate Scanner HUD</p>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[10px] text-emerald-300 font-bold uppercase">Active</span>
+                <span className="text-[11px] text-emerald-300 font-bold uppercase font-display">Active</span>
               </div>
             </div>
 
             <div className="my-6 text-center">
-              <span className="text-4xl font-extrabold font-display tracking-tight text-white block">
-                924 / 1,005
+              <span className="text-4xl font-extrabold font-display tracking-tight text-white block t-data">
+                <RollingNumber value={924} /> <span className="text-xl font-normal text-emerald-200/80">/ 1,005</span>
               </span>
               <p className="text-xs text-emerald-200/80 mt-1 font-medium">
                 Total Morning Gate Check-ins
@@ -402,15 +389,15 @@ export const SchoolAdminDashboard: React.FC = () => {
           <div className="space-y-2.5 bg-emerald-950/60 p-3.5 rounded-2xl border border-emerald-500/20 text-xs">
             <div className="flex justify-between text-emerald-200/90 font-medium">
               <span>Main Gate (RFID Terminal)</span>
-              <span className="font-bold text-white">680 Taps</span>
+              <span className="font-bold text-white font-mono">680 Taps</span>
             </div>
             <div className="flex justify-between text-emerald-200/90 font-medium">
               <span>Classroom Optical Scanners</span>
-              <span className="font-bold text-white">244 Scans</span>
+              <span className="font-bold text-white font-mono">244 Scans</span>
             </div>
             <div className="flex justify-between text-emerald-300 font-bold pt-1 border-t border-emerald-500/20">
               <span>Gate Station Status</span>
-              <span className="text-emerald-300">Synchronized</span>
+              <span className="text-emerald-300 font-display">Synchronized</span>
             </div>
           </div>
         </div>

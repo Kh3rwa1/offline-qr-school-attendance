@@ -68,6 +68,7 @@ export async function seedDatabase() {
       .insert(schools)
       .values({
         name: 'Rampur High School',
+        slug: 'rampur-high-school-0101',
         udiseCode: '19100100101',
         district: 'Murshidabad',
         block: 'Raninagar-I',
@@ -92,6 +93,7 @@ export async function seedDatabase() {
       .insert(schools)
       .values({
         name: 'Haripur High School',
+        slug: 'haripur-high-school-0102',
         udiseCode: '19100100102',
         district: 'Murshidabad',
         block: 'Raninagar-II',

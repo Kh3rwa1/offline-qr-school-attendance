@@ -99,6 +99,13 @@
       "when": 1786600000000,
       "tag": "0013_platform_role_and_school_provisioning",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786610000000,
+      "tag": "0014_school_slug",
+      "breakpoints": true
     }
   ]
 }

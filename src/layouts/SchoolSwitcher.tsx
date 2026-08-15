@@ -95,13 +95,13 @@ export const SchoolSwitcher: React.FC<SchoolSwitcherProps> = ({ isOpen, onClose 
                         <Building2 className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-ink font-display">{mem.schoolName}</p>
+                        <p className="text-sm font-bold text-ink font-display">{mem.schoolName}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-surface-soft text-ink-soft border border-line">
+                          <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-surface-soft text-ink-soft border border-line">
                             {mem.role}
                           </span>
                           {mem.udiseCode && (
-                            <span className="text-[11px] text-forest-700 dark:text-forest-600 font-mono font-semibold">
+                            <span className="text-xs text-forest-700 dark:text-forest-600 font-mono font-semibold">
                               UDISE: {mem.udiseCode}
                             </span>
                           )}

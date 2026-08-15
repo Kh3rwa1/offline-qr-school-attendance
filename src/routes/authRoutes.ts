@@ -38,7 +38,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'INVALID_INPUT', details: parsed.error.format() });
   }
 
-  const { phoneNumber, password, schoolId } = parsed.data;
+  const { phoneNumber: rawPhone, password, schoolId } = parsed.data;
+  const phoneNumber = rawPhone.trim().startsWith('+') ? rawPhone.trim() : `+91${rawPhone.trim().replace(/\D/g, '')}`;
   const user = await lookupAuthUserByPhone(phoneNumber);
   const isValidPassword = await timingSafeVerifyPassword(user?.passwordHash, password);
 

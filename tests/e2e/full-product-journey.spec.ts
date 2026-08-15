@@ -5,10 +5,10 @@ const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 test.describe('End-to-End Product Journeys Matrix', () => {
   test('Super Admin registers new school and views live platform distribution', async ({ page }) => {
     // 1. Log in as Super Admin
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919000000000');
-    await page.getByLabel('Password').fill('SuperSecretAdminPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9000000000');
+    await page.locator('#login-password').fill('SuperSecretAdminPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
 
     await expect(page.getByText('Multi-Tenant Platform Hub')).toBeVisible();
 
@@ -32,10 +32,10 @@ test.describe('End-to-End Product Journeys Matrix', () => {
 
   test('School Admin navigates student roster and views academic management', async ({ page }) => {
     // 1. Log in as School Admin
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000001');
-    await page.getByLabel('Password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000001');
+    await page.locator('#login-password').fill('SchoolAdminPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
 
     await expect(page.getByText('School Administration & Operations')).toBeVisible();
 
@@ -54,10 +54,10 @@ test.describe('End-to-End Product Journeys Matrix', () => {
 
   test('Teacher executes offline roll review and server finalization check', async ({ page }) => {
     // 1. Log in as Teacher
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000002');
-    await page.getByLabel('Password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000002');
+    await page.locator('#login-password').fill('TeacherPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
 
     await expect(page.getByText('Offline QR Attendance')).toBeVisible();
 
@@ -68,10 +68,10 @@ test.describe('End-to-End Product Journeys Matrix', () => {
 
   test('Report Viewer inspects daily roll sheet and longitudinal trends', async ({ page }) => {
     // 1. Log in as Report Viewer
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000004');
-    await page.getByLabel('Password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000004');
+    await page.locator('#login-password').fill('ReportViewerPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
 
     await expect(page.getByText('Attendance Reports & Analytics')).toBeVisible();
 
@@ -88,3 +88,4 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await expect(page.getByRole('heading', { name: 'Government Export & Audit Center' })).toBeVisible();
   });
 });
+

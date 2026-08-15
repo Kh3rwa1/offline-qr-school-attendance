@@ -20,6 +20,7 @@ import { sql } from 'drizzle-orm';
 export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 80 }).notNull().unique(),
   udiseCode: varchar('udise_code', { length: 50 }).unique(),
   district: varchar('district', { length: 100 }).notNull(),
   block: varchar('block', { length: 100 }),
@@ -657,5 +658,26 @@ export const rfidScanEvents = pgTable(
     readerIdx: index('rfid_scan_events_reader_idx').on(table.schoolId, table.readerId, table.scanTimestamp),
     decisionIdx: index('rfid_scan_events_decision_idx').on(table.schoolId, table.decision, table.scanTimestamp),
     sessionIdx: index('rfid_scan_events_session_idx').on(table.schoolId, table.attendanceSessionId, table.scanTimestamp),
+  })
+);
+
+// 34. Demo Requests (Public landing lead capture)
+export const demoRequests = pgTable(
+  'demo_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    phone: varchar('phone', { length: 30 }).notNull(),
+    email: varchar('email', { length: 255 }),
+    schoolName: varchar('school_name', { length: 255 }).notNull(),
+    district: varchar('district', { length: 100 }).notNull(),
+    studentCount: varchar('student_count', { length: 50 }).notNull(),
+    source: varchar('source', { length: 50 }).notNull().default('landing'),
+    status: varchar('status', { length: 30 }).notNull().default('NEW'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    createdAtIdx: index('demo_requests_created_at_idx').on(table.createdAt),
+    statusIdx: index('demo_requests_status_idx').on(table.status),
   })
 );

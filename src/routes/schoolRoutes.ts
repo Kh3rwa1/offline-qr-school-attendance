@@ -14,6 +14,7 @@ export const schoolRouter = Router();
 // Zod Validation Schemas
 const provisionSchoolSchema = z.object({
   name: z.string().min(2).max(255),
+  slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Slug must consist of lowercase letters, digits, and hyphens').min(2).max(80).optional(),
   udiseCode: z.string().regex(/^\d{11}$/, 'UDISE code must be exactly 11 digits'),
   district: z.string().min(2).max(100),
   block: z.string().max(100).optional(),
@@ -35,6 +36,7 @@ const provisionSchoolSchema = z.object({
 
 const updateSchoolSchema = z.object({
   name: z.string().min(2).max(255).optional(),
+  slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Slug must consist of lowercase letters, digits, and hyphens').min(2).max(80).optional(),
   udiseCode: z.string().regex(/^\d{11}$/).optional(),
   district: z.string().min(2).max(100).optional(),
   block: z.string().max(100).optional().nullable(),

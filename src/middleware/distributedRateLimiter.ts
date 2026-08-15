@@ -170,4 +170,15 @@ export const rateLimitPolicies = {
     maxRequests: 300,
     windowMs: 60 * 1000,
   }),
+
+  demoRequests: createDistributedRateLimiter({
+    prefix: 'demo-requests',
+    maxRequests: 5,
+    windowMs: 15 * 60 * 1000,
+    keyGenerator: (req) => {
+      const ip = req.ip || req.socket.remoteAddress || 'unknown';
+      const phone = (req.body?.phone || '').replace(/\D/g, '');
+      return `${ip}:${phone}`;
+    },
+  }),
 };

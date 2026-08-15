@@ -177,7 +177,7 @@ export const Sidebar: React.FC = () => {
         <h4 className="text-sm font-extrabold font-display leading-tight">
           Offline PWA App
         </h4>
-        <p className="text-[11px] text-emerald-300/80 mt-1 font-medium">
+        <p className="text-xs text-emerald-300/80 mt-1 font-medium">
           Zero-connectivity attendance cache
         </p>
         <motion.button

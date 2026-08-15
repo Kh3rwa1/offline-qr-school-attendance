@@ -67,7 +67,8 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
       .insert(schools)
       .values({
         name: 'SMS Test Academy',
-        code: `SMS-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        slug: `sms-academy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        udiseCode: `190103${Math.floor(10000 + Math.random() * 90000)}`,
         district: 'Dhaka',
         preferredLanguage: 'bn',
       })

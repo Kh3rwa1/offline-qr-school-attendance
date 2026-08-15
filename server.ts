@@ -18,6 +18,7 @@ import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
 import { dashboardRouter } from './src/routes/dashboardRoutes';
 import { systemHealthRouter } from './src/routes/systemHealthRoutes';
+import { publicRouter } from './src/routes/publicRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -125,6 +126,7 @@ export async function createApp() {
   });
 
   // API Router registration
+  app.use('/api/v1/public', publicRouter);
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/schools', schoolRouter);

@@ -20,7 +20,7 @@ import {
   PhoneCall,
   Laptop,
 } from 'lucide-react';
-import { Button, Dialog, TextField, Badge } from '../components/ui';
+import { Button, TextField, Dialog, Badge, Toast } from '../components/ui';
 
 interface OnboardingStage {
   step: number;
@@ -89,10 +89,10 @@ const ONBOARDING_STAGES: OnboardingStage[] = [
     step: 5,
     key: 'provision',
     title: 'Provision School',
-    subtitle: 'Automated tenant subdomain & security keys',
+    subtitle: 'Generate a stable workspace path /s/green-valley',
     icon: <Building2 className="w-5 h-5 text-forest-700 dark:text-forest-400" />,
     details: [
-      'Generate dedicated school URL: /s/green-valley',
+      'Generate stable school workspace URL: /s/green-valley',
       'Provision AES-256 tenant encryption master keys',
       'Configure reader mTLS client certificates',
     ],
@@ -144,6 +144,8 @@ export const LandingPage: React.FC = () => {
   const [studentCount, setStudentCount] = useState<number>(650);
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [demoSubmitted, setDemoSubmitted] = useState(false);
+  const [isSubmittingDemo, setIsSubmittingDemo] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
 
   // Demo Form State
   const [demoForm, setDemoForm] = useState({
@@ -155,9 +157,44 @@ export const LandingPage: React.FC = () => {
     studentCount: '500-1000',
   });
 
-  const handleDemoSubmit = (e: React.FormEvent) => {
+  const handleDemoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setDemoSubmitted(true);
+    setDemoError(null);
+    setIsSubmittingDemo(true);
+
+    try {
+      const rawPhone = demoForm.phone.trim();
+      const formattedPhone = rawPhone.startsWith('+91')
+        ? rawPhone
+        : `+91${rawPhone.replace(/\D/g, '')}`;
+
+      const res = await fetch('/api/v1/public/demo-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: demoForm.name.trim(),
+          phone: formattedPhone,
+          email: demoForm.email.trim() || undefined,
+          schoolName: demoForm.schoolName.trim(),
+          district: demoForm.district.trim(),
+          studentCount: demoForm.studentCount || '500-1000',
+          source: 'landing',
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 201 && data.success) {
+        setDemoSubmitted(true);
+      } else {
+        setDemoError(data.message || data.error || 'Failed to record demo request. Please verify fields and try again.');
+      }
+    } catch (err: any) {
+      setDemoError('Network connection issue. Please retry demo request.');
+    } finally {
+      setIsSubmittingDemo(false);
+    }
   };
 
   const selectedStage = ONBOARDING_STAGES[selectedStageIndex];
@@ -561,12 +598,13 @@ export const LandingPage: React.FC = () => {
         onClose={() => {
           setDemoModalOpen(false);
           setDemoSubmitted(false);
+          setDemoError(null);
         }}
         title="Schedule an Institutional Demo"
         description="Connect with our education technology team"
       >
         {demoSubmitted ? (
-          <div className="text-center py-6 space-y-4">
+          <div data-testid="demo-success-state" className="text-center py-6 space-y-4">
             <div className="w-14 h-14 rounded-2xl bg-success-50 text-success-600 border border-success-100 dark:border-success-600/30 mx-auto flex items-center justify-center">
               <CheckCircle2 className="w-8 h-8" />
             </div>
@@ -581,6 +619,7 @@ export const LandingPage: React.FC = () => {
                 onClick={() => {
                   setDemoModalOpen(false);
                   setDemoSubmitted(false);
+                  setDemoError(null);
                 }}
               >
                 Done
@@ -588,7 +627,13 @@ export const LandingPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleDemoSubmit} className="space-y-4 text-left">
+          <form data-testid="demo-request-form" onSubmit={handleDemoSubmit} className="space-y-4 text-left">
+            {demoError && (
+              <div className="mb-2">
+                <Toast kind="error" message={demoError} onDismiss={() => setDemoError(null)} autoDismiss={false} />
+              </div>
+            )}
+
             <TextField
               label="Your Full Name"
               required
@@ -611,7 +656,6 @@ export const LandingPage: React.FC = () => {
               <TextField
                 label="Official Email"
                 type="email"
-                required
                 value={demoForm.email}
                 onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })}
                 placeholder="principal@school.edu.in"
@@ -637,10 +681,23 @@ export const LandingPage: React.FC = () => {
             </div>
 
             <div className="pt-2 flex justify-end gap-2.5">
-              <Button variant="secondary" size="md" onClick={() => setDemoModalOpen(false)}>
+              <Button
+                variant="secondary"
+                size="md"
+                type="button"
+                onClick={() => {
+                  setDemoModalOpen(false);
+                  setDemoError(null);
+                }}
+              >
                 Cancel
               </Button>
-              <Button variant="primary" size="md" type="submit">
+              <Button
+                variant="primary"
+                size="md"
+                type="submit"
+                isLoading={isSubmittingDemo}
+              >
                 Submit Request
               </Button>
             </div>

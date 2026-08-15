@@ -5,10 +5,10 @@ const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 test.describe('RFID Card Enrollment E2E Suite', () => {
   test('RFID_OPERATOR searches student, selects security mode, and enrolls smartcard', async ({ page }) => {
     // 1. Log in as RFID_OPERATOR
-    await page.goto(baseUrl);
-    await page.getByLabel('Phone number').fill('+919100000003');
-    await page.getByLabel('Password').fill('RfidOpPassword123!');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.goto(`${baseUrl}/login`);
+    await page.locator('#login-phone').fill('9100000003');
+    await page.locator('#login-password').fill('RfidOpPassword123!');
+    await page.getByRole('button', { name: /Sign In/i }).click();
 
     await expect(page.getByText('MIFARE DESFire EV2 Operator Console')).toBeVisible();
 

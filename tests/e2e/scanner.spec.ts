@@ -46,11 +46,11 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   }
 
   // Browser page context starts completely unauthenticated and clean
-  await page.goto(baseUrl);
+  await page.goto(`${baseUrl}/login`);
   await page.evaluate(() => navigator.serviceWorker?.ready);
-  await page.getByLabel('Phone number').fill('+919100000002');
-  await page.getByLabel('Password').fill('TeacherPassword123!');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.locator('#login-phone').fill('9100000002');
+  await page.locator('#login-password').fill('TeacherPassword123!');
+  await page.getByRole('button', { name: /Sign In/i }).click();
   await expect(page.getByText('Offline QR Attendance')).toBeVisible();
   await page.waitForFunction((id) => {
     const sel = document.querySelector('select');

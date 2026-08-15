@@ -4,9 +4,11 @@ import { db, withSystemContext } from '../db';
 import { schools, users, schoolMemberships, academicYears, schoolSmsSettings, auditLogs } from '../db/schema';
 import { hashPassword } from '../auth/password';
 import { createAuditLog } from './auditLogService';
+import { generateSchoolSlug, isValidSlug, sanitizeSlug } from './schoolSlug';
 
 export interface ProvisionSchoolInput {
   name: string;
+  slug?: string;
   udiseCode: string;
   district: string;
   block?: string;
@@ -28,6 +30,7 @@ export interface ProvisionSchoolInput {
 
 export interface UpdateSchoolInput {
   name?: string;
+  slug?: string;
   udiseCode?: string;
   district?: string;
   block?: string | null;
@@ -160,11 +163,32 @@ export class SchoolService {
         adminUser = newUser;
       }
 
-      // 5. Create the school record
+      // 5. Generate and reserve unique school slug
+      let candidateSlug = input.slug?.trim().toLowerCase() || generateSchoolSlug(input.name, normalizedUdise);
+      if (!isValidSlug(candidateSlug)) {
+        candidateSlug = sanitizeSlug(candidateSlug) || 'school';
+        candidateSlug = `${candidateSlug}-${normalizedUdise.slice(-4)}`;
+        if (!isValidSlug(candidateSlug)) {
+          candidateSlug = `school-${Date.now().toString(36)}`;
+        }
+      }
+
+      // Check for collision and resolve deterministically
+      const [existingSlug] = await tx
+        .select({ id: schools.id })
+        .from(schools)
+        .where(eq(schools.slug, candidateSlug));
+
+      if (existingSlug) {
+        candidateSlug = `${candidateSlug.slice(0, 70)}-${crypto.randomBytes(2).toString('hex')}`;
+      }
+
+      // Create the school record
       const [newSchool] = await tx
         .insert(schools)
         .values({
           name: input.name.trim(),
+          slug: candidateSlug,
           udiseCode: normalizedUdise,
           district: input.district.trim(),
           block: input.block?.trim() || null,
@@ -405,6 +429,29 @@ export class SchoolService {
     if (input.preferredLanguage) updates.preferredLanguage = input.preferredLanguage;
     if (input.timezone) updates.timezone = input.timezone;
 
+    if (input.slug !== undefined) {
+      const normalizedSlug = input.slug.trim().toLowerCase();
+      if (!isValidSlug(normalizedSlug)) {
+        const error: any = new Error('School slug must contain only lowercase letters, numbers, and hyphens (2-80 characters)');
+        error.code = 'INVALID_SLUG_FORMAT';
+        error.status = 400;
+        throw error;
+      }
+
+      const [conflict] = await db
+        .select({ id: schools.id })
+        .from(schools)
+        .where(eq(schools.slug, normalizedSlug));
+
+      if (conflict && conflict.id !== schoolId) {
+        const error: any = new Error(`School with slug "${normalizedSlug}" already exists`);
+        error.code = 'DUPLICATE_SLUG';
+        error.status = 409;
+        throw error;
+      }
+      updates.slug = normalizedSlug;
+    }
+
     if (input.udiseCode && input.udiseCode.trim() !== existing.udiseCode) {
       const normalizedUdise = input.udiseCode.trim();
       if (!/^\d{11}$/.test(normalizedUdise)) {
@@ -436,6 +483,7 @@ export class SchoolService {
         changes: updates,
         previousState: {
           name: existing.name,
+          slug: existing.slug,
           udiseCode: existing.udiseCode,
           district: existing.district,
           block: existing.block,
@@ -444,5 +492,42 @@ export class SchoolService {
     });
 
     return updated;
+  }
+
+  /**
+   * Look up school metadata by public slug.
+   */
+  static async getSchoolBySlug(slug: string) {
+    if (!slug || !isValidSlug(slug.trim().toLowerCase())) {
+      const error: any = new Error('Invalid school slug format');
+      error.code = 'SCHOOL_NOT_FOUND';
+      error.status = 404;
+      throw error;
+    }
+
+    const normalizedSlug = slug.trim().toLowerCase();
+    const [school] = await db
+      .select({
+        id: schools.id,
+        name: schools.name,
+        slug: schools.slug,
+        udiseCode: schools.udiseCode,
+        district: schools.district,
+        block: schools.block,
+        preferredLanguage: schools.preferredLanguage,
+        status: schools.status,
+        createdAt: schools.createdAt,
+      })
+      .from(schools)
+      .where(eq(schools.slug, normalizedSlug));
+
+    if (!school) {
+      const error: any = new Error('School workspace not found');
+      error.code = 'SCHOOL_NOT_FOUND';
+      error.status = 404;
+      throw error;
+    }
+
+    return school;
   }
 }

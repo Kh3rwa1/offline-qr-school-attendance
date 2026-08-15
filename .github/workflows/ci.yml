@@ -439,6 +439,7 @@ jobs:
           DISABLE_RATE_LIMITING: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
+          FEATURE_RFID: "true"
           PORT: 3100
         run: npm run test:e2e
 

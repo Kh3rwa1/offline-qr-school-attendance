@@ -236,7 +236,11 @@ COMMIT;
   console.log('============================================================');
 }
 
-runR2LiveDrill().catch((err) => {
-  console.error('❌ R2 Live Drill Failed:', err);
-  process.exit(1);
-});
+runR2LiveDrill()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error('❌ R2 Live Drill Failed:', err);
+    process.exit(1);
+  });

@@ -63,23 +63,35 @@ jobs:
         env:
           NODE_ENV: production
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           CSRF_SECRET: ci-session-secret-012345678901234567890123456789
+          BACKUP_ENCRYPTION_KEY: ci-backup-encryption-key-32bytes-long
           REDIS_URL: redis://127.0.0.1:6379
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
+          SMS_PROVIDER: console
+          ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
         run: npm run migrate
 
       - name: Generate 500,000 Student Scale Dataset
         env:
           NODE_ENV: production
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           CSRF_SECRET: ci-session-secret-012345678901234567890123456789
+          BACKUP_ENCRYPTION_KEY: ci-backup-encryption-key-32bytes-long
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
+          SMS_PROVIDER: console
+          ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SCALE_SCHOOLS: ${{ inputs.schools }}
           SCALE_STUDENTS_PER_SCHOOL: ${{ inputs.students_per_school }}
         run: npx tsx scripts/generateScaleDataset.ts
@@ -88,8 +100,11 @@ jobs:
         env:
           NODE_ENV: production
           DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:migration-ci-password@127.0.0.1:5432/school_attendance
           SESSION_SECRET: ci-session-secret-012345678901234567890123456789
           CSRF_SECRET: ci-session-secret-012345678901234567890123456789
+          BACKUP_ENCRYPTION_KEY: ci-backup-encryption-key-32bytes-long
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-012345678901234567890123456789
           REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-012345678901234567890123456789
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
@@ -98,6 +113,9 @@ jobs:
           LOAD_TEST_DURATION_SEC: ${{ inputs.duration_seconds }}
           LOAD_P95_THRESHOLD_MS: '300'
           LOAD_AUTH_P95_THRESHOLD_MS: '600'
+          SMS_PROVIDER: console
+          ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           GITHUB_SHA: ${{ github.sha }}
         run: npm run test:load-full
 

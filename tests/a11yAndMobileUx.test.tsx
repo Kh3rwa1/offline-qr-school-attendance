@@ -66,13 +66,16 @@ describe('WCAG 2.2 AA / AAA Accessibility & Mobile UX Tests', () => {
 
       // Check SVG Gauge attributes
       expect(fileContent).toContain('role="img"');
-      expect(fileContent).toContain('aria-labelledby="attendance-gauge-title attendance-gauge-desc"');
-      expect(fileContent).toContain('id="attendance-gauge-title"');
-      expect(fileContent).toContain('id="attendance-gauge-desc"');
+      expect(fileContent).toContain('useId()');
+      expect(fileContent).toContain('useReducedMotion()');
+      expect(fileContent).toContain('aria-labelledby={`${gaugeTitleId} ${gaugeDescId}`}');
+      expect(fileContent).toContain('<title id={gaugeTitleId}>');
+      expect(fileContent).toContain('<desc id={gaugeDescId}>');
       expect(fileContent).toContain('motion-reduce:transition-none');
 
       // Check Screen-Reader Data Table Alternative
       expect(fileContent).toContain('className="sr-only"');
+      expect(fileContent).toContain('<caption className="sr-only">');
       expect(fileContent).toContain('<table');
     });
   });

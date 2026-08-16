@@ -4,6 +4,7 @@ import { ErrorState } from '../../components/shared/ErrorState';
 import { Button } from '../../components/shared/Button';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -34,7 +35,7 @@ export const SchoolAdminDashboard: React.FC = () => {
         setSummary(res.data);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load school administration summary');
+      setError(getUserSafeError(err, language).message);
     } finally {
       setLoading(false);
     }
@@ -42,9 +43,9 @@ export const SchoolAdminDashboard: React.FC = () => {
 
   useEffect(() => {
     void fetchSummary();
-  }, [activeSchoolId]);
+  }, [activeSchoolId, language]);
 
-  if (loading) return <LoadingState type="stat-cards" message={language === 'bn' ? 'বিদ্যালয়ের তথ্য লোড হচ্ছে…' : 'Loading school operations…'} />;
+  if (loading) return <LoadingState type="stat-cards" message={t('loadingSchoolOps')} />;
   if (error) return <ErrorState message={error} onRetry={fetchSummary} />;
 
   const presentCount = summary?.presentCount ?? 0;
@@ -59,7 +60,7 @@ export const SchoolAdminDashboard: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navOverview')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
@@ -70,7 +71,7 @@ export const SchoolAdminDashboard: React.FC = () => {
             size="md"
             onClick={() => navigate('/app/teacher')}
             leftIcon={<QrCode className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('startAttendance')}
           </Button>
@@ -80,7 +81,7 @@ export const SchoolAdminDashboard: React.FC = () => {
             size="md"
             onClick={() => navigate('/app/reports/exports')}
             leftIcon={<FileSpreadsheet className="w-4 h-4 text-ink-soft" />}
-            className="min-h-[44px] rounded-2xl font-display"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('navDownloadReports')}
           </Button>
@@ -91,7 +92,7 @@ export const SchoolAdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-6 rounded-3xl bg-success-50/70 border border-success-100 dark:border-success-600/30 shadow-xs space-y-2">
           <div className="flex items-center justify-between text-forest-700 dark:text-forest-600">
-            <span className="text-xs font-bold uppercase tracking-wider font-display">
+            <span className="text-sm font-bold uppercase tracking-wider font-display">
               {t('cameIn')}
             </span>
             <CalendarCheck2 className="w-5 h-5" />
@@ -99,14 +100,14 @@ export const SchoolAdminDashboard: React.FC = () => {
           <div className="text-4xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
             {presentCount} / {totalStudents}
           </div>
-          <p className="text-xs text-forest-700/80 font-medium font-display">
-            {language === 'bn' ? `মোট উপস্থিতির ${attendancePct}%` : `${attendancePct}% Present Today`}
+          <p className="text-sm text-forest-700/80 font-medium font-display">
+            {t('presentTodayPct', { pct: attendancePct })}
           </p>
         </div>
 
         <div className="p-6 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase tracking-wider font-display">
+            <span className="text-sm font-bold uppercase tracking-wider font-display">
               {t('navStudents')}
             </span>
             <Users className="w-5 h-5 text-forest-700 dark:text-forest-600" />
@@ -114,14 +115,14 @@ export const SchoolAdminDashboard: React.FC = () => {
           <div className="text-4xl font-extrabold text-ink font-display font-mono">
             {totalStudents}
           </div>
-          <p className="text-xs text-ink-soft font-display">
-            {language === 'bn' ? 'নথিভুক্ত মোট শিক্ষার্থী' : 'Enrolled Students'}
+          <p className="text-sm text-ink-soft font-display">
+            {t('enrolledStudentsCount')}
           </p>
         </div>
 
         <div className="p-6 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase tracking-wider font-display">
+            <span className="text-sm font-bold uppercase tracking-wider font-display">
               {t('navClassesAndSections')}
             </span>
             <GraduationCap className="w-5 h-5 text-forest-700 dark:text-forest-600" />
@@ -129,8 +130,8 @@ export const SchoolAdminDashboard: React.FC = () => {
           <div className="text-4xl font-extrabold text-ink font-display font-mono">
             {summary?.classCount ?? 0}
           </div>
-          <p className="text-xs text-ink-soft font-display">
-            {language === 'bn' ? 'সক্রিয় ক্লাসরুম শাখা' : 'Active Class Sections'}
+          <p className="text-sm text-ink-soft font-display">
+            {t('activeClassSectionsCount')}
           </p>
         </div>
       </div>
@@ -150,7 +151,7 @@ export const SchoolAdminDashboard: React.FC = () => {
           </div>
           <div>
             <h4 className="text-sm font-extrabold text-ink font-display">{t('navSchoolStaff')}</h4>
-            <p className="text-[11px] text-ink-soft mt-0.5">{language === 'bn' ? 'শিক্ষক ও কর্মীদের অ্যাক্সেস পরিচালনা' : 'Manage teachers & staff'}</p>
+            <p className="text-sm text-ink-soft mt-0.5">{t('manageStaffSub')}</p>
           </div>
         </button>
 
@@ -167,7 +168,7 @@ export const SchoolAdminDashboard: React.FC = () => {
           </div>
           <div>
             <h4 className="text-sm font-extrabold text-ink font-display">{t('navStudents')}</h4>
-            <p className="text-[11px] text-ink-soft mt-0.5">{language === 'bn' ? 'নতুন শিক্ষার্থী যোগ ও ক্লাস বিভাজন' : 'Student roster & roll numbers'}</p>
+            <p className="text-sm text-ink-soft mt-0.5">{t('manageStudentsSub')}</p>
           </div>
         </button>
 
@@ -184,7 +185,7 @@ export const SchoolAdminDashboard: React.FC = () => {
           </div>
           <div>
             <h4 className="text-sm font-extrabold text-ink font-display">{t('navClassesAndSections')}</h4>
-            <p className="text-[11px] text-ink-soft mt-0.5">{language === 'bn' ? 'ক্লাসরুম ও শিক্ষাবর্ষ সেটআপ' : 'Class sections & academic year'}</p>
+            <p className="text-sm text-ink-soft mt-0.5">{t('manageAcademicsSub')}</p>
           </div>
         </button>
 
@@ -201,7 +202,7 @@ export const SchoolAdminDashboard: React.FC = () => {
           </div>
           <div>
             <h4 className="text-sm font-extrabold text-ink font-display">{t('navDailyAttendance')}</h4>
-            <p className="text-[11px] text-ink-soft mt-0.5">{language === 'bn' ? 'উপস্থিতি সংশোধন ও অডিট' : 'Review & correct roll sheets'}</p>
+            <p className="text-sm text-ink-soft mt-0.5">{t('manageAttendanceSub')}</p>
           </div>
         </button>
       </div>

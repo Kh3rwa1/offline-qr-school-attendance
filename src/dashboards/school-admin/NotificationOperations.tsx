@@ -59,7 +59,7 @@ export const NotificationOperations: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'notifications'] });
       setActionError(null);
-      setSuccessToast(language === 'bn' ? 'বার্তা পাঠানোর কাজ শুরু হয়েছে।' : 'Sending messages in progress.');
+      setSuccessToast(t('messagesSendingInProgress'));
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
@@ -78,7 +78,7 @@ export const NotificationOperations: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'notifications'] });
       setActionError(null);
-      setSuccessToast(language === 'bn' ? 'বার্তাটি পুনরায় পাঠানোর জন্য যোগ করা হয়েছে।' : 'Message re-queued for sending.');
+      setSuccessToast(t('messageRequeued'));
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
@@ -90,27 +90,27 @@ export const NotificationOperations: React.FC = () => {
   const jobs = data?.jobs || [];
   const summary = data?.summary || { total: 0, delivered: 0, failed: 0, queued: 0 };
 
-  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'বার্তার বিবরণ লোড হচ্ছে…' : 'Loading parent messages…'} />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load notifications'} onRetry={() => refetch()} />;
+  if (isLoading) return <LoadingState type="table" message={t('loadingParentMessages')} />;
+  if (error) return <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'DELIVERED':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+          <span className="px-2.5 py-0.5 rounded-full text-sm font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
             ✓ {t('statusSent')}
           </span>
         );
       case 'QUEUED':
       case 'PROCESSING':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+          <span className="px-2.5 py-0.5 rounded-full text-sm font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
             ⏳ {t('statusWaiting')}
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
+          <span className="px-2.5 py-0.5 rounded-full text-sm font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
             ⚠ {t('statusCouldNotSend')}
           </span>
         );
@@ -138,8 +138,8 @@ export const NotificationOperations: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navParentMessages')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {language === 'bn' ? `${activeSchoolName}-এর অনুপস্থিত শিক্ষার্থীদের অভিভাবকদের এসএমএস বার্তা প্রেরণ।` : `Automated attendance SMS notifications to parents for ${activeSchoolName}.`}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('parentMessagesSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
 
@@ -151,9 +151,9 @@ export const NotificationOperations: React.FC = () => {
             isLoading={processMutation.isPending}
             onClick={() => processMutation.mutate()}
             leftIcon={<Send className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display text-xs"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
-            {language === 'bn' ? 'অপেক্ষমাণ বার্তা এখনই পাঠান' : 'Send Waiting Messages Now'}
+            {t('sendWaitingMessagesNow')}
           </Button>
         </div>
       </div>
@@ -162,7 +162,7 @@ export const NotificationOperations: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{t('statusSent')}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('statusSent')}</span>
             <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
           </div>
           <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
@@ -172,7 +172,7 @@ export const NotificationOperations: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{t('statusWaiting')}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('statusWaiting')}</span>
             <Clock className="w-4 h-4 text-amber-700" />
           </div>
           <div className="text-3xl font-extrabold text-amber-800 font-display font-mono">
@@ -182,7 +182,7 @@ export const NotificationOperations: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{t('statusCouldNotSend')}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('statusCouldNotSend')}</span>
             <AlertTriangle className="w-4 h-4 text-danger-700" />
           </div>
           <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">
@@ -195,12 +195,12 @@ export const NotificationOperations: React.FC = () => {
       <div className="app-card overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between">
           <h3 className="text-base font-extrabold text-ink font-display">
-            {language === 'bn' ? 'অভিভাবকদের বার্তার তালিকা' : 'Parent Messages Log'}
+            {t('parentMessagesLog')}
           </h3>
           <button
             type="button"
             onClick={() => refetch()}
-            className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+            className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
             aria-label="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
@@ -211,8 +211,8 @@ export const NotificationOperations: React.FC = () => {
           <div className="p-12">
             <EmptyState
               kind="generic"
-              title={language === 'bn' ? 'কোনো বার্তা অপেক্ষমাণ নেই' : 'No messages waiting'}
-              description={language === 'bn' ? 'উপস্থিতি গ্রহণ সমাপ্ত হলে স্বয়ংক্রিয়ভাবে অনুপস্থিত শিক্ষার্থীদের অভিভাবকদের বার্তা তৈরি হবে।' : 'Absent student notifications are queued automatically when attendance is finalized.'}
+              title={t('noMessagesWaiting')}
+              description={t('noMessagesWaitingDesc')}
             />
           </div>
         ) : (
@@ -225,14 +225,14 @@ export const NotificationOperations: React.FC = () => {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <h4 className="text-base font-extrabold text-ink font-display">
-                      {job.studentName || (language === 'bn' ? 'শিক্ষার্থী' : 'Student')}
+                      {job.studentName || t('student')}
                     </h4>
                     {getStatusBadge(job.status)}
                   </div>
-                  <p className="text-xs text-ink-muted font-mono">
-                    {language === 'bn' ? 'মোবাইল নং:' : 'Mobile:'} {job.recipientPhone} • {job.queuedAt ? new Date(job.queuedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                  <p className="text-sm text-ink-muted font-mono">
+                    {t('mobile')}: {job.recipientPhone} • {job.queuedAt ? new Date(job.queuedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
                   </p>
-                  <p className="text-xs text-ink-soft bg-surface-soft p-2.5 rounded-xl border border-line mt-1 max-w-xl">
+                  <p className="text-sm text-ink-soft bg-surface-soft p-2.5 rounded-xl border border-line mt-1 max-w-xl">
                     {job.messageText}
                   </p>
                 </div>
@@ -245,7 +245,7 @@ export const NotificationOperations: React.FC = () => {
                       onClick={() => retryMutation.mutate(job.id)}
                       isLoading={retryMutation.isPending}
                       leftIcon={<RotateCcw className="w-4 h-4" />}
-                      className="min-h-[44px] rounded-2xl font-display text-xs"
+                      className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
                     >
                       {t('statusTryAgain')}
                     </Button>

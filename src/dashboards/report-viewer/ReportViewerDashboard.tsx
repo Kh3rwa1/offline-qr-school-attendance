@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { StatCard } from '../../components/shared/StatCard';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
@@ -9,7 +9,7 @@ import { useLanguage } from '../../app/LanguageProvider';
 import { getUserSafeError } from '../../errors/userSafeErrors';
 import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { 
   Download, 
   CalendarCheck2, 
@@ -24,6 +24,9 @@ export const ReportViewerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const shouldReduceMotion = useReducedMotion();
+  const gaugeTitleId = useId();
+  const gaugeDescId = useId();
 
   const fetchAnalytics = async () => {
     if (!activeSchoolId) return;
@@ -169,15 +172,15 @@ export const ReportViewerDashboard: React.FC = () => {
             </div>
 
             <div className="relative my-6 flex flex-col items-center justify-center">
-              {/* Accessible SVG with localized title, desc, role="img", and reduced motion */}
+              {/* Accessible SVG with localized title, desc, role="img", useId, and reduced motion */}
               <svg 
                 className="w-56 h-36" 
                 viewBox="0 0 200 110" 
                 role="img"
-                aria-labelledby="attendance-gauge-title attendance-gauge-desc"
+                aria-labelledby={`${gaugeTitleId} ${gaugeDescId}`}
               >
-                <title id="attendance-gauge-title">{t('attendanceTurnoutGaugeTitle')} ({attendanceRate}%)</title>
-                <desc id="attendance-gauge-desc">
+                <title id={gaugeTitleId}>{t('attendanceTurnoutGaugeTitle')} ({attendanceRate}%)</title>
+                <desc id={gaugeDescId}>
                   {t('attendanceTurnoutGaugeDesc')}: {attendanceRate}%, {totalSessions} {t('sessionsUnit')}
                 </desc>
                 <path
@@ -195,13 +198,14 @@ export const ReportViewerDashboard: React.FC = () => {
                   strokeDasharray="251.2"
                   initial={{ strokeDashoffset: 251.2 }}
                   animate={{ strokeDashoffset: 251.2 - (251.2 * Math.min(100, Math.max(0, attendanceRate))) / 100 }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: shouldReduceMotion ? 0 : 1.2, ease: [0.16, 1, 0.3, 1] }}
                   className="motion-reduce:transition-none"
                   strokeLinecap="round"
                 />
               </svg>
 
               <table className="sr-only">
+                <caption className="sr-only">{t('attendanceSummaryTable')}</caption>
                 <thead>
                   <tr>
                     <th scope="col">{t('metric')}</th>

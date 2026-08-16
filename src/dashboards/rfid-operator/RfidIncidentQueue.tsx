@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
 import { mapRfidRejectionCode } from '../../utils/rfidRejectionMapper';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { Button } from '../../components/shared/Button';
@@ -40,8 +41,8 @@ export const RfidIncidentQueue: React.FC = () => {
 
   const incidents = incidentsData || [];
 
-  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'গেটের তথ্য লোড হচ্ছে…' : 'Loading gate issues…'} />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load gate incidents'} onRetry={() => refetch()} />;
+  if (isLoading) return <LoadingState type="table" message={t('loadingGateProblems')} />;
+  if (error) return <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />;
 
   const unknownCount = incidents.filter(i => (i.rejectionCode || '').includes('NOT_FOUND') || (i.rejectionCode || '').includes('UNREGISTERED')).length;
   const duplicateCount = incidents.filter(i => (i.rejectionCode || '').includes('NONCE') || (i.rejectionCode || '').includes('REPLAY') || (i.rejectionCode || '').includes('DUPLICATE')).length;
@@ -54,8 +55,8 @@ export const RfidIncidentQueue: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navGateProblems')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {language === 'bn' ? `${activeSchoolName}-এর গেটে স্ক্যান না হওয়া কার্ডের তালিকা ও সমাধানের উপায়।` : `List of cards that could not be verified at the gate and what to do next for ${activeSchoolName}.`}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('gateIssuesSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
 
@@ -65,16 +66,16 @@ export const RfidIncidentQueue: React.FC = () => {
             size="md"
             onClick={() => refetch()}
             leftIcon={<RefreshCw className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display text-xs"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
-            {language === 'bn' ? 'রিফ্রেশ করুন' : 'Refresh List'}
+            {t('refreshList')}
           </Button>
 
           <Button
             variant="primary"
             size="md"
             onClick={() => navigate('/app/rfid-operator/enrollment')}
-            className="min-h-[44px] rounded-2xl font-display text-xs"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('navGiveBadge')}
           </Button>
@@ -85,7 +86,7 @@ export const RfidIncidentQueue: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'মোট সমস্যা' : 'Total Issues'}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('totalIssues')}</span>
             <AlertCircle className="w-4 h-4 text-warning-600" />
           </div>
           <div className="text-3xl font-extrabold text-ink font-display font-mono">
@@ -95,27 +96,27 @@ export const RfidIncidentQueue: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'অচেনা ব্যাজ' : 'Unregistered Badges'}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('unregisteredBadges')}</span>
             <ShieldAlert className="w-4 h-4 text-danger-600" />
           </div>
           <div className="text-3xl font-extrabold text-danger-700 font-display font-mono">
             {unknownCount}
           </div>
-          <p className="text-xs text-ink-soft font-display">
-            {language === 'bn' ? 'শিক্ষার্থীকে নতুন ব্যাজ দিতে হবে' : 'Need to give badge to student'}
+          <p className="text-sm text-ink-soft font-display">
+            {t('needToGiveBadge')}
           </p>
         </div>
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'পুনরায় স্ক্যান' : 'Repeated Scans'}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('repeatedScans')}</span>
             <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
           </div>
           <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
             {duplicateCount}
           </div>
-          <p className="text-xs text-ink-soft font-display">
-            {language === 'bn' ? 'ইতিমধ্যে উপস্থিত হিসেবে চিহ্নিত' : 'Already marked present'}
+          <p className="text-sm text-ink-soft font-display">
+            {t('alreadyMarkedPresent')}
           </p>
         </div>
       </div>
@@ -124,7 +125,7 @@ export const RfidIncidentQueue: React.FC = () => {
       <div className="app-card overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between">
           <h3 className="text-base font-extrabold text-ink font-display">
-            {language === 'bn' ? 'সাম্প্রতিক গেটের সমস্যা ও করণীয়' : 'Recent Gate Issues & What To Do'}
+            {t('recentGateIssues')}
           </h3>
         </div>
 
@@ -132,8 +133,8 @@ export const RfidIncidentQueue: React.FC = () => {
           <div className="p-12">
             <EmptyState
               kind="generic"
-              title={language === 'bn' ? 'গেটে কোনো সমস্যা পাওয়া যায়নি' : 'All gate scans are working smoothly'}
-              description={language === 'bn' ? 'সকল কার্ড সঠিকভাবে কাজ করছে এবং উপস্থিতির তথ্য সঠিকভাবে নথিভুক্ত হচ্ছে।' : 'All badges presented at the gate are verified with zero unhandled errors.'}
+              title={t('allGateScansWorking')}
+              description={t('allGateScansWorkingDesc')}
             />
           </div>
         ) : (
@@ -150,7 +151,7 @@ export const RfidIncidentQueue: React.FC = () => {
                       <span className="text-base font-extrabold text-ink font-display">
                         {detail.title}
                       </span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
+                      <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold font-display ${
                         detail.severity === 'danger'
                           ? 'bg-danger-50 text-danger-700 border border-danger-200'
                           : detail.severity === 'warning'
@@ -161,12 +162,12 @@ export const RfidIncidentQueue: React.FC = () => {
                       </span>
                     </div>
 
-                    <p className="text-xs text-ink-soft">
+                    <p className="text-sm text-ink-soft">
                       {detail.explanation}
                     </p>
 
-                    <p className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-surface-soft p-2.5 rounded-xl border border-line mt-1">
-                      👉 {language === 'bn' ? 'করণীয়:' : 'What to do:'} {detail.recommendedAction}
+                    <p className="text-sm font-bold text-forest-700 dark:text-forest-600 bg-surface-soft p-2.5 rounded-xl border border-line mt-1">
+                      👉 {t('whatToDoLabel')} {detail.recommendedAction}
                     </p>
                   </div>
 
@@ -176,7 +177,7 @@ export const RfidIncidentQueue: React.FC = () => {
                         variant="primary"
                         size="sm"
                         onClick={() => navigate('/app/rfid-operator/enrollment')}
-                        className="min-h-[44px] rounded-2xl font-display text-xs"
+                        className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
                       >
                         {t('navGiveBadge')}
                       </Button>

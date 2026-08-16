@@ -10,6 +10,8 @@ const SRC_DIR = path.resolve(__dirname, '../src');
 const TARGET_PATHS = [
   'dashboards/report-viewer',
   'dashboards/teacher',
+  'dashboards/school-admin',
+  'dashboards/rfid-operator',
   'app/LoginPage.tsx',
   'app/ActiveSchoolProvider.tsx',
   'components/BentoScannerGrid.tsx',
@@ -72,6 +74,8 @@ function checkFile(filePath: string) {
     if (
       (filePath.includes('dashboards/report-viewer') ||
        filePath.includes('dashboards/teacher') ||
+       filePath.includes('dashboards/school-admin') ||
+       filePath.includes('dashboards/rfid-operator') ||
        filePath.includes('components/BentoScannerGrid') ||
        filePath.includes('components/Header')) &&
       (line.includes('text-[11px]') || line.includes('text-[10px]') || line.includes('text-[9px]'))

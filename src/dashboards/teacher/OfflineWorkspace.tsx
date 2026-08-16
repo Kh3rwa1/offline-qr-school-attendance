@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOfflineStatus } from '../../app/OfflineStatusProvider';
+import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
 import { getUserSafeError } from '../../errors/userSafeErrors';
 import { offlineDb } from '../../db/offlineDb';
@@ -9,16 +10,19 @@ import { RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const OfflineWorkspace: React.FC = () => {
   const { isOnline, outboxCount, isSyncing, syncNow } = useOfflineStatus();
+  const { activeSchoolId } = useActiveSchool();
   const { language, t } = useLanguage();
   const [events, setEvents] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      const outbox = await offlineDb.syncOutbox.toArray();
+      const outbox = activeSchoolId
+        ? await offlineDb.syncOutbox.where('schoolId').equals(activeSchoolId).toArray()
+        : await offlineDb.syncOutbox.toArray();
       setEvents(outbox);
     }
     void load();
-  }, [outboxCount]);
+  }, [outboxCount, activeSchoolId]);
 
   const mapStatusPill = (status?: string) => {
     switch (status) {

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
 import { api } from '../../services/api';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { Button } from '../../components/shared/Button';
@@ -21,7 +22,7 @@ interface TrendDayItem {
 
 export const TrendReports: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const navigate = useNavigate();
   const [trendRange, setTrendRange] = useState<7 | 30>(7);
 
@@ -111,7 +112,7 @@ export const TrendReports: React.FC = () => {
       {isLoading ? (
         <LoadingState type="stat-cards" message={t('loadingTrendReports')} />
       ) : error ? (
-        <ErrorState message={(error as any)?.message || 'Failed to load trends'} onRetry={() => refetch()} />
+        <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Stat Cards */}

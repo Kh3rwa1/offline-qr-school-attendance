@@ -96,8 +96,8 @@ export const CardOperations: React.FC = () => {
   const suspendedCount = cards.filter((c) => c.status === 'SUSPENDED').length;
   const revokedCount = cards.filter((c) => c.status === 'REVOKED').length;
 
-  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'শিক্ষার্থীদের ব্যাজ লোড হচ্ছে…' : 'Loading student badges…'} />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load badges'} onRetry={() => refetch()} />;
+  if (isLoading) return <LoadingState type="table" message={t('loadingBadges')} />;
+  if (error) return <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />;
 
   return (
     <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="card-operations-view">
@@ -114,8 +114,8 @@ export const CardOperations: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navStudentBadges')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {language === 'bn' ? 'বিদ্যালয়ের শিক্ষার্থীদের সক্রিয় ও নিষ্ক্রিয় ব্যাজের তালিকা।' : `Search and manage student attendance badges at ${activeSchoolName}.`}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('searchBadgesSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
       </div>
@@ -130,7 +130,7 @@ export const CardOperations: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{t('statusActive')}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('statusActive')}</span>
             <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
           </div>
           <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
@@ -140,7 +140,7 @@ export const CardOperations: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{t('statusStopped')}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('statusStopped')}</span>
             <AlertTriangle className="w-4 h-4 text-amber-700" />
           </div>
           <div className="text-3xl font-extrabold text-amber-800 font-display font-mono">
@@ -150,7 +150,7 @@ export const CardOperations: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{t('statusCancelled')}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('statusCancelled')}</span>
             <XCircle className="w-4 h-4 text-danger-700" />
           </div>
           <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">
@@ -168,8 +168,8 @@ export const CardOperations: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={language === 'bn' ? 'শিক্ষার্থীর নাম বা রোল দিয়ে খুঁজুন…' : 'Search by student name or roll number…'}
-              className="w-full pl-11 pr-4 py-2.5 bg-surface-soft border border-line rounded-2xl text-xs font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
+              placeholder={t('searchStudentsPlaceholder')}
+              className="w-full pl-11 pr-4 py-2.5 bg-surface-soft border border-line rounded-2xl text-sm font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
             />
           </div>
 
@@ -177,9 +177,9 @@ export const CardOperations: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none cursor-pointer font-display min-h-[44px]"
+              className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none cursor-pointer font-display min-h-[44px]"
             >
-              <option value="ALL">{language === 'bn' ? 'সকল ব্যাজ' : 'All Badges'}</option>
+              <option value="ALL">{t('allBadges')}</option>
               <option value="ACTIVE">{t('statusActive')}</option>
               <option value="SUSPENDED">{t('statusStopped')}</option>
               <option value="REVOKED">{t('statusCancelled')}</option>
@@ -191,8 +191,8 @@ export const CardOperations: React.FC = () => {
           <div className="p-12">
             <EmptyState
               kind="generic"
-              title={language === 'bn' ? 'কোনো ব্যাজ পাওয়া যায়নি' : 'No student badges found'}
-              description={language === 'bn' ? 'নতুন ব্যাজ দিতে "ব্যাজ দিন" মেনুতে যান।' : 'Assign new badges from the "Give Badge" screen.'}
+              title={t('noBadgesFound')}
+              description={t('noBadgesFoundDesc')}
             />
           </div>
         ) : (
@@ -205,15 +205,15 @@ export const CardOperations: React.FC = () => {
                   className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-xs font-display shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-sm font-display shrink-0">
                       <CreditCard className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-base font-extrabold text-ink font-display">
-                          {c.studentName || (language === 'bn' ? 'অনির্ধারিত শিক্ষার্থী' : 'Unassigned Student')}
+                          {c.studentName || t('unassignedStudent')}
                         </h4>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
+                        <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold font-display ${
                           c.status === 'ACTIVE'
                             ? 'bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30'
                             : c.status === 'SUSPENDED'
@@ -223,8 +223,8 @@ export const CardOperations: React.FC = () => {
                           {c.status === 'ACTIVE' ? t('statusActive') : c.status === 'SUSPENDED' ? t('statusStopped') : t('statusCancelled')}
                         </span>
                       </div>
-                      <p className="text-xs text-ink-muted mt-0.5 font-mono">
-                        {language === 'bn' ? 'ব্যাজ নং:' : 'Badge #:'} •••• {badgeLast4} {c.studentCode && `• ID: ${c.studentCode}`}
+                      <p className="text-sm text-ink-muted mt-0.5 font-mono">
+                        {t('badgeNumberLabel')} •••• {badgeLast4} {c.studentCode && `• ID: ${c.studentCode}`}
                       </p>
                     </div>
                   </div>
@@ -238,7 +238,7 @@ export const CardOperations: React.FC = () => {
                           setSelectedCard(c);
                           setActionType('SUSPEND');
                         }}
-                        className="min-h-[44px] rounded-2xl font-display text-xs text-amber-800 hover:bg-amber-50"
+                        className="min-h-[44px] rounded-2xl font-display text-sm font-bold text-amber-800 hover:bg-amber-50"
                       >
                         {t('stopStudentBadge')}
                       </Button>
@@ -252,7 +252,7 @@ export const CardOperations: React.FC = () => {
                           setSelectedCard(c);
                           setActionType('REACTIVATE');
                         }}
-                        className="min-h-[44px] rounded-2xl font-display text-xs text-forest-700 dark:text-forest-600"
+                        className="min-h-[44px] rounded-2xl font-display text-sm font-bold text-forest-700 dark:text-forest-600"
                       >
                         {t('activateBadgeAgain')}
                       </Button>
@@ -266,7 +266,7 @@ export const CardOperations: React.FC = () => {
                           setSelectedCard(c);
                           setActionType('REVOKE');
                         }}
-                        className="min-h-[44px] rounded-2xl font-display text-xs text-danger-700 hover:bg-danger-50"
+                        className="min-h-[44px] rounded-2xl font-display text-sm font-bold text-danger-700 hover:bg-danger-50"
                       >
                         {t('cancelBadgeForever')}
                       </Button>

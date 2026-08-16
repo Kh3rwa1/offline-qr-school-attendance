@@ -202,6 +202,7 @@ export const LoginPage: React.FC = () => {
             >
               <option value="en">en</option>
               <option value="bn">bn</option>
+              <option value="hi">hi</option>
             </select>
             <button
               type="button"
@@ -214,6 +215,18 @@ export const LoginPage: React.FC = () => {
               }`}
             >
               বাংলা
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage('hi')}
+              aria-label="Hinglish में बदलें"
+              className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
+                language === 'hi'
+                  ? 'bg-forest-700 text-white shadow-2xs'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              हिन्दी
             </button>
             <button
               type="button"

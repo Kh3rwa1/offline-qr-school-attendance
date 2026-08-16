@@ -407,8 +407,8 @@ cmd_restore() {
 
 cmd_repair() {
   log_header "AttendEase OS — Self-Healing Repair Routine"
-  echo " • Restarting unhealthy containers..."
-  dcompose restart
+  echo " • Starting and reconciling container stack..."
+  dcompose up -d
   sleep 5
   cmd_status
 }

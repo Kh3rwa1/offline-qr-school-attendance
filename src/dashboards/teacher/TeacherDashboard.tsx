@@ -742,7 +742,7 @@ export const TeacherDashboard: React.FC = () => {
             {t('classroomDashboard')}
           </h1>
           <p className="t-body text-xs text-ink-soft mt-0.5">
-            {activeSchoolName} • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -869,7 +869,13 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.cameIn}
               </div>
               <p className="text-[11px] text-forest-700/80 font-medium mt-1">
-                {stats.total > 0 ? `${Math.round((stats.cameIn / stats.total) * 100)}% of class` : 'Gate arrivals'}
+                {stats.total > 0
+                  ? language === 'bn'
+                    ? `মোট শিক্ষার্থীর ${Math.round((stats.cameIn / stats.total) * 100)}%`
+                    : `${Math.round((stats.cameIn / stats.total) * 100)}% of class`
+                  : language === 'bn'
+                  ? 'গেটের আগমন'
+                  : 'Gate arrivals'}
               </p>
             </div>
 
@@ -887,7 +893,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.missing}
               </div>
               <p className="text-[11px] text-danger-800/80 font-medium mt-1">
-                Not yet marked present
+                {language === 'bn' ? 'এখনও উপস্থিত চিহ্নিত হয়নি' : 'Not yet marked present'}
               </p>
             </div>
 
@@ -905,7 +911,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.late}
               </div>
               <p className="text-[11px] text-amber-800/80 font-medium mt-1">
-                Arrived after start time
+                {language === 'bn' ? 'দেরিতে এসেছে' : 'Arrived after start time'}
               </p>
             </div>
 
@@ -923,7 +929,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.leave}
               </div>
               <p className="text-[11px] text-ink-muted font-medium mt-1">
-                Approved leave
+                {language === 'bn' ? 'অনুমোদিত ছুটি' : 'Approved leave'}
               </p>
             </div>
           </div>
@@ -931,14 +937,14 @@ export const TeacherDashboard: React.FC = () => {
           {/* Action Bar: Finish Attendance Button */}
           <div className="flex items-center justify-between bg-surface p-4 rounded-3xl border border-line">
             <div className="text-xs font-bold text-ink font-display pl-2">
-              <span>{selectedClassName}</span> • <span className="text-forest-700 dark:text-forest-600 font-bold">{stats.cameIn} of {stats.total} Present</span>
+              <span>{selectedClassName}</span> • <span className="text-forest-700 dark:text-forest-600 font-bold">{stats.cameIn} / {stats.total} {t('statusPresent')}</span>
             </div>
 
             <Button
               variant="primary"
               size="lg"
               onClick={() => setShowConfirmFinish(true)}
-              className="px-6 py-3 rounded-full text-sm font-extrabold shadow-sm"
+              className="px-6 py-3 rounded-full text-sm font-extrabold shadow-sm min-h-[44px]"
               disabled={stats.total === 0 || session?.status === 'FINALIZED'}
               leftIcon={<Check className="w-5 h-5" />}
             >
@@ -958,7 +964,9 @@ export const TeacherDashboard: React.FC = () => {
                       {arrivals.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">Students who walked through the school gate today.</p>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    {language === 'bn' ? 'যে সকল শিক্ষার্থী আজ গেট দিয়ে বিদ্যালয়ে প্রবেশ করেছে।' : 'Students who walked through the school gate today.'}
+                  </p>
                 </div>
               </div>
 
@@ -968,7 +976,7 @@ export const TeacherDashboard: React.FC = () => {
                     <EmptyState
                       kind="generic"
                       title={t('noArrivalsYet')}
-                      description="When students arrive through the school gate, their names appear here automatically."
+                      description={language === 'bn' ? 'শিক্ষার্থীরা গেট দিয়ে প্রবেশ করলে তাদের নাম স্বয়ংক্রিয়ভাবে এখানে দেখা যাবে।' : 'When students arrive through the school gate, their names appear here automatically.'}
                     />
                   </div>
                 ) : (
@@ -986,7 +994,7 @@ export const TeacherDashboard: React.FC = () => {
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
                           <span className="text-[11px] text-ink-muted font-mono">
-                            {new Date(st.time).toLocaleTimeString('en-IN', {
+                            {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
@@ -1013,7 +1021,9 @@ export const TeacherDashboard: React.FC = () => {
                       {missingStudents.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">Students not yet recorded at the gate. Mark them manually if in class.</p>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    {language === 'bn' ? 'যেসব শিক্ষার্থীর গেট রেকর্ড পাওয়া যায়নি। ক্লাসে উপস্থিত থাকলে চিহ্নিত করুন।' : 'Students not yet recorded at the gate. Mark them manually if in class.'}
+                  </p>
                 </div>
               </div>
 
@@ -1023,7 +1033,7 @@ export const TeacherDashboard: React.FC = () => {
                     <EmptyState
                       kind="generic"
                       title={t('noMissingStudents')}
-                      description="All students in this class have arrived or are accounted for."
+                      description={language === 'bn' ? 'এই ক্লাসের সকল শিক্ষার্থীর উপস্থিতি গ্রহণ সম্পন্ন হয়েছে।' : 'All students in this class have arrived or are accounted for.'}
                     />
                   </div>
                 ) : (
@@ -1040,32 +1050,32 @@ export const TeacherDashboard: React.FC = () => {
                           <h4 className="text-xs font-extrabold text-ink font-display">
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
-                          <span className="text-[11px] text-ink-muted">
-                            Roll #{st.rollNumber}
+                          <span className="text-[11px] text-ink-muted font-mono">
+                            {language === 'bn' ? 'রোল:' : 'Roll:'} #{st.rollNumber}
                           </span>
                         </div>
                       </div>
 
-                      {/* Status Override Action Buttons */}
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Status Override Action Buttons - Big 44px Touch Targets */}
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(st.studentId, 'PRESENT')}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display cursor-pointer transition-colors"
+                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
                         >
                           {t('markPresent')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(st.studentId, 'LATE')}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 dark:border-amber-600/30 font-display cursor-pointer transition-colors"
+                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 dark:border-amber-600/30 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
                         >
                           {t('markLate')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(st.studentId, 'LEAVE')}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-colors"
+                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
                         >
                           {t('markLeave')}
                         </button>

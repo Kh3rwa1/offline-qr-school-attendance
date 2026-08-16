@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { useLanguage } from '../../app/LanguageProvider';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
-import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Download, Printer, RefreshCw } from 'lucide-react';
+import { Download, Printer, RefreshCw, CalendarCheck2, Users, Utensils } from 'lucide-react';
 
 interface ClassItem {
   id: string;
@@ -21,11 +21,11 @@ interface StudentRollRecord {
   rollNumber: string;
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
   firstScannedAt?: string | null;
-  source?: string;
 }
 
 export const DailyReports: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
+  const { language, t } = useLanguage();
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -67,7 +67,6 @@ export const DailyReports: React.FC = () => {
     rollNumber: r.rollNumber !== undefined && r.rollNumber !== null ? String(r.rollNumber) : '—',
     status: r.status || 'UNMARKED',
     firstScannedAt: r.firstScannedAt || null,
-    source: r.firstScannedAt ? 'QR / Barcode' : 'Standard Roll',
   }));
 
   const presentCount = records.filter((s) => s.status === 'PRESENT').length;
@@ -78,13 +77,12 @@ export const DailyReports: React.FC = () => {
 
   const handleExportCSV = () => {
     const csvContent = [
-      ['Roll Number', 'Student Name', 'Status', 'First Scan Time', 'Capture Method'].join(','),
+      ['Roll Number', 'Student Name', 'Status', 'Recorded Time'].join(','),
       ...records.map((r) => [
         `"${r.rollNumber || ''}"`,
         `"${r.fullName}"`,
         `"${r.status}"`,
         `"${r.firstScannedAt ? new Date(r.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}"`,
-        `"${r.source || 'Standard Roll'}"`,
       ].join(',')),
     ].join('\n');
 
@@ -97,84 +95,138 @@ export const DailyReports: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PRESENT':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+            {t('statusPresent')}
+          </span>
+        );
+      case 'LATE':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+            {t('statusLate')}
+          </span>
+        );
+      case 'ABSENT':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
+            {t('statusAbsent')}
+          </span>
+        );
+      case 'LEAVE':
+      case 'EXCUSED':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
+            {t('statusOnLeave')}
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-muted border border-line font-display">
+            {t('statusNotMarkedYet')}
+          </span>
+        );
+    }
+  };
+
   return (
-    <div className="space-y-8 text-left" id="daily-reports-view">
+    <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="daily-reports-view">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Daily Attendance Inspection
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
+            {t('navDailyLog')}
           </h1>
-          <p className="t-body text-sm text-ink-soft mt-1">
-            Official classroom roll register and student punch timestamps for {activeSchoolName}.
+          <p className="t-body text-xs text-ink-soft mt-1">
+            {language === 'bn' ? `${activeSchoolName}-এর প্রতিদিনের ক্লাসরুম উপস্থিতি ও মিড-ডে মিল খাতা।` : `Daily classroom attendance register and mid-day meal count for ${activeSchoolName}.`}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => window.print()}
-            leftIcon={<Printer className="w-4 h-4" />}
-          >
-            Print Roll Sheet
-          </Button>
-
+        <div className="flex items-center gap-3 flex-wrap">
           <Button
             variant="secondary"
             size="md"
+            onClick={() => window.print()}
+            leftIcon={<Printer className="w-4 h-4" />}
+            className="min-h-[44px] rounded-2xl font-display text-xs"
+          >
+            {language === 'bn' ? 'প্রিন্ট করুন' : 'Print Sheet'}
+          </Button>
+
+          <Button
+            variant="primary"
+            size="md"
             onClick={handleExportCSV}
             disabled={records.length === 0}
-            leftIcon={<Download className="w-4 h-4 text-ink-soft" />}
+            leftIcon={<Download className="w-4 h-4" />}
+            className="min-h-[44px] rounded-2xl font-display text-xs"
           >
-            Export CSV
+            {t('exportCsv')}
           </Button>
         </div>
       </div>
 
       {isLoading ? (
-        <LoadingState type="table" message="Loading official daily roll report…" />
+        <LoadingState type="table" message={language === 'bn' ? 'দৈনিক রিপোর্ট লোড হচ্ছে…' : 'Loading daily roll report…'} />
       ) : error ? (
         <ErrorState message={(error as any)?.message || 'Failed to load report'} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <StatCard
-              title="Attendance Rate"
-              value={`${attendanceRate}%`}
-              trend={{ value: `${presentCount + lateCount} / ${totalCount} Enrolled`, isPositive: attendanceRate >= 90 }}
-              variant="hero-forest"
-            />
-            <StatCard
-              title="Present & Verified"
-              value={`${presentCount} Students`}
-              trend={{ value: `${lateCount} Marked Late`, isPositive: true }}
-              variant="default"
-            />
-            <StatCard
-              title="Unexcused Absentees"
-              value={`${absentCount} Students`}
-              trend={{ value: "SMS Notifications Sent", isPositive: false }}
-              variant="default"
-            />
-            <StatCard
-              title="Mid-Day Meal Count"
-              value={`${presentCount + lateCount} Meals`}
-              trend={{ value: "Eligible Students Present", isPositive: true }}
-              variant="default"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'উপস্থিতির হার' : 'Turnout Rate'}</span>
+                <CalendarCheck2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
+                {attendanceRate}%
+              </div>
+              <p className="text-xs text-ink-soft font-display">
+                {presentCount + lateCount} / {totalCount} {t('statusPresent')}
+              </p>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('statusAbsent')}</span>
+                <Users className="w-4 h-4 text-danger-700" />
+              </div>
+              <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">
+                {absentCount}
+              </div>
+              <p className="text-xs text-ink-soft font-display">
+                {language === 'bn' ? 'জন শিক্ষার্থী অনুপস্থিত' : 'Absent students'}
+              </p>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'মিড-ডে মিল সংখ্যা' : 'Mid-Day Meal'}</span>
+                <Utensils className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-ink font-display font-mono">
+                {presentCount + lateCount}
+              </div>
+              <p className="text-xs text-ink-soft font-display">
+                {language === 'bn' ? 'জন শিক্ষার্থী আহার উপযোগী' : 'Eligible meals'}
+              </p>
+            </div>
           </div>
 
-          {/* Filter and Date Bar */}
+          {/* Filter Bar */}
           <div className="app-card p-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink-soft font-display">Grade & Section:</span>
+                <span className="text-xs font-bold text-ink-soft font-display">
+                  {language === 'bn' ? 'ক্লাস:' : 'Class:'}
+                </span>
                 <select
                   value={activeClassId}
                   onChange={(e) => setSelectedClassId(e.target.value)}
-                  className="px-4 py-2 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 transition-all cursor-pointer font-display"
+                  className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
                 >
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -185,12 +237,14 @@ export const DailyReports: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink-soft font-display">Roll Date:</span>
+                <span className="text-xs font-bold text-ink-soft font-display">
+                  {language === 'bn' ? 'তারিখ:' : 'Date:'}
+                </span>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3.5 py-1.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono"
+                  className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
                 />
               </div>
             </div>
@@ -198,127 +252,50 @@ export const DailyReports: React.FC = () => {
             <button
               type="button"
               onClick={() => refetch()}
-              className="p-2 rounded-full bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink transition-all cursor-pointer border border-line"
-              title="Refresh roll data"
+              className="p-2.5 rounded-2xl bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink cursor-pointer border border-line min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Refresh"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Student Roll Table */}
+          {/* Student Roll List */}
           <div className="app-card overflow-hidden">
             {records.length === 0 ? (
-              <div className="p-8">
+              <div className="p-12">
                 <EmptyState
                   kind="generic"
-                  title="No attendance records found"
-                  description={`No attendance records found for this class section on ${selectedDate}.`}
+                  title={language === 'bn' ? 'এই ক্লাসের কোনো উপস্থিতি তথ্য নেই' : 'No attendance records found'}
+                  description={language === 'bn' ? 'অন্য ক্লাস বা তারিখ নির্বাচন করে পুনরায় দেখুন।' : `No attendance recorded for this class on ${selectedDate}.`}
                 />
               </div>
             ) : (
-              <>
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
-                        <th className="py-4 px-6">Roll #</th>
-                        <th className="py-4 px-6">Student Name</th>
-                        <th className="py-4 px-6">Attendance Status</th>
-                        <th className="py-4 px-6">First Scan Time</th>
-                        <th className="py-4 px-6">Mid-Day Meal</th>
-                        <th className="py-4 px-6 text-right">Method</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line text-xs">
-                      {records.map((student) => (
-                        <tr key={student.studentId} className="table-row-hover">
-                          <td className="py-4 px-6 font-mono font-bold text-ink">
-                            #{student.rollNumber || '—'}
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="font-extrabold text-ink block font-display">
-                              {student.fullName}
-                            </span>
-                            <span className="text-[11px] text-ink-muted font-mono">
-                              ID: {student.studentId.slice(0, 8)}…
-                            </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
-                              student.status === 'PRESENT'
-                                ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                                : student.status === 'LATE'
-                                ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
-                                : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                            }`}>
-                              {student.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 font-mono text-ink-muted">
-                            {student.firstScannedAt
-                              ? new Date(student.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                              : '—'}
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
-                              student.status !== 'ABSENT' ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30' : 'bg-surface-soft text-ink-muted border border-line'
-                            }`}>
-                              {student.status !== 'ABSENT' ? 'Eligible' : 'Not Eligible'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-right font-medium text-ink-soft">
-                            {student.source || 'Optical QR / RFID'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Stacked Cards */}
-                <div className="md:hidden divide-y divide-line">
-                  {records.map((student) => (
-                    <div key={student.studentId} className="p-4 space-y-2.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-mono font-bold text-ink-muted">#{student.rollNumber || '—'}</span>
-                            <span className="font-extrabold text-ink text-sm font-display">{student.fullName}</span>
-                          </div>
-                          <span className="text-[11px] text-ink-muted font-mono">ID: {student.studentId.slice(0, 8)}…</span>
-                        </div>
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
-                          student.status === 'PRESENT'
-                            ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                            : student.status === 'LATE'
-                            ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
-                            : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                        }`}>
-                          {student.status}
-                        </span>
+              <div className="divide-y divide-line">
+                {records.map((r) => (
+                  <div
+                    key={r.studentId}
+                    className="p-4 sm:p-5 flex items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-2xl bg-surface-soft text-ink flex items-center justify-center font-extrabold text-xs font-display shrink-0">
+                        #{r.rollNumber}
                       </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs pt-1.5 border-t border-line text-ink-soft">
-                        <div>
-                          <span className="t-label text-ink-muted block">First Scan</span>
-                          <span className="font-mono text-[11px] text-ink font-semibold">
-                            {student.firstScannedAt
-                              ? new Date(student.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                              : '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="t-label text-ink-muted block">Mid-Day Meal</span>
-                          <span className={`font-semibold text-[11px] ${student.status !== 'ABSENT' ? 'text-success-800' : 'text-ink-muted'}`}>
-                            {student.status !== 'ABSENT' ? 'Eligible' : 'Not Eligible'}
-                          </span>
-                        </div>
+                      <div>
+                        <h4 className="text-base font-extrabold text-ink font-display">{r.fullName}</h4>
+                        {r.firstScannedAt && (
+                          <p className="text-xs text-ink-muted font-mono">
+                            {new Date(r.firstScannedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </>
+
+                    <div className="shrink-0">
+                      {getStatusBadge(r.status)}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </>

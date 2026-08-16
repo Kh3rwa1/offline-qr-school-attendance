@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
-import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { Toast } from '../../components/shared/Toast';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { motion, AnimatePresence } from 'motion/react';
-import { Search, X } from 'lucide-react';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
+import { Search, CreditCard, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 
 interface CredentialItem {
   id: string;
@@ -27,13 +28,13 @@ interface CredentialItem {
 
 export const CardOperations: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
+  const { language, t } = useLanguage();
   const queryClient = useQueryClient();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedCard, setSelectedCard] = useState<CredentialItem | null>(null);
   const [actionType, setActionType] = useState<'SUSPEND' | 'REACTIVATE' | 'REVOKE' | null>(null);
-  const [actionReason, setActionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
@@ -55,29 +56,27 @@ export const CardOperations: React.FC = () => {
     mutationFn: async ({
       credentialId,
       action,
-      reason,
     }: {
       credentialId: string;
       action: 'SUSPEND' | 'REACTIVATE' | 'REVOKE';
-      reason: string;
     }) => {
       const endpoint = action === 'SUSPEND' ? 'suspend' : action === 'REACTIVATE' ? 'reactivate' : 'revoke';
       return api(`/api/v1/schools/${activeSchoolId}/rfid/credentials/${credentialId}/${endpoint}`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: `Action ${action} by operator` }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'rfid'] });
       setSelectedCard(null);
       setActionType(null);
-      setActionReason('');
       setActionError(null);
-      setSuccessToast('Badge status updated successfully.');
+      setSuccessToast(t('badgeUpdatedSuccess'));
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Operation failed');
+      const safe = getUserSafeError(err, language);
+      setActionError(safe.message);
     },
   });
 
@@ -97,11 +96,11 @@ export const CardOperations: React.FC = () => {
   const suspendedCount = cards.filter((c) => c.status === 'SUSPENDED').length;
   const revokedCount = cards.filter((c) => c.status === 'REVOKED').length;
 
-  if (isLoading) return <LoadingState type="table" message="Loading student badges…" />;
+  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'শিক্ষার্থীদের ব্যাজ লোড হচ্ছে…' : 'Loading student badges…'} />;
   if (error) return <ErrorState message={(error as any)?.message || 'Failed to load badges'} onRetry={() => refetch()} />;
 
   return (
-    <div className="space-y-8 text-left" id="card-operations-view">
+    <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="card-operations-view">
       {/* Toast Notification */}
       {successToast && (
         <div className="fixed top-6 right-6 z-50">
@@ -110,13 +109,13 @@ export const CardOperations: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Student Badges
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
+            {t('navStudentBadges')}
           </h1>
-          <p className="t-body text-sm text-ink-soft mt-1">
-            Search student attendance badges, check active status, and manage cards at {activeSchoolName}.
+          <p className="t-body text-xs text-ink-soft mt-1">
+            {language === 'bn' ? 'বিদ্যালয়ের শিক্ষার্থীদের সক্রিয় ও নিষ্ক্রিয় ব্যাজের তালিকা।' : `Search and manage student attendance badges at ${activeSchoolName}.`}
           </p>
         </div>
       </div>
@@ -127,45 +126,50 @@ export const CardOperations: React.FC = () => {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Issued Badges"
-          value={`${cards.length} Badges`}
-          trend={{ value: `${activeCount} Active with Students`, isPositive: true }}
-          variant="hero-forest"
-        />
-        <StatCard
-          title="Active Badges"
-          value={`${activeCount} Active`}
-          trend={{ value: "Gate Enabled", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="Temporarily Stopped"
-          value={`${suspendedCount} Badges`}
-          trend={{ value: "Paused", isPositive: false }}
-          variant="default"
-        />
-        <StatCard
-          title="Cancelled"
-          value={`${revokedCount} Badges`}
-          trend={{ value: "Disabled at Gates", isPositive: false }}
-          variant="default"
-        />
+      {/* Live Badge Counts */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-ink-muted">
+            <span className="text-xs font-bold uppercase font-display">{t('statusActive')}</span>
+            <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+          </div>
+          <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
+            {activeCount}
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-ink-muted">
+            <span className="text-xs font-bold uppercase font-display">{t('statusStopped')}</span>
+            <AlertTriangle className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="text-3xl font-extrabold text-amber-800 font-display font-mono">
+            {suspendedCount}
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-ink-muted">
+            <span className="text-xs font-bold uppercase font-display">{t('statusCancelled')}</span>
+            <XCircle className="w-4 h-4 text-danger-700" />
+          </div>
+          <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">
+            {revokedCount}
+          </div>
+        </div>
       </div>
 
       {/* Search and Card List */}
       <div className="app-card overflow-hidden">
-        <div className="p-6 border-b border-line flex flex-wrap items-center justify-between gap-4">
+        <div className="p-4 sm:p-5 border-b border-line flex flex-wrap items-center justify-between gap-4">
           <div className="relative flex-1 min-w-64 max-w-md">
             <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by student name, code, or last 4 digits…"
-              className="w-full pl-11 pr-4 py-2.5 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
+              placeholder={language === 'bn' ? 'শিক্ষার্থীর নাম বা রোল দিয়ে খুঁজুন…' : 'Search by student name or roll number…'}
+              className="w-full pl-11 pr-4 py-2.5 bg-surface-soft border border-line rounded-2xl text-xs font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
             />
           </div>
 
@@ -173,287 +177,162 @@ export const CardOperations: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none cursor-pointer font-display"
+              className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none cursor-pointer font-display min-h-[44px]"
             >
-              <option value="ALL">All Badges</option>
-              <option value="ACTIVE">Active</option>
-              <option value="SUSPENDED">Stopped</option>
-              <option value="REVOKED">Cancelled</option>
+              <option value="ALL">{language === 'bn' ? 'সকল ব্যাজ' : 'All Badges'}</option>
+              <option value="ACTIVE">{t('statusActive')}</option>
+              <option value="SUSPENDED">{t('statusStopped')}</option>
+              <option value="REVOKED">{t('statusCancelled')}</option>
             </select>
           </div>
         </div>
 
         {filteredCards.length === 0 ? (
-          <div className="p-8">
+          <div className="p-12">
             <EmptyState
               kind="generic"
-              title="No student badges found"
-              description="Give new student badges or adjust your search filter."
+              title={language === 'bn' ? 'কোনো ব্যাজ পাওয়া যায়নি' : 'No student badges found'}
+              description={language === 'bn' ? 'নতুন ব্যাজ দিতে "ব্যাজ দিন" মেনুতে যান।' : 'Assign new badges from the "Give Badge" screen.'}
             />
           </div>
         ) : (
-          <>
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                  <tr>
-                    <th className="px-6 py-4">Student Name</th>
-                    <th className="px-6 py-4">Badge Number</th>
-                    <th className="px-6 py-4">Issue Date</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                  {filteredCards.map((c) => {
-                    const badgeLast4 = c.epcLastFour || (c.credentialDigest ? c.credentialDigest.slice(-4) : '****');
-                    const statusLabel = c.status === 'ACTIVE' ? 'Active' : c.status === 'SUSPENDED' ? 'Stopped' : 'Cancelled';
-
-                    return (
-                      <tr key={c.id} className="table-row-hover">
-                        <td className="px-6 py-4 font-extrabold text-ink text-sm font-display">
-                          {c.studentName || 'Unassigned Student'}
-                          {c.studentCode && <span className="block text-[11px] text-ink-muted font-mono">ID: {c.studentCode}</span>}
-                        </td>
-                        <td className="px-6 py-4 font-mono font-bold text-ink">
-                          <span className="bg-surface-soft px-3 py-1 rounded-lg border border-line text-xs">
-                            •••• {badgeLast4}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-ink-muted">
-                          {new Date(c.issuedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
-                            c.status === 'ACTIVE'
-                              ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                              : c.status === 'SUSPENDED'
-                              ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
-                              : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                          }`}>
-                            {statusLabel}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {c.status === 'ACTIVE' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCard(c);
-                                  setActionType('SUSPEND');
-                                  setActionReason('');
-                                  setActionError(null);
-                                }}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-warning-800 bg-warning-50 hover:bg-warning-100 border border-warning-100 dark:border-warning-600/30 font-display cursor-pointer"
-                              >
-                                Stop
-                              </button>
-                            )}
-
-                            {c.status === 'SUSPENDED' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCard(c);
-                                  setActionType('REACTIVATE');
-                                  setActionReason('');
-                                  setActionError(null);
-                                }}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
-                              >
-                                Activate
-                              </button>
-                            )}
-
-                            {c.status !== 'REVOKED' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCard(c);
-                                  setActionType('REVOKE');
-                                  setActionReason('');
-                                  setActionError(null);
-                                }}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Stacked Cards */}
-            <div className="md:hidden divide-y divide-line">
-              {filteredCards.map((c) => {
-                const badgeLast4 = c.epcLastFour || (c.credentialDigest ? c.credentialDigest.slice(-4) : '****');
-                const statusLabel = c.status === 'ACTIVE' ? 'Active' : c.status === 'SUSPENDED' ? 'Stopped' : 'Cancelled';
-
-                return (
-                  <div key={c.id} className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="font-extrabold text-ink text-sm font-display">{c.studentName || 'Unassigned Student'}</h4>
-                        <span className="text-[11px] text-ink-muted font-mono block mt-0.5">•••• {badgeLast4}</span>
+          <div className="divide-y divide-line">
+            {filteredCards.map((c) => {
+              const badgeLast4 = c.epcLastFour || (c.credentialDigest ? c.credentialDigest.slice(-4) : '••••');
+              return (
+                <div
+                  key={c.id}
+                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-xs font-display shrink-0">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-extrabold text-ink font-display">
+                          {c.studentName || (language === 'bn' ? 'অনির্ধারিত শিক্ষার্থী' : 'Unassigned Student')}
+                        </h4>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
+                          c.status === 'ACTIVE'
+                            ? 'bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30'
+                            : c.status === 'SUSPENDED'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : 'bg-danger-50 text-danger-800 border border-danger-200'
+                        }`}>
+                          {c.status === 'ACTIVE' ? t('statusActive') : c.status === 'SUSPENDED' ? t('statusStopped') : t('statusCancelled')}
+                        </span>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
-                        c.status === 'ACTIVE'
-                          ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                          : c.status === 'SUSPENDED'
-                          ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
-                          : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                      }`}>
-                        {statusLabel}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs pt-1 text-ink-soft">
-                      <span className="text-ink-muted">
-                        Issued: {new Date(c.issuedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
-                      {c.status === 'ACTIVE' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setActionType('SUSPEND');
-                            setActionReason('');
-                            setActionError(null);
-                          }}
-                          className="px-3 py-1.5 rounded-full text-xs font-bold text-warning-800 bg-warning-50 hover:bg-warning-100 border border-warning-100 dark:border-warning-600/30 font-display cursor-pointer"
-                        >
-                          Stop
-                        </button>
-                      )}
-
-                      {c.status === 'SUSPENDED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setActionType('REACTIVATE');
-                            setActionReason('');
-                            setActionError(null);
-                          }}
-                          className="px-3 py-1.5 rounded-full text-xs font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
-                        >
-                          Activate
-                        </button>
-                      )}
-
-                      {c.status !== 'REVOKED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setActionType('REVOKE');
-                            setActionReason('');
-                            setActionError(null);
-                          }}
-                          className="px-3 py-1.5 rounded-full text-xs font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      )}
+                      <p className="text-xs text-ink-muted mt-0.5 font-mono">
+                        {language === 'bn' ? 'ব্যাজ নং:' : 'Badge #:'} •••• {badgeLast4} {c.studentCode && `• ID: ${c.studentCode}`}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    {c.status === 'ACTIVE' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCard(c);
+                          setActionType('SUSPEND');
+                        }}
+                        className="min-h-[44px] rounded-2xl font-display text-xs text-amber-800 hover:bg-amber-50"
+                      >
+                        {t('stopStudentBadge')}
+                      </Button>
+                    )}
+
+                    {c.status === 'SUSPENDED' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCard(c);
+                          setActionType('REACTIVATE');
+                        }}
+                        className="min-h-[44px] rounded-2xl font-display text-xs text-forest-700 dark:text-forest-600"
+                      >
+                        {t('activateBadgeAgain')}
+                      </Button>
+                    )}
+
+                    {c.status !== 'REVOKED' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCard(c);
+                          setActionType('REVOKE');
+                        }}
+                        className="min-h-[44px] rounded-2xl font-display text-xs text-danger-700 hover:bg-danger-50"
+                      >
+                        {t('cancelBadgeForever')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Confirmation Modal */}
-      <AnimatePresence>
-        {selectedCard && actionType && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-extrabold text-ink font-display">
-                  {actionType === 'SUSPEND' ? 'Stop Student Badge' : actionType === 'REACTIVATE' ? 'Activate Student Badge' : 'Cancel Student Badge'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCard(null);
-                    setActionType(null);
-                  }}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer border border-line"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* Action Dialogs */}
+      <ConfirmationDialog
+        isOpen={Boolean(selectedCard && actionType === 'SUSPEND')}
+        onClose={() => {
+          setSelectedCard(null);
+          setActionType(null);
+        }}
+        onConfirm={() => {
+          if (selectedCard) {
+            cardActionMutation.mutate({ credentialId: selectedCard.id, action: 'SUSPEND' });
+          }
+        }}
+        title={t('stopBadgeModalTitle')}
+        description={t('stopBadgeExplanation')}
+        confirmText={t('stopStudentBadge')}
+        cancelText={t('cancel')}
+        intent="warning"
+      />
 
-              <p className="text-xs text-ink-soft mb-4">
-                {actionType === 'SUSPEND'
-                  ? `Temporarily stop badge for ${selectedCard.studentName || 'this student'}. The student will not be able to mark attendance at the gate.`
-                  : actionType === 'REACTIVATE'
-                  ? `Re-activate badge for ${selectedCard.studentName || 'this student'} for gate attendance.`
-                  : `Permanently cancel badge for ${selectedCard.studentName || 'this student'}.`}
-              </p>
+      <ConfirmationDialog
+        isOpen={Boolean(selectedCard && actionType === 'REACTIVATE')}
+        onClose={() => {
+          setSelectedCard(null);
+          setActionType(null);
+        }}
+        onConfirm={() => {
+          if (selectedCard) {
+            cardActionMutation.mutate({ credentialId: selectedCard.id, action: 'REACTIVATE' });
+          }
+        }}
+        title={t('activateBadgeModalTitle')}
+        description={t('activateBadgeExplanation')}
+        confirmText={t('activateBadgeAgain')}
+        cancelText={t('cancel')}
+        intent="success"
+      />
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Reason (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={actionReason}
-                    onChange={(e) => setActionReason(e.target.value)}
-                    placeholder="e.g. Card misplaced or reported lost"
-                    className="w-full px-4 py-2.5 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedCard(null);
-                      setActionType(null);
-                    }}
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    variant={actionType === 'REVOKE' ? 'danger' : 'primary'}
-                    size="sm"
-                    disabled={cardActionMutation.isPending}
-                    isLoading={cardActionMutation.isPending}
-                    onClick={() => {
-                      cardActionMutation.mutate({
-                        credentialId: selectedCard.id,
-                        action: actionType,
-                        reason: actionReason || `Status changed to ${actionType}`,
-                      });
-                    }}
-                  >
-                    Confirm
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ConfirmationDialog
+        isOpen={Boolean(selectedCard && actionType === 'REVOKE')}
+        onClose={() => {
+          setSelectedCard(null);
+          setActionType(null);
+        }}
+        onConfirm={() => {
+          if (selectedCard) {
+            cardActionMutation.mutate({ credentialId: selectedCard.id, action: 'REVOKE' });
+          }
+        }}
+        title={t('cancelBadgeModalTitle')}
+        description={t('cancelBadgeExplanation')}
+        confirmText={t('cancelBadgeForever')}
+        cancelText={t('cancel')}
+        intent="danger"
+      />
     </div>
   );
 };

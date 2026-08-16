@@ -1,48 +1,22 @@
 import React from 'react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { useLanguage } from '../../app/LanguageProvider';
 import CardEnrollmentWizard from '../../components/rfid/CardEnrollmentWizard';
-import { StatCard } from '../../components/shared/StatCard';
 
 export const EnrollmentOperations: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
-  return (
-    <div className="space-y-8 text-left" id="enrollment-operations-view">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-          Give Student Badge
-        </h1>
-        <p className="t-body text-sm text-ink-soft mt-1">
-          Link attendance cards to students at {activeSchoolName}.
-        </p>
-      </div>
+  const { language, t } = useLanguage();
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Gate Attendance"
-          value="Ready"
-          trend={{ value: "School Gate Ready", isPositive: true }}
-          variant="hero-forest"
-        />
-        <StatCard
-          title="Badge Type"
-          value="Standard Badge"
-          trend={{ value: "Walk-Through Entry", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="Student Protection"
-          value="Safe & Private"
-          trend={{ value: "Secure Records", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="Badge Setup"
-          value="Instant"
-          trend={{ value: "Takes 5 Seconds", isPositive: true }}
-          variant="default"
-        />
+  return (
+    <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="enrollment-operations-view">
+      {/* Header */}
+      <div className="bg-surface p-6 rounded-3xl border border-line shadow-xs">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
+          {t('giveBadgeTitle')}
+        </h1>
+        <p className="t-body text-xs text-ink-soft mt-1">
+          {language === 'bn' ? `${activeSchoolName}-এর শিক্ষার্থীদের জন্য নতুন ব্যাজ যুক্ত করুন।` : `Link attendance cards to students at ${activeSchoolName}.`}
+        </p>
       </div>
 
       {/* Wizard */}

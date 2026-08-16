@@ -86,7 +86,7 @@ export const TopBar: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search student, class, or roll number…"
+            placeholder={language === 'bn' ? 'শিক্ষার্থী, ক্লাস বা রোল নম্বর দিয়ে খুঁজুন…' : 'Search student, class, or roll number…'}
             className="w-full pl-11 pr-14 py-2.5 bg-surface-soft border border-line rounded-full text-sm font-medium text-ink placeholder:text-ink-muted focus:bg-surface focus:border-forest-700 transition-all outline-none"
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted bg-surface border border-line px-2 py-0.5 rounded-lg shadow-2xs font-mono">
@@ -251,10 +251,10 @@ export const TopBar: React.FC = () => {
                         setAccountMenuOpen(false);
                         setSwitcherOpen(true);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
                       <School className="w-4 h-4 text-forest-700" />
-                      <span>Switch School</span>
+                      <span>{language === 'bn' ? 'বিদ্যালয় পরিবর্তন' : 'Switch School'}</span>
                     </button>
 
                     <button
@@ -263,10 +263,10 @@ export const TopBar: React.FC = () => {
                         setAccountMenuOpen(false);
                         setSyncDrawerOpen(true);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
-                      <RefreshCw className="w-4 h-4 text-info-600" />
-                      <span>Sync Telemetry</span>
+                      <RefreshCw className="w-4 h-4 text-forest-700" />
+                      <span>{language === 'bn' ? 'ইন্টারনেট ও সিঙ্ক অবস্থা' : 'Internet & Sync Status'}</span>
                     </button>
                   </div>
 
@@ -277,10 +277,10 @@ export const TopBar: React.FC = () => {
                         setAccountMenuOpen(false);
                         setConfirmLogoutOpen(true);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-bold text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/20 rounded-xl transition-colors text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-bold text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/20 rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
                       <LogOut className="w-4 h-4" />
-                      <span>Sign Out</span>
+                      <span>{t('logout')}</span>
                     </button>
                   </div>
                 </motion.div>
@@ -297,8 +297,8 @@ export const TopBar: React.FC = () => {
       <Drawer
         isOpen={syncDrawerOpen}
         onClose={() => setSyncDrawerOpen(false)}
-        title="Sync & Offline Telemetry"
-        description="Local ledger status and outbox queue management"
+        title={language === 'bn' ? 'ইন্টারনেট ও সংরক্ষণ অবস্থা' : 'Internet & Sync Status'}
+        description={language === 'bn' ? 'মোবাইলে সংরক্ষিত উপস্থিতি ও সার্ভার সিঙ্ক' : 'Attendance sync status and saved records'}
         placement="bottom"
       >
         <div className="space-y-5 text-left max-w-lg mx-auto">
@@ -316,18 +316,28 @@ export const TopBar: React.FC = () => {
               </div>
               <div>
                 <h4 className="text-sm font-bold text-ink">
-                  {isOnline ? 'Online Connection Active' : 'Operating in Offline Mode'}
+                  {isOnline
+                    ? language === 'bn'
+                      ? 'ইন্টারনেট সংযোগ চালু আছে'
+                      : 'Internet Connected'
+                    : language === 'bn'
+                    ? 'অফলাইন মোড চালু'
+                    : 'Operating in Offline Mode'}
                 </h4>
                 <p className="text-xs text-ink-muted">
                   {isOnline
-                    ? 'Connected to school attendance server'
-                    : 'Local SQLite ledger recording scans'}
+                    ? language === 'bn'
+                      ? 'বিদ্যালয়ের সার্ভারের সাথে যুক্ত'
+                      : 'Connected to school attendance server'
+                    : language === 'bn'
+                    ? 'উপস্থিতি এই মোবাইলে সুরক্ষিতভাবে সংরক্ষিত হচ্ছে'
+                    : 'Attendance is safely saved on this mobile'}
                 </p>
               </div>
             </div>
 
             <Badge variant={isOnline ? 'success' : 'warning'} size="sm" dot pulse>
-              {isOnline ? 'LIVE' : 'OFFLINE'}
+              {isOnline ? (language === 'bn' ? 'অনলাইন' : 'ONLINE') : (language === 'bn' ? 'অফলাইন' : 'OFFLINE')}
             </Badge>
           </div>
 
@@ -335,7 +345,7 @@ export const TopBar: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
               <span className="text-xs text-ink-muted uppercase font-bold tracking-wider font-display">
-                Unsynced Scans
+                {language === 'bn' ? 'পাঠানোর অপেক্ষায়' : 'Unsent Scans'}
               </span>
               <div className="text-2xl font-extrabold text-ink font-mono mt-1">
                 {outboxCount}
@@ -344,18 +354,18 @@ export const TopBar: React.FC = () => {
 
             <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
               <span className="text-xs text-ink-muted uppercase font-bold tracking-wider font-display">
-                Security Ledger
+                {language === 'bn' ? 'সংরক্ষণ স্থিতি' : 'Storage Status'}
               </span>
-              <div className="text-sm font-bold text-success-700 dark:text-success-400 mt-1.5 flex items-center gap-1.5">
+              <div className="text-sm font-bold text-forest-700 dark:text-forest-400 mt-1.5 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
-                <span>AES-256 RLS</span>
+                <span>{language === 'bn' ? 'ডিভাইসে সুরক্ষিত' : 'Safely Saved'}</span>
               </div>
             </div>
           </div>
 
           {lastSyncedAt && (
             <p className="text-xs text-ink-muted text-center font-mono">
-              Last synced at: {new Date(lastSyncedAt).toLocaleTimeString()}
+              {language === 'bn' ? 'সর্বশেষ সার্ভারে পাঠানো হয়েছে:' : 'Last synced at:'} {new Date(lastSyncedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN')}
             </p>
           )}
 
@@ -370,9 +380,15 @@ export const TopBar: React.FC = () => {
               disabled={!isOnline || isSyncing}
               isLoading={isSyncing}
               leftIcon={<RefreshCw className="w-4 h-4" />}
-              className="w-full text-base font-bold shadow-lg shadow-forest-700/20"
+              className="w-full text-base font-bold shadow-lg shadow-forest-700/20 min-h-[48px] rounded-2xl font-display"
             >
-              {isSyncing ? 'Synchronizing Outbox…' : 'Sync Records Now'}
+              {isSyncing
+                ? language === 'bn'
+                  ? 'সার্ভারে পাঠানো হচ্ছে…'
+                  : 'Sending to Server…'
+                : language === 'bn'
+                ? 'এখনই সার্ভারে পাঠান'
+                : 'Send Saved Records Now'}
             </Button>
           </div>
         </div>
@@ -383,10 +399,10 @@ export const TopBar: React.FC = () => {
         isOpen={confirmLogoutOpen}
         onClose={() => setConfirmLogoutOpen(false)}
         onConfirm={handleLogout}
-        title="Sign Out of AttendEase?"
-        description="Your active session will be ended. Unsynced attendance events recorded on this device remain safely cached in the encrypted local ledger."
-        confirmText="Sign Out"
-        cancelText="Stay Signed In"
+        title={language === 'bn' ? 'লগআউট করতে চান?' : 'Sign Out of AttendEase?'}
+        description={language === 'bn' ? 'আপনি লগআউট করলেও ডিভাইসে সংরক্ষিত কোনো উপস্থিতি মুছে যাবে না।' : 'Your active session will be ended. Unsynced attendance events recorded on this device remain safely saved.'}
+        confirmText={t('logout')}
+        cancelText={language === 'bn' ? 'ফিরে যান' : 'Stay Signed In'}
         intent="danger"
       />
     </header>

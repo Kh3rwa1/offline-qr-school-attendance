@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
-import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { Toast } from '../../components/shared/Toast';
 import { EmptyState } from '../../components/shared/EmptyState';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, UserPlus, ShieldCheck, X, RefreshCw, ShieldAlert } from 'lucide-react';
+import { Search, UserPlus, X, Users, Eye, EyeOff, Shield } from 'lucide-react';
 import { UserRole } from '../../auth/permissions';
 
 interface MemberItem {
@@ -24,23 +26,19 @@ interface MemberItem {
 
 export const UserManagement: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
+  const { language, t } = useLanguage();
   const queryClient = useQueryClient();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Modals state
   const [suspendModalUser, setSuspendModalUser] = useState<MemberItem | null>(null);
-  const [suspendReason, setSuspendReason] = useState('');
-
   const [reactivateModalUser, setReactivateModalUser] = useState<MemberItem | null>(null);
-  const [reactivateReason, setReactivateReason] = useState('');
-
-  const [roleModalUser, setRoleModalUser] = useState<MemberItem | null>(null);
-  const [selectedNewRole, setSelectedNewRole] = useState<UserRole>('TEACHER');
-  const [roleChangeReason, setRoleChangeReason] = useState('');
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -84,64 +82,46 @@ export const UserManagement: React.FC = () => {
       setFormError(null);
     },
     onError: (err: any) => {
-      setFormError(err.message || 'Failed to add staff member');
+      const safe = getUserSafeError(err, language);
+      setFormError(safe.message);
     },
   });
 
-  // Mutation: Suspend Member
+  // Mutation: Suspend Member (Stop Access)
   const suspendMutation = useMutation({
-    mutationFn: async ({ userId, reason }: { userId: string; reason?: string }) => {
+    mutationFn: async ({ userId }: { userId: string }) => {
       return api(`/api/v1/schools/${activeSchoolId}/members/${userId}/suspend`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: 'Access stopped by administrator' }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
       setSuspendModalUser(null);
-      setSuspendReason('');
       setActionError(null);
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Failed to suspend staff member');
+      const safe = getUserSafeError(err, language);
+      setActionError(safe.message);
     },
   });
 
-  // Mutation: Reactivate Member
+  // Mutation: Reactivate Member (Restore Access)
   const reactivateMutation = useMutation({
-    mutationFn: async ({ userId, reason }: { userId: string; reason?: string }) => {
+    mutationFn: async ({ userId }: { userId: string }) => {
       return api(`/api/v1/schools/${activeSchoolId}/members/${userId}/reactivate`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: 'Access restored by administrator' }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
       setReactivateModalUser(null);
-      setReactivateReason('');
       setActionError(null);
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Failed to reactivate staff member');
-    },
-  });
-
-  // Mutation: Change Role
-  const roleMutation = useMutation({
-    mutationFn: async ({ userId, newRole, reason }: { userId: string; newRole: UserRole; reason?: string }) => {
-      return api(`/api/v1/schools/${activeSchoolId}/members/${userId}/role`, {
-        method: 'PATCH',
-        body: JSON.stringify({ newRole, reason }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
-      setRoleModalUser(null);
-      setRoleChangeReason('');
-      setActionError(null);
-    },
-    onError: (err: any) => {
-      setActionError(err.message || 'Failed to change staff role');
+      const safe = getUserSafeError(err, language);
+      setActionError(safe.message);
     },
   });
 
@@ -149,15 +129,15 @@ export const UserManagement: React.FC = () => {
     e.preventDefault();
     setFormError(null);
     if (!formData.fullName.trim()) {
-      setFormError('Full name is required');
+      setFormError(language === 'bn' ? 'পূর্ণ নাম লিখুন' : 'Full name is required');
       return;
     }
     if (!formData.phoneNumber.trim()) {
-      setFormError('Phone number is required');
+      setFormError(language === 'bn' ? '১০ ডিজিটের মোবাইল নম্বর লিখুন' : '10-digit mobile number is required');
       return;
     }
     if (!formData.temporaryPassword || formData.temporaryPassword.length < 8) {
-      setFormError('Temporary password must be at least 8 characters long');
+      setFormError(t('passwordRequirementText'));
       return;
     }
     inviteMutation.mutate(formData);
@@ -176,16 +156,31 @@ export const UserManagement: React.FC = () => {
   const adminCount = members.filter((m) => m.role === 'SCHOOL_ADMIN' && m.status === 'ACTIVE').length;
   const rfidCount = members.filter((m) => m.role === 'RFID_OPERATOR').length;
 
+  const getRoleBadgeLabel = (role: UserRole) => {
+    switch (role) {
+      case 'TEACHER':
+        return t('roleTeacher');
+      case 'SCHOOL_ADMIN':
+        return t('roleSchoolAdmin');
+      case 'RFID_OPERATOR':
+        return t('roleRfidOperator');
+      case 'REPORT_VIEWER':
+        return t('roleReportViewer');
+      default:
+        return role;
+    }
+  };
+
   return (
-    <div className="space-y-8 text-left" id="user-management-view">
+    <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="user-management-view">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            School User Management
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
+            {t('staffDirectoryTitle')}
           </h1>
-          <p className="t-body text-sm text-ink-soft mt-1">
-            Authorized teachers, turnstile operators, and administrators at {activeSchoolName}.
+          <p className="t-body text-xs text-ink-soft mt-1">
+            {t('staffDirectorySubtitle')} {activeSchoolName}
           </p>
         </div>
 
@@ -197,13 +192,14 @@ export const UserManagement: React.FC = () => {
             setFormError(null);
           }}
           leftIcon={<UserPlus className="w-4 h-4" />}
+          className="min-h-[44px] rounded-2xl font-display"
         >
-          Add Staff Member
+          {t('addStaffMember')}
         </Button>
       </div>
 
       {isLoading ? (
-        <LoadingState type="table" message="Loading staff directory…" />
+        <LoadingState type="table" message={language === 'bn' ? 'কর্মীদের তালিকা লোড হচ্ছে…' : 'Loading staff directory…'} />
       ) : error ? (
         <ErrorState message={(error as any)?.message || 'Failed to load staff roster'} onRetry={() => refetch()} />
       ) : (
@@ -215,244 +211,138 @@ export const UserManagement: React.FC = () => {
           )}
 
           {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <StatCard
-              title="Total Staff"
-              value={`${members.length} Members`}
-              trend={{ value: `${members.filter((m) => m.status === 'ACTIVE').length} Active`, isPositive: true }}
-              variant="hero-forest"
-            />
-            <StatCard
-              title="Classroom Teachers"
-              value={`${teacherCount} Active`}
-              trend={{ value: "Class Sessions Assigned", isPositive: true }}
-              variant="default"
-            />
-            <StatCard
-              title="Gate RFID Operators"
-              value={`${rfidCount} Active`}
-              trend={{ value: "Turnstiles In-Charge", isPositive: true }}
-              variant="default"
-            />
-            <StatCard
-              title="School Administrators"
-              value={`${adminCount} In-Charge`}
-              trend={{ value: "Headmaster & Officers", isPositive: true }}
-              variant="default"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('staffDirectoryTitle')}</span>
+                <Users className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-ink font-display font-mono">
+                {members.length}
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('roleTeacher')}</span>
+                <Users className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
+                {teacherCount}
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('roleSchoolAdmin')}</span>
+                <Shield className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-ink font-display font-mono">
+                {adminCount}
+              </div>
+            </div>
           </div>
 
           {/* Filter and Search Bar */}
           <div className="app-card p-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-72">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search faculty by name or phone…"
-                  className="w-full pl-11 pr-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
-                />
-              </div>
+            <div className="relative flex-1 min-w-64 max-w-md">
+              <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={language === 'bn' ? 'নাম বা মোবাইল নম্বর দিয়ে খুঁজুন…' : 'Search by name or phone…'}
+                className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
+              />
             </div>
 
             <div className="flex items-center gap-2">
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 transition-all cursor-pointer font-display"
+                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
               >
-                <option value="ALL">All Roles</option>
-                <option value="SCHOOL_ADMIN">Headmaster / Admin</option>
-                <option value="TEACHER">Teacher</option>
-                <option value="RFID_OPERATOR">Gate Operator</option>
-                <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
+                <option value="ALL">{language === 'bn' ? 'সকল পদবী' : 'All Roles'}</option>
+                <option value="SCHOOL_ADMIN">{t('roleSchoolAdmin')}</option>
+                <option value="TEACHER">{t('roleTeacher')}</option>
+                <option value="RFID_OPERATOR">{t('roleRfidOperator')}</option>
+                <option value="REPORT_VIEWER">{t('roleReportViewer')}</option>
               </select>
             </div>
           </div>
 
-          {/* Staff Table */}
+          {/* Staff List */}
           <div className="app-card overflow-hidden">
             {filteredUsers.length === 0 ? (
-              <div className="p-8">
+              <div className="p-12">
                 <EmptyState
                   kind="generic"
-                  title="No faculty members found"
-                  description="Add new staff members or clear your search query."
+                  title={language === 'bn' ? 'কোনো কর্মী খুঁজে পাওয়া যায়নি' : 'No staff members found'}
+                  description={language === 'bn' ? 'নতুন কর্মী যুক্ত করতে "নতুন কর্মী যোগ করুন" বোতামে চাপ দিন।' : 'Add new staff members or clear your search query.'}
                 />
               </div>
             ) : (
-              <>
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
-                        <th className="py-4 px-6">Faculty Member</th>
-                        <th className="py-4 px-6">Role & Status</th>
-                        <th className="py-4 px-6">Phone Number</th>
-                        <th className="py-4 px-6">Member Since</th>
-                        <th className="py-4 px-6 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line text-xs">
-                      {filteredUsers.map((user) => (
-                        <tr key={user.userId} className="table-row-hover">
-                          <td className="py-4 px-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold font-display">
-                                {user.fullName.charAt(0)}
-                              </div>
-                              <div>
-                                <span className="font-extrabold text-ink block font-display">
-                                  {user.fullName}
-                                </span>
-                                <span className="text-[11px] text-ink-muted font-mono">
-                                  ID: {user.userId.slice(0, 8)}…
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
-                                {user.role.replace('_', ' ')}
-                              </span>
-                              <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-success-600' : 'bg-danger-600'}`} />
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 font-mono font-bold text-ink">
-                            {user.phoneNumber}
-                          </td>
-                          <td className="py-4 px-6 text-ink-muted">
-                            {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {user.status === 'ACTIVE' ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setRoleModalUser(user);
-                                      setSelectedNewRole(user.role);
-                                      setRoleChangeReason('');
-                                      setActionError(null);
-                                    }}
-                                    className="px-3 py-1 rounded-full text-[11px] font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display"
-                                  >
-                                    Change Role
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
-                                    onClick={() => {
-                                      setSuspendModalUser(user);
-                                      setSuspendReason('');
-                                      setActionError(null);
-                                    }}
-                                    className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer disabled:opacity-30 font-display"
-                                    title={user.role === 'SCHOOL_ADMIN' && adminCount <= 1 ? 'Cannot suspend last active admin' : 'Suspend faculty member'}
-                                  >
-                                    Suspend
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setReactivateModalUser(user);
-                                    setReactivateReason('');
-                                    setActionError(null);
-                                  }}
-                                  className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display"
-                                >
-                                  Reactivate
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Stacked Cards */}
-                <div className="md:hidden divide-y divide-line">
-                  {filteredUsers.map((user) => (
-                    <div key={user.userId} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold font-display shrink-0">
-                            {user.fullName.charAt(0)}
-                          </div>
-                          <div>
-                            <h4 className="font-extrabold text-ink text-sm font-display">{user.fullName}</h4>
-                            <span className="text-xs font-mono font-bold text-ink-soft block mt-0.5">{user.phoneNumber}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
-                            {user.role.replace('_', ' ')}
-                          </span>
-                          <span className={`w-2 h-2 rounded-full ${user.status === 'ACTIVE' ? 'bg-success-600' : 'bg-danger-600'}`} />
-                        </div>
+              <div className="divide-y divide-line">
+                {filteredUsers.map((user) => (
+                  <div
+                    key={user.userId}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-sm font-display shadow-2xs shrink-0">
+                        {user.fullName.charAt(0)}
                       </div>
-
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-line">
-                        <span className="text-[11px] text-ink-muted">
-                          Joined {new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-                        </span>
-
+                      <div>
                         <div className="flex items-center gap-2">
-                          {user.status === 'ACTIVE' ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setRoleModalUser(user);
-                                  setSelectedNewRole(user.role);
-                                  setRoleChangeReason('');
-                                  setActionError(null);
-                                }}
-                                className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold text-ink-soft bg-surface-soft hover:bg-surface border border-line transition-all cursor-pointer font-display flex items-center"
-                              >
-                                Change Role
-                              </button>
-                              <button
-                                type="button"
-                                disabled={suspendMutation.isPending || (user.role === 'SCHOOL_ADMIN' && adminCount <= 1)}
-                                onClick={() => {
-                                  setSuspendModalUser(user);
-                                  setSuspendReason('');
-                                  setActionError(null);
-                                }}
-                                className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 transition-all cursor-pointer disabled:opacity-30 font-display flex items-center"
-                              >
-                                Suspend
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReactivateModalUser(user);
-                                setReactivateReason('');
-                                setActionError(null);
-                              }}
-                              className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 transition-all cursor-pointer font-display flex items-center"
-                            >
-                              Reactivate
-                            </button>
+                          <h4 className="text-base font-extrabold text-ink font-display">
+                            {user.fullName}
+                          </h4>
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                            {getRoleBadgeLabel(user.role)}
+                          </span>
+                          {user.status === 'SUSPENDED' && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
+                              {t('statusStopped')}
+                            </span>
                           )}
                         </div>
+                        <p className="text-xs text-ink-muted mt-0.5 font-mono font-semibold">
+                          {user.phoneNumber}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      {user.status === 'ACTIVE' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={user.role === 'SCHOOL_ADMIN' && adminCount <= 1}
+                          onClick={() => {
+                            if (user.role === 'SCHOOL_ADMIN' && adminCount <= 1) {
+                              setActionError(t('protectLastAdminError'));
+                              return;
+                            }
+                            setSuspendModalUser(user);
+                          }}
+                          className="min-h-[44px] rounded-2xl font-display text-xs text-amber-800 hover:bg-amber-50"
+                        >
+                          {t('stopStaffAccess')}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setReactivateModalUser(user)}
+                          className="min-h-[44px] rounded-2xl font-display text-xs text-forest-700 dark:text-forest-600"
+                        >
+                          {t('restoreStaffAccess')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </>
@@ -461,356 +351,178 @@ export const UserManagement: React.FC = () => {
       {/* Add Staff Modal */}
       <AnimatePresence>
         {isInviteOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-staff-modal-title"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-xl font-extrabold text-ink font-display">
-                  Add Faculty / Staff
+              <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
+                <h3 id="add-staff-modal-title" className="text-xl font-extrabold text-ink font-display">
+                  {t('addStaffMember')}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsInviteOpen(false)}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  aria-label={t('close')}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {formError && (
-                <div className="mb-4">
-                  <Toast kind="error" message={formError} onDismiss={() => setFormError(null)} autoDismiss={false} />
+                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-xs font-semibold">
+                  {formError}
                 </div>
               )}
 
               <form onSubmit={handleInviteSubmit} className="space-y-4">
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Full Name *
+                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    {t('fullNameLabel')} *
                   </label>
                   <input
                     type="text"
                     required
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    placeholder="e.g. Smt. Ananya Mukherjee"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
+                    placeholder={language === 'bn' ? 'যেমন: সুভাষ চন্দ্র বসু' : 'e.g. Subhash Bose'}
+                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Mobile Number *
+                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    {t('phoneNumberLabel')} *
                   </label>
                   <input
-                    type="text"
+                    type="tel"
                     required
                     value={formData.phoneNumber}
                     onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    placeholder="+919830012345"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none font-mono"
+                    placeholder="9830012345"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Role in School *
+                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    {t('staffRoleLabel')} *
                   </label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
                   >
-                    <option value="TEACHER">Classroom Teacher</option>
-                    <option value="SCHOOL_ADMIN">Headmaster / School Admin</option>
-                    <option value="RFID_OPERATOR">Gate RFID Operator</option>
-                    <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
+                    <option value="TEACHER">{t('roleTeacher')}</option>
+                    <option value="SCHOOL_ADMIN">{t('roleSchoolAdmin')}</option>
+                    <option value="RFID_OPERATOR">{t('roleRfidOperator')}</option>
+                    <option value="REPORT_VIEWER">{t('roleReportViewer')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Designation
+                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    {t('temporaryPasswordLabel')} *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.designation}
-                    onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                    placeholder="e.g. Assistant Teacher (Maths)"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={formData.temporaryPassword}
+                      onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full pl-4 pr-12 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-ink-muted hover:text-ink cursor-pointer"
+                      aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    {t('passwordRequirementText')}
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Initial Password (min 8 chars) *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    minLength={8}
-                    value={formData.temporaryPassword}
-                    onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
-                    placeholder="••••••••••••"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                  />
+                {/* Role Explainer Box */}
+                <div className="p-3 rounded-2xl bg-surface-soft border border-line text-xs text-ink-soft space-y-1">
+                  <p className="font-bold text-ink">{t('rolePermissionsExplanation')}</p>
+                  <p>
+                    {formData.role === 'TEACHER' && t('roleTeacherDesc')}
+                    {formData.role === 'SCHOOL_ADMIN' && t('roleSchoolAdminDesc')}
+                    {formData.role === 'RFID_OPERATOR' && t('roleRfidOperatorDesc')}
+                    {formData.role === 'REPORT_VIEWER' && t('roleReportViewerDesc')}
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="reactivateExisting"
-                    checked={formData.reactivateExisting}
-                    onChange={(e) => setFormData({ ...formData, reactivateExisting: e.target.checked })}
-                    className="w-4 h-4 rounded text-forest-700 focus:ring-forest-700 border-line"
-                  />
-                  <label htmlFor="reactivateExisting" className="text-xs font-medium text-ink-soft cursor-pointer">
-                    Explicitly reactivate if user was previously suspended in this school
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                <div className="flex items-center justify-end gap-3 pt-3">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsInviteOpen(false)}
+                    className="min-h-[44px] font-display"
                   >
-                    Cancel
+                    {t('cancel')}
                   </Button>
                   <Button
                     type="submit"
                     variant="primary"
-                    size="sm"
+                    size="md"
                     isLoading={inviteMutation.isPending}
+                    className="min-h-[44px] font-display"
                   >
-                    {inviteMutation.isPending ? 'Adding Member…' : 'Add to Staff'}
+                    {t('addStaffMember')}
                   </Button>
                 </div>
               </form>
             </motion.div>
           </div>
         )}
-
-        {/* Change Role Modal */}
-        {roleModalUser && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-ink">
-                  <ShieldCheck className="w-5 h-5 text-forest-700 dark:text-forest-600" />
-                  <h3 className="text-lg font-extrabold font-display">
-                    Change Faculty Role
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRoleModalUser(null)}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="t-body text-xs text-ink-soft mb-4">
-                Update permissions and responsibilities for <strong>{roleModalUser.fullName}</strong>.
-              </p>
-
-              <div className="space-y-4 mb-5">
-                <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    New Role *
-                  </label>
-                  <select
-                    value={selectedNewRole}
-                    onChange={(e) => setSelectedNewRole(e.target.value as UserRole)}
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none"
-                  >
-                    <option value="TEACHER">Classroom Teacher</option>
-                    <option value="SCHOOL_ADMIN">Headmaster / School Admin</option>
-                    <option value="RFID_OPERATOR">Gate RFID Operator</option>
-                    <option value="REPORT_VIEWER">District Auditor / Report Viewer</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Reason for Role Change
-                  </label>
-                  <input
-                    type="text"
-                    value={roleChangeReason}
-                    onChange={(e) => setRoleChangeReason(e.target.value)}
-                    placeholder="e.g. Promoted to administrator or reassigned to gate duty"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-medium text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setRoleModalUser(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  isLoading={roleMutation.isPending}
-                  onClick={() => roleMutation.mutate({ userId: roleModalUser.userId, newRole: selectedNewRole, reason: roleChangeReason.trim() })}
-                >
-                  {roleMutation.isPending ? 'Updating…' : 'Confirm Role Change'}
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Reactivate Confirmation Modal */}
-        {reactivateModalUser && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-success-800">
-                  <RefreshCw className="w-5 h-5" />
-                  <h3 className="text-lg font-extrabold font-display">
-                    Reactivate Faculty Member
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setReactivateModalUser(null)}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="t-body text-xs text-ink-soft mb-4">
-                Reactivate attendance scanning and console access for <strong>{reactivateModalUser.fullName}</strong>.
-              </p>
-
-              <div className="mb-5">
-                <label className="block t-label text-ink mb-1 font-display">
-                  Reason for Reactivation
-                </label>
-                <input
-                  type="text"
-                  value={reactivateReason}
-                  onChange={(e) => setReactivateReason(e.target.value)}
-                  placeholder="e.g. Returned from leave or re-instated"
-                  className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-medium text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setReactivateModalUser(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  isLoading={reactivateMutation.isPending}
-                  onClick={() => reactivateMutation.mutate({ userId: reactivateModalUser.userId, reason: reactivateReason.trim() })}
-                >
-                  {reactivateMutation.isPending ? 'Reactivating…' : 'Confirm Reactivation'}
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Suspend Confirmation Modal */}
-        {suspendModalUser && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-danger-800">
-                  <ShieldAlert className="w-5 h-5" />
-                  <h3 className="text-lg font-extrabold font-display">
-                    Suspend Faculty Access
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSuspendModalUser(null)}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="t-body text-xs text-ink-soft mb-4">
-                Are you sure you want to suspend attendance scanning and console access for <strong>{suspendModalUser.fullName}</strong> ({suspendModalUser.phoneNumber})?
-              </p>
-
-              <div className="mb-5">
-                <label className="block t-label text-ink mb-1 font-display">
-                  Reason for Suspension (Mandatory)
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={suspendReason}
-                  onChange={(e) => setSuspendReason(e.target.value)}
-                  placeholder="e.g. Transferred to another institution, on extended medical leave, or credentials compromised…"
-                  className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-medium text-ink focus:bg-surface focus:border-danger-600 outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSuspendModalUser(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  disabled={suspendMutation.isPending || suspendReason.trim().length < 3}
-                  isLoading={suspendMutation.isPending}
-                  onClick={() => suspendMutation.mutate({ userId: suspendModalUser.userId, reason: suspendReason.trim() })}
-                >
-                  {suspendMutation.isPending ? 'Suspending…' : 'Confirm Suspension'}
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
       </AnimatePresence>
+
+      {/* Stop Access Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={Boolean(suspendModalUser)}
+        onClose={() => setSuspendModalUser(null)}
+        onConfirm={() => {
+          if (suspendModalUser) {
+            suspendMutation.mutate({ userId: suspendModalUser.userId });
+          }
+        }}
+        title={t('stopAccessModalTitle')}
+        description={t('stopAccessExplanation')}
+        confirmText={t('stopStaffAccess')}
+        cancelText={t('cancel')}
+        intent="warning"
+      />
+
+      {/* Restore Access Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={Boolean(reactivateModalUser)}
+        onClose={() => setReactivateModalUser(null)}
+        onConfirm={() => {
+          if (reactivateModalUser) {
+            reactivateMutation.mutate({ userId: reactivateModalUser.userId });
+          }
+        }}
+        title={t('restoreAccessModalTitle')}
+        description={t('restoreAccessExplanation')}
+        confirmText={t('restoreStaffAccess')}
+        cancelText={t('cancel')}
+        intent="success"
+      />
     </div>
   );
 };

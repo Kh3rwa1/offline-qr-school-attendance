@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
-import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { Toast } from '../../components/shared/Toast';
 import { EmptyState } from '../../components/shared/EmptyState';
@@ -16,7 +17,8 @@ import {
   Download, 
   X, 
   FileSpreadsheet, 
-  AlertTriangle
+  GraduationCap,
+  Users
 } from 'lucide-react';
 
 interface StudentItem {
@@ -60,6 +62,7 @@ interface StagedImportJob {
 
 export const StudentRoster: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
+  const { language, t } = useLanguage();
   const queryClient = useQueryClient();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -163,11 +166,12 @@ export const StudentRoster: React.FC = () => {
         guardianPhone: '',
       });
       setFormError(null);
-      setSuccessToast('Student successfully enrolled in roster.');
+      setSuccessToast(language === 'bn' ? 'শিক্ষার্থী সফলভাবে যুক্ত করা হয়েছে।' : 'Student successfully added.');
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
-      setFormError(err.message || 'Failed to enroll student');
+      const safe = getUserSafeError(err, language);
+      setFormError(safe.message);
     },
   });
 
@@ -194,7 +198,8 @@ export const StudentRoster: React.FC = () => {
       setImportError(null);
     },
     onError: (err: any) => {
-      setImportError(err.message || 'Failed to parse and validate XLSX file');
+      const safe = getUserSafeError(err, language);
+      setImportError(safe.message);
     },
   });
 
@@ -211,11 +216,12 @@ export const StudentRoster: React.FC = () => {
       setIsImportOpen(false);
       setStagedJob(null);
       setImportFile(null);
-      setSuccessToast(`Successfully imported ${res.enrolledCount || stagedJob?.validRowsCount || 'all'} students!`);
+      setSuccessToast(language === 'bn' ? `মোট ${res.enrolledCount || stagedJob?.validRowsCount || 'সকল'} জন শিক্ষার্থী যুক্ত হয়েছে!` : `Successfully imported ${res.enrolledCount || stagedJob?.validRowsCount || 'all'} students!`);
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
-      setImportError(err.message || 'Transaction commit failed');
+      const safe = getUserSafeError(err, language);
+      setImportError(safe.message);
     },
   });
 
@@ -233,7 +239,7 @@ export const StudentRoster: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      setImportError(err.message || 'Template download failed');
+      setImportError(language === 'bn' ? 'ফাইল ডাউনলোড ব্যর্থ হয়েছে' : 'Template download failed');
     }
   };
 
@@ -244,6 +250,7 @@ export const StudentRoster: React.FC = () => {
     const term = searchTerm.toLowerCase();
     return (
       s.name.toLowerCase().includes(term) ||
+      (s.nameBn && s.nameBn.toLowerCase().includes(term)) ||
       s.studentCode.toLowerCase().includes(term) ||
       (s.banglarShikshaId || '').toLowerCase().includes(term) ||
       (s.enrollment?.rollNumber?.toString() || '').includes(term)
@@ -251,7 +258,7 @@ export const StudentRoster: React.FC = () => {
   });
 
   return (
-    <div className="space-y-8 text-left" id="student-roster-view">
+    <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="student-roster-view">
       {/* Toast Notification */}
       <AnimatePresence>
         {successToast && (
@@ -262,13 +269,13 @@ export const StudentRoster: React.FC = () => {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Student Roster Directory
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
+            {t('navStudents')}
           </h1>
-          <p className="t-body text-sm text-ink-soft mt-1">
-            Manage student registrations, class section assignments, and staged bulk XLSX imports for {activeSchoolName}.
+          <p className="t-body text-xs text-ink-soft mt-1">
+            {language === 'bn' ? `${activeSchoolName}-এর সকল শিক্ষার্থীর তালিকা ও ক্লাস বিভাজন।` : `Manage student enrollments and class sections for ${activeSchoolName}.`}
           </p>
         </div>
 
@@ -283,8 +290,9 @@ export const StudentRoster: React.FC = () => {
               setImportError(null);
             }}
             leftIcon={<Upload className="w-4 h-4 text-ink-soft" />}
+            className="min-h-[44px] rounded-2xl font-display"
           >
-            Bulk XLSX Import
+            {t('importStudents')}
           </Button>
 
           <Button
@@ -295,44 +303,50 @@ export const StudentRoster: React.FC = () => {
               setFormError(null);
             }}
             leftIcon={<Plus className="w-4 h-4" />}
+            className="min-h-[44px] rounded-2xl font-display"
           >
-            Enroll Student
+            {t('addStudent')}
           </Button>
         </div>
       </div>
 
       {isLoading ? (
-        <LoadingState type="table" message="Loading student enrollment roster…" />
+        <LoadingState type="table" message={language === 'bn' ? 'শিক্ষার্থীদের তালিকা লোড হচ্ছে…' : 'Loading student enrollment roster…'} />
       ) : error ? (
         <ErrorState message={(error as any)?.message || 'Failed to load students'} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <StatCard
-              title="Enrolled Students"
-              value={students.length}
-              trend={{ value: `${students.filter(s => s.status === 'ACTIVE').length} Active Enrolled`, isPositive: true }}
-              variant="hero-forest"
-            />
-            <StatCard
-              title="Active Class Sections"
-              value={`${classSections.length} Sections`}
-              trend={{ value: "Class 5 to 12 Roster", isPositive: true }}
-              variant="default"
-            />
-            <StatCard
-              title="Current Academic Year"
-              value={currentYear?.name || '2026-27'}
-              trend={{ value: "Academic Session", isPositive: true }}
-              variant="default"
-            />
-            <StatCard
-              title="Banglar Shiksha Synced"
-              value={students.filter(s => s.banglarShikshaId).length}
-              trend={{ value: "Govt ID Linked", isPositive: true }}
-              variant="default"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('navStudents')}</span>
+                <Users className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-ink font-display font-mono">
+                {students.length}
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('navClassesAndSections')}</span>
+                <GraduationCap className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
+                {classSections.length}
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-ink-muted">
+                <span className="text-xs font-bold uppercase font-display">{t('schoolYearTitle')}</span>
+                <GraduationCap className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-ink font-display font-mono">
+                {currentYear?.name || '2026-27'}
+              </div>
+            </div>
           </div>
 
           {/* Search & Filters */}
@@ -341,10 +355,10 @@ export const StudentRoster: React.FC = () => {
               <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search by name, student code, roll #, or Banglar Shiksha ID…"
+                placeholder={language === 'bn' ? 'নাম, রোল বা কোড দিয়ে খুঁজুন…' : 'Search by name, roll, or student code…'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none transition-all"
+                className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
               />
             </div>
 
@@ -352,9 +366,9 @@ export const StudentRoster: React.FC = () => {
               <select
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
-                className="px-4 py-2 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-display"
+                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
               >
-                <option value="ALL">All Class Sections</option>
+                <option value="ALL">{language === 'bn' ? 'সকল ক্লাস' : 'All Class Sections'}</option>
                 {classSections.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.className} - {c.sectionName}
@@ -365,12 +379,12 @@ export const StudentRoster: React.FC = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-display"
+                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
               >
-                <option value="ALL">All Statuses</option>
-                <option value="ACTIVE">Active</option>
-                <option value="ARCHIVED">Archived</option>
-                <option value="TRANSFERRED">Transferred</option>
+                <option value="ALL">{language === 'bn' ? 'সকল অবস্থা' : 'All Statuses'}</option>
+                <option value="ACTIVE">{t('statusActive')}</option>
+                <option value="ARCHIVED">{language === 'bn' ? 'সংরক্ষিত' : 'Archived'}</option>
+                <option value="TRANSFERRED">{language === 'bn' ? 'স্থানান্তরিত' : 'Transferred'}</option>
               </select>
             </div>
           </div>
@@ -378,108 +392,56 @@ export const StudentRoster: React.FC = () => {
           {/* Table */}
           <div className="app-card overflow-hidden">
             {filteredStudents.length === 0 ? (
-              <div className="p-8">
+              <div className="p-12">
                 <EmptyState
                   kind="roster"
-                  title="No students found"
-                  description="Enroll students individually or use the bulk XLSX import to populate your classroom rosters."
-                  actionText="Enroll Student"
+                  title={language === 'bn' ? 'কোনো শিক্ষার্থী পাওয়া যায়নি' : 'No students found'}
+                  description={language === 'bn' ? 'নতুন শিক্ষার্থী যুক্ত করতে "শিক্ষার্থী যোগ করুন" বোতাম চাপুন।' : 'Add students individually or use Excel import.'}
+                  actionText={t('addStudent')}
                   onAction={() => setIsAddOpen(true)}
                 />
               </div>
             ) : (
-              <>
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                      <tr>
-                        <th className="py-4 px-6">Roll #</th>
-                        <th className="py-4 px-6">Student</th>
-                        <th className="py-4 px-6">Student Code / Portal ID</th>
-                        <th className="py-4 px-6">Class Section</th>
-                        <th className="py-4 px-6 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                      {filteredStudents.map((st) => (
-                        <tr key={st.id} className="table-row-hover">
-                          <td className="py-4 px-6 font-mono font-bold text-ink">
-                            #{st.enrollment?.rollNumber ?? '—'}
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold text-xs font-display">
-                                {st.name.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="font-extrabold text-ink text-xs font-display">{st.name}</p>
-                                {st.nameBn && <p className="text-[11px] text-ink-muted">{st.nameBn}</p>}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 font-mono text-[11px] text-ink-soft">
-                            <div className="font-bold text-ink">{st.studentCode}</div>
-                            {st.banglarShikshaId && (
-                              <div className="text-[11px] text-forest-700 dark:text-forest-600">BS: {st.banglarShikshaId}</div>
-                            )}
-                          </td>
-                          <td className="py-4 px-6 font-bold text-ink">
-                            {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : 'Unassigned'}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display ${
-                              st.status === 'ACTIVE'
-                                ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
-                                : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
-                            }`}>
-                              {st.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Stacked Cards */}
-                <div className="md:hidden divide-y divide-line">
-                  {filteredStudents.map((st) => (
-                    <div key={st.id} className="p-4 space-y-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-extrabold text-xs font-display shrink-0">
-                            {st.name.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono font-bold text-ink-muted">#{st.enrollment?.rollNumber ?? '—'}</span>
-                              <h4 className="font-extrabold text-ink text-sm font-display">{st.name}</h4>
-                            </div>
-                            {st.nameBn && <p className="text-[11px] text-ink-muted">{st.nameBn}</p>}
-                          </div>
-                        </div>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display shrink-0 ${
-                          st.status === 'ACTIVE'
-                            ? 'bg-success-50 text-success-800 border-success-100 dark:border-success-600/30'
-                            : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
-                        }`}>
-                          {st.status}
-                        </span>
+              <div className="divide-y divide-line">
+                {filteredStudents.map((st) => (
+                  <div
+                    key={st.id}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-sm font-display shadow-2xs shrink-0">
+                        #{st.enrollment?.rollNumber ?? '—'}
                       </div>
-
-                      <div className="flex items-center justify-between text-xs pt-2 border-t border-line text-ink-soft">
-                        <span className="font-bold text-ink">
-                          {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : 'Unassigned'}
-                        </span>
-                        <span className="font-mono text-[11px] text-ink-muted">
-                          {st.studentCode}
-                        </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-extrabold text-ink font-display">
+                            {language === 'bn' && st.nameBn ? st.nameBn : st.name}
+                          </h4>
+                          {st.nameBn && language !== 'bn' && (
+                            <span className="text-xs text-ink-muted">({st.nameBn})</span>
+                          )}
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                            {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : (language === 'bn' ? 'অনির্ধারিত' : 'Unassigned')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink-muted mt-0.5 font-mono">
+                          ID: {st.studentCode} {st.banglarShikshaId && `• Banglar Shiksha: ${st.banglarShikshaId}`}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-display ${
+                        st.status === 'ACTIVE'
+                          ? 'bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30'
+                          : 'bg-amber-50 text-amber-800 border border-amber-200'
+                      }`}>
+                        {st.status === 'ACTIVE' ? t('statusActive') : st.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </>
@@ -488,29 +450,35 @@ export const StudentRoster: React.FC = () => {
       {/* Enroll Student Modal */}
       <AnimatePresence>
         {isAddOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-student-modal-title"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-lg w-full p-6 sm:p-7 text-left"
+              className="app-card shadow-2xl max-w-lg w-full p-6 sm:p-7 text-left max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-xl font-extrabold text-ink font-display">
-                  Enroll New Student
+              <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
+                <h3 id="add-student-modal-title" className="text-xl font-extrabold text-ink font-display">
+                  {t('addStudent')}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsAddOpen(false)}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  aria-label={t('close')}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {formError && (
-                <div className="mb-4">
-                  <Toast kind="error" message={formError} onDismiss={() => setFormError(null)} autoDismiss={false} />
+                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-xs font-semibold">
+                  {formError}
                 </div>
               )}
 
@@ -518,17 +486,17 @@ export const StudentRoster: React.FC = () => {
                 onSubmit={(e) => {
                   e.preventDefault();
                   setFormError(null);
-                  if (!formData.studentCode.trim()) return setFormError('Student code is required');
-                  if (!formData.name.trim()) return setFormError('Student full name is required');
-                  if (!formData.classSectionId) return setFormError('Please select a class section');
+                  if (!formData.studentCode.trim()) return setFormError(language === 'bn' ? 'শিক্ষার্থী কোড লিখুন' : 'Student code is required');
+                  if (!formData.name.trim()) return setFormError(language === 'bn' ? 'শিক্ষার্থীর পূর্ণ নাম লিখুন' : 'Student full name is required');
+                  if (!formData.classSectionId) return setFormError(language === 'bn' ? 'অনুগ্রহ করে ক্লাস নির্বাচন করুন' : 'Please select a class section');
                   createStudentMutation.mutate(formData);
                 }}
                 className="space-y-4"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Student Code / ID *
+                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                      {t('studentCode')} *
                     </label>
                     <input
                       type="text"
@@ -536,12 +504,12 @@ export const StudentRoster: React.FC = () => {
                       placeholder="e.g. STU-1001"
                       value={formData.studentCode}
                       onChange={(e) => setFormData({ ...formData, studentCode: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none font-mono"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                     />
                   </div>
 
                   <div>
-                    <label className="block t-label text-ink mb-1 font-display">
+                    <label className="block text-xs font-bold text-ink mb-1 font-display">
                       Banglar Shiksha ID
                     </label>
                     <input
@@ -549,15 +517,15 @@ export const StudentRoster: React.FC = () => {
                       placeholder="e.g. 19120100101"
                       value={formData.banglarShikshaId}
                       onChange={(e) => setFormData({ ...formData, banglarShikshaId: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none font-mono"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Full Name (English) *
+                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                      {t('fullNameLabel')} (English) *
                     </label>
                     <input
                       type="text"
@@ -565,36 +533,36 @@ export const StudentRoster: React.FC = () => {
                       placeholder="e.g. Subrata Soren"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                     />
                   </div>
 
                   <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Name (Bengali / বাংলা)
+                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                      {language === 'bn' ? 'নাম (বাংলা)' : 'Name (Bengali / বাংলা)'}
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. সুব্রত সোরেন"
+                      placeholder="যেমন: সুব্রত সোরেন"
                       value={formData.nameBn}
                       onChange={(e) => setFormData({ ...formData, nameBn: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Class Section *
+                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                      {t('navClassesAndSections')} *
                     </label>
                     <select
                       required
                       value={formData.classSectionId}
                       onChange={(e) => setFormData({ ...formData, classSectionId: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink focus:bg-surface focus:border-forest-700 outline-none"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
                     >
-                      <option value="">Choose class section…</option>
+                      <option value="">{language === 'bn' ? 'ক্লাস নির্বাচন করুন…' : 'Choose class section…'}</option>
                       {classSections.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.className} - {c.sectionName}
@@ -604,65 +572,38 @@ export const StudentRoster: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Roll Number *
+                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                      {t('rollNumberLabel')} *
                     </label>
                     <input
                       type="number"
-                      required
                       min={1}
-                      max={999}
+                      required
                       value={formData.rollNumber}
                       onChange={(e) => setFormData({ ...formData, rollNumber: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none font-mono"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Guardian Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Ramesh Soren"
-                      value={formData.guardianName}
-                      onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block t-label text-ink mb-1 font-display">
-                      Guardian Phone (for SMS)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="+919830012345"
-                      value={formData.guardianPhone}
-                      onChange={(e) => setFormData({ ...formData, guardianPhone: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                <div className="flex items-center justify-end gap-3 pt-3">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsAddOpen(false)}
+                    className="min-h-[44px] font-display"
                   >
-                    Cancel
+                    {t('cancel')}
                   </Button>
                   <Button
                     type="submit"
                     variant="primary"
-                    size="sm"
+                    size="md"
                     isLoading={createStudentMutation.isPending}
+                    className="min-h-[44px] font-display"
                   >
-                    {createStudentMutation.isPending ? 'Enrolling…' : 'Enroll Student'}
+                    {t('addStudent')}
                   </Button>
                 </div>
               </form>
@@ -671,181 +612,111 @@ export const StudentRoster: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Staged Bulk XLSX Import Modal */}
+      {/* Bulk XLSX Import Modal */}
       <AnimatePresence>
         {isImportOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-import-modal-title"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-2xl w-full p-6 sm:p-7 text-left max-h-[90vh] overflow-y-auto"
+              className="app-card shadow-2xl max-w-xl w-full p-6 sm:p-7 text-left max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2.5">
-                  <FileSpreadsheet className="w-6 h-6 text-forest-700 dark:text-forest-600" />
-                  <div>
-                    <h3 className="text-xl font-extrabold text-ink font-display">
-                      Bulk Student XLSX Import
-                    </h3>
-                    <p className="t-body text-xs text-ink-muted">
-                      Two-stage transactional import with row-level validation
-                    </p>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
+                <h3 id="bulk-import-modal-title" className="text-xl font-extrabold text-ink font-display">
+                  {t('importStudents')} (Excel / CSV)
+                </h3>
                 <button
                   type="button"
                   onClick={() => setIsImportOpen(false)}
-                  className="w-8 h-8 rounded-full bg-surface-soft hover:bg-surface flex items-center justify-center text-ink-muted hover:text-ink transition-all cursor-pointer border border-line"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  aria-label={t('close')}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {importError && (
-                <div className="mb-4">
-                  <Toast kind="error" message={importError} onDismiss={() => setImportError(null)} autoDismiss={false} />
+                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-xs font-semibold">
+                  {importError}
                 </div>
               )}
 
               {!stagedJob ? (
-                <div className="space-y-5">
-                  <div className="p-4 rounded-2xl bg-success-50 border border-success-100 dark:border-success-600/30 flex items-center justify-between">
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-xs font-extrabold text-forest-700 dark:text-forest-600 font-display">Official Import Template</p>
-                      <p className="text-[11px] text-ink-soft">Includes column headers and validation rules</p>
+                      <h4 className="text-xs font-bold text-ink font-display">
+                        {language === 'bn' ? 'এক্সেল নমুনা ফাইল' : 'Excel Template File'}
+                      </h4>
+                      <p className="text-[11px] text-ink-soft">
+                        {language === 'bn' ? 'নমুনা ফাইলটি ডাউনলোড করে শিক্ষার্থীদের নাম ও তথ্য পূরণ করুন।' : 'Download sample format with pre-filled school columns.'}
+                      </p>
                     </div>
                     <Button
-                      type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       onClick={handleDownloadTemplate}
-                      leftIcon={<Download className="w-3.5 h-3.5" />}
+                      leftIcon={<Download className="w-4 h-4" />}
+                      className="min-h-[44px] rounded-2xl font-display text-xs"
                     >
-                      Download Template
+                      {language === 'bn' ? 'নমুনা ডাউনলোড' : 'Download Sample'}
                     </Button>
                   </div>
 
-                  <div className="border-2 border-dashed border-line rounded-3xl p-8 text-center space-y-3 bg-surface-soft hover:bg-surface transition-colors">
+                  <div className="border-2 border-dashed border-line rounded-3xl p-8 text-center hover:border-forest-700 transition-colors">
+                    <FileSpreadsheet className="w-10 h-10 text-forest-700 dark:text-forest-600 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-ink font-display">
+                      {language === 'bn' ? 'এক্সেল ফাইলটি এখানে নির্বাচন করুন' : 'Select .xlsx or .csv spreadsheet file'}
+                    </p>
                     <input
                       type="file"
-                      id="xlsx-upload-input"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx, .xls, .csv"
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) setImportFile(file);
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setImportFile(f);
+                          uploadXlsxMutation.mutate(f);
+                        }
                       }}
-                      className="hidden"
+                      className="mt-4 block mx-auto text-xs text-ink-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-forest-700 file:text-white hover:file:bg-forest-800 cursor-pointer min-h-[44px]"
                     />
-                    <label htmlFor="xlsx-upload-input" className="cursor-pointer block space-y-2">
-                      <div className="w-12 h-12 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center mx-auto">
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      <p className="text-sm font-extrabold text-ink font-display">
-                        {importFile ? importFile.name : 'Select Student Excel Spreadsheet'}
-                      </p>
-                      <p className="t-body text-xs text-ink-muted">
-                        Supports .xlsx format up to 10MB (max 1,500 rows per batch)
-                      </p>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsImportOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      disabled={!importFile || uploadXlsxMutation.isPending}
-                      isLoading={uploadXlsxMutation.isPending}
-                      onClick={() => importFile && uploadXlsxMutation.mutate(importFile)}
-                    >
-                      {uploadXlsxMutation.isPending ? 'Validating Spreadsheet…' : 'Validate & Preview'}
-                    </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Stage Summary */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 rounded-2xl bg-surface-soft border border-line text-center">
-                      <p className="t-label text-ink-muted">Total Rows</p>
-                      <p className="text-lg font-extrabold text-ink font-mono">{stagedJob.totalRows}</p>
-                    </div>
-                    <div className="p-3 rounded-2xl bg-success-50 border border-success-100 dark:border-success-600/30 text-center">
-                      <p className="t-label text-forest-700 dark:text-forest-600">Valid Rows</p>
-                      <p className="text-lg font-extrabold text-success-800 font-mono">{stagedJob.validRowsCount}</p>
-                    </div>
-                    <div className="p-3 rounded-2xl bg-danger-50 border border-danger-100 dark:border-danger-600/30 text-center">
-                      <p className="t-label text-danger-800">Invalid Rows</p>
-                      <p className="text-lg font-extrabold text-danger-800 font-mono">{stagedJob.invalidRowsCount}</p>
-                    </div>
-                  </div>
-
-                  {/* Errors list if any */}
-                  {stagedJob.errors.length > 0 && (
-                    <div className="p-3.5 bg-danger-50 border border-danger-100 dark:border-danger-600/30 rounded-2xl space-y-2 max-h-40 overflow-y-auto">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-danger-800">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>Validation Warnings ({stagedJob.errors.length})</span>
-                      </div>
-                      <div className="space-y-1">
-                        {stagedJob.errors.slice(0, 10).map((err, idx) => (
-                          <p key={idx} className="text-[11px] text-danger-800 font-mono">
-                            Row {err.row}: {err.column} — {err.message}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Staged preview sample */}
-                  <div className="p-3 bg-surface-soft rounded-2xl border border-line max-h-48 overflow-y-auto">
-                    <p className="text-xs font-bold text-ink mb-2 font-display">
-                      Preview of Valid Students ({stagedJob.validRows.length})
+                  <div className="p-4 rounded-2xl bg-success-50 text-forest-700 border border-success-200">
+                    <p className="text-xs font-bold">
+                      {language === 'bn' 
+                        ? `মোট ${stagedJob.validRowsCount} জন শিক্ষার্থীর তথ্য প্রস্তুত রয়েছে।`
+                        : `${stagedJob.validRowsCount} valid student rows ready to import.`}
                     </p>
-                    <div className="space-y-1.5">
-                      {stagedJob.validRows.slice(0, 5).map((row, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-xs p-2 bg-surface rounded-xl border border-line">
-                          <div>
-                            <span className="font-bold text-ink">{row.name}</span>
-                            <span className="text-ink-muted font-mono text-[11px] ml-2">({row.studentCode})</span>
-                          </div>
-                          <span className="font-mono text-ink-soft text-[11px]">
-                            {row.className}-{row.sectionName} #{row.rollNumber}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-line">
+                  <div className="flex items-center justify-end gap-3 pt-3">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => setStagedJob(null)}
+                      className="min-h-[44px] font-display"
                     >
-                      Back to Upload
+                      {language === 'bn' ? 'অন্য ফাইল দিন' : 'Upload Different File'}
                     </Button>
                     <Button
                       type="button"
                       variant="primary"
-                      size="sm"
-                      disabled={stagedJob.validRowsCount === 0 || commitImportMutation.isPending}
+                      size="md"
                       isLoading={commitImportMutation.isPending}
                       onClick={() => commitImportMutation.mutate(stagedJob.importJobId)}
+                      className="min-h-[44px] font-display"
                     >
-                      {commitImportMutation.isPending
-                        ? 'Enrolling Students…'
-                        : `Commit Import (${stagedJob.validRowsCount} Students)`}
+                      {language === 'bn' ? 'নিশ্চিত করুন ও সেভ করুন' : 'Confirm & Save All'}
                     </Button>
                   </div>
                 </div>

@@ -212,6 +212,8 @@ ensure_secrets() {
 
   mkdir -p ./backups
   chmod 0700 ./backups
+}
+
 dcompose() {
   docker compose --env-file "${CONFIG_FILE}" "$@"
 }

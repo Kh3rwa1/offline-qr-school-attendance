@@ -58,18 +58,22 @@ services:
       REDIS_KEY_HMAC_SECRET: ${REDIS_KEY_HMAC_SECRET:?REDIS_KEY_HMAC_SECRET is required}
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      CSRF_SECRET: ${CSRF_SECRET:-${SESSION_SECRET}}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET}}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
+      ALLOW_IN_MEMORY_RATE_LIMITER: ${ALLOW_IN_MEMORY_RATE_LIMITER:-false}
       RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:-}
       RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:-}
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-}
     volumes:
       - ./backups:/backups:ro
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null']
-      interval: 10s
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null || exit 1']
+      interval: 5s
       timeout: 5s
-      retries: 6
+      retries: 10
+      start_period: 15s
     logging:
       driver: "json-file"
       options:

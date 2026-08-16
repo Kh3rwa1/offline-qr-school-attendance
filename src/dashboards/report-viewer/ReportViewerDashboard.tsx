@@ -63,10 +63,10 @@ export const ReportViewerDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-sm font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider font-display min-h-[32px]">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-sm font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider font-display min-h-[44px]">
               {t('navReports')}
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-soft border border-line text-sm font-bold text-ink-muted uppercase tracking-wider font-mono min-h-[32px]">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-soft border border-line text-sm font-bold text-ink-muted uppercase tracking-wider font-mono min-h-[44px]">
               {t('officialReports')}
             </span>
           </div>

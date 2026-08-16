@@ -16,9 +16,11 @@ export const OfflineWorkspace: React.FC = () => {
 
   useEffect(() => {
     async function load() {
-      const outbox = activeSchoolId
-        ? await offlineDb.syncOutbox.where('schoolId').equals(activeSchoolId).toArray()
-        : await offlineDb.syncOutbox.toArray();
+      if (!activeSchoolId) {
+        setEvents([]);
+        return;
+      }
+      const outbox = await offlineDb.syncOutbox.where('schoolId').equals(activeSchoolId).toArray();
       setEvents(outbox);
     }
     void load();
@@ -76,7 +78,7 @@ export const OfflineWorkspace: React.FC = () => {
           variant="primary"
           size="md"
           onClick={() => void syncNow()}
-          disabled={!isOnline || isSyncing || outboxCount === 0}
+          disabled={!isOnline || isSyncing || outboxCount === 0 || !activeSchoolId}
           isLoading={isSyncing}
           leftIcon={<RefreshCw className="w-4 h-4" />}
           className="min-h-[44px] rounded-2xl font-display text-sm font-bold"

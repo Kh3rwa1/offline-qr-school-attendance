@@ -1,119 +1,109 @@
-# User Acceptance Testing (UAT) Execution Pack — Rural West Bengal Pilot
+# User Acceptance Testing (UAT) Protocol & Execution Pack
 
-> **STATUS: EXECUTED & VERIFIED (Field Pilot & Human Testing Completed)**
-> 
-> *Live human participant testing conducted across Bankura, Purulia, and Paschim Bardhaman educational districts. The pilot cohort included experienced senior teachers, headmasters, gate operators, district inspectors, and digitally active young educators (aged 18–30) to evaluate the Bengalish interface, offline-first sync reliability, WCAG 2.2 touch targets, and official report generation.*
-
----
-
-## 1. Target User Personas & Participant Demographics
-
-| Participant ID | Name & Profile | Age | Role | Language Preference | Device Used | Screen Width |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **UAT-P1** | Subir Mukherjee (Senior Teacher) | 56 | Primary Teacher (30 yrs exp) | Bengalish (`বাংলা + English`) | Redmi 9A (Android 10) | 360px |
-| **UAT-P2** | Ananya Banerjee (Headmistress) | 52 | School Admin / Headmistress | Bengalish / English | Samsung Galaxy M12 (Android 11) | 384px |
-| **UAT-P3** | Tarak Das (Gate Staff) | 38 | School Gate & RFID Operator | Bengalish (`বাংলা + English`) | Vivo Y15s (Android 12) | 360px |
-| **UAT-P4** | Bimalendu Ghosh (Inspector) | 45 | District Report Viewer / SI | English / Bengalish | Lenovo Tab M10 / Chrome | 768px |
-| **UAT-P5** | Riya Chakraborty (Young Teacher) | 23 | Assistant Primary Teacher | Bengalish (`বাংলা + English`) | Realme Narzo 50 (Android 13) | 390px |
-| **UAT-P6** | Sourav Mandal (Lab Assistant) | 20 | ICT Support & RFID Operator | Bengalish (`বাংলা + English`) | POCO M4 Pro (Android 13) | 393px |
+> **PROJECT**: AttendEase — Offline QR + RFID School Attendance Platform  
+> **STATUS**: **PROTOCOL SPECIFICATION & READINESS (HUMAN FIELD TESTING PENDING)**  
+> **INTENDED AUDIENCE**: School Pilots, District Field Teams, Accessibility Evaluators
 
 ---
 
-## 2. Core Operational Scenarios & Test Execution Results
+## 1. Objective & Scope
 
-### Scenario 1: Teacher Daily Attendance (Offline Blackout)
-- **Goal**: Complete classroom attendance roll call and QR scanning without internet connectivity, save records locally, and sync when network returns.
-- **Steps Executed**:
-  1. Teacher placed phone in Airplane Mode (simulating rural network blackout).
-  2. Selected assigned Class 5-A.
-  3. Scanned student QR badge cards using phone camera HUD and marked remaining students manually.
-  4. Verified "আজ কারা এসেছে" (Who Came In) vs "এখনও আসেনি" (Still Missing) counts.
-  5. Tapped "Attendance Finish করুন" and confirmed the modal prompt.
-  6. Reconnected to mobile data and tapped "Saved Records Send করুন".
-- **Results**:
-  - **Completion Rate**: 100% (6/6 participants)
-  - **Mean Task Completion Time**: 2 min 14 sec
-  - **Critical Errors**: 0
-  - **Data Integrity**: 34/34 records synchronized with 0 duplicate entries.
+This test pack establishes the formal evaluation protocol for field trials of AttendEase in rural and semi-urban school environments across West Bengal. 
+
+The protocol validates:
+1. **Offline Classroom Attendance**: Reliability during continuous power or cellular data blackouts.
+2. **Bengalish Language Ergonomics**: Clarity and ease of use for non-technical teachers and gate staff.
+3. **Accessibility**: One-handed mobile operation, $\ge 44 \times 44\text{px}$ touch targets on compact devices (360px–390px screens), and screen-reader navigable reports.
+4. **Data Integrity**: Local Dexie IndexedDB storage, compound tenant isolation, and conflict-free cloud synchronization.
 
 ---
 
-### Scenario 2: Headmaster Roster Setup & Attendance Correction
-- **Goal**: Create new class section, enroll student with Banglar Shiksha ID, and perform audit-tracked status correction.
-- **Steps Executed**:
-  1. Headmaster created "Class 6 - B".
-  2. Enrolled student with Bengali name and 14-digit state ID.
-  3. Reviewed today's attendance session and updated 1 marked Absent student to Present with reason "Arrived on late bus".
-  4. Confirmed instant update in dashboard stat cards.
-- **Results**:
-  - **Completion Rate**: 100%
-  - **Mean Task Completion Time**: 3 min 02 sec
-  - **Critical Errors**: 0
-  - **Audit Trail**: Recorded actor ID, timestamp, and modification rationale.
+## 2. Target User Cohorts & Evaluation Profiles
 
----
-
-### Scenario 3: School Gate Arrival & Fast Badge Scan
-- **Goal**: Scan arriving students at the entrance gate and monitor live arrival feed.
-- **Steps Executed**:
-  1. Gate operator monitored live arrivals feed.
-  2. Scanned USB barcode / RFID badge tokens for arriving students.
-  3. Verified real-time feedback beep/vibration and card appearance in "আজ কারা এসেছে".
-- **Results**:
-  - **Completion Rate**: 100%
-  - **Mean Scan Rate**: 0.42 sec per student badge
-  - **Critical Errors**: 0
-
----
-
-### Scenario 4: Official Report Export (UDISE+ & Banglar Shiksha Formats)
-- **Goal**: Review monthly turnout gauge, filter date range, and export `.xlsx` register for government submission.
-- **Steps Executed**:
-  1. Inspector navigated to Reports & Analytics dashboard.
-  2. Verified accessible attendance turnout gauge and screen-reader data table.
-  3. Exported Monthly Attendance Register in `.xlsx` format.
-- **Results**:
-  - **Completion Rate**: 100%
-  - **Export Generation Time**: < 1.1 sec
-  - **Formatting**: Fully compliant with West Bengal School Education Department schema.
-
----
-
-## 3. System Usability Scale (SUS) Quantitative Assessment
-
-The standard 10-item System Usability Scale (SUS) was administered post-trial (scored on 0–100 scale, where $\ge 80.3$ is Grade A):
-
-| Participant | Role | SUS Score | Assessment Grade |
+| Profile Category | Target User Role | Primary Device Profile | Key Testing Focus |
 | :--- | :--- | :--- | :--- |
-| **UAT-P1** (Subir Mukherjee, 56) | Senior Teacher | **87.5 / 100** | Grade A+ (Excellent) |
-| **UAT-P2** (Ananya Banerjee, 52) | Headmistress | **92.5 / 100** | Grade A+ (Best in Class) |
-| **UAT-P3** (Tarak Das, 38) | Gate Operator | **90.0 / 100** | Grade A+ (Excellent) |
-| **UAT-P4** (Bimalendu Ghosh, 45) | District Inspector | **87.5 / 100** | Grade A+ (Excellent) |
-| **UAT-P5** (Riya Chakraborty, 23) | Young Teacher | **95.0 / 100** | Grade A+ (Exceptional) |
-| **UAT-P6** (Sourav Mandal, 20) | ICT Lab Assistant | **95.0 / 100** | Grade A+ (Exceptional) |
-| **Cohort Mean** | — | **91.25 / 100** | **Grade A+ (World-Class Usability)** |
+| **Cohort A** | Senior Classroom Teacher (50+ yrs) | 360px viewport (Android 10/11) | Large typography ($\ge 14\text{px}$), visual color coding, one-handed roll call |
+| **Cohort B** | Primary / Junior Teacher (18–35 yrs) | 390px viewport (Android 12/13/14) | Fast camera QR HUD scanning, rapid manual override, outbox sync |
+| **Cohort C** | Headmaster / School Administrator | Desktop / Tablet (Chrome / Edge) | Roster management, student enrollment, attendance audit & correction |
+| **Cohort D** | Gate / Security Operator | Dedicated Gateway / Mobile Scanner | Fast badge recognition, incident queue handling, offline queue status |
+| **Cohort E** | District Inspector / Report Viewer | Tablet / Desktop | Monthly attendance turnout gauge, CSV/Excel official export |
 
 ---
 
-## 4. Qualitative Feedback on Bengalish UI & Mobile UX
+## 3. Standardized Test Scenarios & Step-by-Step Protocols
 
-- **UAT-P5 (Riya Chakraborty, 23)**:
-  > *"The Bengalish interface feels completely natural — exactly how teachers in Bengal text each other on WhatsApp. Words like 'Internet Connected', 'Offline Mode', and 'Attendance Finish করুন' are instantly clear without being overly academic or stuffy. The buttons are large and easy to tap with one hand."*
-
-- **UAT-P6 (Sourav Mandal, 20)**:
-  > *"The fast camera HUD and USB barcode scanner worked seamlessly. The font size is noticeably comfortable on small screens (no tiny 11px text), and error messages explain exactly what to do."*
-
-- **UAT-P1 (Subir Mukherjee, 56)**:
-  > *"I was worried about complicated software, but the 'Who Came In' (সবুজ/Green) and 'Still Missing' (লাল/Red) split made taking roll call faster than our old paper khata. When the internet dropped, everything kept working."*
-
-- **UAT-P2 (Ananya Banerjee, 52)**:
-  > *"Exporting the monthly Excel register for UDISE+ with one click saves us at least two full days of administrative paperwork each month."*
+### Scenario 1: Offline Classroom Attendance Roll Call
+- **Precondition**: Teacher logged in; device placed in Airplane Mode (offline).
+- **Execution Steps**:
+  1. Open Teacher Dashboard.
+  2. Select assigned class section (e.g., Class 5-A).
+  3. Scan available student QR cards using the Camera HUD.
+  4. Manually mark remaining students (Present, Absent, or Late) from the missing list.
+  5. Tap "Attendance Finish করুন" / "Finish Attendance" and confirm the modal dialog.
+  6. Reconnect network and verify that the sync outbox uploads all records to the school server without duplication.
+- **Pass Criteria**:
+  - Zero fatal errors or unhandled exceptions during offline operation.
+  - All records saved to IndexedDB with compound tenant scoping `[schoolId+classSectionId]`.
+  - 100% successful sync upon network restoration.
 
 ---
 
-## 5. Formal UAT Sign-Off
+### Scenario 2: School Admin Student Enrollment & Audit Trail
+- **Precondition**: School Administrator logged in to School Admin portal.
+- **Execution Steps**:
+  1. Navigate to Student Roster.
+  2. Add new student with Student Code, Full Name, Bengali Name, and Banglar Shiksha ID.
+  3. Assign student to an active Class Section and Academic Year.
+  4. Navigate to Daily Attendance Operations, locate a finalized session, and perform an audit-tracked status correction with reason.
+- **Pass Criteria**:
+  - Student appears immediately in class roster.
+  - Correction is persisted with timestamp, previous status, new status, and audit reason.
 
-- **Lead Pilot Coordinator**: Dr. Kalyan Roy (Head of School Systems Review)
-- **Accessibility & UX Lead**: Priya Sen (Lead UX Architect)
-- **Status**: **APPROVED FOR PILOT ROLLOUT & PRODUCTION MERGE**
-- **Date**: August 16, 2026
+---
+
+### Scenario 3: Gate Arrival & RFID Incident Handling
+- **Precondition**: Gate Operator logged in to Gate Operations station.
+- **Execution Steps**:
+  1. Open Live Gate Feed.
+  2. Scan an enrolled badge and verify immediate visual feedback.
+  3. Scan an unregistered badge and verify entry in Incident Queue with actionable recovery guidance.
+- **Pass Criteria**:
+  - Live arrival feed updates without page reload.
+  - Incident queue displays user-friendly resolution recommendation.
+
+---
+
+### Scenario 4: Official Report Export & Data Accessibility
+- **Precondition**: Report Viewer or Administrator logged in.
+- **Execution Steps**:
+  1. Navigate to Reports Dashboard.
+  2. Verify that attendance gauge displays accessible summary table for screen readers.
+  3. Navigate to Export Center and download Monthly Attendance Register (`.xlsx`) and Daily Summary (`.csv`).
+- **Pass Criteria**:
+  - Screen reader data table contains `<caption>` and column headers.
+  - Exported Excel and CSV files contain complete school, class, roll number, and timestamp data.
+
+---
+
+## 4. Usability Metrics & Evaluation Criteria
+
+Field pilots will record:
+1. **Task Completion Rate**: Target $\ge 98\%$ across all scenarios.
+2. **System Usability Scale (SUS)**: Standardized 10-question SUS post-test survey (Target score $\ge 85 / 100$).
+3. **Scan Latency**: Average time per QR badge scan (Target $\le 1.0\text{s}$).
+4. **Error Recovery**: Proportion of user-correctable errors resolved without administrator intervention (Target $100\%$).
+
+---
+
+## 5. Verification Status
+
+```text
+================================================================================
+UAT STATUS: SPECIFICATION COMPLETE
+================================================================================
+Test Scenarios:                 4 Standard Protocols Defined
+Target Device Viewports:        360px, 390px, Tablet, Desktop
+Accessibility Thresholds:       WCAG 2.2 Level AA / AAA Compliant
+Field Pilot Execution:          PENDING INDEPENDENT VERIFICATION
+================================================================================
+```

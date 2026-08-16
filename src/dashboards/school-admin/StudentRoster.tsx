@@ -166,7 +166,7 @@ export const StudentRoster: React.FC = () => {
         guardianPhone: '',
       });
       setFormError(null);
-      setSuccessToast(language === 'bn' ? 'শিক্ষার্থী সফলভাবে যুক্ত করা হয়েছে।' : 'Student successfully added.');
+      setSuccessToast(t('studentSavedSuccess'));
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
@@ -216,7 +216,8 @@ export const StudentRoster: React.FC = () => {
       setIsImportOpen(false);
       setStagedJob(null);
       setImportFile(null);
-      setSuccessToast(language === 'bn' ? `মোট ${res.enrolledCount || stagedJob?.validRowsCount || 'সকল'} জন শিক্ষার্থী যুক্ত হয়েছে!` : `Successfully imported ${res.enrolledCount || stagedJob?.validRowsCount || 'all'} students!`);
+      const count = res.enrolledCount || stagedJob?.validRowsCount || 0;
+      setSuccessToast(t('importedStudentsSuccess', { count }));
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
@@ -239,7 +240,7 @@ export const StudentRoster: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      setImportError(language === 'bn' ? 'ফাইল ডাউনলোড ব্যর্থ হয়েছে' : 'Template download failed');
+      setImportError(getUserSafeError(err, language).message);
     }
   };
 
@@ -274,8 +275,8 @@ export const StudentRoster: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navStudents')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {language === 'bn' ? `${activeSchoolName}-এর সকল শিক্ষার্থীর তালিকা ও ক্লাস বিভাজন।` : `Manage student enrollments and class sections for ${activeSchoolName}.`}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('studentRosterSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
 
@@ -290,7 +291,7 @@ export const StudentRoster: React.FC = () => {
               setImportError(null);
             }}
             leftIcon={<Upload className="w-4 h-4 text-ink-soft" />}
-            className="min-h-[44px] rounded-2xl font-display"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('importStudents')}
           </Button>
@@ -303,7 +304,7 @@ export const StudentRoster: React.FC = () => {
               setFormError(null);
             }}
             leftIcon={<Plus className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('addStudent')}
           </Button>
@@ -311,16 +312,16 @@ export const StudentRoster: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <LoadingState type="table" message={language === 'bn' ? 'শিক্ষার্থীদের তালিকা লোড হচ্ছে…' : 'Loading student enrollment roster…'} />
+        <LoadingState type="table" message={t('loadingRoster')} />
       ) : error ? (
-        <ErrorState message={(error as any)?.message || 'Failed to load students'} onRetry={() => refetch()} />
+        <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('navStudents')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('navStudents')}</span>
                 <Users className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-ink font-display font-mono">
@@ -330,7 +331,7 @@ export const StudentRoster: React.FC = () => {
 
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('navClassesAndSections')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('navClassesAndSections')}</span>
                 <GraduationCap className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
@@ -340,7 +341,7 @@ export const StudentRoster: React.FC = () => {
 
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('schoolYearTitle')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('schoolYearTitle')}</span>
                 <GraduationCap className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-ink font-display font-mono">
@@ -355,10 +356,10 @@ export const StudentRoster: React.FC = () => {
               <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder={language === 'bn' ? 'নাম, রোল বা কোড দিয়ে খুঁজুন…' : 'Search by name, roll, or student code…'}
+                placeholder={t('searchStudentsPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
+                className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
               />
             </div>
 
@@ -366,9 +367,9 @@ export const StudentRoster: React.FC = () => {
               <select
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
-                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
+                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
               >
-                <option value="ALL">{language === 'bn' ? 'সকল ক্লাস' : 'All Class Sections'}</option>
+                <option value="ALL">{t('allClasses')}</option>
                 {classSections.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.className} - {c.sectionName}
@@ -379,12 +380,12 @@ export const StudentRoster: React.FC = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
+                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
               >
-                <option value="ALL">{language === 'bn' ? 'সকল অবস্থা' : 'All Statuses'}</option>
+                <option value="ALL">{t('allStatuses')}</option>
                 <option value="ACTIVE">{t('statusActive')}</option>
-                <option value="ARCHIVED">{language === 'bn' ? 'সংরক্ষিত' : 'Archived'}</option>
-                <option value="TRANSFERRED">{language === 'bn' ? 'স্থানান্তরিত' : 'Transferred'}</option>
+                <option value="ARCHIVED">{t('archived')}</option>
+                <option value="TRANSFERRED">{t('transferred')}</option>
               </select>
             </div>
           </div>
@@ -395,8 +396,8 @@ export const StudentRoster: React.FC = () => {
               <div className="p-12">
                 <EmptyState
                   kind="roster"
-                  title={language === 'bn' ? 'কোনো শিক্ষার্থী পাওয়া যায়নি' : 'No students found'}
-                  description={language === 'bn' ? 'নতুন শিক্ষার্থী যুক্ত করতে "শিক্ষার্থী যোগ করুন" বোতাম চাপুন।' : 'Add students individually or use Excel import.'}
+                  title={t('noStudentsFound')}
+                  description={t('noStudentsFoundDesc')}
                   actionText={t('addStudent')}
                   onAction={() => setIsAddOpen(true)}
                 />
@@ -418,20 +419,20 @@ export const StudentRoster: React.FC = () => {
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
                           {st.nameBn && language !== 'bn' && (
-                            <span className="text-xs text-ink-muted">({st.nameBn})</span>
+                            <span className="text-sm text-ink-muted">({st.nameBn})</span>
                           )}
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
-                            {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : (language === 'bn' ? 'অনির্ধারিত' : 'Unassigned')}
+                          <span className="px-2.5 py-0.5 rounded-full text-sm font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                            {st.enrollment ? `${st.enrollment.className} (${st.enrollment.sectionName})` : t('unassigned')}
                           </span>
                         </div>
-                        <p className="text-xs text-ink-muted mt-0.5 font-mono">
-                          ID: {st.studentCode} {st.banglarShikshaId && `• Banglar Shiksha: ${st.banglarShikshaId}`}
+                        <p className="text-sm text-ink-muted mt-0.5 font-mono">
+                          ID: {st.studentCode} {st.banglarShikshaId && `• ${t('banglarShikshaId')}: ${st.banglarShikshaId}`}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 self-end sm:self-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-display ${
+                      <span className={`px-2.5 py-1 rounded-full text-sm font-bold font-display ${
                         st.status === 'ACTIVE'
                           ? 'bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30'
                           : 'bg-amber-50 text-amber-800 border border-amber-200'
@@ -464,12 +465,12 @@ export const StudentRoster: React.FC = () => {
             >
               <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
                 <h3 id="add-student-modal-title" className="text-xl font-extrabold text-ink font-display">
-                  {t('addStudent')}
+                  {t('addStudentTitle')}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsAddOpen(false)}
-                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   aria-label={t('close')}
                 >
                   <X className="w-5 h-5" />
@@ -477,7 +478,7 @@ export const StudentRoster: React.FC = () => {
               </div>
 
               {formError && (
-                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-xs font-semibold">
+                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-sm font-semibold">
                   {formError}
                 </div>
               )}
@@ -486,16 +487,16 @@ export const StudentRoster: React.FC = () => {
                 onSubmit={(e) => {
                   e.preventDefault();
                   setFormError(null);
-                  if (!formData.studentCode.trim()) return setFormError(language === 'bn' ? 'শিক্ষার্থী কোড লিখুন' : 'Student code is required');
-                  if (!formData.name.trim()) return setFormError(language === 'bn' ? 'শিক্ষার্থীর পূর্ণ নাম লিখুন' : 'Student full name is required');
-                  if (!formData.classSectionId) return setFormError(language === 'bn' ? 'অনুগ্রহ করে ক্লাস নির্বাচন করুন' : 'Please select a class section');
+                  if (!formData.studentCode.trim()) return setFormError(t('studentCodeRequired'));
+                  if (!formData.name.trim()) return setFormError(t('studentNameRequired'));
+                  if (!formData.classSectionId) return setFormError(t('chooseClassPrompt'));
                   createStudentMutation.mutate(formData);
                 }}
                 className="space-y-4"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
                       {t('studentCode')} *
                     </label>
                     <input
@@ -504,27 +505,27 @@ export const StudentRoster: React.FC = () => {
                       placeholder="e.g. STU-1001"
                       value={formData.studentCode}
                       onChange={(e) => setFormData({ ...formData, studentCode: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-ink mb-1 font-display">
-                      Banglar Shiksha ID
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
+                      {t('banglarShikshaId')}
                     </label>
                     <input
                       type="text"
                       placeholder="e.g. 19120100101"
                       value={formData.banglarShikshaId}
                       onChange={(e) => setFormData({ ...formData, banglarShikshaId: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
                       {t('fullNameLabel')} (English) *
                     </label>
                     <input
@@ -533,36 +534,36 @@ export const StudentRoster: React.FC = () => {
                       placeholder="e.g. Subrata Soren"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-ink mb-1 font-display">
-                      {language === 'bn' ? 'নাম (বাংলা)' : 'Name (Bengali / বাংলা)'}
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
+                      {t('fullNameBengali')}
                     </label>
                     <input
                       type="text"
                       placeholder="যেমন: সুব্রত সোরেন"
                       value={formData.nameBn}
                       onChange={(e) => setFormData({ ...formData, nameBn: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
                       {t('navClassesAndSections')} *
                     </label>
                     <select
                       required
                       value={formData.classSectionId}
                       onChange={(e) => setFormData({ ...formData, classSectionId: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
                     >
-                      <option value="">{language === 'bn' ? 'ক্লাস নির্বাচন করুন…' : 'Choose class section…'}</option>
+                      <option value="">{t('chooseClassPrompt')}</option>
                       {classSections.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.className} - {c.sectionName}
@@ -572,7 +573,7 @@ export const StudentRoster: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-ink mb-1 font-display">
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
                       {t('rollNumberLabel')} *
                     </label>
                     <input
@@ -581,7 +582,7 @@ export const StudentRoster: React.FC = () => {
                       required
                       value={formData.rollNumber}
                       onChange={(e) => setFormData({ ...formData, rollNumber: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                     />
                   </div>
                 </div>
@@ -592,7 +593,7 @@ export const StudentRoster: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsAddOpen(false)}
-                    className="min-h-[44px] font-display"
+                    className="min-h-[44px] font-display text-sm"
                   >
                     {t('cancel')}
                   </Button>
@@ -601,7 +602,7 @@ export const StudentRoster: React.FC = () => {
                     variant="primary"
                     size="md"
                     isLoading={createStudentMutation.isPending}
-                    className="min-h-[44px] font-display"
+                    className="min-h-[44px] font-display text-sm font-bold"
                   >
                     {t('addStudent')}
                   </Button>
@@ -634,7 +635,7 @@ export const StudentRoster: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsImportOpen(false)}
-                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   aria-label={t('close')}
                 >
                   <X className="w-5 h-5" />
@@ -642,7 +643,7 @@ export const StudentRoster: React.FC = () => {
               </div>
 
               {importError && (
-                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-xs font-semibold">
+                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-sm font-semibold">
                   {importError}
                 </div>
               )}
@@ -651,11 +652,11 @@ export const StudentRoster: React.FC = () => {
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-center justify-between gap-4">
                     <div>
-                      <h4 className="text-xs font-bold text-ink font-display">
-                        {language === 'bn' ? 'এক্সেল নমুনা ফাইল' : 'Excel Template File'}
+                      <h4 className="text-sm font-bold text-ink font-display">
+                        {t('excelTemplate')}
                       </h4>
-                      <p className="text-[11px] text-ink-soft">
-                        {language === 'bn' ? 'নমুনা ফাইলটি ডাউনলোড করে শিক্ষার্থীদের নাম ও তথ্য পূরণ করুন।' : 'Download sample format with pre-filled school columns.'}
+                      <p className="text-sm text-ink-soft">
+                        {t('excelTemplateDesc')}
                       </p>
                     </div>
                     <Button
@@ -663,16 +664,16 @@ export const StudentRoster: React.FC = () => {
                       size="sm"
                       onClick={handleDownloadTemplate}
                       leftIcon={<Download className="w-4 h-4" />}
-                      className="min-h-[44px] rounded-2xl font-display text-xs"
+                      className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
                     >
-                      {language === 'bn' ? 'নমুনা ডাউনলোড' : 'Download Sample'}
+                      {t('downloadSample')}
                     </Button>
                   </div>
 
                   <div className="border-2 border-dashed border-line rounded-3xl p-8 text-center hover:border-forest-700 transition-colors">
                     <FileSpreadsheet className="w-10 h-10 text-forest-700 dark:text-forest-600 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-ink font-display">
-                      {language === 'bn' ? 'এক্সেল ফাইলটি এখানে নির্বাচন করুন' : 'Select .xlsx or .csv spreadsheet file'}
+                    <p className="text-sm font-bold text-ink font-display">
+                      {t('selectSpreadsheetPrompt')}
                     </p>
                     <input
                       type="file"
@@ -684,17 +685,15 @@ export const StudentRoster: React.FC = () => {
                           uploadXlsxMutation.mutate(f);
                         }
                       }}
-                      className="mt-4 block mx-auto text-xs text-ink-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-forest-700 file:text-white hover:file:bg-forest-800 cursor-pointer min-h-[44px]"
+                      className="mt-4 block mx-auto text-sm text-ink-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-forest-700 file:text-white hover:file:bg-forest-800 cursor-pointer min-h-[44px]"
                     />
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl bg-success-50 text-forest-700 border border-success-200">
-                    <p className="text-xs font-bold">
-                      {language === 'bn' 
-                        ? `মোট ${stagedJob.validRowsCount} জন শিক্ষার্থীর তথ্য প্রস্তুত রয়েছে।`
-                        : `${stagedJob.validRowsCount} valid student rows ready to import.`}
+                    <p className="text-sm font-bold">
+                      {t('stagedRowsReady', { count: stagedJob.validRowsCount })}
                     </p>
                   </div>
 
@@ -704,19 +703,19 @@ export const StudentRoster: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => setStagedJob(null)}
-                      className="min-h-[44px] font-display"
+                      className="min-h-[44px] font-display text-sm"
                     >
-                      {language === 'bn' ? 'অন্য ফাইল দিন' : 'Upload Different File'}
+                      {t('uploadDifferentFile')}
                     </Button>
                     <Button
-                      type="button"
+                      type="submit"
                       variant="primary"
                       size="md"
                       isLoading={commitImportMutation.isPending}
                       onClick={() => commitImportMutation.mutate(stagedJob.importJobId)}
-                      className="min-h-[44px] font-display"
+                      className="min-h-[44px] font-display text-sm font-bold"
                     >
-                      {language === 'bn' ? 'নিশ্চিত করুন ও সেভ করুন' : 'Confirm & Save All'}
+                      {t('confirmAndSaveAll')}
                     </Button>
                   </div>
                 </div>

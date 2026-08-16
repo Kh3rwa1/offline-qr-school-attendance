@@ -6,6 +6,7 @@ const FORBIDDEN_PATTERNS = [
   { pattern: /'teacherId':\s*'teacher'/i, label: 'Fabricated teacherId fallback' },
   { pattern: /teacherId:\s*'teacher'/i, label: 'Fabricated teacherId fallback' },
   { pattern: /actorId:\s*'teacher'/i, label: 'Fabricated actorId fallback' },
+  { pattern: /(teacherId|actorId|userId|user\?\.id)\s*\|\|\s*['"]teacher['"]/i, label: 'Prohibited fallback to placeholder teacher identity' },
   { pattern: /'04:A2:8B:1A:99:40'/, label: 'Fabricated RFID test card UID' },
   { pattern: /\balert\s*\(/, label: 'Prohibited browser alert() popup' },
   { pattern: /Verification Passed/i, label: 'Fabricated compliance claim: Verification Passed' },

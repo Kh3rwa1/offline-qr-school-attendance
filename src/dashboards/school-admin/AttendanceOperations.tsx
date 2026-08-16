@@ -116,7 +116,7 @@ export const AttendanceOperations: React.FC = () => {
       setCorrectingStudent(null);
       setCorrectionReason('');
       setActionError(null);
-      setSuccessToast(language === 'bn' ? 'উপস্থিতি সংশোধন সম্পন্ন হয়েছে।' : 'Attendance record corrected and audited.');
+      setSuccessToast(t('attendanceCorrectedAudited'));
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
@@ -129,8 +129,8 @@ export const AttendanceOperations: React.FC = () => {
   const finalizedCount = sessions.filter((s) => s.status === 'FINALIZED').length;
   const inProgressCount = sessions.filter((s) => s.status === 'IN_PROGRESS' || s.status === 'SUBMITTED').length;
 
-  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'উপস্থিতি বিবরণ লোড হচ্ছে…' : 'Loading daily attendance…'} />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load attendance'} onRetry={() => refetch()} />;
+  if (isLoading) return <LoadingState type="table" message={t('loadingDailyAttendance')} />;
+  if (error) return <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />;
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -165,8 +165,8 @@ export const AttendanceOperations: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navDailyAttendance')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {language === 'bn' ? `${activeSchoolName}-এর দৈনিক উপস্থিতি খাতা পর্যবেক্ষণ ও সংশোধন।` : `Review and correct daily classroom attendance rolls for ${activeSchoolName}.`}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('attendanceOpsSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
 
@@ -175,14 +175,14 @@ export const AttendanceOperations: React.FC = () => {
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
+            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
           />
           <Button
             variant="primary"
             size="md"
             onClick={() => navigate('/app/teacher')}
             leftIcon={<QrCode className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display text-xs"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('startAttendance')}
           </Button>
@@ -199,7 +199,7 @@ export const AttendanceOperations: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'আজকের মোট ক্লাস' : 'Total Sessions'}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('totalSessions')}</span>
             <CalendarCheck2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
           </div>
           <div className="text-3xl font-extrabold text-ink font-display font-mono">
@@ -209,7 +209,7 @@ export const AttendanceOperations: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'সম্পন্ন ও লক' : 'Finalized & Locked'}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('finalizedAndLocked')}</span>
             <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
           </div>
           <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
@@ -219,7 +219,7 @@ export const AttendanceOperations: React.FC = () => {
 
         <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
           <div className="flex items-center justify-between text-ink-muted">
-            <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'চলমান উপস্থিতি' : 'In Progress'}</span>
+            <span className="text-sm font-bold uppercase font-display">{t('inProgress')}</span>
             <Clock className="w-4 h-4 text-amber-700" />
           </div>
           <div className="text-3xl font-extrabold text-amber-800 font-display font-mono">
@@ -232,12 +232,12 @@ export const AttendanceOperations: React.FC = () => {
       <div className="app-card overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between">
           <h3 className="text-base font-extrabold text-ink font-display">
-            {language === 'bn' ? `${selectedDate} তারিখের ক্লাসরুম উপস্থিতি` : `Classroom Rolls for ${selectedDate}`}
+            {t('classroomRollsForDate', { date: selectedDate })}
           </h3>
           <button
             type="button"
             onClick={() => refetch()}
-            className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+            className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
             aria-label="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
@@ -248,8 +248,8 @@ export const AttendanceOperations: React.FC = () => {
           <div className="p-12">
             <EmptyState
               kind="generic"
-              title={language === 'bn' ? 'এই তারিখে কোনো উপস্থিতি গৃহীত হয়নি' : 'No attendance sessions found for this date'}
-              description={language === 'bn' ? 'উপস্থিতি গ্রহণ শুরু করতে "উপস্থিতি গ্রহণ করুন" বোতামে চাপ দিন।' : 'Start taking attendance from the Attendance Station.'}
+              title={t('noAttendanceSessionsDate')}
+              description={t('noAttendanceSessionsDateDesc')}
             />
           </div>
         ) : (
@@ -265,16 +265,16 @@ export const AttendanceOperations: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="text-base font-extrabold text-ink font-display">
-                      {session.className} — {language === 'bn' ? 'শাখা' : 'Section'} {session.sectionName}
+                      {session.className} — {session.sectionName}
                     </h4>
-                    <p className="text-xs text-ink-muted mt-0.5 font-display">
+                    <p className="text-sm text-ink-muted mt-0.5 font-display">
                       {session.status === 'FINALIZED' ? (
                         <span className="text-forest-700 dark:text-forest-600 font-bold">
-                          ✓ {language === 'bn' ? 'উপস্থিতি সমাপ্ত ও লক' : 'Attendance Finished & Locked'}
+                          ✓ {t('attendanceFinishedLocked')}
                         </span>
                       ) : (
                         <span className="text-amber-800 font-bold">
-                          ⏳ {language === 'bn' ? 'উপস্থিতি গ্রহণ চলছে' : 'Attendance in progress'}
+                          ⏳ {t('attendanceInProgress')}
                         </span>
                       )}
                     </p>
@@ -287,9 +287,9 @@ export const AttendanceOperations: React.FC = () => {
                     size="sm"
                     onClick={() => setInspectSessionId(session.id)}
                     leftIcon={<Edit3 className="w-4 h-4" />}
-                    className="min-h-[44px] rounded-2xl font-display text-xs"
+                    className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
                   >
-                    {language === 'bn' ? 'উপস্থিতি দেখুন ও সংশোধন করুন' : 'View Roll & Correct'}
+                    {t('viewRollAndCorrect')}
                   </Button>
                 </div>
               </div>
@@ -318,8 +318,8 @@ export const AttendanceOperations: React.FC = () => {
                   <h3 id="inspect-session-modal-title" className="text-xl font-extrabold text-ink font-display">
                     {inspectData.session.className} ({inspectData.session.sectionName})
                   </h3>
-                  <p className="text-xs text-ink-soft">
-                    {language === 'bn' ? 'মোট উপস্থিতির হার:' : 'Turnout Rate:'} {inspectData.summary.attendanceRate}% ({inspectData.summary.presentCount} / {inspectData.summary.totalStudents})
+                  <p className="text-sm text-ink-soft">
+                    {t('turnoutRateLabel')} {inspectData.summary.attendanceRate}% ({inspectData.summary.presentCount} / {inspectData.summary.totalStudents})
                   </p>
                 </div>
                 <button
@@ -328,7 +328,7 @@ export const AttendanceOperations: React.FC = () => {
                     setInspectSessionId(null);
                     setCorrectingStudent(null);
                   }}
-                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   aria-label={t('close')}
                 >
                   <X className="w-5 h-5" />
@@ -343,12 +343,12 @@ export const AttendanceOperations: React.FC = () => {
                     className="p-3.5 flex items-center justify-between gap-3 bg-surface hover:bg-surface-soft"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-surface-soft text-ink flex items-center justify-center font-bold text-xs">
+                      <div className="w-9 h-9 rounded-full bg-surface-soft text-ink flex items-center justify-center font-bold text-sm font-display">
                         #{st.rollNumber}
                       </div>
                       <div>
-                        <h5 className="text-xs font-bold text-ink font-display">{st.fullName}</h5>
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-display ${
+                        <h5 className="text-sm font-bold text-ink font-display">{st.fullName}</h5>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-sm font-bold font-display ${
                           st.status === 'PRESENT'
                             ? 'bg-success-50 text-forest-700 dark:text-forest-600'
                             : st.status === 'LATE'
@@ -372,9 +372,9 @@ export const AttendanceOperations: React.FC = () => {
                         setCorrectionNewStatus(st.status === 'PRESENT' ? 'ABSENT' : 'PRESENT');
                         setCorrectionReason('');
                       }}
-                      className="min-h-[44px] rounded-2xl text-xs font-display text-forest-700 dark:text-forest-600"
+                      className="min-h-[44px] rounded-2xl text-sm font-display text-forest-700 dark:text-forest-600 font-bold"
                     >
-                      {language === 'bn' ? 'সংশোধন' : 'Edit'}
+                      {t('edit')}
                     </Button>
                   </div>
                 ))}
@@ -383,36 +383,34 @@ export const AttendanceOperations: React.FC = () => {
               {/* Edit Modal / Box */}
               {correctingStudent && (
                 <div className="mt-4 p-4 rounded-2xl bg-surface-soft border border-line space-y-3">
-                  <div className="flex items-center gap-2 text-forest-700 font-bold text-xs font-display">
+                  <div className="flex items-center gap-2 text-forest-700 dark:text-forest-600 font-bold text-sm font-display">
                     <ShieldAlert className="w-4 h-4" />
                     <span>
-                      {language === 'bn'
-                        ? `${correctingStudent.fullName}-এর উপস্থিতি সংশোধন`
-                        : `Correcting attendance for ${correctingStudent.fullName}`}
+                      {t('correctAttendanceTitle')}: {correctingStudent.fullName}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-ink-muted mb-1">
-                        {language === 'bn' ? 'পূর্বের অবস্থা' : 'Previous Status'}
+                      <label className="block text-sm font-bold text-ink-muted mb-1">
+                        {t('previousStatus')}
                       </label>
                       <input
                         type="text"
                         disabled
                         value={getStatusLabel(correctingStudent.currentStatus)}
-                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line text-xs font-bold text-ink-muted"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line text-sm font-bold text-ink-muted"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-ink mb-1 font-display">
-                        {language === 'bn' ? 'নতুন অবস্থা' : 'New Status'} *
+                      <label className="block text-sm font-bold text-ink mb-1 font-display">
+                        {t('newStatus')} *
                       </label>
                       <select
                         value={correctionNewStatus}
                         onChange={(e) => setCorrectionNewStatus(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                       >
                         <option value="PRESENT">{t('statusPresent')}</option>
                         <option value="LATE">{t('statusLate')}</option>
@@ -423,16 +421,16 @@ export const AttendanceOperations: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-ink mb-1 font-display">
-                      {language === 'bn' ? 'সংশোধনের কারণ' : 'Reason for Correction'} *
+                    <label className="block text-sm font-bold text-ink mb-1 font-display">
+                      {t('reasonForCorrection')} *
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder={language === 'bn' ? 'যেমন: দেরিতে আগমন, অভিভাবকের চিঠি' : 'e.g. Arrived late with doctor slip'}
+                      placeholder={t('reasonPlaceholder')}
                       value={correctionReason}
                       onChange={(e) => setCorrectionReason(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-surface border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                      className="w-full px-4 py-2.5 rounded-2xl bg-surface border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                     />
                   </div>
 
@@ -442,7 +440,7 @@ export const AttendanceOperations: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => setCorrectingStudent(null)}
-                      className="min-h-[44px] font-display"
+                      className="min-h-[44px] font-display text-sm"
                     >
                       {t('cancel')}
                     </Button>
@@ -460,9 +458,9 @@ export const AttendanceOperations: React.FC = () => {
                           reason: correctionReason.trim(),
                         });
                       }}
-                      className="min-h-[44px] font-display text-xs"
+                      className="min-h-[44px] font-display text-sm font-bold"
                     >
-                      {language === 'bn' ? 'সংশোধন সংরক্ষণ করুন' : 'Save Attendance Change'}
+                      {t('saveAttendanceChange')}
                     </Button>
                   </div>
                 </div>

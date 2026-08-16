@@ -41,6 +41,7 @@ import {
   playScanErrorFeedback,
 } from '../../utils/feedback';
 import { api } from '../../services/api';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 
 interface GateArrival {
   studentId: string;
@@ -139,7 +140,7 @@ export const TeacherDashboard: React.FC = () => {
         }
       }
     } catch {
-      const cached = await offlineDb.rosters.toArray();
+      const cached = await offlineDb.rosters.where('schoolId').equals(activeSchoolId).toArray();
       const uniqueMap = new Map<string, any>();
       cached.forEach((r) => {
         if (!uniqueMap.has(r.classSectionId)) {
@@ -187,8 +188,8 @@ export const TeacherDashboard: React.FC = () => {
           if (res.allStudents) setAllStudents(res.allStudents);
 
           const localSession = await offlineDb.sessions
-            .where('classSectionId')
-            .equals(selectedClassId)
+            .where('[schoolId+classSectionId]')
+            .equals([activeSchoolId, selectedClassId])
             .and((s) => s.sessionDate === todayStr)
             .first();
 
@@ -199,11 +200,15 @@ export const TeacherDashboard: React.FC = () => {
             }
             setSession(localSession);
           } else if (res.session) {
+            if (!user?.id) {
+              setSession({ ...res.session, serverSessionId: res.session.id });
+              return;
+            }
             try {
               const newLocal = await createOfflineSession({
                 schoolId: activeSchoolId,
                 classSectionId: selectedClassId,
-                teacherId: user?.id || 'teacher',
+                teacherId: user.id,
                 sessionDate: todayStr,
               });
               newLocal.serverSessionId = res.session.id;
@@ -222,8 +227,8 @@ export const TeacherDashboard: React.FC = () => {
 
     // Offline fallback from IndexedDB
     const localSession = await offlineDb.sessions
-      .where('classSectionId')
-      .equals(selectedClassId)
+      .where('[schoolId+classSectionId]')
+      .equals([activeSchoolId, selectedClassId])
       .and((s) => s.sessionDate === todayStr)
       .first();
 
@@ -293,21 +298,25 @@ export const TeacherDashboard: React.FC = () => {
           throw dlErr;
         }
       }
-      showFeedback({ kind: 'success', text: 'Roster and active QR digests downloaded successfully.' });
+      showFeedback({ kind: 'success', text: t('rosterDownloaded') });
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Error downloading roster' });
+      showFeedback({ kind: 'error', text: getUserSafeError(err, language).message });
     }
   };
 
   // Handle Start Session
   const handleStartSession = async () => {
     if (!activeSchoolId || !selectedClassId) return;
+    if (!user?.id) {
+      showFeedback({ kind: 'error', text: t('sessionExpired') });
+      return;
+    }
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
       let localSession = await offlineDb.sessions
-        .where('classSectionId')
-        .equals(selectedClassId)
+        .where('[schoolId+classSectionId]')
+        .equals([activeSchoolId, selectedClassId])
         .and((s) => s.sessionDate === todayStr)
         .first();
 
@@ -315,7 +324,7 @@ export const TeacherDashboard: React.FC = () => {
         localSession = await createOfflineSession({
           schoolId: activeSchoolId,
           classSectionId: selectedClassId,
-          teacherId: user?.id || 'teacher',
+          teacherId: user.id,
           sessionDate: todayStr,
         });
       }
@@ -324,16 +333,16 @@ export const TeacherDashboard: React.FC = () => {
       showFeedback({ kind: 'success', text: t('sessionStarted') });
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Could not start session' });
+      showFeedback({ kind: 'error', text: getUserSafeError(err, language).message });
     }
   };
 
   // Handle Scan Action
   const handleScan = useCallback(
     async (rawToken: string, source: 'CAMERA' | 'USB') => {
-      if (!activeSchoolId || !selectedClassId || !user) {
+      if (!activeSchoolId || !selectedClassId || !user?.id) {
         playScanErrorFeedback();
-        showFeedback({ kind: 'error', text: t('sessionRequired') });
+        showFeedback({ kind: 'error', text: !user?.id ? t('sessionExpired') : t('sessionRequired') });
         return;
       }
 
@@ -341,8 +350,8 @@ export const TeacherDashboard: React.FC = () => {
       if (!activeSessionId) {
         const todayStr = new Date().toISOString().slice(0, 10);
         let localSession = await offlineDb.sessions
-          .where('classSectionId')
-          .equals(selectedClassId)
+          .where('[schoolId+classSectionId]')
+          .equals([activeSchoolId, selectedClassId])
           .and((s) => s.sessionDate === todayStr)
           .first();
 
@@ -381,7 +390,7 @@ export const TeacherDashboard: React.FC = () => {
             playScanSuccessFeedback();
             showFeedback({
               kind: 'success',
-              text: `${result.student.name} (#${result.student.rollNumber}) marked PRESENT`,
+              text: `${result.student.name} (#${result.student.rollNumber}) ${t('markedPresent')}`,
             });
             void fetchTodayGateData();
           }
@@ -391,10 +400,10 @@ export const TeacherDashboard: React.FC = () => {
         }
       } catch (err: any) {
         playScanErrorFeedback();
-        showFeedback({ kind: 'error', text: err.message || 'Error processing scan' });
+        showFeedback({ kind: 'error', text: getUserSafeError(err, language).message });
       }
     },
-    [activeSchoolId, selectedClassId, session, user, t, showFeedback, fetchTodayGateData]
+    [activeSchoolId, selectedClassId, session, user, t, language, showFeedback, fetchTodayGateData]
   );
 
   const handleScanRef = useRef(handleScan);
@@ -429,7 +438,7 @@ export const TeacherDashboard: React.FC = () => {
         err?.message?.includes('permission') ||
         err?.message?.includes('denied');
       setCameraStatus(isDenied ? 'permission_denied' : 'error');
-      setCameraError(isDenied ? 'permission_denied' : (err?.message || 'error'));
+      setCameraError(isDenied ? 'permission_denied' : 'error');
     }
   }, [videoEl]);
 
@@ -498,7 +507,7 @@ export const TeacherDashboard: React.FC = () => {
       await refreshOutbox();
       showFeedback({ kind: 'success', text: t('syncSuccess') });
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Sync failed' });
+      showFeedback({ kind: 'error', text: getUserSafeError(err, language).message });
     } finally {
       setIsSyncing(false);
       await refreshOutbox();
@@ -511,14 +520,18 @@ export const TeacherDashboard: React.FC = () => {
     newStatus: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED' | 'LEAVE'
   ) => {
     if (!activeSchoolId || !selectedClassId) return;
+    if (!user?.id) {
+      showFeedback({ kind: 'error', text: t('sessionExpired') });
+      return;
+    }
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
       let currentSession = session;
       if (!currentSession) {
         currentSession =
           (await offlineDb.sessions
-            .where('classSectionId')
-            .equals(selectedClassId)
+            .where('[schoolId+classSectionId]')
+            .equals([activeSchoolId, selectedClassId])
             .and((s) => s.sessionDate === todayStr)
             .first()) || null;
       }
@@ -602,7 +615,7 @@ export const TeacherDashboard: React.FC = () => {
       await refreshOutbox();
       void fetchTodayGateData();
     } catch (err: any) {
-      console.warn('Manual status update error:', err);
+      showFeedback({ kind: 'error', text: getUserSafeError(err, language).message });
     }
   };
 
@@ -613,8 +626,8 @@ export const TeacherDashboard: React.FC = () => {
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
       let localSession = await offlineDb.sessions
-        .where('classSectionId')
-        .equals(selectedClassId)
+        .where('[schoolId+classSectionId]')
+        .equals([activeSchoolId, selectedClassId])
         .and((s) => s.sessionDate === todayStr)
         .first();
 
@@ -637,7 +650,7 @@ export const TeacherDashboard: React.FC = () => {
       setShowConfirmFinish(false);
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Error finalizing attendance' });
+      showFeedback({ kind: 'error', text: getUserSafeError(err, language).message });
     } finally {
       setIsFinishing(false);
     }
@@ -1141,7 +1154,7 @@ export const TeacherDashboard: React.FC = () => {
                   onClick={handleFinalizeAttendance}
                   className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
                 >
-                  {isFinishing ? 'Saving…' : t('confirmFinishBtn')}
+                  {isFinishing ? t('savingSession') : t('confirmFinishBtn')}
                 </Button>
               </div>
             </motion.div>

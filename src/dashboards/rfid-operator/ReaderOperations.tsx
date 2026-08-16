@@ -5,7 +5,7 @@ import ReaderManagement from '../../components/rfid/ReaderManagement';
 
 export const ReaderOperations: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
 
   return (
     <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="reader-operations-view">
@@ -14,8 +14,8 @@ export const ReaderOperations: React.FC = () => {
         <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
           {t('schoolGatesTitle')}
         </h1>
-        <p className="t-body text-xs text-ink-soft mt-1">
-          {language === 'bn' ? `${activeSchoolName}-এ স্থাপিত গেটের ডিভাইস পরিচালনা করুন।` : `Manage attendance gate boxes installed at ${activeSchoolName}.`}
+        <p className="t-body text-sm text-ink-soft mt-1">
+          {t('schoolGatesSubtitle', { schoolName: activeSchoolName })}
         </p>
       </div>
 

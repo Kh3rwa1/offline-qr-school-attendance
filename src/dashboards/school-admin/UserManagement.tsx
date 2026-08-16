@@ -35,6 +35,7 @@ export const UserManagement: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Modals state
   const [suspendModalUser, setSuspendModalUser] = useState<MemberItem | null>(null);
@@ -80,6 +81,8 @@ export const UserManagement: React.FC = () => {
         reactivateExisting: false,
       });
       setFormError(null);
+      setSuccessToast(t('staffMemberAdded'));
+      setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
       const safe = getUserSafeError(err, language);
@@ -99,6 +102,8 @@ export const UserManagement: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
       setSuspendModalUser(null);
       setActionError(null);
+      setSuccessToast(t('staffAccessSuspended'));
+      setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
       const safe = getUserSafeError(err, language);
@@ -118,6 +123,8 @@ export const UserManagement: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'members'] });
       setReactivateModalUser(null);
       setActionError(null);
+      setSuccessToast(t('staffAccessRestored'));
+      setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
       const safe = getUserSafeError(err, language);
@@ -129,11 +136,11 @@ export const UserManagement: React.FC = () => {
     e.preventDefault();
     setFormError(null);
     if (!formData.fullName.trim()) {
-      setFormError(language === 'bn' ? 'পূর্ণ নাম লিখুন' : 'Full name is required');
+      setFormError(t('fullNameRequired'));
       return;
     }
     if (!formData.phoneNumber.trim()) {
-      setFormError(language === 'bn' ? '১০ ডিজিটের মোবাইল নম্বর লিখুন' : '10-digit mobile number is required');
+      setFormError(t('phoneFormatRequired'));
       return;
     }
     if (!formData.temporaryPassword || formData.temporaryPassword.length < 8) {
@@ -154,7 +161,6 @@ export const UserManagement: React.FC = () => {
 
   const teacherCount = members.filter((m) => m.role === 'TEACHER').length;
   const adminCount = members.filter((m) => m.role === 'SCHOOL_ADMIN' && m.status === 'ACTIVE').length;
-  const rfidCount = members.filter((m) => m.role === 'RFID_OPERATOR').length;
 
   const getRoleBadgeLabel = (role: UserRole) => {
     switch (role) {
@@ -173,14 +179,23 @@ export const UserManagement: React.FC = () => {
 
   return (
     <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="user-management-view">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {successToast && (
+          <div className="fixed top-6 right-6 z-50">
+            <Toast kind="success" message={successToast} onDismiss={() => setSuccessToast(null)} />
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('staffDirectoryTitle')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {t('staffDirectorySubtitle')} {activeSchoolName}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('staffManagementSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
 
@@ -192,16 +207,16 @@ export const UserManagement: React.FC = () => {
             setFormError(null);
           }}
           leftIcon={<UserPlus className="w-4 h-4" />}
-          className="min-h-[44px] rounded-2xl font-display"
+          className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
         >
           {t('addStaffMember')}
         </Button>
       </div>
 
       {isLoading ? (
-        <LoadingState type="table" message={language === 'bn' ? 'কর্মীদের তালিকা লোড হচ্ছে…' : 'Loading staff directory…'} />
+        <LoadingState type="table" message={t('loadingStaff')} />
       ) : error ? (
-        <ErrorState message={(error as any)?.message || 'Failed to load staff roster'} onRetry={() => refetch()} />
+        <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />
       ) : (
         <>
           {actionError && (
@@ -214,7 +229,7 @@ export const UserManagement: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('staffDirectoryTitle')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('staffDirectoryTitle')}</span>
                 <Users className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-ink font-display font-mono">
@@ -224,7 +239,7 @@ export const UserManagement: React.FC = () => {
 
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('roleTeacher')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('roleTeacher')}</span>
                 <Users className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
@@ -234,7 +249,7 @@ export const UserManagement: React.FC = () => {
 
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('roleSchoolAdmin')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('roleSchoolAdmin')}</span>
                 <Shield className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-ink font-display font-mono">
@@ -251,8 +266,8 @@ export const UserManagement: React.FC = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={language === 'bn' ? 'নাম বা মোবাইল নম্বর দিয়ে খুঁজুন…' : 'Search by name or phone…'}
-                className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
+                placeholder={t('searchStaffPlaceholder')}
+                className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink placeholder:text-ink-muted outline-none focus:border-forest-700 min-h-[44px]"
               />
             </div>
 
@@ -260,9 +275,9 @@ export const UserManagement: React.FC = () => {
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+                className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
               >
-                <option value="ALL">{language === 'bn' ? 'সকল পদবী' : 'All Roles'}</option>
+                <option value="ALL">{t('allRoles')}</option>
                 <option value="SCHOOL_ADMIN">{t('roleSchoolAdmin')}</option>
                 <option value="TEACHER">{t('roleTeacher')}</option>
                 <option value="RFID_OPERATOR">{t('roleRfidOperator')}</option>
@@ -277,8 +292,8 @@ export const UserManagement: React.FC = () => {
               <div className="p-12">
                 <EmptyState
                   kind="generic"
-                  title={language === 'bn' ? 'কোনো কর্মী খুঁজে পাওয়া যায়নি' : 'No staff members found'}
-                  description={language === 'bn' ? 'নতুন কর্মী যুক্ত করতে "নতুন কর্মী যোগ করুন" বোতামে চাপ দিন।' : 'Add new staff members or clear your search query.'}
+                  title={t('noStaffFound')}
+                  description={t('noStaffFoundDesc')}
                 />
               </div>
             ) : (
@@ -297,16 +312,16 @@ export const UserManagement: React.FC = () => {
                           <h4 className="text-base font-extrabold text-ink font-display">
                             {user.fullName}
                           </h4>
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                          <span className="px-2.5 py-0.5 rounded-full text-sm font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                             {getRoleBadgeLabel(user.role)}
                           </span>
                           {user.status === 'SUSPENDED' && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
+                            <span className="px-2.5 py-0.5 rounded-full text-sm font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
                               {t('statusStopped')}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-ink-muted mt-0.5 font-mono font-semibold">
+                        <p className="text-sm text-ink-muted mt-0.5 font-mono font-semibold">
                           {user.phoneNumber}
                         </p>
                       </div>
@@ -325,7 +340,7 @@ export const UserManagement: React.FC = () => {
                             }
                             setSuspendModalUser(user);
                           }}
-                          className="min-h-[44px] rounded-2xl font-display text-xs text-amber-800 hover:bg-amber-50"
+                          className="min-h-[44px] rounded-2xl font-display text-sm text-amber-800 hover:bg-amber-50 font-bold"
                         >
                           {t('stopStaffAccess')}
                         </Button>
@@ -334,7 +349,7 @@ export const UserManagement: React.FC = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => setReactivateModalUser(user)}
-                          className="min-h-[44px] rounded-2xl font-display text-xs text-forest-700 dark:text-forest-600"
+                          className="min-h-[44px] rounded-2xl font-display text-sm text-forest-700 dark:text-forest-600 font-bold"
                         >
                           {t('restoreStaffAccess')}
                         </Button>
@@ -370,7 +385,7 @@ export const UserManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsInviteOpen(false)}
-                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+                  className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   aria-label={t('close')}
                 >
                   <X className="w-5 h-5" />
@@ -378,14 +393,14 @@ export const UserManagement: React.FC = () => {
               </div>
 
               {formError && (
-                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-xs font-semibold">
+                <div className="mb-4 p-3 rounded-2xl bg-danger-50 text-danger-800 border border-danger-200 text-sm font-semibold">
                   {formError}
                 </div>
               )}
 
               <form onSubmit={handleInviteSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                  <label className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('fullNameLabel')} *
                   </label>
                   <input
@@ -393,13 +408,13 @@ export const UserManagement: React.FC = () => {
                     required
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    placeholder={language === 'bn' ? 'যেমন: সুভাষ চন্দ্র বসু' : 'e.g. Subhash Bose'}
-                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                    placeholder="e.g. Subhash Bose"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                  <label className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('phoneNumberLabel')} *
                   </label>
                   <input
@@ -408,18 +423,18 @@ export const UserManagement: React.FC = () => {
                     value={formData.phoneNumber}
                     onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                     placeholder="9830012345"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 font-mono min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                  <label className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('staffRoleLabel')} *
                   </label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
                   >
                     <option value="TEACHER">{t('roleTeacher')}</option>
                     <option value="SCHOOL_ADMIN">{t('roleSchoolAdmin')}</option>
@@ -429,7 +444,7 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-ink mb-1 font-display">
+                  <label className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('temporaryPasswordLabel')} *
                   </label>
                   <div className="relative">
@@ -439,24 +454,24 @@ export const UserManagement: React.FC = () => {
                       value={formData.temporaryPassword}
                       onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full pl-4 pr-12 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
+                      className="w-full pl-4 pr-12 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-semibold text-ink outline-none focus:border-forest-700 min-h-[44px]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-ink-muted hover:text-ink cursor-pointer"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-ink-muted hover:text-ink cursor-pointer min-h-[36px] min-w-[36px] inline-flex items-center justify-center"
                       aria-label={showPassword ? t('hidePassword') : t('showPassword')}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-[11px] text-ink-muted mt-1">
+                  <p className="text-sm text-ink-muted mt-1">
                     {t('passwordRequirementText')}
                   </p>
                 </div>
 
                 {/* Role Explainer Box */}
-                <div className="p-3 rounded-2xl bg-surface-soft border border-line text-xs text-ink-soft space-y-1">
+                <div className="p-3 rounded-2xl bg-surface-soft border border-line text-sm text-ink-soft space-y-1">
                   <p className="font-bold text-ink">{t('rolePermissionsExplanation')}</p>
                   <p>
                     {formData.role === 'TEACHER' && t('roleTeacherDesc')}
@@ -472,7 +487,7 @@ export const UserManagement: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsInviteOpen(false)}
-                    className="min-h-[44px] font-display"
+                    className="min-h-[44px] font-display text-sm"
                   >
                     {t('cancel')}
                   </Button>
@@ -481,7 +496,7 @@ export const UserManagement: React.FC = () => {
                     variant="primary"
                     size="md"
                     isLoading={inviteMutation.isPending}
-                    className="min-h-[44px] font-display"
+                    className="min-h-[44px] font-display text-sm font-bold"
                   >
                     {t('addStaffMember')}
                   </Button>

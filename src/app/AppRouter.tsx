@@ -81,10 +81,10 @@ export const AppRouter: React.FC = () => {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-xs">
+        <div className="min-h-screen grid place-items-center bg-canvas text-ink font-bold text-sm">
           <div className="flex flex-col items-center gap-2">
             <div className="w-6 h-6 border-2 border-forest-700 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-xs font-display">Loading workspace…</span>
+            <span className="text-sm font-display">Loading workspace…</span>
           </div>
         </div>
       }

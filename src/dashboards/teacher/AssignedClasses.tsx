@@ -33,7 +33,7 @@ export const AssignedClasses: React.FC = () => {
         }
       } catch (err: any) {
         // Offline fallback: load from cached roster items
-        const cached = await offlineDb.rosters.toArray();
+        const cached = await offlineDb.rosters.where('schoolId').equals(activeSchoolId).toArray();
         const uniqueMap = new Map<string, any>();
         cached.forEach((r: any) => {
           if (!uniqueMap.has(r.classSectionId)) {

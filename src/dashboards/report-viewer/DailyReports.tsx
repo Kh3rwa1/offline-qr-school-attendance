@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { Button } from '../../components/shared/Button';
@@ -171,7 +172,7 @@ export const DailyReports: React.FC = () => {
       {isLoading ? (
         <LoadingState type="table" message={t('loadingDailyReport')} />
       ) : error ? (
-        <ErrorState message={(error as any)?.message || 'Failed to load report'} onRetry={() => refetch()} />
+        <ErrorState message={getUserSafeError(error, language).message} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Stat Cards */}

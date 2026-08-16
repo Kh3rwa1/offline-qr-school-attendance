@@ -39,7 +39,7 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000001');
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 

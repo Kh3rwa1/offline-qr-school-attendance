@@ -19,7 +19,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     expect(passBox).not.toBeNull();
     expect(passBox!.height).toBeGreaterThanOrEqual(44);
 
-    const submitBtn = page.getByRole('button', { name: /Sign In|Log In/i });
+    const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
     await expect(submitBtn).toBeVisible();
     const submitBox = await submitBtn.boundingBox();
     expect(submitBox).not.toBeNull();
@@ -37,7 +37,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
@@ -61,7 +61,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000001');
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
@@ -97,7 +97,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000004');
     await page.locator('#login-password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 

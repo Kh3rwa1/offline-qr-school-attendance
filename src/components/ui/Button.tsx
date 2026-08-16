@@ -63,7 +63,7 @@ export const Button: React.FC<ButtonProps> = ({
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       type={type}
       disabled={isDisabled}
-      className={`inline-flex items-center justify-center rounded-full font-display transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none select-none text-center ${
+      className={`inline-flex items-center justify-center rounded-full font-display transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none select-none text-center ${
         fullWidth ? 'w-full' : ''
       } ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...(rest as any)}

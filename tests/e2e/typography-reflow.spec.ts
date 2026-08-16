@@ -55,7 +55,7 @@ test.describe('Browser-Level Typography (>=14px) & Reflow / 200% Zoom Verificati
 
     // Verify key interactive controls remain visible and functional
     const phoneInput = page.locator('#login-phone');
-    const submitBtn = page.getByRole('button', { name: /Sign In|Log In/i });
+    const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
 
     await expect(phoneInput).toBeVisible();
     await expect(submitBtn).toBeVisible();

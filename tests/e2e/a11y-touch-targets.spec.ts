@@ -21,7 +21,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
         await expect(page.locator('#login-phone')).toBeVisible();
         await expect(page.locator('#login-password')).toBeVisible();
-        await expect(page.getByRole('button', { name: /Sign In|Log In/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i })).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
@@ -34,7 +34,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await page.goto(`${baseUrl}/login`);
         await page.locator('#login-phone').fill('9100000002');
         await page.locator('#login-password').fill('TeacherPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
         await expect(page.getByText(/Today’s attendance|আজকের হাজিরা/i)).toBeVisible();
 
@@ -66,7 +66,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await page.goto(`${baseUrl}/login`);
         await page.locator('#login-phone').fill('9100000001');
         await page.locator('#login-password').fill('SchoolAdminPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
         await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
@@ -118,7 +118,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await page.goto(`${baseUrl}/login`);
         await page.locator('#login-phone').fill('9100000003');
         await page.locator('#login-password').fill('RfidOpPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
         await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
@@ -133,7 +133,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await page.goto(`${baseUrl}/login`);
         await page.locator('#login-phone').fill('9100000004');
         await page.locator('#login-password').fill('ReportViewerPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In/i }).click();
+        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
         await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 

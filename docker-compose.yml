@@ -60,9 +60,9 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
-      RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:?RFID_HMAC_SECRET is required}
-      RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:?RFID_CARD_MASTER_KEY is required}
-      KMS_MASTER_KEY: ${KMS_MASTER_KEY:?KMS_MASTER_KEY is required}
+      RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:-}
+      RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:-}
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY:-}
     volumes:
       - ./backups:/backups:ro
     healthcheck:
@@ -185,7 +185,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
       POSTGRES_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
       POSTGRES_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET:-replace-with-a-random-32-byte-backup-encryption-key-012345678}}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET:?SESSION_SECRET or BACKUP_ENCRYPTION_KEY is required}}
       BACKUP_CRON: ${BACKUP_CRON:-18:30}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-14}
     volumes:
@@ -206,7 +206,30 @@ services:
       db:
         condition: service_healthy
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: school_attendance_caddy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      SERVER_DOMAIN: ${SERVER_DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    depends_on:
+      app:
+        condition: service_healthy
+
   rfid-gateway:
+    profiles: ["rfid"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -245,3 +268,5 @@ services:
 volumes:
   pgdata:
   redisdata:
+  caddy_data:
+  caddy_config:

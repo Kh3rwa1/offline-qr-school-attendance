@@ -17,7 +17,7 @@ async function runR2LiveDrill() {
   const outputDir = path.join(process.cwd(), 'output');
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const backupPassphrase = process.env.BACKUP_PASSPHRASE || 'attendease-production-backup-secret-key-32bytes';
+  const backupPassphrase = process.env.BACKUP_ENCRYPTION_KEY || process.env.BACKUP_PASSPHRASE || 'attendease-production-backup-secret-key-32bytes';
   const r2Account = process.env.R2_ACCOUNT_ID;
   const r2AccessKey = process.env.R2_ACCESS_KEY_ID;
   const r2SecretKey = process.env.R2_SECRET_ACCESS_KEY;

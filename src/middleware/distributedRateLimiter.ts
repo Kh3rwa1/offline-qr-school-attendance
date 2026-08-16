@@ -105,6 +105,12 @@ export const rateLimitPolicies = {
     windowMs: 15 * 60 * 1000,
   }),
 
+  setup: createDistributedRateLimiter({
+    prefix: 'setup',
+    maxRequests: 5,
+    windowMs: 15 * 60 * 1000,
+  }),
+
   sync: createDistributedRateLimiter({
     prefix: 'sync',
     maxRequests: 300,

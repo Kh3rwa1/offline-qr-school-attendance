@@ -1,0 +1,42 @@
+{
+    # Global options
+    auto_https disable_redirects
+    admin off
+}
+
+# AttendEase Reverse Proxy
+{$SERVER_DOMAIN:localhost} {
+    # Security Headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(self), geolocation=(), microphone=()"
+        -Server
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Health check bypass
+    @health path /healthz /readyz /livez /api/v1/health
+    handle @health {
+        reverse_proxy app:3000
+    }
+
+    # Main Application Proxy
+    reverse_proxy app:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Logging
+    log {
+        output stdout
+        format json
+    }
+}

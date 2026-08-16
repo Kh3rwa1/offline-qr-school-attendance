@@ -15,7 +15,6 @@ import {
   enrollments,
   academicYears,
   classSections,
-  classes,
 } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -463,7 +462,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
           },
         };
 
-        rfidRouter.handle(req, mockRes, (err: any) => {
+        (rfidRouter as any).handle(req, mockRes, (err: any) => {
           if (err) resolve({ statusCode: 500, body: { error: err.message } });
           else resolve({ statusCode: 404, body: { error: 'NOT_FOUND' } });
         });
@@ -523,7 +522,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
             },
           };
 
-          app.handle(req, mockRes, () => {
+          (app as any).handle(req, mockRes, () => {
             resolve({ statusCode: 404, body: { error: 'API_ENDPOINT_NOT_FOUND' } });
           });
         });

@@ -61,8 +61,21 @@ export const TeacherDashboard: React.FC = () => {
   const [session, setSession] = useState<OfflineSessionItem | null>(null);
   const [sessionRoster, setSessionRoster] = useState<OfflineSessionRosterItem[]>([]);
   const [scanInput, setScanInput] = useState('');
+  const [viewMode, setViewModeState] = useState<'review' | 'scanner' | 'roster'>(() => {
+    try {
+      return (localStorage.getItem('attendance.viewMode') as any) || 'review';
+    } catch {
+      return 'review';
+    }
+  });
+
+  const setViewMode = useCallback((mode: 'review' | 'scanner' | 'roster') => {
+    try {
+      localStorage.setItem('attendance.viewMode', mode);
+    } catch {}
+    setViewModeState(mode);
+  }, []);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'warning' | 'error'; text: string } | null>(null);
-  const [viewMode, setViewMode] = useState<'review' | 'scanner' | 'roster'>('review');
   const [finalizing, setFinalizing] = useState(false);
   const [scanBurst, setScanBurst] = useState<{ id: number; studentName?: string; studentNameBn?: string } | null>(null);
 
@@ -261,7 +274,7 @@ export const TeacherDashboard: React.FC = () => {
 
   const isSessionActive = Boolean(session && (session.status as string) !== 'FINALIZED' && (session.status as string) !== 'FINALIZE_PENDING');
   useEffect(() => {
-    if (viewMode === 'scanner' && videoEl && isSessionActive) {
+    if (isSessionActive && videoEl) {
       void startCamera(videoEl);
     } else {
       stopCamera();
@@ -269,7 +282,7 @@ export const TeacherDashboard: React.FC = () => {
     return () => {
       stopCamera();
     };
-  }, [viewMode, videoEl, isSessionActive, startCamera, stopCamera]);
+  }, [isSessionActive, videoEl, startCamera, stopCamera]);
 
   // Setup USB hardware keyboard-wedge scanner listener
   useEffect(() => {
@@ -360,6 +373,7 @@ export const TeacherDashboard: React.FC = () => {
       setSession(s);
       const sRoster = await offlineDb.sessionRosters.where('sessionId').equals(s.id).toArray();
       setSessionRoster(sRoster);
+      setViewMode('scanner');
       showFeedback({ kind: 'success', text: t('sessionOpen') });
     } catch (err: any) {
       showFeedback({ kind: 'error', text: err.message || 'Failed to start session' });
@@ -539,6 +553,8 @@ export const TeacherDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
+            <span>{t('offlineQrAttendance')}</span>
+            <span className="text-forest-400">•</span>
             <span>{t('uhfGateAttendance')}</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
@@ -926,6 +942,36 @@ export const TeacherDashboard: React.FC = () => {
               </Button>
             </div>
           </div>
+
+          {/* USB / Manual Token Input Field */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = scanInput.trim();
+              setScanInput('');
+              if (value) void handleScan(value, 'USB');
+            }}
+            className="flex flex-col sm:flex-row gap-3 pt-1 pb-2"
+          >
+            <div className="relative flex-1">
+              <Usb className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                placeholder={t('usbScannerPlaceholder')}
+                className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="md"
+              disabled={!scanInput.trim()}
+              className="min-h-[44px]"
+            >
+              {t('scanToken')}
+            </Button>
+          </form>
 
           {sessionRoster.length === 0 ? (
             <EmptyState

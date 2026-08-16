@@ -86,7 +86,7 @@ export const TopBar: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={language === 'bn' ? 'শিক্ষার্থী, ক্লাস বা রোল নম্বর দিয়ে খুঁজুন…' : 'Search student, class, or roll number…'}
+            placeholder={language === 'bn' ? 'Student, Class বা Roll Number Search করুন…' : 'Search student, class, or roll number…'}
             className="w-full pl-11 pr-14 py-2.5 bg-surface-soft border border-line rounded-full text-sm font-medium text-ink placeholder:text-ink-muted focus:bg-surface focus:border-forest-700 transition-all outline-none"
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted bg-surface border border-line px-2 py-0.5 rounded-lg shadow-2xs font-mono">
@@ -141,10 +141,12 @@ export const TopBar: React.FC = () => {
         </motion.button>
 
         {/* Language Switcher Pill */}
-        <div className="inline-flex rounded-full bg-surface-soft border border-line p-0.5 sm:p-1">
+        <div className="inline-flex rounded-full bg-surface-soft border border-line p-0.5 sm:p-1" role="group" aria-label="Language selection">
           <button
             type="button"
             onClick={() => setLanguage('en')}
+            title="English"
+            aria-label="English"
             className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
               language === 'en'
                 ? 'bg-forest-700 text-white shadow-xs'
@@ -156,13 +158,15 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={() => setLanguage('bn')}
+            title="বাংলা + English"
+            aria-label="বাংলা + English"
             className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
               language === 'bn'
                 ? 'bg-forest-700 text-white shadow-xs'
                 : 'text-ink-soft hover:text-ink'
             }`}
           >
-            বাং
+            বাং + EN
           </button>
         </div>
 
@@ -254,7 +258,7 @@ export const TopBar: React.FC = () => {
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
                       <School className="w-4 h-4 text-forest-700" />
-                      <span>{language === 'bn' ? 'বিদ্যালয় পরিবর্তন' : 'Switch School'}</span>
+                      <span>{language === 'bn' ? 'School Change করুন' : 'Switch School'}</span>
                     </button>
 
                     <button
@@ -266,7 +270,7 @@ export const TopBar: React.FC = () => {
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
                       <RefreshCw className="w-4 h-4 text-forest-700" />
-                      <span>{language === 'bn' ? 'ইন্টারনেট ও সিঙ্ক অবস্থা' : 'Internet & Sync Status'}</span>
+                      <span>{language === 'bn' ? 'Internet ও Sync Status' : 'Internet & Sync Status'}</span>
                     </button>
                   </div>
 
@@ -297,8 +301,8 @@ export const TopBar: React.FC = () => {
       <Drawer
         isOpen={syncDrawerOpen}
         onClose={() => setSyncDrawerOpen(false)}
-        title={language === 'bn' ? 'ইন্টারনেট ও সংরক্ষণ অবস্থা' : 'Internet & Sync Status'}
-        description={language === 'bn' ? 'মোবাইলে সংরক্ষিত উপস্থিতি ও সার্ভার সিঙ্ক' : 'Attendance sync status and saved records'}
+        title={language === 'bn' ? 'Internet ও Storage Status' : 'Internet & Sync Status'}
+        description={language === 'bn' ? 'এই ফোনে Saved Attendance ও Server Sync' : 'Attendance sync status and saved records'}
         placement="bottom"
       >
         <div className="space-y-5 text-left max-w-lg mx-auto">
@@ -318,26 +322,26 @@ export const TopBar: React.FC = () => {
                 <h4 className="text-sm font-bold text-ink">
                   {isOnline
                     ? language === 'bn'
-                      ? 'ইন্টারনেট সংযোগ চালু আছে'
+                      ? 'ইন্টারনেট Connected'
                       : 'Internet Connected'
                     : language === 'bn'
-                    ? 'অফলাইন মোড চালু'
+                    ? 'Offline Mode'
                     : 'Operating in Offline Mode'}
                 </h4>
                 <p className="text-xs text-ink-muted">
                   {isOnline
                     ? language === 'bn'
-                      ? 'বিদ্যালয়ের সার্ভারের সাথে যুক্ত'
+                      ? 'School Server-এ Connected'
                       : 'Connected to school attendance server'
                     : language === 'bn'
-                    ? 'উপস্থিতি এই মোবাইলে সুরক্ষিতভাবে সংরক্ষিত হচ্ছে'
+                    ? 'Attendance এই ফোনে Safe আছে'
                     : 'Attendance is safely saved on this mobile'}
                 </p>
               </div>
             </div>
 
             <Badge variant={isOnline ? 'success' : 'warning'} size="sm" dot pulse>
-              {isOnline ? (language === 'bn' ? 'অনলাইন' : 'ONLINE') : (language === 'bn' ? 'অফলাইন' : 'OFFLINE')}
+              {isOnline ? (language === 'bn' ? 'Online' : 'ONLINE') : (language === 'bn' ? 'Offline' : 'OFFLINE')}
             </Badge>
           </div>
 
@@ -345,7 +349,7 @@ export const TopBar: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
               <span className="text-xs text-ink-muted uppercase font-bold tracking-wider font-display">
-                {language === 'bn' ? 'পাঠানোর অপেক্ষায়' : 'Unsent Scans'}
+                {language === 'bn' ? 'Waiting to Send' : 'Unsent Scans'}
               </span>
               <div className="text-2xl font-extrabold text-ink font-mono mt-1">
                 {outboxCount}
@@ -354,18 +358,18 @@ export const TopBar: React.FC = () => {
 
             <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
               <span className="text-xs text-ink-muted uppercase font-bold tracking-wider font-display">
-                {language === 'bn' ? 'সংরক্ষণ স্থিতি' : 'Storage Status'}
+                {language === 'bn' ? 'Storage Status' : 'Storage Status'}
               </span>
               <div className="text-sm font-bold text-forest-700 dark:text-forest-400 mt-1.5 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
-                <span>{language === 'bn' ? 'ডিভাইসে সুরক্ষিত' : 'Safely Saved'}</span>
+                <span>{language === 'bn' ? 'এই ফোনে Safe আছে' : 'Safely Saved'}</span>
               </div>
             </div>
           </div>
 
           {lastSyncedAt && (
             <p className="text-xs text-ink-muted text-center font-mono">
-              {language === 'bn' ? 'সর্বশেষ সার্ভারে পাঠানো হয়েছে:' : 'Last synced at:'} {new Date(lastSyncedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN')}
+              {language === 'bn' ? 'Last Server Sync:' : 'Last synced at:'} {new Date(lastSyncedAt).toLocaleTimeString('en-IN')}
             </p>
           )}
 
@@ -384,10 +388,10 @@ export const TopBar: React.FC = () => {
             >
               {isSyncing
                 ? language === 'bn'
-                  ? 'সার্ভারে পাঠানো হচ্ছে…'
+                  ? 'Server-এ Send হচ্ছে…'
                   : 'Sending to Server…'
                 : language === 'bn'
-                ? 'এখনই সার্ভারে পাঠান'
+                ? 'Saved Records Send করুন'
                 : 'Send Saved Records Now'}
             </Button>
           </div>
@@ -399,10 +403,10 @@ export const TopBar: React.FC = () => {
         isOpen={confirmLogoutOpen}
         onClose={() => setConfirmLogoutOpen(false)}
         onConfirm={handleLogout}
-        title={language === 'bn' ? 'লগআউট করতে চান?' : 'Sign Out of AttendEase?'}
-        description={language === 'bn' ? 'আপনি লগআউট করলেও ডিভাইসে সংরক্ষিত কোনো উপস্থিতি মুছে যাবে না।' : 'Your active session will be ended. Unsynced attendance events recorded on this device remain safely saved.'}
+        title={language === 'bn' ? 'AttendEase থেকে Logout করবেন?' : 'Sign Out of AttendEase?'}
+        description={language === 'bn' ? 'Logout করলেও এই ফোনে Saved Attendance সম্পূর্ণ Safe থাকবে।' : 'Your active session will be ended. Unsynced attendance events recorded on this device remain safely saved.'}
         confirmText={t('logout')}
-        cancelText={language === 'bn' ? 'ফিরে যান' : 'Stay Signed In'}
+        cancelText={language === 'bn' ? 'Login থাকুন' : 'Stay Signed In'}
         intent="danger"
       />
     </header>

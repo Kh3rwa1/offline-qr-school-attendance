@@ -6,7 +6,7 @@ describe('Plain Language Error & RFID Code Mappings', () => {
   describe('getUserSafeError', () => {
     it('translates network / offline errors into reassuring plain language in Bengali & English', () => {
       const bnErr = getUserSafeError(new Error('Failed to fetch'), 'bn');
-      expect(bnErr.title).toBe('ইন্টারনেট সংযোগ নেই');
+      expect(bnErr.title).toBe('Internet নেই');
       expect(bnErr.canRetry).toBe(true);
 
       const enErr = getUserSafeError(new Error('Failed to fetch'), 'en');
@@ -16,8 +16,8 @@ describe('Plain Language Error & RFID Code Mappings', () => {
 
     it('translates camera permission issues into clear action steps', () => {
       const bnErr = getUserSafeError(new Error('NotAllowedError: Permission denied'), 'bn');
-      expect(bnErr.title).toBe('ক্যামেরা ব্যবহারের অনুমতি প্রয়োজন');
-      expect(bnErr.actionSuggestion).toContain('ক্যামেরা ব্যবহারের অনুমতি দিন');
+      expect(bnErr.title).toBe('Camera Permission প্রয়োজন');
+      expect(bnErr.actionSuggestion).toContain('Camera Allow করুন');
 
       const enErr = getUserSafeError(new Error('NotAllowedError: Permission denied'), 'en');
       expect(enErr.title).toBe('Camera Permission Needed');
@@ -25,7 +25,7 @@ describe('Plain Language Error & RFID Code Mappings', () => {
 
     it('translates 401 / session expiration without developer jargon', () => {
       const bnErr = getUserSafeError({ message: '401 Unauthorized jwt token expired' }, 'bn');
-      expect(bnErr.title).toBe('সেশনের মেয়াদ শেষ হয়েছে');
+      expect(bnErr.title).toBe('Session শেষ হয়েছে');
 
       const enErr = getUserSafeError({ message: '401 Unauthorized jwt token expired' }, 'en');
       expect(enErr.title).toBe('Session Expired');

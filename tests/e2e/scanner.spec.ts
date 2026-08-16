@@ -289,11 +289,11 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   await expect(retryBtn).toBeVisible();
 
   // 4. Switch to Bengali and assert Bengalish denied copy
-  const bnBtn = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i });
+  const bnBtn = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i }).first();
   if (await bnBtn.isVisible()) {
     await bnBtn.click();
     await expect(page.getByText(/Camera Permission পাওয়া যায়নি|Camera Permission/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Camera আবার Try করুন|Try Again|Camera/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Camera আবার Try করুন|Try Again|Camera/i }).first()).toBeVisible();
   }
 });
 

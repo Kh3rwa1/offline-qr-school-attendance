@@ -206,7 +206,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setLanguage('bn')}
-              aria-label={t('bengaliLabel')}
+              aria-label="বাংলা"
               className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'bn'
                   ? 'bg-forest-700 text-white shadow-2xs'
@@ -218,7 +218,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setLanguage('en')}
-              aria-label={t('englishLabel')}
+              aria-label="English"
               className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'en'
                   ? 'bg-forest-700 text-white shadow-2xs'

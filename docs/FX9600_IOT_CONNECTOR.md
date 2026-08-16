@@ -77,3 +77,12 @@ Authorization: Bearer <reader_provisioning_secret>
 
 - **Portal Burst Rate Limit**: Default `RFID_READER_SCAN_RATE_LIMIT=600` (600 requests/min/reader) to prevent HTTP 429 throttling during 50+ student crowd doorway rushes.
 - **Duplicate Walk Debounce**: Configured via `RFID_DUPLICATE_TAP_COOLDOWN_MS=30000` (30s). When multiple antennas read the same EPC badge during a single passage, the first read returns `ACCEPTED` (HTTP 200) and subsequent reads return `DUPLICATE` (HTTP 200) without double-marking or resetting attendance.
+
+---
+
+## 6. Physical Hardware Validation Disclaimer
+
+> [!NOTE]
+> Zebra FX9600 integration is implemented and software-tested against documented IoT Connector payload contracts. Physical FX9600 hardware validation is pending and is not implied by CI.
+> 
+> For on-site commissioning procedures, test cases, and sign-off forms, see [docs/FX9600_HARDWARE_ACCEPTANCE_PACK.md](file:///Users/dulorai/Documents/offline-qr-school-attendance/docs/FX9600_HARDWARE_ACCEPTANCE_PACK.md).

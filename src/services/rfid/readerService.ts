@@ -75,6 +75,9 @@ export async function registerReader(params: {
   firmwareVersion?: string;
   adapterType: 'GATEWAY' | 'USB_HID' | 'WEB_SERIAL' | 'NETWORK';
   securityCapability?: string;
+  assignedClassSectionId?: string;
+  antennaConfig?: any;
+  bearerToken?: string;
   certificateFingerprint?: string;
   sharedSecret?: string;
   actorId?: string;
@@ -96,6 +99,9 @@ export async function registerReader(params: {
 
     const rawSecret = params.sharedSecret || crypto.randomBytes(32).toString('hex');
     const encryptedSecret = encryptReaderSecret(rawSecret);
+    const bearerTokenDigest = params.bearerToken
+      ? crypto.createHash('sha256').update(params.bearerToken).digest('hex')
+      : undefined;
 
     let normalizedDirection: 'ENTRY' | 'EXIT' | 'BIDIRECTIONAL' | 'NONE' = 'NONE';
     if ((params.directionMode as any) === 'IN' || params.directionMode === 'ENTRY') {
@@ -114,10 +120,13 @@ export async function registerReader(params: {
         name: params.name,
         location: params.location,
         directionMode: normalizedDirection,
-        readerModel: params.readerModel,
+        readerModel: params.readerModel || 'ZEBRA_FX9600',
         firmwareVersion: params.firmwareVersion,
         adapterType: params.adapterType,
-        securityCapability: params.securityCapability || 'UID_ONLY',
+        securityCapability: params.securityCapability || 'ZEBRA_FX9600',
+        assignedClassSectionId: params.assignedClassSectionId || null,
+        antennaConfig: params.antennaConfig || null,
+        bearerTokenDigest,
         certificateFingerprint: params.certificateFingerprint,
         sharedSecretEncrypted: encryptedSecret,
         status: 'PENDING',

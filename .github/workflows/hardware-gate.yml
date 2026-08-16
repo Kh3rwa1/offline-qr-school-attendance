@@ -1,4 +1,4 @@
-name: DESFire Cryptographic Simulation & APDU Verification Gate
+name: Zebra FX9600 IoT Connector Contract Simulation — No Physical Hardware
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   physical-hardware-gate:
-    name: DESFire EV2/EV3 PC/SC Hardware & APDU Verification Gate
+    name: Zebra FX9600 IoT Connector Contract Simulation — No Physical Hardware
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,22 +35,16 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Verify PC/SC Smartcard Subsystem Daemon
-        run: |
-          if command -v systemctl &> /dev/null; then
-            systemctl is-active --quiet pcscd || sudo systemctl start pcscd || true
-          fi
-
       - name: Annotate Simulation Mode
-        run: echo "::notice::This gate verifies cryptographic correctness in simulation. Physical certification requires on-site hardware commissioning per SCHOOL_SITE_RFID_CERTIFICATION_PROTOCOL.md"
+        run: echo "::notice::Zebra FX9600 integration is implemented and software-tested against documented IoT Connector payload contracts. Physical FX9600 hardware validation is pending and is not implied by CI."
 
-      - name: Execute Hardware Verification & APDU Benchmarks
+      - name: Execute Zebra FX9600 IoT Connector Contract Simulation
         env:
           HARDWARE_RELEASE_GATE: ${{ inputs.enforce_live_hardware == 'true' && '1' || '0' }}
           GITHUB_SHA: ${{ github.sha }}
         run: npx tsx scripts/hardware-runner.ts
 
-      - name: Upload Hardware Certification Reports
+      - name: Upload Contract Simulation Reports
         if: always()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:

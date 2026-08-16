@@ -23,7 +23,7 @@
 
 ## 2. Simulated (Software Emulation / Staged)
 
-- **Live Physical Zebra FX9600 Hardware Gate**: The Zebra IoT Connector webhook ingest service, cryptographic verification, normalization, idempotency, debouncing, and attendance marking are 100% coded and verified with authentic fixtures. The physical FX9600 reader, antenna array (India 865–867 MHz band), and live Ethernet IoT Connector push are simulated in automated CI until physical on-site deployment.
+- **Physical Zebra FX9600 Hardware Gate**: Zebra FX9600 integration is implemented and software-tested against documented IoT Connector payload contracts. Physical FX9600 hardware validation is pending and is not implied by CI. (See `docs/FX9600_HARDWARE_ACCEPTANCE_PACK.md` for on-site commissioning runbook).
 - **Telecom Carrier DLT SMS Gateway**: Absence SMS job queue creation in PostgreSQL works; telecom SMS dispatch (Jio DLT, Airtel, Vi) uses console/webhook mode unless live credentials are provided.
 - **Cloudflare R2 Backup Replication**: Local encrypted database backups work; remote replication to Cloudflare R2 is staged and verified via automated round-trip drill (`scripts/runR2LiveDrill.ts`).
 

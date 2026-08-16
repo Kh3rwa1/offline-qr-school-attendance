@@ -267,7 +267,8 @@ cmd_install() {
 
   if [ ${HEALTHY} -ne 1 ]; then
     echo "❌ Error: AttendEase OS failed to pass readiness probes within 90s." >&2
-    dcompose logs --tail=50 >&2
+    dcompose ps -a >&2
+    dcompose logs --tail=100 >&2
     exit 1
   fi
 

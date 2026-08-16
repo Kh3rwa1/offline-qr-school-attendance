@@ -109,7 +109,7 @@ export const Sidebar: React.FC = () => {
                   to={item.href}
                   end={item.href === '/app/super-admin' || item.href === '/app/school-admin' || item.href === '/app/teacher' || item.href === '/app/rfid'}
                   className={({ isActive }) =>
-                    `flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs transition-all relative group ${
+                    `flex items-center justify-between px-3.5 py-2.5 min-h-[44px] rounded-2xl text-xs transition-all relative group ${
                       isActive
                         ? 'text-ink font-bold bg-surface-soft shadow-2xs border border-line/60'
                         : 'text-ink-soft hover:text-ink hover:bg-surface-soft/60 font-medium'
@@ -155,7 +155,7 @@ export const Sidebar: React.FC = () => {
                 whileHover={{ x: 2, scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => void logout()}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl hover:text-danger-600 hover:bg-danger-50 transition-all font-display text-left cursor-pointer"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 min-h-[44px] rounded-2xl hover:text-danger-600 hover:bg-danger-50 transition-all font-display text-left cursor-pointer"
               >
                 <LogOut className="w-4 h-4 text-ink-muted group-hover:text-danger-600 transition-colors" />
                 <span>Logout Session</span>
@@ -169,7 +169,7 @@ export const Sidebar: React.FC = () => {
       <motion.div
         whileHover={{ y: -2 }}
         transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-        className="dark-tracker-card p-5 relative overflow-hidden text-white mt-6 rounded-[28px]"
+        className="dark-tracker-card bg-[#09261b] p-5 relative overflow-hidden text-white mt-6 rounded-[28px]"
       >
         <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center mb-3">
           <Download className="w-4 h-4 text-emerald-400" />
@@ -177,7 +177,7 @@ export const Sidebar: React.FC = () => {
         <h4 className="text-sm font-extrabold font-display leading-tight">
           Offline PWA App
         </h4>
-        <p className="text-xs text-emerald-300/80 mt-1 font-medium">
+        <p className="text-xs text-emerald-100 mt-1 font-medium">
           Zero-connectivity attendance cache
         </p>
         <motion.button
@@ -186,7 +186,7 @@ export const Sidebar: React.FC = () => {
           onClick={() => {
             window.location.href = '/app/teacher/offline';
           }}
-          className="mt-4 w-full py-2.5 px-3 rounded-full bg-forest-700 hover:bg-forest-800 text-white text-xs font-bold transition-all shadow-md font-display cursor-pointer"
+          className="mt-4 w-full py-2.5 px-3 min-h-[44px] rounded-full bg-forest-700 hover:bg-forest-800 text-white text-xs font-bold transition-all shadow-md font-display cursor-pointer"
         >
           Offline Workspace
         </motion.button>

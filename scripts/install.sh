@@ -7,7 +7,7 @@ set -euo pipefail
 
 umask 077
 
-VERSION="1.0.0"
+VERSION="1.3.0"
 CONFIG_FILE=".env"
 STATE_FILE=".attendease_state.json"
 COMMAND="install"
@@ -15,6 +15,7 @@ UNATTENDED=0
 DRY_RUN=0
 PURGE=0
 RESTORE_TARGET=""
+TARGET_IMAGE="${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:latest}"
 
 # Parse CLI arguments and subcommands
 if [[ $# -gt 0 ]]; then
@@ -34,6 +35,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --config)
       CONFIG_FILE="$2"
+      shift 2
+      ;;
+    --image=*)
+      TARGET_IMAGE="${1#*=}"
+      shift
+      ;;
+    --image)
+      TARGET_IMAGE="$2"
       shift 2
       ;;
     --unattended|-y)
@@ -65,6 +74,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --config=<path>  Path to configuration env file (default: .env)"
+      echo "  --image=<ref>    Target container image reference for update/install"
       echo "  --unattended, -y Non-interactive execution"
       echo "  --dry-run        Validate pre-flight requirements without starting containers"
       echo "  --purge          Purge all database volumes on uninstall"
@@ -259,11 +269,11 @@ cmd_install() {
   fi
 
   # Record installed state
-  APP_IMAGE_ID=$(dcompose images -q app 2>/dev/null || echo "local-build")
+  INSTALLED_IMAGE="${TARGET_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}"
   cat <<EOF > "${STATE_FILE}"
 {
   "version": "${VERSION}",
-  "current_image": "${APP_IMAGE_ID}",
+  "current_image": "${INSTALLED_IMAGE}",
   "previous_image": null,
   "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -341,11 +351,7 @@ cmd_backup() {
 
   BACKUP_KEY=$(grep '^BACKUP_ENCRYPTION_KEY=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
   if [ -z "${BACKUP_KEY}" ]; then
-    BACKUP_KEY=$(grep '^SESSION_SECRET=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
-  fi
-
-  if [ -z "${BACKUP_KEY}" ]; then
-    echo "❌ Error: Missing BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}" >&2
+    echo "❌ Error: Missing mandatory BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}. Failing closed for security." >&2
     exit 1
   fi
 
@@ -374,7 +380,8 @@ cmd_restore() {
 
   BACKUP_KEY=$(grep '^BACKUP_ENCRYPTION_KEY=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
   if [ -z "${BACKUP_KEY}" ]; then
-    BACKUP_KEY=$(grep '^SESSION_SECRET=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    echo "❌ Error: Missing mandatory BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}. Failing closed for security." >&2
+    exit 1
   fi
 
   echo "⚠️ Restoring database will overwrite current state."
@@ -409,13 +416,16 @@ cmd_update() {
   cmd_backup
   PRE_UPDATE_BACKUP=$(find ./backups -name "*.sql.gz.enc" 2>/dev/null | sort -r | head -n 1 || true)
 
-  CURRENT_IMAGE_ID=$(dcompose images -q app 2>/dev/null || echo "unknown")
+  CURRENT_IMAGE_REF="ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0"
+  if [ -f "${STATE_FILE}" ]; then
+    CURRENT_IMAGE_REF=$(grep '"current_image"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2- | tr -d '", ' || echo "ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0")
+  fi
 
-  echo "\n2. Pulling latest release container images..."
-  dcompose pull app caddy
+  echo "\n2. Pulling target release container image (${TARGET_IMAGE})..."
+  ATTENDEASE_IMAGE="${TARGET_IMAGE}" dcompose pull app || docker pull "${TARGET_IMAGE}" || true
 
-  echo "\n3. Restarting application services with updated image..."
-  dcompose up -d --no-deps app caddy
+  echo "\n3. Recreating application services with updated image..."
+  ATTENDEASE_IMAGE="${TARGET_IMAGE}" dcompose up -d --no-deps --force-recreate app caddy
 
   echo "\n4. Testing post-update readiness probes..."
   MAX_RETRIES=15
@@ -432,12 +442,11 @@ cmd_update() {
   done
 
   if [ ${HEALTHY} -eq 1 ]; then
-    NEW_IMAGE_ID=$(dcompose images -q app 2>/dev/null || echo "unknown")
     cat <<EOF > "${STATE_FILE}"
 {
   "version": "${VERSION}",
-  "current_image": "${NEW_IMAGE_ID}",
-  "previous_image": "${CURRENT_IMAGE_ID}",
+  "current_image": "${TARGET_IMAGE}",
+  "previous_image": "${CURRENT_IMAGE_REF}",
   "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "last_backup": "${PRE_UPDATE_BACKUP}"
 }
@@ -445,10 +454,8 @@ EOF
     chmod 0600 "${STATE_FILE}"
     echo "✅ Upgrade successful: All health probes green."
   else
-    echo "❌ Upgrade failed health checks! Rolling back to previous application state..." >&2
-    if [ -n "${CURRENT_IMAGE_ID}" ] && [ "${CURRENT_IMAGE_ID}" != "unknown" ]; then
-      dcompose up -d --no-deps app caddy
-    fi
+    echo "❌ Upgrade failed health checks! Recreating container stack with previous image (${CURRENT_IMAGE_REF})..." >&2
+    ATTENDEASE_IMAGE="${CURRENT_IMAGE_REF}" dcompose up -d --no-deps --force-recreate app caddy
     echo "⚠️ Note: If database schema migrations were applied, run: ./scripts/install.sh restore ${PRE_UPDATE_BACKUP}" >&2
     exit 1
   fi
@@ -457,22 +464,28 @@ EOF
 cmd_rollback() {
   log_header "AttendEase OS — Appliance Rollback"
   if [ -f "${STATE_FILE}" ]; then
-    PREV_IMAGE=$(grep '"previous_image"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2 | tr -d '", ' || true)
+    PREV_IMAGE=$(grep '"previous_image"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2- | tr -d '", ' || true)
     LAST_BACKUP=$(grep '"last_backup"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2- | tr -d '", ' || true)
     if [ -n "${PREV_IMAGE}" ] && [ "${PREV_IMAGE}" != "null" ]; then
-      echo " • Reverting container stack to previous recorded state (${PREV_IMAGE})..."
-      dcompose restart app caddy
+      echo " • Recreating application containers using recorded previous image (${PREV_IMAGE})..."
+      ATTENDEASE_IMAGE="${PREV_IMAGE}" dcompose up -d --no-deps --force-recreate app caddy
       if [ -n "${LAST_BACKUP}" ] && [ -f "${LAST_BACKUP}" ]; then
         echo " • Previous pre-update backup available at: ${LAST_BACKUP}"
       fi
-      echo "✅ Rollback applied."
+      echo " • Testing readiness probes after rollback..."
+      sleep 3
+      if curl -sf "http://127.0.0.1:3000/readyz" >/dev/null 2>&1; then
+        echo "✅ Rollback applied successfully. Application is healthy."
+      else
+        echo "⚠️ Warning: Rollback completed, but /readyz probe has not yet passed."
+      fi
       return 0
     fi
   fi
 
   echo " • Restarting existing container stack..."
   dcompose restart
-  echo "✅ Rollback applied."
+  echo "✅ Restart applied."
 }
 
 cmd_uninstall() {

@@ -2,7 +2,7 @@
   "name": "offline-qr-school-attendance",
   "description": "Hybrid Offline QR + Production RFID/NFC School Attendance Platform",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.3.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

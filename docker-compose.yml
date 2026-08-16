@@ -40,6 +40,7 @@ services:
         max-file: "5"
 
   app:
+    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}
     build:
       context: .
       dockerfile: Dockerfile
@@ -59,7 +60,7 @@ services:
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       CSRF_SECRET: ${CSRF_SECRET:-${SESSION_SECRET}}
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET}}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY is required}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       ALLOW_FAKE_SMS_IN_PRODUCTION: ${ALLOW_FAKE_SMS_IN_PRODUCTION:-false}
       ALLOW_IN_MEMORY_RATE_LIMITER: ${ALLOW_IN_MEMORY_RATE_LIMITER:-false}
@@ -116,6 +117,7 @@ services:
         condition: service_healthy
 
   migrate:
+    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}
     build:
       context: .
       dockerfile: Dockerfile
@@ -143,6 +145,7 @@ services:
         condition: service_completed_successfully
 
   sms-worker:
+    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}
     build:
       context: .
       dockerfile: Dockerfile
@@ -189,7 +192,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
       POSTGRES_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
       POSTGRES_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-${SESSION_SECRET:?SESSION_SECRET or BACKUP_ENCRYPTION_KEY is required}}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY is required}
       BACKUP_CRON: ${BACKUP_CRON:-18:30}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-14}
     volumes:

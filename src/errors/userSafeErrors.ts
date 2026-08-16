@@ -23,10 +23,10 @@ export function getUserSafeError(error: any, lang: Language = 'en'): UserSafeErr
   ) {
     if (lang === 'bn') {
       return {
-        title: 'ইন্টারনেট সংযোগ নেই',
-        message: 'ইন্টারনেট সংযোগ বন্ধ রয়েছে। আপনার উপস্থিতি ডিভাইসে সুরক্ষিত আছে এবং পরে স্বয়ংক্রিয়ভাবে জমা হবে।',
+        title: 'Internet নেই',
+        message: 'Internet connection নেই — Attendance এই ফোনে Safe আছে। Internet এলে Auto Send হবে।',
         canRetry: true,
-        actionSuggestion: 'ইন্টারনেট সংযোগ পুনরায় চালু হলে স্বয়ংক্রিয়ভাবে জমা হবে।',
+        actionSuggestion: 'Attendance নিতে থাকুন। Internet পেলে Saved Records Auto Send হবে।',
       };
     }
     return {
@@ -46,10 +46,10 @@ export function getUserSafeError(error: any, lang: Language = 'en'): UserSafeErr
   ) {
     if (lang === 'bn') {
       return {
-        title: 'ক্যামেরা ব্যবহারের অনুমতি প্রয়োজন',
-        message: 'কিউআর ব্যাজ স্ক্যান করতে ব্রাউজারে ক্যামেরার অনুমতি দেওয়া প্রয়োজন।',
+        title: 'Camera Permission প্রয়োজন',
+        message: 'Student QR Badge Scan করতে Browser-এ Camera Permission প্রয়োজন।',
         canRetry: true,
-        actionSuggestion: 'ব্রাউজারের সেটিংস থেকে ক্যামেরা ব্যবহারের অনুমতি দিন।',
+        actionSuggestion: 'Browser Settings থেকে Camera Allow করুন এবং আবার Try করুন।',
       };
     }
     return {
@@ -64,10 +64,10 @@ export function getUserSafeError(error: any, lang: Language = 'en'): UserSafeErr
   if (lower.includes('unauthorized') || lower.includes('401') || lower.includes('session expired')) {
     if (lang === 'bn') {
       return {
-        title: 'সেশনের মেয়াদ শেষ হয়েছে',
-        message: 'নিরাপত্তার স্বার্থে আপনার সেশন বন্ধ হয়েছে। অনুগ্রহ করে আবার লগইন করুন।',
+        title: 'Session শেষ হয়েছে',
+        message: 'Security-র কারণে আপনার Login Session শেষ হয়েছে। দয়া করে আবার Login করুন।',
         canRetry: false,
-        actionSuggestion: 'পুনরায় লগইন করতে লগইন পৃষ্ঠায় ফিরে যান।',
+        actionSuggestion: 'Mobile Number ও Password দিয়ে আবার Login করুন।',
       };
     }
     return {
@@ -82,10 +82,10 @@ export function getUserSafeError(error: any, lang: Language = 'en'): UserSafeErr
   if (lower.includes('forbidden') || lower.includes('403') || lower.includes('access denied')) {
     if (lang === 'bn') {
       return {
-        title: 'অ্যাক্সেস সংরক্ষিত',
-        message: 'এই কাজটি করার জন্য আপনার অনুমতি নেই। প্রধান শিক্ষকের সাথে যোগাযোগ করুন।',
+        title: 'Access Restricted',
+        message: 'এই Action করার Permission নেই। School Headmaster-এর সাথে যোগাযোগ করুন।',
         canRetry: false,
-        actionSuggestion: 'অনুমোদনের জন্য বিদ্যালয় প্রধানের সাথে যোগাযোগ করুন।',
+        actionSuggestion: 'Access-এর জন্য School Headmaster বা Admin-এর সাথে যোগাযোগ করুন।',
       };
     }
     return {
@@ -100,10 +100,10 @@ export function getUserSafeError(error: any, lang: Language = 'en'): UserSafeErr
   if (lower.includes('already exists') || lower.includes('duplicate') || lower.includes('conflict') || lower.includes('409')) {
     if (lang === 'bn') {
       return {
-        title: 'রেকর্ড ইতিমধ্যে বিদ্যমান',
-        message: 'এই তথ্যটি ইতিমধ্যে সিস্টেমে নথিভুক্ত রয়েছে।',
+        title: 'Record Already আছে',
+        message: 'এই Record বা Badge already System-এ Register করা আছে।',
         canRetry: false,
-        actionSuggestion: 'নথিভুক্ত তথ্যটি পরীক্ষা করে দেখুন।',
+        actionSuggestion: 'Student ID, Roll Number বা Badge Number Check করুন।',
       };
     }
     return {
@@ -117,10 +117,10 @@ export function getUserSafeError(error: any, lang: Language = 'en'): UserSafeErr
   // Generic fallback
   if (lang === 'bn') {
     return {
-      title: 'একটি সমস্যা দেখা দিয়েছে',
-      message: 'অনুরোধটি সম্পন্ন করা সম্ভব হয়নি। আপনার সংরক্ষিত তথ্য অক্ষত আছে।',
+      title: 'Action Complete হয়নি',
+      message: 'Action-টি সম্পন্ন করা যায়নি। তবে আপনার Data সম্পূর্ণ Safe আছে।',
       canRetry: true,
-      actionSuggestion: 'অনুগ্রহ করে কয়েক মুহূর্ত পর পুনরায় চেষ্টা করুন।',
+      actionSuggestion: 'কিছুক্ষণ পর আবার Try করুন।',
     };
   }
   return {

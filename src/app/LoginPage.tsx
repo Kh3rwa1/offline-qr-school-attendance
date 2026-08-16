@@ -138,15 +138,15 @@ export const LoginPage: React.FC = () => {
         setError(
           resolvedSchool
             ? (language === 'bn'
-              ? `এই মোবাইল নম্বরটি ${resolvedSchool.name} এর অন্তর্ভুক্ত নয়।`
+              ? `এই Mobile Number-টি ${resolvedSchool.name}-এর Staff তালিকায় নেই।`
               : `This mobile number is not a member of ${resolvedSchool.name}.`)
             : (language === 'bn'
-              ? 'এই বিদ্যালয় ওয়ার্কস্পেসে আপনার প্রবেশাধিকার নেই।'
+              ? 'এই School Workspace-এ আপনার Access নেই।'
               : 'You do not have access to this school workspace.')
         );
       } else {
         const defaultMsg = language === 'bn'
-          ? 'ভুল মোবাইল নম্বর বা পাসওয়ার্ড। অনুগ্রহ করে পুনরায় চেষ্টা করুন।'
+          ? 'Mobile Number বা Password ভুল হয়েছে। আবার Try করুন।'
           : 'Invalid mobile number or password. Please try again.';
         setError(err.message && err.message !== 'INVALID_CREDENTIALS' && !err.message.includes('Invalid') ? err.message : defaultMsg);
       }
@@ -182,7 +182,7 @@ export const LoginPage: React.FC = () => {
               className="pl-9 pr-8 py-1.5 rounded-full bg-surface border border-line text-xs font-semibold text-ink shadow-2xs outline-none cursor-pointer hover:bg-surface-soft transition-all"
             >
               <option value="en">English</option>
-              <option value="bn">বাংলা (Bengali)</option>
+              <option value="bn">বাংলা + English</option>
             </select>
           </div>
 
@@ -221,7 +221,7 @@ export const LoginPage: React.FC = () => {
             </h2>
             <p className="text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
               {language === 'bn' ? (
-                <>আমরা <code className="px-1.5 py-0.5 rounded bg-surface-soft font-mono text-xs text-ink font-bold">/s/{schoolSlug}</code> ঠিকানায় কোনো সক্রিয় বিদ্যালয় খুঁজে পাইনি। অনুগ্রহ করে ওয়েব ঠিকানা যাচাই করুন বা প্রশাসকের সাথে যোগাযোগ করুন।</>
+                <>আমরা <code className="px-1.5 py-0.5 rounded bg-surface-soft font-mono text-xs text-ink font-bold">/s/{schoolSlug}</code> ঠিকানায় কোনো সক্রিয় School Workspace খুঁজে পাইনি। অনুগ্রহ করে URL Check করুন বা School Admin-এর সাথে যোগাযোগ করুন।</>
               ) : (
                 <>We could not find an active school workspace at <code className="px-1.5 py-0.5 rounded bg-surface-soft font-mono text-xs text-ink font-bold">/s/{schoolSlug}</code>. Please check the URL or contact your school administrator.</>
               )}
@@ -293,9 +293,9 @@ export const LoginPage: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    {language === 'bn' ? 'দৈনিক শ্রেণীকক্ষ' : 'Daily classroom'} <br />
+                    {language === 'bn' ? 'Daily Classroom' : 'Daily classroom'} <br />
                     <span className="text-forest-700 dark:text-forest-500">
-                      {language === 'bn' ? 'উপস্থিতি ব্যবস্থাপনা।' : 'attendance infrastructure.'}
+                      {language === 'bn' ? 'Attendance System।' : 'attendance infrastructure.'}
                     </span>
                   </>
                 )}
@@ -303,7 +303,7 @@ export const LoginPage: React.FC = () => {
               <p className="text-sm sm:text-base text-ink-soft font-normal leading-relaxed max-w-xl">
                 {resolvedSchool
                   ? (language === 'bn'
-                    ? `${resolvedSchool.name} (${resolvedSchool.district}) এর দৈনিক উপস্থিতি পরিচালনা করতে লগ ইন করুন।`
+                    ? `${resolvedSchool.name} (${resolvedSchool.district})-এর আজকের Attendance পরিচালনা করতে Login করুন।`
                     : `Sign in to manage today’s school attendance for ${resolvedSchool.name} (${resolvedSchool.district}).`)
                   : t('loginHeroSubtitle')}
               </p>
@@ -346,12 +346,12 @@ export const LoginPage: React.FC = () => {
           >
             <div className="space-y-1.5 mb-6">
               <h2 className="text-2xl sm:text-3xl font-extrabold text-ink font-display">
-                {language === 'bn' ? 'লগ ইন করুন' : 'Sign In'}
+                {language === 'bn' ? 'Login করুন' : 'Sign In'}
               </h2>
               <p className="text-sm text-ink-soft">
                 {resolvedSchool
-                  ? (language === 'bn' ? `${resolvedSchool.name} এ প্রবেশ করতে লগ ইন করুন` : `Sign in to access ${resolvedSchool.name}`)
-                  : (language === 'bn' ? 'আপনার নিবন্ধিত মোবাইল নম্বর এবং পাসওয়ার্ড লিখুন' : 'Enter your registered mobile number and password')}
+                  ? (language === 'bn' ? `${resolvedSchool.name}-এ Login করুন` : `Sign in to access ${resolvedSchool.name}`)
+                  : (language === 'bn' ? 'আপনার Registered Mobile Number ও Password দিন' : 'Enter your registered mobile number and password')}
               </p>
             </div>
 
@@ -372,7 +372,7 @@ export const LoginPage: React.FC = () => {
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="90000 00000"
-                helperText={language === 'bn' ? 'অনুমোদিত শিক্ষক বা প্রশাসকের ফোন নম্বর' : 'Authorized teacher, staff, or administrator number'}
+                helperText={language === 'bn' ? 'অনুমোদিত শিক্ষক বা Staff-এর Mobile Number' : 'Authorized teacher, staff, or administrator number'}
               />
 
               <PasswordField
@@ -393,7 +393,7 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="rounded border-line text-forest-700 focus:ring-forest-600 cursor-pointer w-4 h-4"
                   />
-                  <span>{language === 'bn' ? 'মোবাইল নম্বর মনে রাখুন' : 'Remember mobile number'}</span>
+                  <span>{language === 'bn' ? 'Mobile Number মনে রাখুন' : 'Remember mobile number'}</span>
                 </label>
 
                 <button
@@ -401,7 +401,7 @@ export const LoginPage: React.FC = () => {
                   onClick={() => setForgotPasswordOpen(true)}
                   className="text-xs font-bold text-forest-700 dark:text-forest-400 hover:underline cursor-pointer"
                 >
-                  {language === 'bn' ? 'পাসওয়ার্ড ভুলে গেছেন?' : 'Forgot password?'}
+                  {language === 'bn' ? 'Password ভুলে গেছেন?' : 'Forgot password?'}
                 </button>
               </div>
 
@@ -413,9 +413,9 @@ export const LoginPage: React.FC = () => {
                   isLoading={isSubmitting}
                   rightIcon={<ArrowRight className="w-4 h-4" />}
                   className="w-full text-base font-bold shadow-lg shadow-forest-700/20"
-                  aria-label={resolvedSchool ? `Sign In to ${resolvedSchool.name}` : (language === 'bn' ? 'লগ ইন করুন' : 'Sign In to Workspace')}
+                  aria-label={resolvedSchool ? `Sign In to ${resolvedSchool.name}` : (language === 'bn' ? 'Login করুন' : 'Sign In to Workspace')}
                 >
-                  {resolvedSchool ? (language === 'bn' ? `${resolvedSchool.name} এ লগ ইন` : `Sign In to ${resolvedSchool.name}`) : (language === 'bn' ? 'লগ ইন করুন' : 'Sign In to Workspace')}
+                  {resolvedSchool ? (language === 'bn' ? `${resolvedSchool.name}-এ Login` : `Sign In to ${resolvedSchool.name}`) : (language === 'bn' ? 'Login করুন' : 'Sign In to Workspace')}
                 </Button>
               </div>
             </form>
@@ -602,24 +602,24 @@ export const LoginPage: React.FC = () => {
         isOpen={privacyOpen}
         onClose={() => setPrivacyOpen(false)}
         title={t('privacyPolicy')}
-        description={language === 'bn' ? 'শিক্ষার্থী তথ্যের সুরক্ষা নীতি' : 'Student data privacy and protection principles'}
+        description={language === 'bn' ? 'Student Data Privacy ও Security নীতি' : 'Student data privacy and protection principles'}
       >
         <div className="space-y-3.5 text-left text-xs max-h-[60vh] overflow-y-auto pr-1">
           <p className="text-ink-soft leading-relaxed">
             {language === 'bn'
-              ? 'অটেন্ডইজ শিক্ষার্থীদের তথ্যের গোপনীয়তা ও সুরক্ষায় সর্বোচ্চ গুরুত্ব দেয়।'
+              ? 'AttendEase শিক্ষার্থীদের তথ্যের গোপনীয়তা ও সুরক্ষায় সর্বোচ্চ গুরুত্ব দেয়।'
               : 'AttendEase prioritizes student privacy and data security.'}
           </p>
-          <h4 className="font-bold text-ink">1. {language === 'bn' ? 'লোকাল এনক্রিপশন' : 'Local Encryption'}</h4>
+          <h4 className="font-bold text-ink">1. {language === 'bn' ? 'Local Encryption' : 'Local Encryption'}</h4>
           <p className="text-ink-soft leading-relaxed">
             {language === 'bn'
-              ? 'সকল অফলাইন উপস্থিতি তথ্য ডিভাইসে নিরাপদে সংরক্ষিত হয়।'
+              ? 'সকল Offline Attendance তথ্য ডিভাইসে নিরাপদে Encrypted থাকে।'
               : 'All offline attendance records are securely stored on the device.'}
           </p>
-          <h4 className="font-bold text-ink">2. {language === 'bn' ? 'স্কুল আইসোলেশন' : 'Tenant Isolation'}</h4>
+          <h4 className="font-bold text-ink">2. {language === 'bn' ? 'School Isolation' : 'Tenant Isolation'}</h4>
           <p className="text-ink-soft leading-relaxed">
             {language === 'bn'
-              ? 'পোস্টগ্রেসকিউএল রো-লেভেল সিকিউরিটির মাধ্যমে প্রতিটি বিদ্যালয়ের তথ্য সম্পূর্ণ আলাদা রাখা হয়।'
+              ? 'PostgreSQL Row-Level Security-র মাধ্যমে প্রতিটি School-এর Data সম্পূর্ণ আলাদা ও সুরক্ষিত রাখা হয়।'
               : 'PostgreSQL Row-Level Security guarantees strict data isolation between schools.'}
           </p>
 
@@ -636,12 +636,12 @@ export const LoginPage: React.FC = () => {
         isOpen={termsOpen}
         onClose={() => setTermsOpen(false)}
         title={t('termsOfService')}
-        description={language === 'bn' ? 'সফটওয়্যার ব্যবহারের নীতিমালা' : 'Authorized educational use terms'}
+        description={language === 'bn' ? 'Software ব্যবহারের নীতিমালা' : 'Authorized educational use terms'}
       >
         <div className="space-y-3.5 text-left text-xs max-h-[60vh] overflow-y-auto pr-1">
           <p className="text-ink-soft leading-relaxed">
             {language === 'bn'
-              ? 'এই অ্যাপ্লিকেশনটি কেবলমাত্র অনুমোদিত শিক্ষক ও বিদ্যালয় কর্মীদের ব্যবহারের জন্য।'
+              ? 'এই Application-টি শুধুমাত্র অনুমোদিত Teacher ও Staff-দের ব্যবহারের জন্য।'
               : 'This application is exclusively for authorized teachers and school administrators.'}
           </p>
           <div className="pt-2 flex justify-end">

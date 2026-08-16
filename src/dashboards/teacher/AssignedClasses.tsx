@@ -8,12 +8,12 @@ import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { useNavigate } from 'react-router-dom';
-import { QrCode, ArrowRight, GraduationCap, Users, CheckCircle2 } from 'lucide-react';
+import { QrCode, ArrowRight } from 'lucide-react';
 import { offlineDb } from '../../db/offlineDb';
 
 export const AssignedClasses: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export const AssignedClasses: React.FC = () => {
     navigate('/app/teacher');
   };
 
-  if (loading) return <LoadingState type="stat-cards" message={language === 'bn' ? 'নির্ধারিত ক্লাস লোড হচ্ছে…' : 'Loading assigned classes…'} />;
+  if (loading) return <LoadingState type="stat-cards" message={t('loadingAssignedClasses')} />;
   if (error) return <ErrorState message={error} />;
 
   const totalStudents = classes.reduce((sum, c) => sum + (c.studentCount || 0), 0);
@@ -68,13 +68,13 @@ export const AssignedClasses: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-sm font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
             <span>{t('navMyClasses')}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('myClassroomDuty')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             {t('myClassroomDutyDesc')} {activeSchoolName}.
           </p>
         </div>
@@ -90,7 +90,7 @@ export const AssignedClasses: React.FC = () => {
             }
           }}
           leftIcon={<QrCode className="w-4 h-4" />}
-          className="min-h-[44px] rounded-2xl font-display"
+          className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
         >
           {t('startTodaysAttendance')}
         </Button>
@@ -100,10 +100,10 @@ export const AssignedClasses: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title={t('activeClassDuty')}
-          value={`${classes.length} ${language === 'bn' ? 'টি শাখা' : 'Sections'}`}
+          value={`${classes.length} ${t('sectionsUnit')}`}
           trend={{ 
             value: classes.length > 0 
-              ? (language === 'bn' ? 'উপস্থিতি গ্রহণের জন্য প্রস্তুত' : 'Ready for attendance') 
+              ? t('readyForAttendanceTrend') 
               : t('noAssignedClassesDesc'), 
             isPositive: classes.length > 0 
           }}
@@ -119,7 +119,7 @@ export const AssignedClasses: React.FC = () => {
           title={t('qrAndManual')}
           value={t('qrAndManualDesc')}
           trend={{ 
-            value: language === 'bn' ? 'সহজ ও দ্রুত' : 'Quick attendance mark', 
+            value: t('quickMarkTrend'), 
             isPositive: true 
           }}
           variant="default"
@@ -128,7 +128,7 @@ export const AssignedClasses: React.FC = () => {
           title={t('offlineReady')}
           value={t('offlineReadyDesc')}
           trend={{ 
-            value: language === 'bn' ? 'ইন্টারনেট ছাড়াও চলে' : 'Works without network', 
+            value: t('worksWithoutNetworkTrend'), 
             isPositive: true 
           }}
           variant="default"
@@ -153,7 +153,7 @@ export const AssignedClasses: React.FC = () => {
                   <div className="w-10 h-10 rounded-2xl bg-forest-700 text-white flex items-center justify-center font-extrabold text-sm shadow-2xs font-display">
                     {cls.className?.replace(/[^0-9]/g, '') || cls.className?.charAt(0) || 'C'}
                   </div>
-                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 uppercase tracking-wider font-display">
+                  <span className="text-sm font-bold px-3.5 py-1 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 uppercase tracking-wider font-display">
                     {t('activeRoll')}
                   </span>
                 </div>
@@ -162,7 +162,7 @@ export const AssignedClasses: React.FC = () => {
                   <h3 className="font-extrabold text-lg text-ink font-display">
                     {cls.className} - {cls.sectionName}
                   </h3>
-                  <p className="t-body text-xs text-ink-soft mt-1">
+                  <p className="t-body text-sm text-ink-soft mt-1">
                     {t('enrolledCount')}: <span className="font-bold text-ink font-mono">{cls.studentCount || 0} {t('studentsUnit')}</span>
                   </p>
                 </div>
@@ -174,7 +174,7 @@ export const AssignedClasses: React.FC = () => {
                   size="md"
                   onClick={() => handleOpenClassScanner(cls.classSectionId)}
                   rightIcon={<ArrowRight className="w-4 h-4" />}
-                  className="w-full justify-center min-h-[44px] rounded-2xl font-display"
+                  className="w-full justify-center min-h-[44px] rounded-2xl font-display text-sm font-bold"
                 >
                   {t('takeClassAttendance')}
                 </Button>

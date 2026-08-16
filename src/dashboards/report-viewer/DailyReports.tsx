@@ -99,32 +99,32 @@ export const DailyReports: React.FC = () => {
     switch (status) {
       case 'PRESENT':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+          <span className="px-3 py-1 rounded-full text-sm font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
             {t('statusPresent')}
           </span>
         );
       case 'LATE':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+          <span className="px-3 py-1 rounded-full text-sm font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
             {t('statusLate')}
           </span>
         );
       case 'ABSENT':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
+          <span className="px-3 py-1 rounded-full text-sm font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
             {t('statusAbsent')}
           </span>
         );
       case 'LEAVE':
       case 'EXCUSED':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
+          <span className="px-3 py-1 rounded-full text-sm font-bold bg-surface-soft text-ink-soft border border-line font-display">
             {t('statusOnLeave')}
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-muted border border-line font-display">
+          <span className="px-3 py-1 rounded-full text-sm font-bold bg-surface-soft text-ink-muted border border-line font-display">
             {t('statusNotMarkedYet')}
           </span>
         );
@@ -139,8 +139,8 @@ export const DailyReports: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navDailyLog')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {language === 'bn' ? `${activeSchoolName}-এর প্রতিদিনের ক্লাসরুম উপস্থিতি ও মিড-ডে মিল খাতা।` : `Daily classroom attendance register and mid-day meal count for ${activeSchoolName}.`}
+          <p className="t-body text-sm text-ink-soft mt-1">
+            {t('dailyRegisterSubtitle', { schoolName: activeSchoolName })}
           </p>
         </div>
 
@@ -150,9 +150,9 @@ export const DailyReports: React.FC = () => {
             size="md"
             onClick={() => window.print()}
             leftIcon={<Printer className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display text-xs"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
-            {language === 'bn' ? 'প্রিন্ট করুন' : 'Print Sheet'}
+            {t('printSheet')}
           </Button>
 
           <Button
@@ -161,7 +161,7 @@ export const DailyReports: React.FC = () => {
             onClick={handleExportCSV}
             disabled={records.length === 0}
             leftIcon={<Download className="w-4 h-4" />}
-            className="min-h-[44px] rounded-2xl font-display text-xs"
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
             {t('exportCsv')}
           </Button>
@@ -169,7 +169,7 @@ export const DailyReports: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <LoadingState type="table" message={language === 'bn' ? 'দৈনিক রিপোর্ট লোড হচ্ছে…' : 'Loading daily roll report…'} />
+        <LoadingState type="table" message={t('loadingDailyReport')} />
       ) : error ? (
         <ErrorState message={(error as any)?.message || 'Failed to load report'} onRetry={() => refetch()} />
       ) : (
@@ -178,40 +178,40 @@ export const DailyReports: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'উপস্থিতির হার' : 'Turnout Rate'}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('turnoutRate')}</span>
                 <CalendarCheck2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
                 {attendanceRate}%
               </div>
-              <p className="text-xs text-ink-soft font-display">
+              <p className="text-sm text-ink-soft font-display">
                 {presentCount + lateCount} / {totalCount} {t('statusPresent')}
               </p>
             </div>
 
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{t('statusAbsent')}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('statusAbsent')}</span>
                 <Users className="w-4 h-4 text-danger-700" />
               </div>
               <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">
                 {absentCount}
               </div>
-              <p className="text-xs text-ink-soft font-display">
-                {language === 'bn' ? 'জন শিক্ষার্থী অনুপস্থিত' : 'Absent students'}
+              <p className="text-sm text-ink-soft font-display">
+                {absentCount} {t('absentStudentsUnit')}
               </p>
             </div>
 
             <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
               <div className="flex items-center justify-between text-ink-muted">
-                <span className="text-xs font-bold uppercase font-display">{language === 'bn' ? 'মিড-ডে মিল সংখ্যা' : 'Mid-Day Meal'}</span>
+                <span className="text-sm font-bold uppercase font-display">{t('midDayMeal')}</span>
                 <Utensils className="w-4 h-4 text-forest-700 dark:text-forest-600" />
               </div>
               <div className="text-3xl font-extrabold text-ink font-display font-mono">
                 {presentCount + lateCount}
               </div>
-              <p className="text-xs text-ink-soft font-display">
-                {language === 'bn' ? 'জন শিক্ষার্থী আহার উপযোগী' : 'Eligible meals'}
+              <p className="text-sm text-ink-soft font-display">
+                {presentCount + lateCount} {t('eligibleMeals')}
               </p>
             </div>
           </div>
@@ -220,13 +220,13 @@ export const DailyReports: React.FC = () => {
           <div className="app-card p-4 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink-soft font-display">
-                  {language === 'bn' ? 'ক্লাস:' : 'Class:'}
+                <span className="text-sm font-bold text-ink-soft font-display">
+                  {t('classLabel')}
                 </span>
                 <select
                   value={activeClassId}
                   onChange={(e) => setSelectedClassId(e.target.value)}
-                  className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+                  className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
                 >
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -237,14 +237,14 @@ export const DailyReports: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink-soft font-display">
-                  {language === 'bn' ? 'তারিখ:' : 'Date:'}
+                <span className="text-sm font-bold text-ink-soft font-display">
+                  {t('dateLabel')}
                 </span>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
+                  className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
                 />
               </div>
             </div>
@@ -265,8 +265,8 @@ export const DailyReports: React.FC = () => {
               <div className="p-12">
                 <EmptyState
                   kind="generic"
-                  title={language === 'bn' ? 'এই ক্লাসের কোনো উপস্থিতি তথ্য নেই' : 'No attendance records found'}
-                  description={language === 'bn' ? 'অন্য ক্লাস বা তারিখ নির্বাচন করে পুনরায় দেখুন।' : `No attendance recorded for this class on ${selectedDate}.`}
+                  title={t('noAttendanceFoundTitle')}
+                  description={t('noAttendanceFoundDesc', { date: selectedDate })}
                 />
               </div>
             ) : (
@@ -277,13 +277,13 @@ export const DailyReports: React.FC = () => {
                     className="p-4 sm:p-5 flex items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
                   >
                     <div className="flex items-center gap-3.5">
-                      <div className="w-10 h-10 rounded-2xl bg-surface-soft text-ink flex items-center justify-center font-extrabold text-xs font-display shrink-0">
+                      <div className="w-10 h-10 rounded-2xl bg-surface-soft text-ink flex items-center justify-center font-extrabold text-sm font-display shrink-0">
                         #{r.rollNumber}
                       </div>
                       <div>
                         <h4 className="text-base font-extrabold text-ink font-display">{r.fullName}</h4>
                         {r.firstScannedAt && (
-                          <p className="text-xs text-ink-muted font-mono">
+                          <p className="text-sm text-ink-muted font-mono">
                             {new Date(r.firstScannedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         )}

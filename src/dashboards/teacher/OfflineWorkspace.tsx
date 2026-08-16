@@ -5,7 +5,7 @@ import { getUserSafeError } from '../../errors/userSafeErrors';
 import { offlineDb } from '../../db/offlineDb';
 import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
-import { RefreshCw, CheckCircle2, Wifi, WifiOff, HardDrive, ShieldCheck, AlertCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const OfflineWorkspace: React.FC = () => {
   const { isOnline, outboxCount, isSyncing, syncNow } = useOfflineStatus();
@@ -57,13 +57,13 @@ export const OfflineWorkspace: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-sm font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
             <span>{t('navOfflineAttendance')}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('savedAttendanceTitle')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1">
             {t('savedAttendanceSubtitle')}
           </p>
         </div>
@@ -75,7 +75,7 @@ export const OfflineWorkspace: React.FC = () => {
           disabled={!isOnline || isSyncing || outboxCount === 0}
           isLoading={isSyncing}
           leftIcon={<RefreshCw className="w-4 h-4" />}
-          className="min-h-[44px] rounded-2xl font-display"
+          className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
         >
           {isSyncing ? t('sendingAttendance') : t('sendSavedAttendance')}
         </Button>
@@ -105,7 +105,7 @@ export const OfflineWorkspace: React.FC = () => {
           title={t('phoneStorage')}
           value={t('phoneStorageSafe')}
           trend={{ 
-            value: language === 'bn' ? 'Offline use-এর জন্য Save আছে' : 'Saved for offline use', 
+            value: t('savedForOfflineTrend'), 
             isPositive: true 
           }}
           variant="default"
@@ -114,7 +114,7 @@ export const OfflineWorkspace: React.FC = () => {
           title={t('syncSafe')}
           value={t('syncSafeDesc')}
           trend={{ 
-            value: language === 'bn' ? 'Student Records Safe আছে' : 'Protected student records', 
+            value: t('protectedStudentRecordsTrend'), 
             isPositive: true 
           }}
           variant="default"
@@ -128,11 +128,11 @@ export const OfflineWorkspace: React.FC = () => {
             <h3 className="text-base font-extrabold text-ink font-display">
               {t('pendingQueueTitle')}
             </h3>
-            <p className="t-body text-xs text-ink-soft mt-0.5">
+            <p className="t-body text-sm text-ink-soft mt-0.5">
               {t('pendingQueueSubtitle')}
             </p>
           </div>
-          <span className={`text-xs font-bold px-3 py-1 rounded-full border font-display ${
+          <span className={`text-sm font-bold px-3.5 py-1.5 rounded-full border font-display ${
             outboxCount === 0 
               ? 'bg-success-50 text-forest-700 dark:text-forest-600 border-success-100 dark:border-success-600/30' 
               : 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
@@ -149,7 +149,7 @@ export const OfflineWorkspace: React.FC = () => {
             <h4 className="text-base font-extrabold text-ink font-display">
               {t('syncedConfirmationTitle')}
             </h4>
-            <p className="t-body text-xs text-ink-soft max-w-md mx-auto">
+            <p className="t-body text-sm text-ink-soft max-w-md mx-auto">
               {t('syncedConfirmationDesc')}
             </p>
           </div>
@@ -157,7 +157,7 @@ export const OfflineWorkspace: React.FC = () => {
           <>
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-sm">
                 <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
                   <tr>
                     <th className="px-6 py-4">{t('student')}</th>
@@ -176,8 +176,8 @@ export const OfflineWorkspace: React.FC = () => {
                           {e.studentName || e.studentId || t('student')}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="bg-surface-soft px-2.5 py-1 rounded-lg border border-line text-[11px] font-bold">
-                            {e.source === 'CAMERA' ? 'Camera Scan' : 'Manual Mark'}
+                          <span className="bg-surface-soft px-3 py-1 rounded-lg border border-line text-sm font-bold">
+                            {e.source === 'CAMERA' ? t('cameraScanSource') : t('manualMarkSource')}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-ink-muted font-mono">
@@ -186,11 +186,11 @@ export const OfflineWorkspace: React.FC = () => {
                             : '—'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display ${pill.className}`}>
+                          <span className={`px-3 py-1 rounded-full text-sm font-bold border font-display ${pill.className}`}>
                             {pill.label}
                           </span>
                           {safeErr && (
-                            <span className="block text-[11px] text-danger-600 mt-0.5 font-sans" title={safeErr.message}>
+                            <span className="block text-sm text-danger-600 mt-0.5 font-sans" title={safeErr.message}>
                               {safeErr.message}
                             </span>
                           )}
@@ -211,20 +211,20 @@ export const OfflineWorkspace: React.FC = () => {
                   <div key={e.clientEventId} className="p-4 space-y-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="text-xs font-bold text-ink block">
+                        <span className="text-sm font-bold text-ink block">
                           {e.studentName || e.studentId || t('student')}
                         </span>
-                        <span className="text-[11px] text-ink-muted mt-0.5 block">
-                          {e.source === 'CAMERA' ? 'Camera Scan' : 'Manual Mark'}
+                        <span className="text-sm text-ink-muted mt-0.5 block">
+                          {e.source === 'CAMERA' ? t('cameraScanSource') : t('manualMarkSource')}
                         </span>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display shrink-0 ${pill.className}`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold border font-display shrink-0 ${pill.className}`}>
                         {pill.label}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-line text-ink-soft">
-                      <span className="text-[11px] text-ink-muted font-mono">
+                    <div className="flex items-center justify-between text-sm pt-1 border-t border-line text-ink-soft">
+                      <span className="text-sm text-ink-muted font-mono">
                         {e.clientTimestamp 
                           ? new Date(e.clientTimestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) 
                           : '—'}
@@ -232,7 +232,7 @@ export const OfflineWorkspace: React.FC = () => {
                     </div>
 
                     {safeErr && (
-                      <p className="text-[11px] text-danger-600 bg-danger-50 p-2.5 rounded-xl border border-danger-100 dark:border-danger-600/30">
+                      <p className="text-sm text-danger-600 bg-danger-50 p-3 rounded-xl border border-danger-100 dark:border-danger-600/30">
                         {safeErr.message}
                       </p>
                     )}

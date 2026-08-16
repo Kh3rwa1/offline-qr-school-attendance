@@ -425,11 +425,13 @@ export const TeacherDashboard: React.FC = () => {
       const isDenied =
         err?.name === 'NotAllowedError' ||
         err?.name === 'PermissionDeniedError' ||
-        err?.message?.includes('Permission');
+        err?.message?.includes('Permission') ||
+        err?.message?.includes('permission') ||
+        err?.message?.includes('denied');
       setCameraStatus(isDenied ? 'permission_denied' : 'error');
-      setCameraError(isDenied ? t('cameraDenied') : (err?.message || t('cameraDenied')));
+      setCameraError(isDenied ? 'permission_denied' : (err?.message || 'error'));
     }
-  }, [videoEl, t]);
+  }, [videoEl]);
 
   const stopCamera = useCallback(() => {
     if (cameraScannerRef.current) {
@@ -1031,11 +1033,11 @@ export const TeacherDashboard: React.FC = () => {
               playsInline
             />
 
-            {cameraError && (
+            {Boolean(cameraError) && (
               <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
                 <AlertCircle className="w-10 h-10 text-amber-400" />
                 <p className="text-sm font-semibold max-w-xs">
-                  {cameraStatus === 'permission_denied' ? t('cameraDenied') : cameraError}
+                  {t('cameraDenied')}
                 </p>
                 <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)} className="min-h-[44px]">
                   {t('retryCamera')}

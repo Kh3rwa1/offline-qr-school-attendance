@@ -115,10 +115,10 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await page.keyboard.press('Enter');
 
     // Verify text switches to Bengali
-    await expect(page.getByRole('button', { name: /লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
 
     // Reload page and verify persistence
     await page.reload();
-    await expect(page.getByRole('button', { name: /লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
   });
 });

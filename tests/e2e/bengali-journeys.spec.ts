@@ -16,14 +16,14 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await langBtn.click();
 
     // Verify Bengali string on submit button
-    await expect(page.getByRole('button', { name: /লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
 
     // Verify phone field placeholder / label in Bengali
     await expect(page.locator('label').filter({ hasText: /মোবাইল নম্বর|ফোন|Phone/i })).toBeVisible();
 
     // Reload page: Verify persistence
     await page.reload();
-    await expect(page.getByRole('button', { name: /লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
   });
 
   test('Teacher journey in Bengali renders localized attendance station and offline outbox', async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     // 2. Switch language to Bengali if not already
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
@@ -55,7 +55,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000001');
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     // 2. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
@@ -80,7 +80,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000003');
     await page.locator('#login-password').fill('RfidOpPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     // 2. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
@@ -98,7 +98,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000004');
     await page.locator('#login-password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
     // 2. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();

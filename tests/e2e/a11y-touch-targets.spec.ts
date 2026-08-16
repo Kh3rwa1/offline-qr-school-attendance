@@ -52,7 +52,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
         if (await offlineTab.isVisible()) {
           await offlineTab.click();
-          await expect(page.getByText(/Offline Outbox|অফলাইন আউটবক্স|Sync Outbox/i).first()).toBeVisible();
+          await expect(page.locator('#offline-workspace-view')).toBeVisible();
 
           await assertAllInteractiveElementsTouchTarget(page, {
             minSize: 44,
@@ -119,7 +119,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await page.locator('#login-password').fill('RfidOpPassword123!');
         await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
-        await expect(page.getByText(/Gate Operator Station|Operator Station|RFID Operator/i).first()).toBeVisible();
+        await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,

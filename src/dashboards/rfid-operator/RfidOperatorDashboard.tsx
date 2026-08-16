@@ -9,7 +9,7 @@ import RfidReports from '../../components/rfid/RfidReports';
 import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 
 export const RfidOperatorDashboard: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
@@ -21,13 +21,13 @@ export const RfidOperatorDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
-            <span>Zebra FX9600 UHF RFID Operator Console</span>
+            <span>School Gate Operations</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            UHF RFID Gate Operations
+            School gate
           </h1>
           <p className="t-body text-sm text-ink-soft mt-1">
-            Plan, provision, and monitor Zebra FX9600 fixed UHF readers and EPC Gen2 badge attendance for {activeSchoolName}.
+            Manage gate attendance, student badges, and daily arrivals for {activeSchoolName}.
           </p>
         </div>
 
@@ -38,46 +38,47 @@ export const RfidOperatorDashboard: React.FC = () => {
             onClick={() => setSubView('enroll')}
             leftIcon={<Plus className="w-4 h-4" />}
           >
-            Enroll EPC Badge
+            Give a student a badge
           </Button>
 
           <Button
             variant="secondary"
             size="md"
             onClick={() => setSubView('bulk')}
+            leftIcon={<Users className="w-4 h-4" />}
           >
-            Bulk Provision
+            Give many badges
           </Button>
         </div>
       </div>
 
-      {/* 4 Stat Cards Row (Hero Forest + 3 White Cards) */}
+      {/* 4 Stat Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Gate Terminals"
-          value="Fixed FX9600"
-          trend={{ value: "Zebra IoT Connector Webhook", isPositive: true }}
+          title="Gates online"
+          value="Gate Boxes"
+          trend={{ value: "Doorway attendance active", isPositive: true }}
           variant="hero-forest"
           onClick={() => setSubView('readers')}
         />
         <StatCard
-          title="Active Badges"
-          value="EPC Gen 2"
-          trend={{ value: "SHA-256 Vault Protected", isPositive: true }}
+          title="Student badges"
+          value="Active Badges"
+          trend={{ value: "Protected records", isPositive: true }}
           variant="default"
           onClick={() => setSubView('cards')}
         />
         <StatCard
-          title="Tap Velocity"
-          value="Gate Stream"
-          trend={{ value: "Zero Replay Collisions", isPositive: true }}
+          title="Who walked in today"
+          value="Gate Arrivals"
+          trend={{ value: "Live stream active", isPositive: true }}
           variant="default"
           onClick={() => setSubView('reports')}
         />
         <StatCard
-          title="Tag Standard"
-          value="ISO 18000-63"
-          trend={{ value: "Passive UHF EPC Gen2", isPositive: true }}
+          title="Gate Status"
+          value="Ready"
+          trend={{ value: "Attendance operational", isPositive: true }}
           variant="default"
           onClick={() => setSubView('dashboard')}
         />
@@ -89,11 +90,11 @@ export const RfidOperatorDashboard: React.FC = () => {
           {(
             [
               ['dashboard', 'Overview'],
-              ['readers', 'Zebra FX9600 Readers'],
-              ['cards', 'Badge Status'],
-              ['enroll', 'EPC Enroll'],
-              ['bulk', 'Bulk Provision'],
-              ['reports', 'Gate Logs'],
+              ['readers', 'Gates'],
+              ['cards', 'Student badges'],
+              ['enroll', 'Give badge'],
+              ['bulk', 'Give many badges'],
+              ['reports', 'Who walked in'],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -108,10 +109,6 @@ export const RfidOperatorDashboard: React.FC = () => {
               {label}
             </button>
           ))}
-        </div>
-
-        <div className="px-3 text-xs font-bold text-ink-muted font-mono">
-          Zebra IoT Connector: <span className="text-forest-700 dark:text-forest-600 font-bold">READY</span>
         </div>
       </div>
 
@@ -130,7 +127,7 @@ export const RfidOperatorDashboard: React.FC = () => {
           <EmptyState
             kind="generic"
             title="No active school selected"
-            description="Please select an active school to access RFID operations."
+            description="Please select an active school to access gate operations."
           />
         </div>
       )}

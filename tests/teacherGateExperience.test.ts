@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll, beforeAll } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../server';
 import { db, withTenantContext } from '../src/db/index';
 import { runMigrations } from '../src/db/migrate';
@@ -13,6 +14,7 @@ import {
   schoolMemberships,
   teacherAssignments,
   attendanceSessions,
+  attendanceSessionRoster,
   attendanceRecords,
   rfidReaders,
   rfidCredentials,
@@ -405,5 +407,394 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
     expect(body.results).toHaveLength(1);
     expect(body.results[0].success).toBe(true);
     expect(body.results[0].epcLastFour).toBe('4820');
+  });
+
+  it('Teacher manual override hits /manual with newStatus and server session UUID, saving correctly', async () => {
+    const [school] = await db
+      .insert(schools)
+      .values({
+        name: 'Midnapore Collegiate School',
+        slug: `midnapore-manual-${Date.now()}`,
+        district: 'Paschim Medinipur',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    const [teacherUser] = await db
+      .insert(users)
+      .values({
+        phoneNumber: `+9198300${Math.floor(10000 + Math.random() * 90000)}`,
+        passwordHash: 'hash123',
+        fullName: 'Buddhadeb Guha',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    await db.insert(schoolMemberships).values({
+      schoolId: school.id,
+      userId: teacherUser.id,
+      role: 'TEACHER',
+      status: 'ACTIVE',
+    });
+
+    let classSectionId = '';
+    let studentId = '';
+    let sessionId = '';
+
+    await withTenantContext(school.id, async (tx) => {
+      const [ay] = await tx
+        .insert(academicYears)
+        .values({
+          schoolId: school.id,
+          name: 'AY 2026',
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+          isCurrent: true,
+        })
+        .returning();
+
+      const [cs] = await tx
+        .insert(classSections)
+        .values({
+          schoolId: school.id,
+          academicYearId: ay.id,
+          className: 'Class 6',
+          sectionName: 'B',
+          capacity: 40,
+        })
+        .returning();
+      classSectionId = cs.id;
+
+      await tx.insert(teacherAssignments).values({
+        schoolId: school.id,
+        teacherId: teacherUser.id,
+        classSectionId: cs.id,
+        academicYearId: ay.id,
+        isClassTeacher: true,
+      });
+
+      const [st] = await tx
+        .insert(students)
+        .values({
+          schoolId: school.id,
+          studentCode: 'MID-001',
+          name: 'Suman Chatterjee',
+          gender: 'MALE',
+          status: 'ACTIVE',
+        })
+        .returning();
+      studentId = st.id;
+
+      const [enr] = await tx.insert(enrollments).values({
+        schoolId: school.id,
+        studentId: st.id,
+        classSectionId: cs.id,
+        academicYearId: ay.id,
+        rollNumber: 12,
+        startDate: '2026-01-01',
+        status: 'ACTIVE',
+      }).returning();
+
+      const [sess] = await tx
+        .insert(attendanceSessions)
+        .values({
+          schoolId: school.id,
+          classSectionId: cs.id,
+          teacherId: teacherUser.id,
+          sessionDate: new Date().toISOString().slice(0, 10),
+          sessionType: 'DAILY',
+          status: 'OPEN',
+        })
+        .returning();
+      sessionId = sess.id;
+
+      await tx.insert(attendanceSessionRoster).values({
+        schoolId: school.id,
+        attendanceSessionId: sess.id,
+        studentId: st.id,
+        enrollmentId: enr.id,
+        studentNameSnapshot: st.name,
+        rollNumberSnapshot: 12,
+        isExpected: true,
+      });
+    });
+
+    const sessionAuth = await createSession(teacherUser.id, school.id);
+
+    // Call POST /api/v1/schools/:schoolId/attendance/sessions/:sessionId/manual
+    const response = await fetch(`${baseUrl}/api/v1/schools/${school.id}/attendance/sessions/${sessionId}/manual`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sessionAuth.token}`,
+        'X-Active-School-Id': school.id,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        studentId,
+        newStatus: 'PRESENT',
+        reason: 'Teacher manual override',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.status).toBe('PRESENT');
+    expect(body.data.captureMethod).toBe('MANUAL');
+
+    // Confirm that GET /today-gate reflects the manual update
+    const todayGateRes = await fetch(`${baseUrl}/api/v1/schools/${school.id}/attendance/today-gate?classSectionId=${classSectionId}`, {
+      headers: {
+        Authorization: `Bearer ${sessionAuth.token}`,
+        'X-Active-School-Id': school.id,
+      },
+    });
+    const gateBody: any = await todayGateRes.json();
+    expect(gateBody.success).toBe(true);
+    expect(gateBody.stats.cameIn).toBe(1);
+    expect(gateBody.stats.missing).toBe(0);
+  });
+
+  it('Teacher finalize attendance locks the server session and auto-marks missing students as ABSENT', async () => {
+    const [school] = await db
+      .insert(schools)
+      .values({
+        name: 'Durgapur Modern Academy',
+        slug: `durgapur-finalize-${Date.now()}`,
+        district: 'Paschim Bardhaman',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    const [teacherUser] = await db
+      .insert(users)
+      .values({
+        phoneNumber: `+9198300${Math.floor(10000 + Math.random() * 90000)}`,
+        passwordHash: 'hash123',
+        fullName: 'Barnali Roy',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    await db.insert(schoolMemberships).values({
+      schoolId: school.id,
+      userId: teacherUser.id,
+      role: 'TEACHER',
+      status: 'ACTIVE',
+    });
+
+    let classSectionId = '';
+    let studentPresentId = '';
+    let studentMissingId = '';
+    let sessionId = '';
+
+    await withTenantContext(school.id, async (tx) => {
+      const [ay] = await tx
+        .insert(academicYears)
+        .values({
+          schoolId: school.id,
+          name: 'AY 2026',
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+          isCurrent: true,
+        })
+        .returning();
+
+      const [cs] = await tx
+        .insert(classSections)
+        .values({
+          schoolId: school.id,
+          academicYearId: ay.id,
+          className: 'Class 7',
+          sectionName: 'A',
+          capacity: 40,
+        })
+        .returning();
+      classSectionId = cs.id;
+
+      await tx.insert(teacherAssignments).values({
+        schoolId: school.id,
+        teacherId: teacherUser.id,
+        classSectionId: cs.id,
+        academicYearId: ay.id,
+        isClassTeacher: true,
+      });
+
+      const [st1] = await tx
+        .insert(students)
+        .values({
+          schoolId: school.id,
+          studentCode: 'DUR-001',
+          name: 'Tanmoy Sen',
+          gender: 'MALE',
+          status: 'ACTIVE',
+        })
+        .returning();
+      studentPresentId = st1.id;
+
+      const [st2] = await tx
+        .insert(students)
+        .values({
+          schoolId: school.id,
+          studentCode: 'DUR-002',
+          name: 'Riya Sen',
+          gender: 'FEMALE',
+          status: 'ACTIVE',
+        })
+        .returning();
+      studentMissingId = st2.id;
+
+      const [enr1, enr2] = await tx.insert(enrollments).values([
+        {
+          schoolId: school.id,
+          studentId: st1.id,
+          classSectionId: cs.id,
+          academicYearId: ay.id,
+          rollNumber: 1,
+          startDate: '2026-01-01',
+          status: 'ACTIVE',
+        },
+        {
+          schoolId: school.id,
+          studentId: st2.id,
+          classSectionId: cs.id,
+          academicYearId: ay.id,
+          rollNumber: 2,
+          startDate: '2026-01-01',
+          status: 'ACTIVE',
+        },
+      ]).returning();
+
+      const [sess] = await tx
+        .insert(attendanceSessions)
+        .values({
+          schoolId: school.id,
+          classSectionId: cs.id,
+          teacherId: teacherUser.id,
+          sessionDate: new Date().toISOString().slice(0, 10),
+          sessionType: 'DAILY',
+          status: 'OPEN',
+        })
+        .returning();
+      sessionId = sess.id;
+
+      await tx.insert(attendanceSessionRoster).values([
+        {
+          schoolId: school.id,
+          attendanceSessionId: sess.id,
+          studentId: st1.id,
+          enrollmentId: enr1.id,
+          studentNameSnapshot: st1.name,
+          rollNumberSnapshot: 1,
+          isExpected: true,
+        },
+        {
+          schoolId: school.id,
+          attendanceSessionId: sess.id,
+          studentId: st2.id,
+          enrollmentId: enr2.id,
+          studentNameSnapshot: st2.name,
+          rollNumberSnapshot: 2,
+          isExpected: true,
+        },
+      ]);
+
+      await tx.insert(attendanceRecords).values([
+        {
+          schoolId: school.id,
+          attendanceSessionId: sess.id,
+          studentId: studentPresentId,
+          status: 'PRESENT',
+          captureMethod: 'MANUAL',
+        },
+        {
+          schoolId: school.id,
+          attendanceSessionId: sess.id,
+          studentId: studentMissingId,
+          status: 'UNMARKED',
+          captureMethod: 'MANUAL',
+        },
+      ]);
+    });
+
+    const sessionAuth = await createSession(teacherUser.id, school.id);
+
+    // Call PATCH /api/v1/schools/:schoolId/attendance/sessions/:sessionId/status with FINALIZED
+    const response = await fetch(`${baseUrl}/api/v1/schools/${school.id}/attendance/sessions/${sessionId}/status`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${sessionAuth.token}`,
+        'X-Active-School-Id': school.id,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        status: 'FINALIZED',
+        autoMarkAbsentForUnmarked: true,
+        reason: 'Class teacher finalized daily attendance',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body: any = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.status).toBe('FINALIZED');
+
+    // Verify student 2 was auto-marked ABSENT
+    await withTenantContext(school.id, async (tx) => {
+      const records = await tx
+        .select()
+        .from(attendanceRecords)
+        .where(eq(attendanceRecords.attendanceSessionId, sessionId));
+      
+      const st2Record = records.find((r: any) => r.studentId === studentMissingId);
+      expect(st2Record).toBeDefined();
+      expect(st2Record?.status).toBe('ABSENT');
+    });
+  });
+
+  it('Verifies that old endpoint /records/manual returns 404', async () => {
+    const [school] = await db
+      .insert(schools)
+      .values({
+        name: 'Asansol Primary School',
+        slug: `asansol-404-${Date.now()}`,
+        district: 'Paschim Bardhaman',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    const [teacherUser] = await db
+      .insert(users)
+      .values({
+        phoneNumber: `+9198300${Math.floor(10000 + Math.random() * 90000)}`,
+        passwordHash: 'hash123',
+        fullName: 'Subhashish Das',
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    await db.insert(schoolMemberships).values({
+      schoolId: school.id,
+      userId: teacherUser.id,
+      role: 'TEACHER',
+      status: 'ACTIVE',
+    });
+
+    const sessionAuth = await createSession(teacherUser.id, school.id);
+
+    const response = await fetch(`${baseUrl}/api/v1/schools/${school.id}/attendance/sessions/00000000-0000-0000-0000-000000000000/records/manual`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sessionAuth.token}`,
+        'X-Active-School-Id': school.id,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        studentId: '00000000-0000-0000-0000-000000000000',
+        status: 'PRESENT',
+      }),
+    });
+
+    expect(response.status).toBe(404);
   });
 });

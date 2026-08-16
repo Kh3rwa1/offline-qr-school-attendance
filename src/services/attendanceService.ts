@@ -860,7 +860,13 @@ export async function getTodayGateAttendance(params: {
   userRole: string;
 }) {
   const { schoolId, classSectionId, actorId, userRole } = params;
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const [school] = await db
+    .select({ timezone: schools.timezone })
+    .from(schools)
+    .where(eq(schools.id, schoolId))
+    .limit(1);
+  const tz = school?.timezone || 'Asia/Kolkata';
+  const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
 
   let targetClassSectionId = classSectionId;
   if (!targetClassSectionId) {

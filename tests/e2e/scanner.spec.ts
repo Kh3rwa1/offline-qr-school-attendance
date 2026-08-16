@@ -51,7 +51,7 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   await page.locator('#login-phone').fill('9100000002');
   await page.locator('#login-password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: /Sign In/i }).click();
-  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
   await page.waitForFunction((id) => {
     const sel = document.querySelector('select');
     return sel && Array.from(sel.options).some(o => o.value === id);
@@ -65,10 +65,14 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   // Reload once online so service worker caches page shell
   await page.reload();
   await page.evaluate(() => navigator.serviceWorker?.ready);
-  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
   await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
   await context.setOffline(true);
+  const phoneBackup = page.getByTestId('phone-backup-details');
+  if (await phoneBackup.isVisible()) {
+    await phoneBackup.locator('summary').click();
+  }
   const scanner = page.getByPlaceholder('USB scanner token (press Enter)');
   await scanner.fill(tokens[0]);
   await scanner.press('Enter');
@@ -86,14 +90,14 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
     await reopened.locator('#login-password').fill('TeacherPassword123!');
     await reopened.locator('button[type="submit"]').click();
   }
-  await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(reopened.getByText('Today’s attendance').or(reopened.getByText(/Today’s attendance/i))).toBeVisible();
   await context.setOffline(false);
 
   // Reconnect and synchronize
   await context.setOffline(false);
   await reopened.waitForTimeout(500);
   await reopened.reload();
-  await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(reopened.getByText('Today’s attendance').or(reopened.getByText(/Today’s attendance/i))).toBeVisible();
   
   const pushBtn = reopened.getByRole('button', { name: /Push Local Outbox/i });
   if (await pushBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -186,7 +190,7 @@ test('live camera scanner initializes getUserMedia with environment facing mode 
   await page.locator('#login-password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
-  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
   // Select class and start session
   const selectEl = page.locator('select');
@@ -203,6 +207,11 @@ test('live camera scanner initializes getUserMedia with environment facing mode 
   if (await startBtn.isVisible()) {
     await startBtn.click();
     await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+  }
+
+  const phoneBackup = page.getByTestId('phone-backup-details');
+  if (await phoneBackup.isVisible()) {
+    await phoneBackup.locator('summary').click();
   }
 
   // 1. Assert getUserMedia was called with facingMode: 'environment'
@@ -246,7 +255,7 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   await page.locator('#login-password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
-  await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+  await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
   // Select class and start session
   const selectEl = page.locator('select');
@@ -264,6 +273,11 @@ test('camera permission denied renders bilingual error HUD and interactive retry
       await startBtn.click();
       await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
     }
+  }
+
+  const phoneBackupDenied = page.getByTestId('phone-backup-details');
+  if (await phoneBackupDenied.isVisible()) {
+    await phoneBackupDenied.locator('summary').click();
   }
 
   // 1. Assert HUD is NOT LIVE

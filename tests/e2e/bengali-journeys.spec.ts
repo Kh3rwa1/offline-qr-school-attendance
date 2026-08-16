@@ -76,6 +76,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
   });
 
   test('RFID Operator station in Bengali renders localized scanner and reader HUD', async ({ page }) => {
+    test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
     // 1. Log in as RFID Operator
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000003');

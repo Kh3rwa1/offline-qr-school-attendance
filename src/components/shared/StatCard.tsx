@@ -39,7 +39,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         whileTap={{ scale: 0.985 }}
         transition={{ type: 'spring', stiffness: 350, damping: 22 }}
         onClick={onClick}
-        className={`hero-forest-card p-6 sm:p-7 relative overflow-hidden flex flex-col justify-between cursor-pointer select-none group ${className}`}
+        className={`hero-forest-card bg-forest-800 text-white p-6 sm:p-7 relative overflow-hidden flex flex-col justify-between cursor-pointer select-none group ${className}`}
       >
         <div className="flex items-center justify-between">
           <p className="t-label text-emerald-100 tracking-wider font-display">{title}</p>

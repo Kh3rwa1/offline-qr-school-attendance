@@ -233,6 +233,14 @@
   }
 }
 
+.hero-forest-card {
+  background: linear-gradient(135deg, #153a2d 0%, #1a4d3b 100%);
+  color: #ffffff;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  box-shadow: 0 10px 25px -5px rgba(21, 58, 45, 0.3), 0 8px 10px -6px rgba(21, 58, 45, 0.2);
+}
+
 .animate-fade-in-rise {
   animation: fadeInRise 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

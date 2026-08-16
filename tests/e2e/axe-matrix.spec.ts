@@ -81,6 +81,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
   });
 
   test('RFID Operator Station passes Axe scan', async ({ page }) => {
+    test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000003');
     await page.locator('#login-password').fill('RfidOpPassword123!');

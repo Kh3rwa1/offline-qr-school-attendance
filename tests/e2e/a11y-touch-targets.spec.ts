@@ -115,6 +115,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
       });
 
       test('RFID Operator dashboard & reader operations satisfy >= 44x44px', async ({ page }) => {
+        test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
         await page.goto(`${baseUrl}/login`);
         await page.locator('#login-phone').fill('9100000003');
         await page.locator('#login-password').fill('RfidOpPassword123!');

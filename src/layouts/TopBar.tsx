@@ -15,9 +15,7 @@ import {
   Wifi,
   WifiOff,
   LogOut,
-  ShieldCheck,
-  User as UserIcon,
-  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button, Drawer, ConfirmationDialog, Badge } from '../components/ui';
@@ -72,11 +70,11 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => setSwitcherOpen(true)}
-          className="flex md:hidden items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink max-w-[170px] truncate shadow-2xs cursor-pointer active:scale-95 transition-all"
+          className="flex md:hidden items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-soft border border-line text-sm font-bold text-ink max-w-[170px] truncate shadow-2xs cursor-pointer active:scale-95 transition-all min-h-[44px]"
         >
-          <School className="w-3.5 h-3.5 text-forest-700 dark:text-forest-500 shrink-0" />
+          <School className="w-4 h-4 text-forest-700 dark:text-forest-500 shrink-0" />
           <span className="truncate">{activeSchoolName}</span>
-          <ChevronDown className="w-3 h-3 text-ink-muted shrink-0" />
+          <ChevronDown className="w-4 h-4 text-ink-muted shrink-0" />
         </button>
 
         {/* Desktop Search */}
@@ -86,10 +84,10 @@ export const TopBar: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={language === 'bn' ? 'Student, Class বা Roll Number Search করুন…' : 'Search student, class, or roll number…'}
-            className="w-full pl-11 pr-14 py-2.5 bg-surface-soft border border-line rounded-full text-sm font-medium text-ink placeholder:text-ink-muted focus:bg-surface focus:border-forest-700 transition-all outline-none"
+            placeholder={t('searchTopBarPlaceholder')}
+            className="w-full pl-11 pr-14 py-2.5 bg-surface-soft border border-line rounded-full text-sm font-medium text-ink placeholder:text-ink-muted focus:bg-surface focus:border-forest-700 transition-all outline-none min-h-[44px]"
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted bg-surface border border-line px-2 py-0.5 rounded-lg shadow-2xs font-mono">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-ink-muted bg-surface border border-line px-2 py-0.5 rounded-lg shadow-2xs font-mono">
             ⌘ F
           </span>
         </div>
@@ -102,11 +100,11 @@ export const TopBar: React.FC = () => {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setSwitcherOpen(true)}
-          className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-full bg-surface-soft border border-line text-sm font-bold text-ink hover:bg-surface transition-all cursor-pointer shadow-2xs"
+          className="hidden md:flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-surface-soft border border-line text-sm font-bold text-ink hover:bg-surface transition-all cursor-pointer shadow-2xs min-h-[44px]"
         >
           <School className="w-4 h-4 text-forest-700 dark:text-forest-500 shrink-0" />
           <span className="max-w-44 truncate">{activeSchoolName}</span>
-          <ChevronDown className="w-3.5 h-3.5 text-ink-muted" />
+          <ChevronDown className="w-4 h-4 text-ink-muted" />
         </motion.button>
 
         {/* Sync Telemetry Badge (Mobile: Compact Pill, Desktop: Detailed Pill) */}
@@ -115,39 +113,39 @@ export const TopBar: React.FC = () => {
           whileTap={{ scale: 0.98 }}
           onClick={() => setSyncDrawerOpen(true)}
           aria-label="Synchronization telemetry status"
-          className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full bg-surface-soft border border-line hover:bg-surface transition-all text-xs font-semibold cursor-pointer shadow-2xs"
+          className="flex items-center gap-2 px-3 py-2 rounded-full bg-surface-soft border border-line hover:bg-surface transition-all text-sm font-semibold cursor-pointer shadow-2xs min-h-[44px]"
         >
           {isOnline ? (
-            <Wifi className="w-3.5 h-3.5 text-success-600 shrink-0" />
+            <Wifi className="w-4 h-4 text-success-600 shrink-0" />
           ) : (
-            <WifiOff className="w-3.5 h-3.5 text-warning-600 shrink-0" />
+            <WifiOff className="w-4 h-4 text-warning-600 shrink-0" />
           )}
 
           {outboxCount > 0 ? (
-            <span className="bg-warning-500 text-white text-xs font-bold px-1.5 py-0.2 rounded-full font-mono">
+            <span className="bg-warning-500 text-white text-sm font-bold px-2 py-0.5 rounded-full font-mono">
               {outboxCount}
             </span>
           ) : (
-            <span className="hidden sm:inline text-ink-soft text-xs font-mono">
-              {isSyncing ? 'Syncing…' : 'Synced'}
+            <span className="hidden sm:inline text-ink-soft text-sm font-mono">
+              {isSyncing ? t('syncStatusSyncing') : t('statusSynced')}
             </span>
           )}
 
           <RefreshCw
-            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 text-ink-muted ${
+            className={`w-4 h-4 text-ink-muted ${
               isSyncing ? 'animate-spin text-forest-600' : ''
             }`}
           />
         </motion.button>
 
         {/* Language Switcher Pill */}
-        <div className="inline-flex rounded-full bg-surface-soft border border-line p-0.5 sm:p-1" role="group" aria-label="Language selection">
+        <div className="inline-flex rounded-full bg-surface-soft border border-line p-1" role="group" aria-label="Language selection">
           <button
             type="button"
             onClick={() => setLanguage('en')}
             title="English"
             aria-label="English"
-            className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-full text-sm font-bold font-display transition-all cursor-pointer min-h-[44px] min-w-[44px] ${
               language === 'en'
                 ? 'bg-forest-700 text-white shadow-xs'
                 : 'text-ink-soft hover:text-ink'
@@ -160,7 +158,7 @@ export const TopBar: React.FC = () => {
             onClick={() => setLanguage('bn')}
             title="বাংলা + English"
             aria-label="বাংলা + English"
-            className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-full text-sm font-bold font-display transition-all cursor-pointer min-h-[44px] min-w-[44px] ${
               language === 'bn'
                 ? 'bg-forest-700 text-white shadow-xs'
                 : 'text-ink-soft hover:text-ink'
@@ -176,12 +174,12 @@ export const TopBar: React.FC = () => {
           whileTap={{ scale: 0.92 }}
           onClick={toggleDarkMode}
           aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-surface border border-line flex items-center justify-center text-ink-soft hover:bg-surface-soft hover:text-ink transition-all shadow-2xs cursor-pointer shrink-0"
+          className="w-10 h-10 rounded-full bg-surface border border-line flex items-center justify-center text-ink-soft hover:bg-surface-soft hover:text-ink transition-all shadow-2xs cursor-pointer shrink-0 min-h-[44px] min-w-[44px]"
         >
           {isDarkMode ? (
-            <Sun className="w-4 h-4 text-warning-600" />
+            <Sun className="w-5 h-5 text-warning-600" />
           ) : (
-            <Moon className="w-4 h-4 text-ink-soft" />
+            <Moon className="w-5 h-5 text-ink-soft" />
           )}
         </motion.button>
 
@@ -190,11 +188,11 @@ export const TopBar: React.FC = () => {
           whileHover={{ scale: 1.08, y: -1 }}
           whileTap={{ scale: 0.92 }}
           aria-label="Notifications"
-          className="hidden sm:flex w-10 h-10 rounded-full bg-surface border border-line items-center justify-center text-ink-soft hover:bg-surface-soft hover:text-ink transition-all shadow-2xs relative cursor-pointer shrink-0"
+          className="hidden sm:flex w-10 h-10 rounded-full bg-surface border border-line items-center justify-center text-ink-soft hover:bg-surface-soft hover:text-ink transition-all shadow-2xs relative cursor-pointer shrink-0 min-h-[44px] min-w-[44px]"
         >
-          <Bell className="w-4 h-4" />
-          <span className="w-2 h-2 rounded-full bg-forest-600 absolute top-2.5 right-2.5 animate-ping" />
-          <span className="w-2 h-2 rounded-full bg-forest-600 absolute top-2.5 right-2.5" />
+          <Bell className="w-5 h-5" />
+          <span className="w-2.5 h-2.5 rounded-full bg-forest-600 absolute top-2.5 right-2.5 animate-ping" />
+          <span className="w-2.5 h-2.5 rounded-full bg-forest-600 absolute top-2.5 right-2.5" />
         </motion.button>
 
         {/* User Account Menu Dropdown Anchor */}
@@ -205,20 +203,20 @@ export const TopBar: React.FC = () => {
             onClick={() => setAccountMenuOpen((prev) => !prev)}
             aria-expanded={accountMenuOpen}
             aria-haspopup="true"
-            className="flex items-center gap-2.5 pl-1 sm:pl-2 cursor-pointer select-none outline-none"
+            className="flex items-center gap-2.5 pl-1 sm:pl-2 cursor-pointer select-none outline-none min-h-[44px]"
           >
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-forest-700 text-white flex items-center justify-center text-sm font-bold shadow-md shadow-forest-700/20 font-display">
+            <div className="w-10 h-10 rounded-full bg-forest-700 text-white flex items-center justify-center text-base font-bold shadow-md shadow-forest-700/20 font-display">
               {user?.fullName?.charAt(0) || 'U'}
             </div>
             <div className="hidden xl:flex flex-col text-left">
               <span className="text-sm font-bold text-ink leading-tight font-display">
                 {user?.fullName || 'Administrator'}
               </span>
-              <span className="text-xs font-medium text-ink-muted">
+              <span className="text-sm font-medium text-ink-muted">
                 {user?.phoneNumber || activeRole || 'Active'}
               </span>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-ink-muted hidden sm:block" />
+            <ChevronDown className="w-4 h-4 text-ink-muted hidden sm:block" />
           </motion.button>
 
           {/* Account Popover Menu */}
@@ -240,7 +238,7 @@ export const TopBar: React.FC = () => {
                     <p className="text-sm font-bold text-ink truncate font-display">
                       {user?.fullName || 'User'}
                     </p>
-                    <p className="text-xs text-ink-muted font-mono truncate">
+                    <p className="text-sm text-ink-muted font-mono truncate">
                       {user?.phoneNumber || 'No phone'}
                     </p>
                     <Badge variant="forest" size="sm" className="mt-1">
@@ -258,7 +256,7 @@ export const TopBar: React.FC = () => {
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
                       <School className="w-4 h-4 text-forest-700" />
-                      <span>{language === 'bn' ? 'School Change করুন' : 'Switch School'}</span>
+                      <span>{t('switchSchool')}</span>
                     </button>
 
                     <button
@@ -270,7 +268,7 @@ export const TopBar: React.FC = () => {
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-surface-soft rounded-xl transition-colors text-left cursor-pointer min-h-[44px]"
                     >
                       <RefreshCw className="w-4 h-4 text-forest-700" />
-                      <span>{language === 'bn' ? 'Internet ও Sync Status' : 'Internet & Sync Status'}</span>
+                      <span>{t('syncDrawerTitle')}</span>
                     </button>
                   </div>
 
@@ -301,8 +299,8 @@ export const TopBar: React.FC = () => {
       <Drawer
         isOpen={syncDrawerOpen}
         onClose={() => setSyncDrawerOpen(false)}
-        title={language === 'bn' ? 'Internet ও Storage Status' : 'Internet & Sync Status'}
-        description={language === 'bn' ? 'এই ফোনে Saved Attendance ও Server Sync' : 'Attendance sync status and saved records'}
+        title={t('syncDrawerTitle')}
+        description={t('syncDrawerDesc')}
         placement="bottom"
       >
         <div className="space-y-5 text-left max-w-lg mx-auto">
@@ -320,56 +318,44 @@ export const TopBar: React.FC = () => {
               </div>
               <div>
                 <h4 className="text-sm font-bold text-ink">
-                  {isOnline
-                    ? language === 'bn'
-                      ? 'ইন্টারনেট Connected'
-                      : 'Internet Connected'
-                    : language === 'bn'
-                    ? 'Offline Mode'
-                    : 'Operating in Offline Mode'}
+                  {isOnline ? t('internetConnected') : t('offlineAttendanceMode')}
                 </h4>
-                <p className="text-xs text-ink-muted">
-                  {isOnline
-                    ? language === 'bn'
-                      ? 'School Server-এ Connected'
-                      : 'Connected to school attendance server'
-                    : language === 'bn'
-                    ? 'Attendance এই ফোনে Safe আছে'
-                    : 'Attendance is safely saved on this mobile'}
+                <p className="text-sm text-ink-muted">
+                  {isOnline ? t('connectedToServer') : t('operatingLocally')}
                 </p>
               </div>
             </div>
 
             <Badge variant={isOnline ? 'success' : 'warning'} size="sm" dot pulse>
-              {isOnline ? (language === 'bn' ? 'Online' : 'ONLINE') : (language === 'bn' ? 'Offline' : 'OFFLINE')}
+              {isOnline ? t('statusOnline') : t('statusOffline')}
             </Badge>
           </div>
 
           {/* Telemetry Metrics */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
-              <span className="text-xs text-ink-muted uppercase font-bold tracking-wider font-display">
-                {language === 'bn' ? 'Waiting to Send' : 'Unsent Scans'}
+            <div className="p-4 rounded-2xl bg-surface-soft border border-line">
+              <span className="text-sm text-ink-muted uppercase font-bold tracking-wider font-display">
+                {t('syncStatusWaiting')}
               </span>
               <div className="text-2xl font-extrabold text-ink font-mono mt-1">
                 {outboxCount}
               </div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-surface-soft border border-line">
-              <span className="text-xs text-ink-muted uppercase font-bold tracking-wider font-display">
-                {language === 'bn' ? 'Storage Status' : 'Storage Status'}
+            <div className="p-4 rounded-2xl bg-surface-soft border border-line">
+              <span className="text-sm text-ink-muted uppercase font-bold tracking-wider font-display">
+                {t('storageStatus')}
               </span>
               <div className="text-sm font-bold text-forest-700 dark:text-forest-400 mt-1.5 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
-                <span>{language === 'bn' ? 'এই ফোনে Safe আছে' : 'Safely Saved'}</span>
+                <span>{t('storageGuaranteed')}</span>
               </div>
             </div>
           </div>
 
           {lastSyncedAt && (
-            <p className="text-xs text-ink-muted text-center font-mono">
-              {language === 'bn' ? 'Last Server Sync:' : 'Last synced at:'} {new Date(lastSyncedAt).toLocaleTimeString('en-IN')}
+            <p className="text-sm text-ink-muted text-center font-mono">
+              {t('lastSyncedAtLabel')} {new Date(lastSyncedAt).toLocaleTimeString('en-IN')}
             </p>
           )}
 
@@ -383,16 +369,10 @@ export const TopBar: React.FC = () => {
               }}
               disabled={!isOnline || isSyncing}
               isLoading={isSyncing}
-              leftIcon={<RefreshCw className="w-4 h-4" />}
+              leftIcon={<RefreshCw className="w-5 h-5" />}
               className="w-full text-base font-bold shadow-lg shadow-forest-700/20 min-h-[48px] rounded-2xl font-display"
             >
-              {isSyncing
-                ? language === 'bn'
-                  ? 'Server-এ Send হচ্ছে…'
-                  : 'Sending to Server…'
-                : language === 'bn'
-                ? 'Saved Records Send করুন'
-                : 'Send Saved Records Now'}
+              {isSyncing ? t('sendingRecords') : t('sendRecordsNow')}
             </Button>
           </div>
         </div>
@@ -403,10 +383,10 @@ export const TopBar: React.FC = () => {
         isOpen={confirmLogoutOpen}
         onClose={() => setConfirmLogoutOpen(false)}
         onConfirm={handleLogout}
-        title={language === 'bn' ? 'AttendEase থেকে Logout করবেন?' : 'Sign Out of AttendEase?'}
-        description={language === 'bn' ? 'Logout করলেও এই ফোনে Saved Attendance সম্পূর্ণ Safe থাকবে।' : 'Your active session will be ended. Unsynced attendance events recorded on this device remain safely saved.'}
+        title={t('logOutConfirmTitle')}
+        description={t('logOutConfirmDesc')}
         confirmText={t('logout')}
-        cancelText={language === 'bn' ? 'Login থাকুন' : 'Stay Signed In'}
+        cancelText={t('staySignedIn')}
         intent="danger"
       />
     </header>

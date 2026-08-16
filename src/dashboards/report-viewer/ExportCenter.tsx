@@ -59,7 +59,7 @@ export const ExportCenter: React.FC = () => {
         params.append('date', selectedDate);
       } else if (type === 'monthly-register') {
         if (!selectedClassId) {
-          throw new Error(language === 'bn' ? 'অনুগ্রহ করে একটি ক্লাস নির্বাচন করুন' : 'Please select a class section for the monthly register export');
+          throw new Error(t('selectClassExportError'));
         }
         params.append('classSectionId', selectedClassId);
         params.append('year', String(selectedYear));
@@ -105,7 +105,7 @@ export const ExportCenter: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      setSuccessToast(language === 'bn' ? 'ফাইলটি সফলভাবে ডাউনলোড হয়েছে।' : 'File successfully downloaded.');
+      setSuccessToast(t('fileDownloadedSuccess'));
       setTimeout(() => setSuccessToast(null), 4000);
     } catch (err: any) {
       const safe = getUserSafeError(err, language);
@@ -115,9 +115,10 @@ export const ExportCenter: React.FC = () => {
     }
   };
 
-  const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
-  const monthNames = language === 'bn' ? monthNamesBn : monthNamesEn;
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
   return (
     <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="export-center-view">
@@ -139,19 +140,19 @@ export const ExportCenter: React.FC = () => {
         <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
           {t('exportCenterTitle')}
         </h1>
-        <p className="t-body text-xs text-ink-soft mt-1">
-          {language === 'bn' ? `${activeSchoolName}-এর সরকারি পোর্টাল (UDISE+, বাংলার শিক্ষা) ও স্কুলের কাজের জন্য এক্সেল ফাইল ডাউনলোড করুন।` : `Download official Excel & CSV attendance files for government reporting and school records for ${activeSchoolName}.`}
+        <p className="t-body text-sm text-ink-soft mt-1">
+          {t('exportCenterSubtitle', { schoolName: activeSchoolName })}
         </p>
       </div>
 
       {/* Parameter Controls Bar */}
-      <div className="app-card p-4 sm:p-5 flex flex-wrap items-center gap-4 text-xs font-bold text-ink">
+      <div className="app-card p-4 sm:p-5 flex flex-wrap items-center gap-4 text-sm font-bold text-ink">
         <div className="flex items-center gap-2">
-          <span className="text-ink-soft font-display">{language === 'bn' ? 'ক্লাস:' : 'Class Section:'}</span>
+          <span className="text-ink-soft font-display">{t('classLabel')}</span>
           <select
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
           >
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -162,21 +163,21 @@ export const ExportCenter: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-ink-soft font-display">{language === 'bn' ? 'তারিখ:' : 'Date:'}</span>
+          <span className="text-ink-soft font-display">{t('dateLabel')}</span>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
+            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-ink-soft font-display">{language === 'bn' ? 'মাস / বছর:' : 'Month/Year:'}</span>
+          <span className="text-ink-soft font-display">{t('monthYearLabel')}</span>
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
           >
             {monthNames.map((m, idx) => (
               <option key={idx + 1} value={idx + 1}>{m}</option>
@@ -185,7 +186,7 @@ export const ExportCenter: React.FC = () => {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
+            className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"
           >
             <option value={2025}>2025</option>
             <option value={2026}>2026</option>
@@ -195,12 +196,10 @@ export const ExportCenter: React.FC = () => {
       </div>
 
       {/* UDISE+ Government Explainer Card */}
-      <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-start gap-3 text-xs text-ink-soft">
+      <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-start gap-3 text-sm text-ink-soft">
         <Info className="w-5 h-5 text-forest-700 dark:text-forest-600 shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          {language === 'bn'
-            ? 'এই ফাইলগুলি পশ্চিমবঙ্গ সরকার ও ভারত সরকারের UDISE+ ও বাংলার শিক্ষা পোর্টালের অনুমোদিত ফরম্যাটে তৈরি। আপনি সরাসরি অফিসে জমা বা পোর্টালে আপলোড করতে পারেন।'
-            : 'Exported sheets are fully formatted for West Bengal Banglar Shiksha & National UDISE+ compliance. You can print or upload them directly.'}
+          {t('monthlyRegisterDesc')}
         </p>
       </div>
 
@@ -213,18 +212,16 @@ export const ExportCenter: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
-              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+              <span className="px-3 py-1 rounded-full text-sm font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
                 Excel (.xlsx)
               </span>
             </div>
             <div>
               <h3 className="font-extrabold text-lg text-ink font-display">
-                {language === 'bn' ? 'মাসিক উপস্থিতি খাতা (রেজিস্টার)' : 'Monthly Class Attendance Register'}
+                {t('monthlyRegisterTitle')}
               </h3>
-              <p className="t-body text-xs text-ink-soft leading-relaxed mt-1">
-                {language === 'bn'
-                  ? 'নির্বাচিত মাসের প্রতিটি দিনের শিক্ষার্থীর উপস্থিতি তালিকা ও সারাংশ।'
-                  : 'Full monthly attendance sheet with day-by-day P/A markings and total percentage.'}
+              <p className="t-body text-sm text-ink-soft leading-relaxed mt-1">
+                {t('monthlyRegisterDesc')}
               </p>
             </div>
           </div>
@@ -237,9 +234,9 @@ export const ExportCenter: React.FC = () => {
               disabled={downloadingType === 'monthly-register'}
               isLoading={downloadingType === 'monthly-register'}
               leftIcon={<Download className="w-4 h-4" />}
-              className="min-h-[44px] rounded-2xl font-display text-xs"
+              className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
             >
-              {language === 'bn' ? 'এক্সেল ফাইল ডাউনলোড করুন' : 'Download Excel File'}
+              {t('downloadExcel')}
             </Button>
           </div>
         </div>
@@ -251,18 +248,16 @@ export const ExportCenter: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-xs">
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
-              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
+              <span className="px-3 py-1 rounded-full text-sm font-bold bg-surface-soft text-ink-soft border border-line font-display">
                 CSV (.csv)
               </span>
             </div>
             <div>
               <h3 className="font-extrabold text-lg text-ink font-display">
-                {language === 'bn' ? 'দৈনিক বিদ্যালয় সারাংশ' : 'Daily School Attendance Summary'}
+                {t('dailySummaryExportTitle')}
               </h3>
-              <p className="t-body text-xs text-ink-soft leading-relaxed mt-1">
-                {language === 'bn'
-                  ? 'আজকের সকল ক্লাসের উপস্থিতি সংখ্যা ও মিড-ডে মিলের হিসাব।'
-                  : 'Daily school roll snapshot across all classes with mid-day meal counts.'}
+              <p className="t-body text-sm text-ink-soft leading-relaxed mt-1">
+                {t('dailySummaryExportDesc')}
               </p>
             </div>
           </div>
@@ -275,9 +270,9 @@ export const ExportCenter: React.FC = () => {
               disabled={downloadingType === 'daily-school'}
               isLoading={downloadingType === 'daily-school'}
               leftIcon={<Download className="w-4 h-4" />}
-              className="min-h-[44px] rounded-2xl font-display text-xs"
+              className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
             >
-              {language === 'bn' ? 'সিএসভি ডাউনলোড করুন' : 'Download CSV File'}
+              {t('downloadCsv')}
             </Button>
           </div>
         </div>

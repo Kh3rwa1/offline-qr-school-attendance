@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Camera,
   RefreshCw,
-  Download,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -13,8 +12,8 @@ import {
   CameraOff,
   Check,
   Usb,
-  ClipboardCheck,
-  ScanLine,
+  Building2,
+  Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '../../components/shared/Button';
@@ -32,9 +31,7 @@ import {
 } from '../../services/offlineSyncService';
 import {
   offlineDb,
-  OfflineRosterItem,
   OfflineSessionItem,
-  OfflineSessionRosterItem,
   OutboxEventItem,
 } from '../../db/offlineDb';
 import { CameraScannerService, setupUSBScannerListener } from '../../services/scannerService';
@@ -70,7 +67,7 @@ export const TeacherDashboard: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   const { user } = useSession();
   const { isOnline, outboxCount, syncNow, refreshOutbox } = useOfflineStatus();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
@@ -81,8 +78,7 @@ export const TeacherDashboard: React.FC = () => {
     }
   });
 
-  const [session, setSession] = useState<any | null>(null);
-  const [isAssigned, setIsAssigned] = useState<boolean>(true);
+  const [session, setSession] = useState<OfflineSessionItem | null>(null);
   const [stats, setStats] = useState({
     cameIn: 0,
     missing: 0,
@@ -118,12 +114,12 @@ export const TeacherDashboard: React.FC = () => {
   function getDeviceIdentifier() {
     const existing = localStorage.getItem('attendance.deviceIdentifier');
     if (existing) return existing;
-    const created = `browser-${globalThis.crypto.randomUUID()}`;
-    localStorage.setItem('attendance.deviceIdentifier', created);
-    return created;
+    const generated = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    localStorage.setItem('attendance.deviceIdentifier', generated);
+    return generated;
   }
 
-  // Load teacher assigned classes
+  // Load Classes
   const loadClasses = useCallback(async () => {
     if (!activeSchoolId) return;
     try {
@@ -137,13 +133,12 @@ export const TeacherDashboard: React.FC = () => {
         if (!selectedClassId || !classList.some((c) => (c.classSectionId || c.id) === selectedClassId)) {
           const firstId = classList[0].classSectionId || classList[0].id;
           setSelectedClassId(firstId);
-          localStorage.setItem('attendance.classSectionId', firstId);
+          try {
+            localStorage.setItem('attendance.classSectionId', firstId);
+          } catch {}
         }
-      } else {
-        setIsAssigned(false);
       }
-    } catch (err: any) {
-      console.warn('Could not load online classes, checking local:', err);
+    } catch {
       const cached = await offlineDb.rosters.toArray();
       const uniqueMap = new Map<string, any>();
       cached.forEach((r) => {
@@ -172,6 +167,8 @@ export const TeacherDashboard: React.FC = () => {
   const fetchTodayGateData = useCallback(async () => {
     if (!activeSchoolId || !selectedClassId) return;
 
+    const todayStr = new Date().toISOString().slice(0, 10);
+
     if (navigator.onLine) {
       try {
         const res = await api<{
@@ -185,17 +182,16 @@ export const TeacherDashboard: React.FC = () => {
         }>(`/api/v1/schools/${activeSchoolId}/attendance/today-gate?classSectionId=${selectedClassId}`);
 
         if (res.success) {
-          setIsAssigned(res.isAssigned !== false);
           if (res.stats) setStats(res.stats);
           if (res.arrivals) setArrivals(res.arrivals);
           if (res.allStudents) setAllStudents(res.allStudents);
 
-          const todayStr = new Date().toISOString().slice(0, 10);
           const localSession = await offlineDb.sessions
-            .where('[schoolId+classSectionId]')
-            .equals([activeSchoolId, selectedClassId])
-            .filter((s) => s.sessionDate === todayStr)
+            .where('classSectionId')
+            .equals(selectedClassId)
+            .and((s) => s.sessionDate === todayStr)
             .first();
+
           if (localSession) {
             if (res.session?.id && localSession.serverSessionId !== res.session.id) {
               await offlineDb.sessions.update(localSession.id, { serverSessionId: res.session.id });
@@ -225,11 +221,10 @@ export const TeacherDashboard: React.FC = () => {
     }
 
     // Offline fallback from IndexedDB
-    const todayStr = new Date().toISOString().slice(0, 10);
     const localSession = await offlineDb.sessions
-      .where('[schoolId+classSectionId]')
-      .equals([activeSchoolId, selectedClassId])
-      .filter((s) => s.sessionDate === todayStr)
+      .where('classSectionId')
+      .equals(selectedClassId)
+      .and((s) => s.sessionDate === todayStr)
       .first();
 
     if (localSession) {
@@ -269,13 +264,13 @@ export const TeacherDashboard: React.FC = () => {
           }))
       );
     }
-  }, [activeSchoolId, selectedClassId]);
+  }, [activeSchoolId, selectedClassId, user]);
 
   useEffect(() => {
     void fetchTodayGateData();
     const interval = setInterval(() => {
       void fetchTodayGateData();
-    }, 3000);
+    }, 4000);
     return () => clearInterval(interval);
   }, [fetchTodayGateData]);
 
@@ -298,190 +293,45 @@ export const TeacherDashboard: React.FC = () => {
           throw dlErr;
         }
       }
-      showFeedback({ kind: 'success', text: t('rosterDownloaded') });
+      showFeedback({ kind: 'success', text: 'Roster and active QR digests downloaded successfully.' });
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Failed to download roster' });
+      showFeedback({ kind: 'error', text: err.message || 'Error downloading roster' });
     }
   };
 
   // Handle Start Session
   const handleStartSession = async () => {
     if (!activeSchoolId || !selectedClassId) return;
-    if (!user?.id) {
-      showFeedback({ kind: 'error', text: t('sessionRequired') });
-      return;
-    }
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
-      let serverSessionId: string | undefined = undefined;
+      let localSession = await offlineDb.sessions
+        .where('classSectionId')
+        .equals(selectedClassId)
+        .and((s) => s.sessionDate === todayStr)
+        .first();
 
-      if (navigator.onLine) {
-        try {
-          const res = await api<{ success: boolean; data: any }>(
-            `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
-            {
-              method: 'POST',
-              body: JSON.stringify({
-                classSectionId: selectedClassId,
-                sessionDate: todayStr,
-                sessionType: 'DAILY',
-              }),
-            }
-          );
-          if (res?.data?.id) {
-            serverSessionId = res.data.id;
-          }
-        } catch (serverErr: any) {
-          console.warn('Network unavailable, creating local session:', serverErr);
-        }
+      if (!localSession) {
+        localSession = await createOfflineSession({
+          schoolId: activeSchoolId,
+          classSectionId: selectedClassId,
+          teacherId: user?.id || 'teacher',
+          sessionDate: todayStr,
+        });
       }
 
-      const s = await createOfflineSession({
-        schoolId: activeSchoolId,
-        classSectionId: selectedClassId,
-        teacherId: user.id,
-        sessionDate: todayStr,
-      });
-
-      if (serverSessionId) {
-        s.serverSessionId = serverSessionId;
-        await offlineDb.sessions.update(s.id, { serverSessionId });
-      }
-
-      setSession(s);
-      showFeedback({ kind: 'success', text: t('sessionOpen') });
+      setSession(localSession);
+      showFeedback({ kind: 'success', text: t('sessionStarted') });
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Failed to start session' });
+      showFeedback({ kind: 'error', text: err.message || 'Could not start session' });
     }
   };
 
-  // Handle Manual Status Change for a Student (Present, Absent, Late, Leave)
-  const handleUpdateStatus = async (
-    studentId: string,
-    newStatus: 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE' | 'EXCUSED'
-  ) => {
-    if (!activeSchoolId || !selectedClassId) return;
-
-    setAllStudents((prev) =>
-      prev.map((st) => (st.studentId === studentId ? { ...st, status: newStatus } : st))
-    );
-
-    setStats((prev) => {
-      const current = allStudents.find((s) => s.studentId === studentId)?.status || 'UNMARKED';
-      let cameIn = prev.cameIn;
-      let missing = prev.missing;
-      let late = prev.late;
-      let leave = prev.leave;
-
-      if (current === 'PRESENT') cameIn--;
-      if (current === 'UNMARKED' || current === 'ABSENT') missing--;
-      if (current === 'LATE') late--;
-      if (current === 'LEAVE' || current === 'EXCUSED') leave--;
-
-      if (newStatus === 'PRESENT') cameIn++;
-      if (newStatus === 'ABSENT') missing++;
-      if (newStatus === 'LATE') late++;
-      if (newStatus === 'LEAVE' || newStatus === 'EXCUSED') leave++;
-
-      return { ...prev, cameIn, missing, late, leave };
-    });
-
-    try {
-      let currentSession = session;
-      let serverSessionId = currentSession?.serverSessionId;
-
-      if (!serverSessionId && currentSession?.id && /^[0-9a-fA-F-]{36}$/.test(currentSession.id) && !currentSession.id.startsWith('sess-')) {
-        serverSessionId = currentSession.id;
-      }
-
-      if (navigator.onLine) {
-        if (!serverSessionId) {
-          const todayStr = new Date().toISOString().slice(0, 10);
-          try {
-            const createRes = await api<{ success: boolean; data: any }>(
-              `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
-              {
-                method: 'POST',
-                body: JSON.stringify({
-                  classSectionId: selectedClassId,
-                  sessionDate: todayStr,
-                  sessionType: 'DAILY',
-                }),
-              }
-            );
-            if (createRes?.data?.id) {
-              serverSessionId = createRes.data.id;
-              if (currentSession?.id) {
-                await offlineDb.sessions.update(currentSession.id, { serverSessionId });
-                setSession((prev: any) => (prev ? { ...prev, serverSessionId } : prev));
-              }
-            }
-          } catch (sessionErr) {
-            console.warn('Could not auto-create server session:', sessionErr);
-          }
-        }
-
-        if (serverSessionId) {
-          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/manual`, {
-            method: 'POST',
-            body: JSON.stringify({
-              studentId,
-              newStatus,
-              reason: 'Teacher manual override',
-            }),
-          });
-        }
-      }
-
-      const effectiveSessionId = currentSession?.id || serverSessionId || `sess-${Date.now()}`;
-      const timestamp = new Date().toISOString();
-      const outboxEvent: OutboxEventItem = {
-        clientEventId: `manual-${effectiveSessionId}-${studentId}-${Date.now()}`,
-        schoolId: activeSchoolId,
-        sessionId: serverSessionId || effectiveSessionId,
-        sessionMetadata: {
-          clientSessionId: currentSession?.clientSessionId || effectiveSessionId,
-          classSectionId: selectedClassId,
-          sessionDate: currentSession?.sessionDate || new Date().toISOString().slice(0, 10),
-          sessionType: 'DAILY',
-        },
-        studentId,
-        eventType: 'MANUAL_STATUS_UPDATE',
-        statusValue: newStatus,
-        clientTimestamp: timestamp,
-        source: 'MANUAL',
-        syncStatus: serverSessionId && navigator.onLine ? 'SYNCED' : 'PENDING',
-        retryCount: 0,
-        createdAt: timestamp,
-      };
-
-      await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
-        if (currentSession?.id) {
-          const sessionRosterItem = await offlineDb.sessionRosters
-            .where('[sessionId+studentId]')
-            .equals([currentSession.id, studentId])
-            .first();
-          if (sessionRosterItem && sessionRosterItem.id) {
-            await offlineDb.sessionRosters.update(sessionRosterItem.id, { status: newStatus });
-          }
-        }
-        if (!navigator.onLine || !serverSessionId) {
-          await offlineDb.syncOutbox.put(outboxEvent);
-        }
-      });
-
-      await refreshOutbox();
-    } catch (err: any) {
-      console.warn('Manual status update error:', err);
-    }
-  };
-
-  // Handle Scan from Phone Camera or USB
+  // Handle Scan Action
   const handleScan = useCallback(
     async (rawToken: string, source: 'CAMERA' | 'USB') => {
-      if (!activeSchoolId || !selectedClassId || !user?.id) {
+      if (!activeSchoolId || !selectedClassId || !user) {
         playScanErrorFeedback();
         showFeedback({ kind: 'error', text: t('sessionRequired') });
         return;
@@ -490,21 +340,25 @@ export const TeacherDashboard: React.FC = () => {
       let activeSessionId = session?.id;
       if (!activeSessionId) {
         const todayStr = new Date().toISOString().slice(0, 10);
-        const localSession = await offlineDb.sessions
-          .where('[schoolId+classSectionId]')
-          .equals([activeSchoolId, selectedClassId])
-          .filter((s) => s.sessionDate === todayStr)
+        let localSession = await offlineDb.sessions
+          .where('classSectionId')
+          .equals(selectedClassId)
+          .and((s) => s.sessionDate === todayStr)
           .first();
-        if (localSession) {
+
+        if (!localSession) {
+          const newSession = await createOfflineSession({
+            schoolId: activeSchoolId,
+            classSectionId: selectedClassId,
+            teacherId: user.id,
+            sessionDate: todayStr,
+          });
+          activeSessionId = newSession.id;
+          setSession(newSession);
+        } else {
           activeSessionId = localSession.id;
           setSession(localSession);
         }
-      }
-
-      if (!activeSessionId) {
-        playScanErrorFeedback();
-        showFeedback({ kind: 'error', text: t('sessionRequired') });
-        return;
       }
 
       try {
@@ -527,7 +381,7 @@ export const TeacherDashboard: React.FC = () => {
             playScanSuccessFeedback();
             showFeedback({
               kind: 'success',
-              text: `${result.student.name} (#${result.student.rollNumber}) ${t('markedPresent')}`,
+              text: `${result.student.name} (#${result.student.rollNumber}) marked PRESENT`,
             });
             void fetchTodayGateData();
           }
@@ -571,11 +425,13 @@ export const TeacherDashboard: React.FC = () => {
       const isDenied =
         err?.name === 'NotAllowedError' ||
         err?.name === 'PermissionDeniedError' ||
-        err?.message?.includes('Permission');
+        err?.message?.includes('Permission') ||
+        err?.message?.includes('permission') ||
+        err?.message?.includes('denied');
       setCameraStatus(isDenied ? 'permission_denied' : 'error');
-      setCameraError(isDenied ? t('cameraDenied') : (err?.message || t('cameraDenied')));
+      setCameraError(isDenied ? 'permission_denied' : (err?.message || 'error'));
     }
-  }, [videoEl, t]);
+  }, [videoEl]);
 
   const stopCamera = useCallback(() => {
     if (cameraScannerRef.current) {
@@ -649,21 +505,29 @@ export const TeacherDashboard: React.FC = () => {
     }
   };
 
-  // Finalize Attendance for Today
-  const handleFinalizeAttendance = async () => {
+  // Status manual override handler
+  const handleUpdateStatus = async (
+    studentId: string,
+    newStatus: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED' | 'LEAVE'
+  ) => {
     if (!activeSchoolId || !selectedClassId) return;
-    setIsFinishing(true);
     try {
-      let serverSessionId = session?.serverSessionId;
-      if (!serverSessionId && session?.id && /^[0-9a-fA-F-]{36}$/.test(session.id) && !session.id.startsWith('sess-')) {
-        serverSessionId = session.id;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let currentSession = session;
+      if (!currentSession) {
+        currentSession =
+          (await offlineDb.sessions
+            .where('classSectionId')
+            .equals(selectedClassId)
+            .and((s) => s.sessionDate === todayStr)
+            .first()) || null;
       }
 
+      let serverSessionId = currentSession?.serverSessionId;
       if (navigator.onLine) {
         if (!serverSessionId) {
-          const todayStr = new Date().toISOString().slice(0, 10);
           try {
-            const createRes = await api<{ success: boolean; data: any }>(
+            const createRes = await api<{ success: boolean; data?: { id: string } }>(
               `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
               {
                 method: 'POST',
@@ -676,48 +540,119 @@ export const TeacherDashboard: React.FC = () => {
             );
             if (createRes?.data?.id) {
               serverSessionId = createRes.data.id;
+              if (currentSession?.id) {
+                await offlineDb.sessions.update(currentSession.id, { serverSessionId });
+                setSession((prev: any) => (prev ? { ...prev, serverSessionId } : prev));
+              }
             }
-          } catch (createErr) {
-            console.warn('Could not resolve server session to finalize:', createErr);
+          } catch (sessionErr) {
+            console.warn('Could not auto-create server session:', sessionErr);
           }
         }
 
         if (serverSessionId) {
-          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/status`, {
-            method: 'PATCH',
+          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/manual`, {
+            method: 'POST',
             body: JSON.stringify({
-              status: 'FINALIZED',
-              autoMarkAbsentForUnmarked: true,
-              reason: 'Class teacher finalized daily attendance',
+              studentId,
+              newStatus,
+              reason: 'Teacher manual override',
             }),
           });
         }
       }
 
-      if (session?.id) {
-        await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
-      }
-      setSession((prev: any) => (prev ? { ...prev, status: 'FINALIZED' } : null));
-      setShowConfirmFinish(false);
-      showFeedback({ kind: 'success', text: t('finalizedSuccess') });
+      const effectiveSessionId = currentSession?.id || serverSessionId || `sess-${Date.now()}`;
+      const timestamp = new Date().toISOString();
+      const outboxEvent: OutboxEventItem = {
+        clientEventId: `manual-${effectiveSessionId}-${studentId}-${Date.now()}`,
+        schoolId: activeSchoolId,
+        sessionId: serverSessionId || effectiveSessionId,
+        sessionMetadata: {
+          clientSessionId: currentSession?.clientSessionId || effectiveSessionId,
+          classSectionId: selectedClassId,
+          sessionDate: currentSession?.sessionDate || new Date().toISOString().slice(0, 10),
+          sessionType: 'DAILY',
+        },
+        studentId,
+        eventType: 'MANUAL_STATUS_UPDATE',
+        statusValue: newStatus,
+        clientTimestamp: timestamp,
+        source: 'MANUAL',
+        syncStatus: serverSessionId && navigator.onLine ? 'SYNCED' : 'PENDING',
+        retryCount: 0,
+        createdAt: timestamp,
+      };
+
+      await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+        if (currentSession?.id) {
+          const sessionRosterItem = await offlineDb.sessionRosters
+            .where('[sessionId+studentId]')
+            .equals([currentSession.id, studentId])
+            .first();
+          if (sessionRosterItem && sessionRosterItem.id) {
+            await offlineDb.sessionRosters.update(sessionRosterItem.id, { status: newStatus });
+          }
+        }
+        if (!navigator.onLine || !serverSessionId) {
+          await offlineDb.syncOutbox.put(outboxEvent);
+        }
+      });
+
+      await refreshOutbox();
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Error finishing attendance' });
+      console.warn('Manual status update error:', err);
+    }
+  };
+
+  // Finalize attendance session
+  const handleFinalizeAttendance = async () => {
+    if (!activeSchoolId || !selectedClassId) return;
+    setIsFinishing(true);
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let localSession = await offlineDb.sessions
+        .where('classSectionId')
+        .equals(selectedClassId)
+        .and((s) => s.sessionDate === todayStr)
+        .first();
+
+      if (localSession) {
+        await offlineDb.sessions.update(localSession.id, { status: 'FINALIZED' });
+        localSession.status = 'FINALIZED';
+        setSession(localSession);
+      }
+
+      if (navigator.onLine) {
+        const serverSessionId = localSession?.serverSessionId;
+        if (serverSessionId) {
+          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/finalize`, {
+            method: 'PATCH',
+          });
+        }
+      }
+
+      showFeedback({ kind: 'success', text: t('attendanceFinalized') });
+      setShowConfirmFinish(false);
+      void fetchTodayGateData();
+    } catch (err: any) {
+      showFeedback({ kind: 'error', text: err.message || 'Error finalizing attendance' });
     } finally {
       setIsFinishing(false);
     }
   };
-
-  const missingStudents = allStudents.filter(
-    (s) => s.status === 'UNMARKED' || s.status === 'ABSENT'
-  );
 
   const selectedClassObj = classes.find(
     (c) => (c.classSectionId || c.id) === selectedClassId
   );
   const selectedClassName = selectedClassObj
     ? `${selectedClassObj.className} – ${selectedClassObj.sectionName}`
-    : 'Class';
+    : t('classLabel');
+
+  const missingStudents = allStudents.filter(
+    (s) => s.status === 'UNMARKED' || s.status === 'ABSENT'
+  );
 
   return (
     <div className="space-y-6 text-left max-w-6xl mx-auto" id="teacher-dashboard-view">
@@ -732,478 +667,430 @@ export const TeacherDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
+      {/* Top Header Card */}
+      <div className="bg-surface p-6 sm:p-7 rounded-3xl border border-line shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 text-xs font-bold font-display border border-success-100 dark:border-success-600/30 mb-2">
-            <span>{t('gateAttendance')}</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 text-sm font-bold font-display border border-success-100 mb-2">
+            <span>{t('todayAttendance')}</span>
+          </div>
+          <div className="flex items-center gap-2 text-forest-700 dark:text-forest-600 font-bold text-sm font-display mb-1">
+            <Building2 className="w-4 h-4" />
+            <span>{activeSchoolName}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
-            {t('classroomDashboard')}
+            {t('navAttendanceRegister')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            {activeSchoolName} • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          <p className="text-sm text-ink-soft mt-1">
+            {t('gateAttendanceRecords')} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-3 flex-wrap">
           {/* Class Picker */}
           {classes.length > 0 && (
-            <div className="relative flex-1 sm:flex-initial">
+            <div className="flex items-center gap-2 bg-surface-soft p-1.5 rounded-2xl border border-line">
+              <span className="text-sm font-bold text-ink-soft px-2 font-display">{t('classLabel')}</span>
               <select
                 value={selectedClassId}
                 onChange={(e) => {
                   const newId = e.target.value;
                   setSelectedClassId(newId);
-                  localStorage.setItem('attendance.classSectionId', newId);
+                  try {
+                    localStorage.setItem('attendance.classSectionId', newId);
+                  } catch {}
                 }}
-                className="w-full sm:w-48 pl-4 pr-10 py-2 rounded-full bg-surface-soft border border-line text-xs font-extrabold text-ink outline-none focus:border-forest-700 font-display cursor-pointer appearance-none"
+                className="px-3.5 py-2 rounded-xl bg-surface border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
               >
                 {classes.map((c) => {
-                  const id = c.classSectionId || c.id;
-                  const label = `${c.className} – ${c.sectionName}`;
+                  const idVal = c.classSectionId || c.id;
                   return (
-                    <option key={id} value={id}>
-                      {label}
+                    <option key={idVal} value={idVal}>
+                      {c.className} – {c.sectionName}
                     </option>
                   );
                 })}
               </select>
-              <ChevronDown className="w-4 h-4 text-ink-muted absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           )}
 
-          {/* Download Roster */}
+          {/* Download Roster Button */}
           <Button
             variant="ghost"
-            size="sm"
+            size="md"
             onClick={handleDownloadRoster}
-            leftIcon={<Download className="w-3.5 h-3.5" />}
+            leftIcon={<Download className="w-4 h-4" />}
+            className="min-h-[44px] text-sm font-bold rounded-2xl"
           >
             {t('downloadRoster')}
           </Button>
 
-          {/* Start Session */}
+          {/* Start Session Button */}
           <Button
             variant="primary"
-            size="sm"
+            size="md"
             onClick={handleStartSession}
             disabled={!selectedClassId || (!!session && session.status !== 'FINALIZED')}
+            className="min-h-[44px] text-sm font-bold rounded-2xl"
           >
             {session && session.status !== 'FINALIZED' ? t('sessionOpen') : t('startSession')}
           </Button>
 
-          {/* Push Outbox */}
+          {/* Sync Outbox Button */}
           <Button
-            variant="outline"
-            size="sm"
+            variant="secondary"
+            size="md"
             onClick={handlePushOutbox}
-            isLoading={isSyncing}
             disabled={!isOnline || outboxCount === 0 || isSyncing}
-            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
+            isLoading={isSyncing}
+            leftIcon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
           >
-            {isSyncing ? t('syncingOutbox') : t('pushOutbox')}
+            {isSyncing ? t('syncingOutbox') : t('pushOutbox')} ({outboxCount})
           </Button>
+        </div>
+      </div>
 
-          {/* Language Switcher */}
-          <div className="inline-flex rounded-full bg-surface-soft border border-line p-1" role="group" aria-label="Language selection">
-            <button
-              type="button"
-              onClick={() => setLanguage('en')}
-              title="English"
-              aria-label="English"
-              className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
-                language === 'en'
-                  ? 'bg-forest-700 text-white shadow-xs'
-                  : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage('bn')}
-              title="বাংলা + English"
-              aria-label="বাংলা + English"
-              className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
-                language === 'bn'
-                  ? 'bg-forest-700 text-white shadow-xs'
-                  : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              বাং + EN
-            </button>
+      {/* Big Numbers (Stat Cards) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Came In */}
+        <div className="p-6 rounded-3xl bg-success-50/70 border border-success-100 dark:border-success-600/30 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider font-display">
+              {t('cameIn')}
+            </span>
+            <span className="p-2 rounded-full bg-forest-700 text-white">
+              <UserCheck className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-4xl sm:text-5xl font-extrabold text-forest-700 dark:text-forest-600 font-display mt-3 font-mono">
+            {stats.cameIn}
+          </div>
+          <p className="text-sm text-forest-700/80 font-medium mt-1">
+            {stats.total > 0
+              ? `${Math.round((stats.cameIn / stats.total) * 100)}% (${stats.cameIn} / ${stats.total})`
+              : t('whoCameIn')}
+          </p>
+        </div>
+
+        {/* Still Missing */}
+        <div className="p-6 rounded-3xl bg-danger-50/60 border border-danger-100 dark:border-danger-600/30 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-danger-800 uppercase tracking-wider font-display">
+              {t('stillMissing')}
+            </span>
+            <span className="p-2 rounded-full bg-danger-800 text-white">
+              <UserX className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-4xl sm:text-5xl font-extrabold text-danger-800 font-display mt-3 font-mono">
+            {stats.missing}
+          </div>
+          <p className="text-sm text-danger-800/80 font-medium mt-1">
+            {t('statusNotMarkedYet')}
+          </p>
+        </div>
+
+        {/* Late */}
+        <div className="p-6 rounded-3xl bg-amber-50/60 border border-amber-100 dark:border-amber-600/30 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-amber-800 uppercase tracking-wider font-display">
+              {t('statusLate')}
+            </span>
+            <span className="p-2 rounded-full bg-amber-700 text-white">
+              <Clock className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-4xl sm:text-5xl font-extrabold text-amber-800 font-display mt-3 font-mono">
+            {stats.late}
+          </div>
+          <p className="text-sm text-amber-800/80 font-medium mt-1">
+            {t('statusLate')}
+          </p>
+        </div>
+
+        {/* Leave */}
+        <div className="p-6 rounded-3xl bg-surface-soft border border-line shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-ink-muted uppercase tracking-wider font-display">
+              {t('statusOnLeave')}
+            </span>
+            <span className="p-2 rounded-full bg-ink-muted text-white">
+              <UserMinus className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-4xl sm:text-5xl font-extrabold text-ink font-display mt-3 font-mono">
+            {stats.leave}
+          </div>
+          <p className="text-sm text-ink-muted font-medium mt-1">
+            {t('statusOnLeave')}
+          </p>
+        </div>
+      </div>
+
+      {/* Action Bar: Finish Attendance Button */}
+      <div className="flex items-center justify-between bg-surface p-4 rounded-3xl border border-line">
+        <div className="text-sm font-bold text-ink font-display pl-2">
+          <span>{selectedClassName}</span> • <span className="text-forest-700 dark:text-forest-600 font-bold">{stats.cameIn} / {stats.total} {t('statusPresent')}</span>
+        </div>
+
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={() => setShowConfirmFinish(true)}
+          className="px-6 py-3 rounded-full text-sm font-extrabold shadow-xs min-h-[44px]"
+          disabled={stats.total === 0 || session?.status === 'FINALIZED'}
+          leftIcon={<Check className="w-5 h-5" />}
+        >
+          {session?.status === 'FINALIZED' ? t('finalizedSuccess') : t('finishAttendance')}
+        </Button>
+      </div>
+
+      {/* Main 2-Column Split: Who Came In (Left) vs Still Missing (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column: Who Came In */}
+        <div className="app-card p-6 flex flex-col h-[520px]">
+          <div className="flex items-center justify-between pb-4 border-b border-line mb-4">
+            <div>
+              <h3 className="text-lg font-extrabold text-ink font-display flex items-center gap-2">
+                <span>{t('whoCameIn')}</span>
+                <span className="text-sm px-2.5 py-0.5 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 font-bold font-mono">
+                  {arrivals.length}
+                </span>
+              </h3>
+              <p className="text-sm text-ink-soft mt-0.5">
+                {t('gateAttendanceRecords')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {arrivals.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <EmptyState
+                  kind="generic"
+                  title={t('noArrivalsYet')}
+                  description={t('gateAttendanceRecords')}
+                />
+              </div>
+            ) : (
+              arrivals.map((st) => (
+                <div
+                  key={st.studentId}
+                  className="p-3.5 rounded-2xl bg-surface border border-line hover:border-forest-700/40 transition-colors flex items-center justify-between gap-3 shadow-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-bold text-sm font-display">
+                      #{st.rollNumber}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-ink font-display">
+                        {language === 'bn' && st.nameBn ? st.nameBn : st.name}
+                      </h4>
+                      <span className="text-sm text-ink-muted font-mono">
+                        {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="px-3 py-1 rounded-full text-sm font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 font-display">
+                    {t('statusPresent')}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Still Missing */}
+        <div className="app-card p-6 flex flex-col h-[520px]">
+          <div className="flex items-center justify-between pb-4 border-b border-line mb-4">
+            <div>
+              <h3 className="text-lg font-extrabold text-ink font-display flex items-center gap-2">
+                <span>{t('stillMissing')}</span>
+                <span className="text-sm px-2.5 py-0.5 rounded-full bg-danger-50 text-danger-800 font-bold font-mono">
+                  {missingStudents.length}
+                </span>
+              </h3>
+              <p className="text-sm text-ink-soft mt-0.5">
+                {t('statusNotMarkedYet')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {missingStudents.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-center p-6">
+                <CheckCircle2 className="w-12 h-12 text-forest-700 dark:text-forest-600 mx-auto mb-2" />
+                <h4 className="text-base font-extrabold text-ink font-display">{t('statusPresent')}</h4>
+                <p className="text-sm text-ink-soft mt-1">{t('statusPresent')}</p>
+              </div>
+            ) : (
+              missingStudents.map((st) => (
+                <div
+                  key={st.studentId}
+                  className="p-3.5 rounded-2xl bg-surface border border-line hover:border-danger-300 transition-colors flex items-center justify-between gap-3 shadow-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-danger-50 text-danger-800 flex items-center justify-center font-bold text-sm font-display">
+                      #{st.rollNumber}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-ink font-display">
+                        {language === 'bn' && st.nameBn ? st.nameBn : st.name}
+                      </h4>
+                      <span className="text-sm text-ink-muted font-display">
+                        {t('statusNotMarkedYet')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Status Override Buttons - Big 44px Touch Targets */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(st.studentId, 'PRESENT')}
+                      className="min-h-[44px] px-3.5 py-2 rounded-2xl text-sm font-extrabold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      {t('markPresent')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(st.studentId, 'LATE')}
+                      className="min-h-[44px] px-3.5 py-2 rounded-2xl text-sm font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      {t('markLate')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(st.studentId, 'LEAVE')}
+                      className="min-h-[44px] px-3.5 py-2 rounded-2xl text-sm font-extrabold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      {t('markLeave')}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-
-      {/* If No Assigned Classes / Teacher */}
-      {!isAssigned && classes.length === 0 && (
-        <div className="p-8 rounded-3xl bg-amber-50/60 border border-amber-200 dark:border-amber-600/30 text-left">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-amber-100 rounded-2xl text-amber-800 shrink-0">
-              <AlertCircle className="w-6 h-6" />
+      {/* Phone Backup QR / USB Scanner Accordion */}
+      <details data-testid="phone-backup-details" className="app-card overflow-hidden group">
+        <summary className="p-4 sm:p-5 flex items-center justify-between cursor-pointer list-none select-none hover:bg-surface-soft transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-forest-50 text-forest-700 dark:text-forest-600">
+              <Camera className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-ink font-display">
-                {t('askHeadmasterAssign')}
-              </h3>
-              <p className="text-xs text-ink-soft mt-1 max-w-xl">
-                {t('noAssignedClassesDesc')}
-              </p>
+              <h3 className="text-sm font-extrabold text-ink font-display">{t('phoneBackup')}</h3>
+              <p className="text-sm text-ink-muted">{t('phoneBackupDesc')}</p>
             </div>
           </div>
-        </div>
-      )}
+          <ChevronDown className="w-5 h-5 text-ink-muted group-open:rotate-180 transition-transform" />
+        </summary>
 
-      {/* Big Numbers (Stat Cards) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Came In */}
-            <div className="p-6 rounded-3xl bg-success-50/70 border border-success-100 dark:border-success-600/30 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider font-display">
-                  {t('cameIn')}
-                </span>
-                <span className="p-2 rounded-full bg-forest-700 text-white">
-                  <UserCheck className="w-4 h-4" />
-                </span>
-              </div>
-              <div className="text-4xl sm:text-5xl font-extrabold text-forest-700 dark:text-forest-600 font-display mt-3 font-mono">
-                {stats.cameIn}
-              </div>
-              <p className="text-[11px] text-forest-700/80 font-medium mt-1">
-                {stats.total > 0
-                  ? language === 'bn'
-                    ? `Class-এর ${Math.round((stats.cameIn / stats.total) * 100)}%`
-                    : `${Math.round((stats.cameIn / stats.total) * 100)}% of class`
-                  : language === 'bn'
-                  ? 'Gate Arrivals'
-                  : 'Gate arrivals'}
-              </p>
+        <div className="p-6 pt-2 space-y-4 border-t border-line" data-testid="camera-hud">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Camera className="w-5 h-5 text-forest-700 dark:text-forest-600" />
+              <h3 className="text-sm font-extrabold text-ink font-display">{t('cameraHud')}</h3>
             </div>
-
-            {/* Still Missing */}
-            <div className="p-6 rounded-3xl bg-danger-50/60 border border-danger-100 dark:border-danger-600/30 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-danger-800 uppercase tracking-wider font-display">
-                  {t('stillMissing')}
-                </span>
-                <span className="p-2 rounded-full bg-danger-800 text-white">
-                  <UserX className="w-4 h-4" />
-                </span>
-              </div>
-              <div className="text-4xl sm:text-5xl font-extrabold text-danger-800 font-display mt-3 font-mono">
-                {stats.missing}
-              </div>
-              <p className="text-[11px] text-danger-800/80 font-medium mt-1">
-                {language === 'bn' ? 'এখনও Present Mark করা হয়নি' : 'Not yet marked present'}
-              </p>
-            </div>
-
-            {/* Late */}
-            <div className="p-6 rounded-3xl bg-amber-50/60 border border-amber-100 dark:border-amber-600/30 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider font-display">
-                  {t('late')}
-                </span>
-                <span className="p-2 rounded-full bg-amber-700 text-white">
-                  <Clock className="w-4 h-4" />
-                </span>
-              </div>
-              <div className="text-4xl sm:text-5xl font-extrabold text-amber-800 font-display mt-3 font-mono">
-                {stats.late}
-              </div>
-              <p className="text-[11px] text-amber-800/80 font-medium mt-1">
-                {language === 'bn' ? 'Late এসেছে' : 'Arrived after start time'}
-              </p>
-            </div>
-
-            {/* Leave */}
-            <div className="p-6 rounded-3xl bg-surface-soft border border-line shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider font-display">
-                  {t('leave')}
-                </span>
-                <span className="p-2 rounded-full bg-ink-muted text-white">
-                  <UserMinus className="w-4 h-4" />
-                </span>
-              </div>
-              <div className="text-4xl sm:text-5xl font-extrabold text-ink font-display mt-3 font-mono">
-                {stats.leave}
-              </div>
-              <p className="text-[11px] text-ink-muted font-medium mt-1">
-                {language === 'bn' ? 'Approved Leave' : 'Approved leave'}
-              </p>
-            </div>
-          </div>
-
-          {/* Action Bar: Finish Attendance Button */}
-          <div className="flex items-center justify-between bg-surface p-4 rounded-3xl border border-line">
-            <div className="text-xs font-bold text-ink font-display pl-2">
-              <span>{selectedClassName}</span> • <span className="text-forest-700 dark:text-forest-600 font-bold">{stats.cameIn} / {stats.total} {t('statusPresent')}</span>
-            </div>
-
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => setShowConfirmFinish(true)}
-              className="px-6 py-3 rounded-full text-sm font-extrabold shadow-sm min-h-[44px]"
-              disabled={stats.total === 0 || session?.status === 'FINALIZED'}
-              leftIcon={<Check className="w-5 h-5" />}
-            >
-              {session?.status === 'FINALIZED' ? t('finalizedSuccess') : t('finishAttendance')}
-            </Button>
-          </div>
-
-          {/* Main 2-Column Split: Who Came In (Left) vs Still Missing (Right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Who Came In */}
-            <div className="app-card p-6 flex flex-col h-[520px]">
-              <div className="flex items-center justify-between pb-4 border-b border-line mb-4">
-                <div>
-                  <h3 className="text-lg font-extrabold text-ink font-display flex items-center gap-2">
-                    <span>{t('whoCameIn')}</span>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 font-bold font-mono">
-                      {arrivals.length}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">
-                    {language === 'bn' ? 'আজ যারা Gate দিয়ে এসেছে।' : 'Students who walked through the school gate today.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                {arrivals.length === 0 ? (
-                  <div className="h-full flex items-center justify-center">
-                    <EmptyState
-                      kind="generic"
-                      title={t('noArrivalsYet')}
-                      description={language === 'bn' ? 'Students Gate দিয়ে প্রবেশ করলে এখানে automatically দেখা যাবে।' : 'When students arrive through the school gate, their names appear here automatically.'}
-                    />
-                  </div>
-                ) : (
-                  arrivals.map((st) => (
-                    <div
-                      key={st.studentId}
-                      className="p-3.5 rounded-2xl bg-surface border border-line hover:border-forest-700/40 transition-colors flex items-center justify-between gap-3 shadow-2xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 flex items-center justify-center font-bold text-xs font-display">
-                          #{st.rollNumber}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-ink font-display">
-                            {language === 'bn' && st.nameBn ? st.nameBn : st.name}
-                          </h4>
-                          <span className="text-[11px] text-ink-muted font-mono">
-                            {new Date(st.time).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </div>
-                      </div>
-
-                      <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display shrink-0">
-                        {t('gateAttendance')}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Right Column: Still Missing */}
-            <div className="app-card p-6 flex flex-col h-[520px]">
-              <div className="flex items-center justify-between pb-4 border-b border-line mb-4">
-                <div>
-                  <h3 className="text-lg font-extrabold text-ink font-display flex items-center gap-2">
-                    <span>{t('stillMissing')}</span>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-danger-50 text-danger-800 font-bold font-mono">
-                      {missingStudents.length}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">
-                    {language === 'bn' ? 'যাদের Gate Record নেই। ক্লাসে থাকলে Present Mark করুন।' : 'Students not yet recorded at the gate. Mark them manually if in class.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                {missingStudents.length === 0 ? (
-                  <div className="h-full flex items-center justify-center">
-                    <EmptyState
-                      kind="generic"
-                      title={t('noMissingStudents')}
-                      description={language === 'bn' ? 'এই ক্লাসের সব Students-এর Attendance Record করা হয়েছে।' : 'All students in this class have arrived or are accounted for.'}
-                    />
-                  </div>
-                ) : (
-                  missingStudents.map((st) => (
-                    <div
-                      key={st.studentId}
-                      className="p-3.5 rounded-2xl bg-surface border border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-surface-soft text-ink-muted flex items-center justify-center font-bold text-xs font-display">
-                          #{st.rollNumber}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-ink font-display">
-                            {language === 'bn' && st.nameBn ? st.nameBn : st.name}
-                          </h4>
-                          <span className="text-[11px] text-ink-muted font-mono">
-                            {language === 'bn' ? 'Roll:' : 'Roll:'} #{st.rollNumber}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Status Override Action Buttons - Big 44px Touch Targets */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateStatus(st.studentId, 'PRESENT')}
-                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
-                        >
-                          {t('markPresent')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateStatus(st.studentId, 'LATE')}
-                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 dark:border-amber-600/30 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
-                        >
-                          {t('markLate')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateStatus(st.studentId, 'LEAVE')}
-                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
-                        >
-                          {t('markLeave')}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Phone Backup Scanner (Collapsed by default, expandable details) */}
-          <details className="app-card max-w-xl mx-auto overflow-hidden group border border-line" data-testid="phone-backup-details">
-            <summary className="p-4 sm:p-5 flex items-center justify-between cursor-pointer list-none select-none bg-surface hover:bg-surface-soft transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-forest-50 text-forest-700 dark:text-forest-400 border border-forest-100 dark:border-forest-600/30">
+            <div className="flex items-center gap-2">
+              {isCameraActive ? (
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3.5 py-1.5 rounded-full cursor-pointer hover:bg-amber-100 font-display min-h-[44px]"
+                >
+                  <CameraOff className="w-4 h-4" />
+                  <span>{t('stopCamera')}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void startCamera(videoEl)}
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-forest-700 bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-full cursor-pointer hover:bg-emerald-100 font-display min-h-[44px]"
+                >
                   <Camera className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-extrabold text-ink font-display">{t('phoneBackup')}</h3>
-                  <p className="text-[11px] text-ink-muted">{t('phoneBackupDesc')}</p>
-                </div>
-              </div>
-              <ChevronDown className="w-4 h-4 text-ink-muted group-open:rotate-180 transition-transform" />
-            </summary>
-
-            <div className="p-6 pt-2 space-y-4 border-t border-line" data-testid="camera-hud">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-forest-700 dark:text-forest-600" />
-                  <h3 className="text-sm font-extrabold text-ink font-display">{t('cameraHud')}</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isCameraActive ? (
-                    <button
-                      type="button"
-                      onClick={stopCamera}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full cursor-pointer hover:bg-amber-100 font-display"
-                    >
-                      <CameraOff className="w-3.5 h-3.5" />
-                      <span>{t('stopCamera')}</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void startCamera(videoEl)}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full cursor-pointer hover:bg-emerald-100 font-display"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>{t('startCamera')}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div
-                className="relative aspect-video max-h-[36vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line"
-                data-testid="camera-viewfinder"
-              >
-                <video
-                  ref={videoCallbackRef}
-                  className="w-full h-full object-cover"
-                  muted
-                  playsInline
-                />
-
-                {cameraError && (
-                  <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
-                    <AlertCircle className="w-10 h-10 text-amber-400" />
-                    <p className="text-sm font-semibold max-w-xs">
-                      {cameraStatus === 'permission_denied' ? t('cameraDenied') : cameraError}
-                    </p>
-                    <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)}>
-                      {t('retryCamera')}
-                    </Button>
-                  </div>
-                )}
-
-                {!cameraError && (
-                  <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
-                    <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
-                      <span>
-                        {cameraStatus === 'starting'
-                          ? t('cameraStarting')
-                          : isCameraActive
-                          ? t('cameraActive')
-                          : t('cameraStopped')}
-                      </span>
-                    </div>
-                    {isCameraActive && (
-                      <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
-                    )}
-                    <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
-                      {t('alignQrCode')}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* USB Token input */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const value = scanInput.trim();
-                  setScanInput('');
-                  if (value) void handleScan(value, 'USB');
-                }}
-                className="flex flex-col sm:flex-row gap-3 pt-2"
-              >
-                <div className="relative flex-1">
-                  <Usb className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    value={scanInput}
-                    onChange={(e) => setScanInput(e.target.value)}
-                    placeholder={t('usbScannerPlaceholder')}
-                    className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                  />
-                </div>
-                <Button type="submit" variant="primary" size="md" className="min-h-[44px] w-full sm:w-auto justify-center">
-                  {t('scanToken')}
-                </Button>
-              </form>
+                  <span>{t('startCamera')}</span>
+                </button>
+              )}
             </div>
-          </details>
+          </div>
+
+          <div
+            className="relative aspect-video max-h-[36vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line"
+            data-testid="camera-viewfinder"
+          >
+            <video
+              ref={videoCallbackRef}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+            />
+
+            {Boolean(cameraError) && (
+              <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
+                <AlertCircle className="w-10 h-10 text-amber-400" />
+                <p className="text-sm font-semibold max-w-xs">
+                  {t('cameraDenied')}
+                </p>
+                <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)} className="min-h-[44px]">
+                  {t('retryCamera')}
+                </Button>
+              </div>
+            )}
+
+            {!cameraError && (
+              <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
+                <div className="flex justify-between items-center text-sm font-mono text-emerald-400 font-bold">
+                  <span>
+                    {cameraStatus === 'starting'
+                      ? t('cameraStarting')
+                      : isCameraActive
+                      ? t('cameraActive')
+                      : t('cameraStopped')}
+                  </span>
+                </div>
+                {isCameraActive && (
+                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
+                )}
+                <div className="text-center text-sm font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
+                  {t('alignQrCode')}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* USB Token input */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = scanInput.trim();
+              setScanInput('');
+              if (value) void handleScan(value, 'USB');
+            }}
+            className="flex flex-col sm:flex-row gap-3 pt-2"
+          >
+            <div className="relative flex-1">
+              <Usb className="w-5 h-5 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                placeholder={t('usbScannerPlaceholder')}
+                className="w-full pl-12 pr-4 py-3 bg-surface-soft border border-line rounded-full text-sm font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none min-h-[44px]"
+              />
+            </div>
+            <Button type="submit" variant="primary" size="md" className="min-h-[44px] w-full sm:w-auto justify-center rounded-full font-display text-sm font-bold">
+              {t('scanToken')}
+            </Button>
+          </form>
+        </div>
+      </details>
 
       {/* Finish Attendance Confirmation Modal */}
       <AnimatePresence>
@@ -1213,35 +1100,36 @@ export const TeacherDashboard: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 text-left rounded-3xl"
             >
               <h3 className="text-xl font-extrabold text-ink font-display mb-2">
                 {t('confirmFinishTitle')}
               </h3>
-              <p className="text-xs text-ink-soft mb-6">
+              <p className="text-sm text-ink-soft mb-6">
                 {t('confirmFinishDesc')}
               </p>
 
-              <div className="p-4 rounded-2xl bg-surface-soft border border-line mb-6 space-y-2 text-xs">
+              <div className="p-4 rounded-2xl bg-surface-soft border border-line mb-6 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-ink-muted">Class:</span>
+                  <span className="text-ink-muted">{t('classLabel')}:</span>
                   <strong className="text-ink font-display">{selectedClassName}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-ink-muted">Marked Present:</span>
-                  <strong className="text-forest-700 dark:text-forest-600 font-display">{stats.cameIn} students</strong>
+                  <span className="text-ink-muted">{t('cameIn')}:</span>
+                  <strong className="text-forest-700 dark:text-forest-600 font-display">{stats.cameIn} {t('studentsUnit')}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-ink-muted">Will Be Marked Absent:</span>
-                  <strong className="text-danger-800 font-display">{stats.missing} students</strong>
+                  <span className="text-ink-muted">{t('statusAbsent')}:</span>
+                  <strong className="text-danger-800 font-display">{stats.missing} {t('studentsUnit')}</strong>
                 </div>
               </div>
 
               <div className="flex items-center justify-end gap-3">
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="md"
                   onClick={() => setShowConfirmFinish(false)}
+                  className="min-h-[44px] rounded-2xl font-display text-sm"
                 >
                   {t('cancel')}
                 </Button>
@@ -1251,6 +1139,7 @@ export const TeacherDashboard: React.FC = () => {
                   disabled={isFinishing}
                   isLoading={isFinishing}
                   onClick={handleFinalizeAttendance}
+                  className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
                 >
                   {isFinishing ? 'Saving…' : t('confirmFinishBtn')}
                 </Button>

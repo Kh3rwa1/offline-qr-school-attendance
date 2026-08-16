@@ -1,5 +1,6 @@
 import React from 'react';
 import { Language, NetworkStatus } from '../types';
+import { translate } from '../i18n';
 import { Wifi, WifiOff, Users, QrCode, RefreshCw, FileText, ShieldCheck } from 'lucide-react';
 
 interface HeaderProps {
@@ -39,87 +40,87 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
         {/* Navigation Tabs */}
-        <div className="flex bg-surface-soft p-1 rounded-2xl border border-line gap-1 text-xs font-semibold">
+        <div className="flex bg-surface-soft p-1 rounded-2xl border border-line gap-1 text-sm font-semibold">
           <button
             onClick={() => setActiveView('scanner')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer font-display ${
+            className={`flex items-center gap-2 px-3.5 py-2 min-h-[44px] rounded-xl transition-all cursor-pointer font-display ${
               activeView === 'scanner'
                 ? 'bg-surface text-ink shadow-2xs font-bold'
                 : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <QrCode className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'Scanner' : 'Scanner'}</span>
+            <QrCode className="w-4 h-4" />
+            <span>{translate('headerScanner', language)}</span>
           </button>
           <button
             onClick={() => setActiveView('roster')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer font-display ${
+            className={`flex items-center gap-2 px-3.5 py-2 min-h-[44px] rounded-xl transition-all cursor-pointer font-display ${
               activeView === 'roster'
                 ? 'bg-surface text-ink shadow-2xs font-bold'
                 : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'Class List' : 'Roster'}</span>
+            <Users className="w-4 h-4" />
+            <span>{translate('headerRoster', language)}</span>
           </button>
           <button
             onClick={() => setActiveView('outbox')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all relative cursor-pointer font-display ${
+            className={`flex items-center gap-2 px-3.5 py-2 min-h-[44px] rounded-xl transition-all relative cursor-pointer font-display ${
               activeView === 'outbox'
                 ? 'bg-surface text-ink shadow-2xs font-bold'
                 : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'Saved Attendance' : 'Outbox'}</span>
+            <RefreshCw className="w-4 h-4" />
+            <span>{translate('headerOutbox', language)}</span>
             {pendingSyncCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-warning-600 absolute -top-0.5 -right-0.5 animate-pulse"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-warning-600 absolute -top-0.5 -right-0.5 animate-pulse"></span>
             )}
           </button>
           <button
             onClick={() => setActiveView('reports')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer font-display ${
+            className={`flex items-center gap-2 px-3.5 py-2 min-h-[44px] rounded-xl transition-all cursor-pointer font-display ${
               activeView === 'reports'
                 ? 'bg-surface text-ink shadow-2xs font-bold'
                 : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'Reports' : 'Reports'}</span>
+            <FileText className="w-4 h-4" />
+            <span>{translate('headerReports', language)}</span>
           </button>
           <button
             onClick={() => setActiveView('admin')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer font-display ${
+            className={`flex items-center gap-2 px-3.5 py-2 min-h-[44px] rounded-xl transition-all cursor-pointer font-display ${
               activeView === 'admin'
                 ? 'bg-forest-700 text-white shadow-sm font-bold'
                 : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'School Admin' : 'Headmaster'}</span>
+            <ShieldCheck className="w-4 h-4" />
+            <span>{translate('headerSchoolAdmin', language)}</span>
           </button>
         </div>
 
         {/* Network Toggle Button */}
         <button
           onClick={toggleNetworkStatus}
-          className="flex items-center bg-surface border border-line px-3.5 py-2 rounded-full shadow-2xs hover:bg-surface-soft transition-colors cursor-pointer"
+          className="flex items-center bg-surface border border-line px-4 py-2.5 min-h-[44px] rounded-full shadow-2xs hover:bg-surface-soft transition-colors cursor-pointer"
           title="Current network status"
         >
           {networkStatus === 'OFFLINE' ? (
             <>
               <div className="w-2.5 h-2.5 rounded-full bg-warning-600 mr-2 animate-pulse"></div>
-              <WifiOff className="w-3.5 h-3.5 text-warning-600 mr-1.5" />
-              <span className="text-xs font-bold uppercase tracking-wider text-ink-soft font-display">
-                {language === 'bn' ? 'Offline Mode' : 'Offline Mode'}
+              <WifiOff className="w-4 h-4 text-warning-600 mr-1.5" />
+              <span className="text-sm font-bold uppercase tracking-wider text-ink-soft font-display">
+                {translate('offlineAttendanceMode', language)}
               </span>
             </>
           ) : (
             <>
               <div className="w-2.5 h-2.5 rounded-full bg-success-600 mr-2"></div>
-              <Wifi className="w-3.5 h-3.5 text-success-600 mr-1.5" />
-              <span className="text-xs font-bold uppercase tracking-wider text-ink-soft font-display">
-                {language === 'bn' ? 'Online Mode' : 'Online Mode'}
+              <Wifi className="w-4 h-4 text-success-600 mr-1.5" />
+              <span className="text-sm font-bold uppercase tracking-wider text-ink-soft font-display">
+                {translate('statusOnline', language)}
               </span>
             </>
           )}
@@ -128,9 +129,9 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Language Switcher */}
         <button
           onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
-          className="bg-forest-700 text-white px-3.5 py-2 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-forest-800 transition-colors cursor-pointer shadow-2xs font-display"
+          className="px-4 py-2.5 min-h-[44px] bg-surface border border-line rounded-full font-bold text-sm text-ink-soft hover:bg-surface-soft transition-colors cursor-pointer"
         >
-          {language === 'en' ? 'বাংলা + English' : 'English'}
+          {translate('toggleLanguage', language)}
         </button>
       </div>
     </header>

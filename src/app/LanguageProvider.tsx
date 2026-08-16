@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { Language, translate, TranslationKey } from '../i18n';
 
 interface LanguageContextValue {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: TranslationKey) => string;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
@@ -25,8 +25,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch {}
   };
 
-  const t = (key: TranslationKey): string => {
-    return translate(key, language);
+  const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
+    return translate(key, language, params);
   };
 
   return (
@@ -42,7 +42,7 @@ export function useLanguage(): LanguageContextValue {
     return {
       language: 'en',
       setLanguage: () => {},
-      t: (key: TranslationKey) => translate(key, 'en'),
+      t: (key: TranslationKey, params?: Record<string, string | number>) => translate(key, 'en', params),
     };
   }
   return ctx;

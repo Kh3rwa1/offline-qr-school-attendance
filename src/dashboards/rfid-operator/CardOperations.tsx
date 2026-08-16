@@ -128,15 +128,15 @@ export const CardOperations: React.FC = () => {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Issued Smartcards"
-          value={`${cards.length} Cards`}
+          title="Issued UHF Badges"
+          value={`${cards.length} Badges`}
           trend={{ value: `${activeCount} Active in Circulation`, isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
-          title="Active Cards"
+          title="Active Badges"
           value={`${activeCount} Active`}
-          trend={{ value: "DESFire EV2/EV3 Standard", isPositive: true }}
+          trend={{ value: "EPC Gen 2 / ISO 18000-63", isPositive: true }}
           variant="default"
         />
         <StatCard

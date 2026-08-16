@@ -11,10 +11,10 @@ export const ReaderOperations: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Physical Gate Readers
+            Zebra FX9600 Gate Readers
           </h1>
           <p className="t-body text-sm text-ink-soft mt-1">
-            Configure ESP32 / PN532 and Raspberry Pi smartcard gate terminals at {activeSchoolName}.
+            Configure Zebra FX9600 fixed UHF RFID readers and IoT Connector webhooks at {activeSchoolName}.
           </p>
         </div>
       </div>
@@ -22,27 +22,27 @@ export const ReaderOperations: React.FC = () => {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Online Gate Terminals"
-          value="4 of 4 Online"
-          trend={{ value: "Gate 1, Gate 2, Lab, Admin", isPositive: true }}
+          title="Zebra FX9600 Readers"
+          value="Fixed UHF"
+          trend={{ value: "4/8 Antenna Ports", isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
-          title="Avg Tap-to-Turnout Latency"
-          value="42 ms"
-          trend={{ value: "Hardware Accelerated AES", isPositive: true }}
+          title="Ingest Latency"
+          value="< 50 ms"
+          trend={{ value: "IoT Webhook Ingest", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="DESFire EV3 Proofs"
-          value="100% Valid"
-          trend={{ value: "Cryptographic CMAC Verified", isPositive: true }}
+          title="Tag Protocol"
+          value="EPC Gen 2"
+          trend={{ value: "ISO 18000-63 Standard", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Firmware Version"
-          value="v2.4.1 Secure"
-          trend={{ value: "mTLS Certificate Bound", isPositive: true }}
+          title="Security Ingest"
+          value="HMAC-SHA256"
+          trend={{ value: "Webhook Signature Verified", isPositive: true }}
           variant="default"
         />
       </div>

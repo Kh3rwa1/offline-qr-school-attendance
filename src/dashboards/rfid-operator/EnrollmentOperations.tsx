@@ -10,37 +10,37 @@ export const EnrollmentOperations: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-          Card Personalization & Key Injection
+          UHF EPC Gen2 Badge Enrollment
         </h1>
         <p className="t-body text-sm text-ink-soft mt-1">
-          Issue brand-new MIFARE DESFire EV3 smartcards with AES-128 student keys at {activeSchoolName}.
+          Assign passive UHF EPC Gen2 badges for Zebra FX9600 gate attendance at {activeSchoolName}.
         </p>
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Personalization Station"
-          value="USB PC/SC Ready"
-          trend={{ value: "ACR122U / HID Omnikey", isPositive: true }}
+          title="Gate Integration"
+          value="Zebra FX9600"
+          trend={{ value: "IoT Connector Webhook", isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
-          title="Cards Programmed"
-          value="45 This Month"
-          trend={{ value: "New Student Admissions", isPositive: true }}
+          title="Protocol Standard"
+          value="EPC Gen 2"
+          trend={{ value: "ISO 18000-63 Standard", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Cryptographic Standard"
-          value="AES-128 CMAC"
-          trend={{ value: "Hardware Level Security", isPositive: true }}
+          title="Credential Security"
+          value="SHA-256 Vault"
+          trend={{ value: "Zero Raw-EPC Storage", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Blank Card Stock"
-          value="150 Available"
-          trend={{ value: "Ready in Supply Room", isPositive: true }}
+          title="Badge Availability"
+          value="Ready"
+          trend={{ value: "Handheld / Gate Ingest", isPositive: true }}
           variant="default"
         />
       </div>

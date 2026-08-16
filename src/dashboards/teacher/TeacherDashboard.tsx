@@ -62,7 +62,7 @@ export const TeacherDashboard: React.FC = () => {
   const [sessionRoster, setSessionRoster] = useState<OfflineSessionRosterItem[]>([]);
   const [scanInput, setScanInput] = useState('');
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'warning' | 'error'; text: string } | null>(null);
-  const [viewMode, setViewMode] = useState<'scanner' | 'review' | 'roster'>('scanner');
+  const [viewMode, setViewMode] = useState<'review' | 'scanner' | 'roster'>('review');
   const [finalizing, setFinalizing] = useState(false);
   const [scanBurst, setScanBurst] = useState<{ id: number; studentName?: string; studentNameBn?: string } | null>(null);
 
@@ -539,7 +539,7 @@ export const TeacherDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
-            <span>{t('offlineQrAttendance')}</span>
+            <span>{t('uhfGateAttendance')}</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             {t('classroomDashboard')}
@@ -671,9 +671,9 @@ export const TeacherDashboard: React.FC = () => {
         <div className="flex gap-2">
           {(
             [
-              ['scanner', t('scannerView'), <ScanLine className="w-3.5 h-3.5" key="s" />],
-              ['review', t('reviewRoster'), <ClipboardCheck className="w-3.5 h-3.5" key="r" />],
+              ['review', t('gateReviewMode'), <ClipboardCheck className="w-3.5 h-3.5" key="r" />],
               ['roster', t('cachedRoster'), <Database className="w-3.5 h-3.5" key="c" />],
+              ['scanner', t('fallbackQrScanner'), <ScanLine className="w-3.5 h-3.5" key="s" />],
             ] as const
           ).map(([mode, label, icon]) => (
             <button

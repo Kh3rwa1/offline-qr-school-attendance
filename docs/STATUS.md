@@ -1,43 +1,35 @@
 # AttendEase OS — System Status & Feature Truth
 
-**Last Updated**: 2026-08-15  
+**Last Updated**: 2026-08-16  
 **Target Persona**: Primary & Secondary School Teachers and School Administrators in Rural West Bengal  
-**Primary Product**: Bilingual Offline-First QR Attendance Appliance for Low-End Android Smartphones (Chrome, 2–4 GB RAM, intermittent 2G/4G, Asia/Kolkata).
+**Primary Product**: UHF RFID Gate Attendance Appliance for Zebra FX9600 (EPC Class 1 Gen 2 / ISO 18000-63) with Legacy Offline QR Support.
 
 ---
 
 ## 1. Works (Production-Ready Code)
 
-- **One-Command Production Appliance Installer (`scripts/install.sh`)**: Automated installer supporting Ubuntu LTS (x86_64 and ARM64) with pre-flight RAM/disk/Docker validation, automated secret generation (`0600`), and Caddy reverse proxy.
-- **First-Run Web Setup Wizard (`/setup`)**: 4-step onboarding creating the initial Super Administrator, primary school provisioning, optional CSV roster import, rate limiting, and permanent lockdown upon completion.
-- **Appliance Management CLI (`bin/attendease`)**: Operational CLI supporting `status`, `backup`, `restore`, `repair`, `diagnostics`, `update`, and `rollback`.
-- **Dedicated Encrypted Backup Custody**: OpenSSL AES-256-CBC PBKDF2 envelope encryption using dedicated `BACKUP_ENCRYPTION_KEY`, SHA-256 integrity manifest generation, and verified R2 disaster recovery drill.
-- **Offline QR Code Token Digest Matching**: Client-side SHA-256 digest computation and instant local match (<200ms) against the downloaded class section roster package.
-- **Teacher Mobile Attendance Loop**: Live environment-facing camera viewfinder stream (`getUserMedia`) and USB / OTG keyboard-wedge hardware scanner listeners with audio chimes and haptic feedback.
-- **IndexedDB Local Data Store (Dexie)**: Client-side persistent storage of class rosters, active sessions, and crash-proof atomic sync outbox (survives app close and phone reboot).
-- **Duplicate Scan Protection**: Prevents duplicate recording with clear timestamped alert: `"Student Name (Roll #X) already marked PRESENT at HH:MM"`.
-- **Manual Review & Status Overrides**: Teacher can review unmarked students and set ABSENT / LATE / LEAVE / EXCUSED; every update enters the atomic outbox.
-- **Session Finalization & Auto-Absent**: Finalization auto-marks remaining UNMARKED students as ABSENT, syncs outbox events, calls server finalization API, and locks the local session.
-- **Parent Absence SMS Jobs**: Server-side transactional queue creation for guardian absence notifications during session finalization.
+- **Zebra FX9600 IoT Connector Ingest API (`/api/v1/schools/:schoolId/rfid/zebra/reads`)**: Ingests Zebra IoT Connector JSON tag-read events over HTTP/HTTPS, normalizes payloads, enforces HMAC-SHA256 signature verification or per-reader Bearer tokens, executes idempotency and duplicate debounce filtering, resolves student class enrollments, and atomically marks attendance `PRESENT`.
+- **UHF EPC Gen2 Credential Management (`/api/v1/schools/:schoolId/rfid/credentials`)**: Securely binds student IDs to SHA-256 digests of canonical EPC hex strings. Never logs or stores raw EPC values after enrollment; stores only digests and last-4 characters for operational auditing.
+- **Teacher Attendance Review & Finalization Dashboard**: Today's gate attendance session overview, live tap feed from FX9600 gate antennas, unmarked student roster with one-click manual overrides (Present/Absent/Late/Excused), and atomic session finalization.
+- **Session Finalization & Auto-Absent**: Finalization locks the session, automatically marks remaining UNMARKED students as ABSENT, and queues parent absence SMS jobs.
+- **Parent Absence SMS Queue**: Transactional PostgreSQL queue creation for guardian absence notifications upon session finalization.
+- **Legacy Offline QR Attendance**: Client-side SHA-256 token matching, IndexedDB outbox sync, camera viewfinder (`getUserMedia`), and USB keyboard-wedge barcode scanner support retained as fallback.
 - **Server Multi-Tenant Isolation**: PostgreSQL Row-Level Security (RLS) enforcing strict tenant separation via `app.current_school_id`.
-- **Teacher Assignment Authorization**: Teachers can only take attendance for class sections to which they are assigned.
-- **Session-Bound Anti-CSRF**: Cryptographic token signing preventing cross-site request forgery on state-modifying requests.
-- **Bilingual Interface (English + বাংলা)**: Localized login, dashboard, viewfinder HUD, error states, and setup wizard for rural West Bengal educators.
-- **UDISE+ Data Portability**: Un-truncated student and attendance exports for school administrators.
-- **FEATURE_RFID Isolation**: RFID feature flag defaults to false (`FEATURE_RFID=false`), Docker profile `["rfid"]` omitted, disabling all RFID API endpoints (404) and hiding RFID UI navigation.
-- **License**: MIT Open Source License.
+- **Dedicated Encrypted Backup Custody**: OpenSSL AES-256-CBC envelope encryption with dedicated `BACKUP_ENCRYPTION_KEY`, SHA-256 manifests, and R2 replication.
+- **One-Command Production Appliance Installer (`scripts/install.sh`)**: Automated installer supporting Ubuntu LTS (x86_64 and ARM64) with pre-flight diagnostics, secret generation (`0600`), Caddy reverse proxy, update, and rollback.
+- **Bilingual Interface (English + বাংলা)**: Localized dashboards, review screens, reader management, and setup wizard.
 
 ---
 
 ## 2. Simulated (Software Emulation / Staged)
 
-- **RFID / DESFire Hardware**: The RFID module (Mifare DESFire EV2/EV3, reader authentication, APDU gateway daemon) is a software emulation model. Feature-flagged **OFF** (`FEATURE_RFID=false`) by default for the QR pilot.
-- **Telecom Carrier DLT SMS Gateway**: Absence SMS job queue creation in PostgreSQL works; actual telecom SMS dispatch (Jio DLT, Airtel, Vi) uses console/webhook simulation unless live credentials are provided.
-- **Cloudflare R2 Backup Replication**: Local encrypted database backups work; remote replication to Cloudflare R2 is staged and verified via automated round-trip drill (`scripts/runR2LiveDrill.ts`), requiring active Cloudflare R2 bucket credentials for live cloud uploads.
+- **Live Zebra FX9600 Fixed Reader Hardware**: The Zebra IoT Connector webhook ingest service, cryptographic verification, normalization, idempotency, debouncing, and attendance marking are fully coded and tested with authentic fixtures. Simulated in automated CI until physical on-site FX9600 hardware and Ethernet gate testing is conducted.
+- **Telecom Carrier DLT SMS Gateway**: Absence SMS job queue creation in PostgreSQL works; telecom SMS dispatch (Jio DLT, Airtel, Vi) uses console/webhook mode unless live credentials are provided.
+- **Cloudflare R2 Backup Replication**: Local encrypted database backups work; remote replication to Cloudflare R2 is staged and verified via automated round-trip drill (`scripts/runR2LiveDrill.ts`).
 
 ---
 
-## 3. Broken / Untested (Explicit Limitations)
+## 3. Broken / Unsupported (Explicit Limitations)
 
-- **Physical USB OTG PC/SC Smartcard Readers on Android**: No physical hardware certification; frozen and simulated.
+- **MIFARE / DESFire EV2/EV3 Smartcards & PC/SC Readers**: Not supported. AttendEase uses passive UHF EPC Class 1 Gen 2 / ISO 18000-63 badges with fixed Zebra FX9600 gate readers. PC/SC APDU smartcard reader code is legacy/unsupported.
 - **Firefox Mobile Offline Background Sync**: Service worker background sync in older mobile Firefox versions requires user interaction on reconnect.

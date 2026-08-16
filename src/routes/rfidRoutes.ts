@@ -11,10 +11,48 @@ import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/sc
 import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
+import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
+import { canonicalizeEpc, computeEpcDigest, getEpcLastFour } from '../services/rfid/cryptoService';
+
 export const rfidRouter = Router();
 
 // ============================================================================
-// SCAN ENDPOINT (Reader-authenticated)
+// ZEBRA FX9600 IOT CONNECTOR WEBHOOK INGEST ENDPOINT
+// ============================================================================
+rfidRouter.post(
+  '/:schoolId/rfid/zebra/reads',
+  rateLimitPolicies.rfidScan,
+  async (req: any, res: Response) => {
+    try {
+      const schoolId = req.params.schoolId;
+      const rawBody = (req as any).rawBody || Buffer.from(JSON.stringify(req.body || {}));
+      const parsedBody = req.body || {};
+      const headers = req.headers || {};
+
+      const result = await processZebraIotWebhook({
+        schoolId,
+        rawBody,
+        parsedBody,
+        headers,
+      });
+
+      return res.status(200).json(result);
+    } catch (error: any) {
+      const errMsg = error.message || 'ZEBRA_INGEST_FAILED';
+      if (errMsg.includes('UNAUTHORIZED_READER')) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED_READER', message: errMsg });
+      }
+      if (errMsg.includes('FORBIDDEN_READER')) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN_READER', message: errMsg });
+      }
+      console.error('Zebra IoT Connector webhook error:', error);
+      return res.status(500).json({ success: false, error: 'ZEBRA_INGEST_ERROR', message: errMsg });
+    }
+  }
+);
+
+// ============================================================================
+// SCAN ENDPOINT (Reader-authenticated, Normalized Envelope)
 // ============================================================================
 rfidRouter.post(
   '/:schoolId/rfid/scans',
@@ -64,6 +102,50 @@ rfidRouter.post(
 // ============================================================================
 // CREDENTIAL MANAGEMENT (User-authenticated, tenant-scoped)
 // ============================================================================
+rfidRouter.post(
+  '/:schoolId/rfid/credentials/enroll-epc',
+  rateLimitPolicies.rfidEnrollment,
+  requireAuth,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
+  tenantHandler(async ({ req, schoolId, user }) => {
+    try {
+      const { studentId, epc, expiresAt } = req.body;
+      if (!studentId || !epc) {
+        return { status: 400, body: { success: false, error: 'studentId and epc are required' } };
+      }
+      const canonical = canonicalizeEpc(epc);
+      const credentialDigest = computeEpcDigest(canonical);
+      const epcLastFour = getEpcLastFour(canonical);
+
+      const credential = await credentialService.enrollCredential({
+        schoolId,
+        studentId,
+        credentialDigest,
+        securityMode: 'SECURE',
+        keyVersion: 1,
+        operatorUserId: user.id,
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      });
+
+      // Auto-activate for immediate use
+      const activeCred = await credentialService.activateCredential(credential.id, schoolId, user.id);
+
+      return {
+        status: 201,
+        body: {
+          success: true,
+          credential: {
+            ...activeCred,
+            epcLastFour,
+          },
+        },
+      };
+    } catch (error: any) {
+      return { status: 400, body: { success: false, error: error.message } };
+    }
+  })
+);
+
 rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll',
   rateLimitPolicies.rfidEnrollment,

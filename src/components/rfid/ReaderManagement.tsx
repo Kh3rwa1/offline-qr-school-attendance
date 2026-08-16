@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
+import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../shared/LoadingState';
 import { ErrorState } from '../shared/ErrorState';
 import { Button } from '../shared/Button';
 import { Toast } from '../shared/Toast';
 import { EmptyState } from '../shared/EmptyState';
-import { Plus, X, Radio } from 'lucide-react';
+import { Plus, X, Radio, Server, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ReaderItem {
@@ -23,21 +25,8 @@ interface ReaderItem {
   lastSeenAt?: string;
 }
 
-function getReaderLiveStatus(lastSeenAt?: string) {
-  if (!lastSeenAt) {
-    return { label: 'Not set up', badgeClass: 'bg-surface-soft text-ink-muted border-line' };
-  }
-  const diffMs = Date.now() - new Date(lastSeenAt).getTime();
-  if (diffMs < 5 * 60 * 1000) {
-    return { label: 'Online', badgeClass: 'bg-success-50 text-forest-700 dark:text-forest-600 border-success-100 dark:border-success-600/30' };
-  }
-  if (diffMs < 24 * 60 * 60 * 1000) {
-    return { label: 'Quiet', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200 dark:border-amber-600/30' };
-  }
-  return { label: 'Not set up', badgeClass: 'bg-surface-soft text-ink-muted border-line' };
-}
-
 export default function ReaderManagement({ schoolId }: { schoolId: string }) {
+  const { language, t } = useLanguage();
   const queryClient = useQueryClient();
   const [isProvisionOpen, setIsProvisionOpen] = useState(false);
   const [provisionForm, setProvisionForm] = useState({
@@ -50,6 +39,21 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
     readerModel: 'ZEBRA_FX9600',
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const getReaderLiveStatus = (lastSeenAt?: string) => {
+    if (!lastSeenAt) {
+      return { label: t('notSetUp'), badgeClass: 'bg-surface-soft text-ink-muted border-line' };
+    }
+    const diffMs = Date.now() - new Date(lastSeenAt).getTime();
+    if (diffMs < 5 * 60 * 1000) {
+      return { label: t('online'), badgeClass: 'bg-success-50 text-forest-700 dark:text-forest-600 border-success-100 dark:border-success-600/30' };
+    }
+    if (diffMs < 24 * 60 * 60 * 1000) {
+      return { label: t('quiet'), badgeClass: 'bg-amber-50 text-amber-800 border-amber-200 dark:border-amber-600/30' };
+    }
+    return { label: t('notSetUp'), badgeClass: 'bg-surface-soft text-ink-muted border-line' };
+  };
 
   // Query: Readers
   const { data: readersData, isLoading, error, refetch } = useQuery({
@@ -84,11 +88,10 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
       setFormError(null);
     },
     onError: (err: any) => {
-      setFormError(err.message || 'Failed to register gate box');
+      const safeErr = getUserSafeError(err, language);
+      setFormError(safeErr.message);
     },
   });
-
-  const [actionError, setActionError] = useState<string | null>(null);
 
   // Mutation: Status Change (Approve / Suspend / Revoke)
   const statusMutation = useMutation({
@@ -96,7 +99,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
       const actionEndpoint = status === 'APPROVED' ? 'approve' : status === 'SUSPENDED' ? 'suspend' : 'revoke';
       return api(`/api/v1/schools/${schoolId}/rfid/readers/${readerId}/${actionEndpoint}`, {
         method: 'POST',
-        body: JSON.stringify({ reason: `Status changed to ${status} by administrator` }),
+        body: JSON.stringify({ reason: `Status changed to ${status}` }),
       });
     },
     onSuccess: () => {
@@ -104,7 +107,8 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
       setActionError(null);
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Failed to update reader status');
+      const safeErr = getUserSafeError(err, language);
+      setActionError(safeErr.message);
     },
   });
 
@@ -112,7 +116,7 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
     e.preventDefault();
     setFormError(null);
     if (!provisionForm.deviceId.trim()) {
-      setFormError('Gate Box ID is required');
+      setFormError(language === 'bn' ? 'গেট ডিভাইস আইডি আবশ্যক' : 'Gate Device ID is required');
       return;
     }
     registerMutation.mutate(provisionForm);
@@ -120,8 +124,8 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
   const readers = readersData || [];
 
-  if (isLoading) return <LoadingState type="table" message="Loading school gate boxes…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load gate boxes'} onRetry={() => refetch()} />;
+  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'গেট ডিভাইস লোড হচ্ছে…' : 'Loading school gate devices…'} />;
+  if (error) return <ErrorState message={(error as any)?.message || (language === 'bn' ? 'গেট ডিভাইস লোড করতে সমস্যা হয়েছে' : 'Failed to load gate devices')} onRetry={() => refetch()} />;
 
   return (
     <div className="space-y-6 text-left">
@@ -131,29 +135,32 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-extrabold text-ink font-display">School Gate Boxes</h2>
-          <p className="t-body text-xs text-ink-soft">Gate attendance boxes installed at school entrance and exit gates.</p>
+          <h2 className="text-xl font-extrabold text-ink font-display">{t('gateBoxesTitle')}</h2>
+          <p className="t-body text-xs text-ink-soft">
+            {language === 'bn' ? 'বিদ্যালয়ের প্রবেশ ও প্রস্থান গেটের উপস্থিতি ডিভাইস।' : 'Gate attendance boxes installed at school entrance and exit gates.'}
+          </p>
         </div>
 
         <Button
           variant="primary"
-          size="sm"
+          size="md"
           onClick={() => setIsProvisionOpen(true)}
           leftIcon={<Plus className="w-4 h-4" />}
+          className="min-h-[44px] rounded-2xl font-display"
         >
-          Add Gate Box
+          {t('addGateBox')}
         </Button>
       </div>
 
-      <div className="app-card overflow-hidden">
+      <div className="app-card overflow-hidden bg-surface border border-line rounded-3xl shadow-xs">
         {readers.length === 0 ? (
           <div className="p-8">
             <EmptyState
               kind="generic"
-              title="No school gate boxes added yet"
-              description="Click 'Add Gate Box' to connect a gate attendance box."
+              title={language === 'bn' ? 'কোনো গেট ডিভাইস যোগ করা হয়নি' : 'No school gate devices added yet'}
+              description={language === 'bn' ? 'নতুন ডিভাইস যুক্ত করতে "গেট ডিভাইস যোগ করুন" চাপুন।' : 'Click "Add Gate Device" to connect a gate attendance box.'}
             />
           </div>
         ) : (
@@ -163,40 +170,44 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-line bg-surface-soft text-[11px] font-extrabold uppercase tracking-wider text-ink-muted font-display">
-                    <th className="py-4 px-6">Gate Box / Location</th>
-                    <th className="py-4 px-6">Direction</th>
-                    <th className="py-4 px-6">Status</th>
-                    <th className="py-4 px-6">Connection</th>
-                    <th className="py-4 px-6 text-right">Actions</th>
+                    <th className="py-4 px-6">{t('gateBoxesTitle')}</th>
+                    <th className="py-4 px-6">{t('source')}</th>
+                    <th className="py-4 px-6">{t('status')}</th>
+                    <th className="py-4 px-6">{t('internetStatus')}</th>
+                    <th className="py-4 px-6 text-right">{language === 'bn' ? 'পদক্ষেপ' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line bg-surface">
                   {readers.map((r) => {
                     const liveStatus = getReaderLiveStatus(r.lastSeenAt);
                     return (
-                      <tr key={r.id} className="table-row-hover">
+                      <tr key={r.id} className="table-row-hover font-medium">
                         <td className="py-4 px-6">
                           <span className="font-extrabold text-ink block font-display text-sm">
                             {r.name}
                           </span>
                           <span className="text-[11px] text-ink-muted font-medium">
-                            {r.location || 'Entrance Gate'} • Box ID: <span className="font-mono">{r.deviceId}</span>
+                            {r.location || (language === 'bn' ? 'প্রধান গেট' : 'Entrance Gate')} • ID: <span className="font-mono">{r.deviceId}</span>
                           </span>
                         </td>
                         <td className="py-4 px-6 font-semibold text-ink">
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-surface-soft text-ink-soft border border-line font-display">
-                            {r.directionMode === 'IN' ? 'Entry Gate' : r.directionMode === 'OUT' ? 'Exit Gate' : 'Two-Way'}
+                            {r.directionMode === 'IN' 
+                              ? (language === 'bn' ? 'প্রবেশ গেট' : 'Entry Gate') 
+                              : r.directionMode === 'OUT' 
+                              ? (language === 'bn' ? 'প্রস্থান গেট' : 'Exit Gate') 
+                              : (language === 'bn' ? 'দ্বিমুখী' : 'Two-Way')}
                           </span>
                         </td>
                         <td className="py-4 px-6">
-                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display border ${
                             r.status === 'APPROVED' || r.status === 'ACTIVE'
-                              ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                              ? 'bg-success-50 text-forest-700 dark:text-forest-600 border-success-100 dark:border-success-600/30'
                               : r.status === 'PENDING'
-                              ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                              ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
                               : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
                           }`}>
-                            {r.status === 'APPROVED' || r.status === 'ACTIVE' ? 'Active' : r.status === 'PENDING' ? 'Pending' : 'Stopped'}
+                            {r.status === 'APPROVED' || r.status === 'ACTIVE' ? t('statusActive') : r.status === 'PENDING' ? t('statusWaiting') : t('statusStopped')}
                           </span>
                         </td>
                         <td className="py-4 px-6">
@@ -210,21 +221,21 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                               <button
                                 type="button"
                                 onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
+                                className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer min-h-[36px]"
                               >
-                                Approve
+                                {language === 'bn' ? 'অনুমোদন' : 'Approve'}
                               </button>
                             )}
                             {r.status !== 'REVOKED' ? (
                               <button
                                 type="button"
                                 onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
-                                className="px-3 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
+                                className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer min-h-[36px]"
                               >
-                                Revoke
+                                {language === 'bn' ? 'বন্ধ করুন' : 'Revoke'}
                               </button>
                             ) : (
-                              <span className="text-[11px] text-ink-muted font-bold font-display">Revoked</span>
+                              <span className="text-[11px] text-ink-muted font-bold font-display">{t('statusCancelled')}</span>
                             )}
                           </div>
                         </td>
@@ -245,21 +256,21 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                       <div>
                         <h4 className="font-extrabold text-ink text-sm font-display">{r.name}</h4>
                         <p className="text-[11px] text-ink-muted mt-0.5">
-                          {r.location || 'Entrance Gate'} • <span className="font-mono">{r.deviceId}</span>
+                          {r.location || (language === 'bn' ? 'প্রধান গেট' : 'Entrance Gate')} • <span className="font-mono">{r.deviceId}</span>
                         </p>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 border ${
                         r.status === 'APPROVED' || r.status === 'ACTIVE'
-                          ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+                          ? 'bg-success-50 text-forest-700 dark:text-forest-600 border-success-100 dark:border-success-600/30'
                           : r.status === 'PENDING'
-                          ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
+                          ? 'bg-warning-50 text-warning-800 border-warning-100 dark:border-warning-600/30'
                           : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
                       }`}>
-                        {r.status === 'APPROVED' || r.status === 'ACTIVE' ? 'Active' : r.status === 'PENDING' ? 'Pending' : 'Stopped'}
+                        {r.status === 'APPROVED' || r.status === 'ACTIVE' ? t('statusActive') : r.status === 'PENDING' ? t('statusWaiting') : t('statusStopped')}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs pt-1 text-ink-soft">
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-line text-ink-soft">
                       <span className={`font-display text-[11px] font-bold px-2 py-0.5 rounded-full border ${liveStatus.badgeClass}`}>
                         {liveStatus.label}
                       </span>
@@ -269,18 +280,18 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                           <button
                             type="button"
                             onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
-                            className="px-2.5 py-1 rounded-full text-[11px] font-bold text-success-800 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer min-h-[44px]"
                           >
-                            Approve
+                            {language === 'bn' ? 'অনুমোদন' : 'Approve'}
                           </button>
                         )}
                         {r.status !== 'REVOKED' && (
                           <button
                             type="button"
                             onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
-                            className="px-2.5 py-1 rounded-full text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer min-h-[44px]"
                           >
-                            Revoke
+                            {language === 'bn' ? 'বন্ধ করুন' : 'Revoke'}
                           </button>
                         )}
                       </div>
@@ -301,11 +312,11 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left"
+              className="app-card shadow-2xl max-w-md w-full p-6 sm:p-7 text-left bg-surface border border-line rounded-3xl"
             >
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-5 pb-3 border-b border-line">
                 <h3 className="text-xl font-extrabold text-ink font-display">
-                  Add School Gate Box
+                  {t('addGateBox')}
                 </h3>
                 <button
                   type="button"
@@ -324,77 +335,79 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
 
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Gate Box Device ID *
+                  <label className="block t-label text-ink mb-1 font-display text-xs font-bold">
+                    {language === 'bn' ? 'ডিভাইস আইডি *' : 'Gate Device ID *'}
                   </label>
                   <input
                     type="text"
                     required
                     value={provisionForm.deviceId}
                     onChange={(e) => setProvisionForm({ ...provisionForm, deviceId: e.target.value })}
-                    placeholder="e.g. FX9600-GATE-01"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink font-mono focus:bg-surface focus:border-forest-700 outline-none"
+                    placeholder="e.g. GATE-BOX-01"
+                    className="w-full px-4 py-3 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink font-mono focus:bg-surface focus:border-forest-700 outline-none min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Gate Box Friendly Name *
+                  <label className="block t-label text-ink mb-1 font-display text-xs font-bold">
+                    {t('gateBoxName')} *
                   </label>
                   <input
                     type="text"
                     required
                     value={provisionForm.name}
                     onChange={(e) => setProvisionForm({ ...provisionForm, name: e.target.value })}
-                    placeholder="e.g. Main Entrance Gate Box"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
+                    placeholder={language === 'bn' ? 'যেমন: প্রধান প্রবেশদ্বার বক্স' : 'e.g. Main Entrance Gate Box'}
+                    className="w-full px-4 py-3 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Physical Location
+                  <label className="block t-label text-ink mb-1 font-display text-xs font-bold">
+                    {t('gateLocation')}
                   </label>
                   <input
                     type="text"
                     value={provisionForm.location}
                     onChange={(e) => setProvisionForm({ ...provisionForm, location: e.target.value })}
-                    placeholder="e.g. North School Gate"
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none"
+                    placeholder={language === 'bn' ? 'যেমন: উত্তর দিকের গেট' : 'e.g. North School Gate'}
+                    className="w-full px-4 py-3 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block t-label text-ink mb-1 font-display">
-                    Direction
+                  <label className="block t-label text-ink mb-1 font-display text-xs font-bold">
+                    {t('source')}
                   </label>
                   <select
                     value={provisionForm.directionMode}
                     onChange={(e) => setProvisionForm({ ...provisionForm, directionMode: e.target.value as any })}
-                    className="w-full px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none cursor-pointer"
+                    className="w-full px-4 py-3 rounded-2xl bg-surface-soft border border-line text-xs font-bold text-ink focus:bg-surface focus:border-forest-700 outline-none cursor-pointer min-h-[44px]"
                   >
-                    <option value="IN">Entry Gate (In)</option>
-                    <option value="OUT">Exit Gate (Out)</option>
-                    <option value="BIDIRECTIONAL">Two-Way (In/Out)</option>
+                    <option value="IN">{language === 'bn' ? 'প্রবেশ গেট (In)' : 'Entry Gate (In)'}</option>
+                    <option value="OUT">{language === 'bn' ? 'প্রস্থান গেট (Out)' : 'Exit Gate (Out)'}</option>
+                    <option value="BIDIRECTIONAL">{language === 'bn' ? 'দ্বিমুখী (In/Out)' : 'Two-Way (In/Out)'}</option>
                   </select>
                 </div>
 
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant="secondary"
+                    size="md"
                     onClick={() => setIsProvisionOpen(false)}
+                    className="min-h-[44px] rounded-2xl font-display"
                   >
-                    Cancel
+                    {t('cancel')}
                   </Button>
                   <Button
                     type="submit"
                     variant="primary"
-                    size="sm"
+                    size="md"
                     disabled={registerMutation.isPending}
                     isLoading={registerMutation.isPending}
+                    className="min-h-[44px] rounded-2xl font-display"
                   >
-                    {registerMutation.isPending ? 'Saving…' : 'Save Gate Box'}
+                    {t('saveGateBox')}
                   </Button>
                 </div>
               </form>

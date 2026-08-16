@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
-import { Download, RefreshCw } from 'lucide-react';
+import { useLanguage } from '../../app/LanguageProvider';
+import { Download, RefreshCw, Users, CalendarCheck2 } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { EmptyState } from '../shared/EmptyState';
 
 export default function RfidReports({ schoolId }: { schoolId: string }) {
+  const { language, t } = useLanguage();
   const [filterMethod, setFilterMethod] = useState('ALL');
 
   const { data: scansData, isLoading, error, refetch } = useQuery({
@@ -55,28 +57,33 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <div className="app-card p-6 text-left">
+    <div className="app-card p-6 sm:p-7 text-left bg-surface border border-line rounded-3xl shadow-xs">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
         <div>
-          <h2 className="text-xl font-extrabold text-ink font-display">Who Walked In Today</h2>
-          <p className="t-body text-xs text-ink-soft">Real-time gate attendance arrivals recorded at school gates.</p>
+          <h2 className="text-xl font-extrabold text-ink font-display">{t('whoWalkedInToday')}</h2>
+          <p className="t-body text-xs text-ink-soft">
+            {language === 'bn' ? 'বিদ্যালয়ের গেটে শিক্ষার্থীদের উপস্থিতির লাইভ রেকর্ড।' : 'Real-time gate attendance arrivals recorded at school gates.'}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
             type="button"
             onClick={() => refetch()}
-            className="p-2 rounded-full bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink cursor-pointer border border-line"
+            className="p-3 rounded-2xl bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink cursor-pointer border border-line min-h-[44px] min-w-[44px] flex items-center justify-center"
+            title={language === 'bn' ? 'রিফ্রেশ করুন' : 'Refresh'}
+            aria-label={language === 'bn' ? 'রিফ্রেশ করুন' : 'Refresh'}
           >
             <RefreshCw className="w-4 h-4" />
           </button>
           <Button
             variant="primary"
-            size="sm"
+            size="md"
             onClick={handleExportCSV}
             disabled={scans.length === 0}
             leftIcon={<Download className="w-4 h-4" />}
+            className="min-h-[44px] rounded-2xl font-display"
           >
-            Export CSV
+            {t('downloadCsv')}
           </Button>
         </div>
       </div>
@@ -85,111 +92,79 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
         <select
           value={filterMethod}
           onChange={(e) => setFilterMethod(e.target.value)}
-          className="border border-line px-4 py-2 rounded-full text-xs font-bold text-ink bg-surface-soft outline-none focus:border-forest-700 font-display cursor-pointer"
+          className="border border-line px-4 py-2.5 rounded-2xl text-xs font-bold text-ink bg-surface-soft outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
         >
-          <option value="ALL">All Entries</option>
-          <option value="GATE">Gate Attendance</option>
+          <option value="ALL">{language === 'bn' ? 'সকল রেকর্ড' : 'All Entries'}</option>
+          <option value="GATE">{language === 'bn' ? 'গেট উপস্থিতি' : 'Gate Attendance'}</option>
         </select>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-surface-soft p-4 rounded-2xl border border-line text-center">
-          <div className="text-2xl font-extrabold text-ink font-display font-mono">{totalScans}</div>
-          <div className="text-[11px] text-ink-muted font-bold">Total Gate Entries</div>
+        <div className="bg-surface-soft p-5 rounded-2xl border border-line text-center">
+          <div className="text-3xl font-extrabold text-ink font-display font-mono">{totalScans}</div>
+          <div className="text-[11px] text-ink-muted font-bold uppercase tracking-wider mt-1">
+            {language === 'bn' ? 'মোট গেট উপস্থিতি' : 'Total Gate Entries'}
+          </div>
         </div>
-        <div className="bg-success-50 p-4 rounded-2xl border border-success-100 dark:border-success-600/30 text-center">
-          <div className="text-2xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">{acceptedScans}</div>
-          <div className="text-[11px] text-forest-700 dark:text-forest-600 font-bold">Marked Present</div>
+        <div className="bg-success-50 p-5 rounded-2xl border border-success-100 dark:border-success-600/30 text-center">
+          <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">{acceptedScans}</div>
+          <div className="text-[11px] text-forest-700/80 font-bold uppercase tracking-wider mt-1">
+            {t('cameIn')}
+          </div>
         </div>
-        <div className="bg-danger-50 p-4 rounded-2xl border border-danger-100 dark:border-danger-600/30 text-center">
-          <div className="text-2xl font-extrabold text-danger-800 font-display font-mono">{rejectedScans}</div>
-          <div className="text-[11px] text-danger-800 font-bold">Duplicates & Unenrolled</div>
+        <div className="bg-danger-50 p-5 rounded-2xl border border-danger-100 dark:border-danger-600/30 text-center">
+          <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">{rejectedScans}</div>
+          <div className="text-[11px] text-danger-800/80 font-bold uppercase tracking-wider mt-1">
+            {language === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected'}
+          </div>
         </div>
       </div>
 
-      {filteredScans.length === 0 ? (
-        <div className="p-8 border border-line rounded-2xl">
-          <EmptyState
-            kind="generic"
-            title="No one has walked in yet today."
-            description="Gate arrivals will appear automatically when students walk past the school gate."
-          />
-        </div>
-      ) : (
-        <>
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto border border-line rounded-2xl">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                <tr>
-                  <th className="p-3">Time</th>
-                  <th className="p-3">Student</th>
-                  <th className="p-3">Method</th>
-                  <th className="p-3">Reader / Location</th>
-                  <th className="p-3 text-right">Decision</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                {filteredScans.map((row: any, i: number) => (
-                  <tr key={i} className="table-row-hover">
-                    <td className="p-3 font-mono text-ink-muted">
-                      {new Date(row.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </td>
-                    <td className="p-3 font-bold text-ink font-display">{row.student}</td>
-                    <td className="p-3">
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-info-50 text-info-800 border border-info-100 dark:border-info-600/30">
-                        {row.method}
-                      </span>
-                    </td>
-                    <td className="p-3 text-ink-soft font-medium">
-                      {row.reader} <span className="text-ink-muted font-normal">({row.location})</span>
-                    </td>
-                    <td className="p-3 text-right">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
-                        row.decision === 'ACCEPTED'
-                          ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                          : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                      }`}>
-                        {row.decision}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Stacked Cards */}
-          <div className="md:hidden space-y-3">
-            {filteredScans.map((row: any, i: number) => (
-              <div key={i} className="app-card p-4 space-y-2 border border-line">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h4 className="font-extrabold text-ink text-sm font-display">{row.student}</h4>
-                    <span className="font-mono text-xs text-ink-muted">
-                      {new Date(row.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display shrink-0 ${
-                    row.decision === 'ACCEPTED'
-                      ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
+            <tr>
+              <th className="py-4 px-6">{t('timeRecorded')}</th>
+              <th className="py-4 px-6">{t('student')}</th>
+              <th className="py-4 px-6">{t('source')}</th>
+              <th className="py-4 px-6">{language === 'bn' ? 'গেট ডিভাইস' : 'Gate Device'}</th>
+              <th className="py-4 px-6 text-right">{t('status')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line bg-surface font-medium">
+            {filteredScans.map((s: any, i: number) => (
+              <tr key={i} className="table-row-hover">
+                <td className="py-4 px-6 font-mono text-ink-muted">
+                  {new Date(s.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </td>
+                <td className="py-4 px-6 font-bold text-ink">{s.student || s.studentName || (language === 'bn' ? 'শিক্ষার্থী' : 'Student')}</td>
+                <td className="py-4 px-6 text-ink-soft">{s.method || (language === 'bn' ? 'গেট উপস্থিতি' : 'Gate attendance')}</td>
+                <td className="py-4 px-6 text-ink-soft">{s.reader || s.readerName || '—'}</td>
+                <td className="py-4 px-6 text-right">
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-bold border font-display ${
+                    s.decision === 'ACCEPTED'
+                      ? 'bg-success-50 text-forest-700 dark:text-forest-600 border-success-100 dark:border-success-600/30'
                       : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
                   }`}>
-                    {row.decision}
+                    {s.decision === 'ACCEPTED' ? t('cameIn') : s.decision}
                   </span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-line text-ink-soft">
-                  <span>{row.reader} <span className="text-ink-muted">({row.location})</span></span>
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-info-50 text-info-800 border border-info-100 dark:border-info-600/30">
-                    {row.method}
-                  </span>
-                </div>
-              </div>
+                </td>
+              </tr>
             ))}
-          </div>
-        </>
-      )}
+            {filteredScans.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-12">
+                  <EmptyState
+                    kind="generic"
+                    title={t('noArrivalsToday')}
+                    description={language === 'bn' ? 'আজকে এখনও কোনো শিক্ষার্থী গেট দিয়ে প্রবেশ করেনি।' : 'No arrivals have been recorded through the school gate yet today.'}
+                  />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

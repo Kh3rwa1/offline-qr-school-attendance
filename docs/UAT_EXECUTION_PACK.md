@@ -10,10 +10,10 @@
 
 | Participant ID | Role | Profile / Demographics | Language Preference | Device Used |
 | :--- | :--- | :--- | :--- | :--- |
-| **UAT-P1** | Primary Teacher | 56 years old, 30 years teaching experience, basic smartphone user | Bengali (বাংলা) | Redmi 9A (Android 10, 360px width) |
-| **UAT-P2** | Head Teacher (School Admin) | 52 years old, responsible for institutional compliance and mid-day meal audits | Bengali / English | Samsung Galaxy M12 (Android 11) |
-| **UAT-P3** | School Gate Operator | 38 years old, non-teaching staff, manages gate arrival and badge cards | Bengali (বাংলা) | Vivo Y15s (Android 12) |
-| **UAT-P4** | District Report Viewer | 45 years old, district education inspector, reviews monthly turnout trends | English / Bengali | Chrome on Windows Laptop / Tablet |
+| **UAT-P1** | Primary Teacher | 56 years old, 30 years teaching experience, basic smartphone user | Bengalish (`বাংলা + English`) | Redmi 9A (Android 10, 360px width) |
+| **UAT-P2** | Head Teacher (School Admin) | 52 years old, responsible for institutional compliance and mid-day meal audits | Bengalish (`বাংলা + English`) / English | Samsung Galaxy M12 (Android 11) |
+| **UAT-P3** | School Gate Operator | 38 years old, non-teaching staff, manages gate arrival and badge cards | Bengalish (`বাংলা + English`) | Vivo Y15s (Android 12) |
+| **UAT-P4** | District Report Viewer | 45 years old, district education inspector, reviews monthly turnout trends | English / Bengalish (`বাংলা + English`) | Chrome on Windows Laptop / Tablet |
 
 ---
 
@@ -24,8 +24,8 @@
 2. Opens AttendEase, selects assigned Class 5-A.
 3. Takes attendance using QR camera badge scans and touch-mark roll sheet.
 4. Marks 28 students Present, 2 Late, 4 Absent.
-5. Taps "Finish Attendance" and confirms the prompt.
-6. Reconnects to network and verifies that "Send Saved Attendance" securely uploads all 34 records without duplicate errors.
+5. Taps "Attendance Finish করুন" / "Finish Attendance" and confirms the prompt.
+6. Reconnects to network and verifies that "Saved Records Send করুন" securely uploads all 34 records without duplicate errors.
 
 ### Scenario 2: School Headmaster Roster Setup & Corrections
 1. Headmaster creates new class section "Class 6 - B".
@@ -35,8 +35,8 @@
 
 ### Scenario 3: Gate Operator Badge Assignment & Arrival Monitoring
 1. Gate operator searches student "Subrata Mondal" by roll number.
-2. Taps "Give Badge" and scans new RFID card token.
-3. Verifies student arrival appears immediately in "Who Walked In Today" live feed.
+2. Taps "Badge দিন" / "Give Badge" and scans new RFID card token.
+3. Verifies student arrival appears immediately in "আজ কারা এসেছে" / "Who Came In Today" live feed.
 
 ### Scenario 4: Official Report Export
 1. Report Viewer opens Reports & Analytics dashboard.

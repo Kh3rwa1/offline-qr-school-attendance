@@ -49,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <QrCode className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'স্ক্যানার' : 'Scanner'}</span>
+            <span>{language === 'bn' ? 'Scanner' : 'Scanner'}</span>
           </button>
           <button
             onClick={() => setActiveView('roster')}
@@ -60,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'ছাত্র তালিকা' : 'Roster'}</span>
+            <span>{language === 'bn' ? 'Class List' : 'Roster'}</span>
           </button>
           <button
             onClick={() => setActiveView('outbox')}
@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'আউটবক্স' : 'Outbox'}</span>
+            <span>{language === 'bn' ? 'Saved Attendance' : 'Outbox'}</span>
             {pendingSyncCount > 0 && (
               <span className="w-2 h-2 rounded-full bg-warning-600 absolute -top-0.5 -right-0.5 animate-pulse"></span>
             )}
@@ -85,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'রিপোর্ট' : 'Reports'}</span>
+            <span>{language === 'bn' ? 'Reports' : 'Reports'}</span>
           </button>
           <button
             onClick={() => setActiveView('admin')}
@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{language === 'bn' ? 'প্রধান শিক্ষক' : 'Headmaster'}</span>
+            <span>{language === 'bn' ? 'School Admin' : 'Headmaster'}</span>
           </button>
         </div>
 
@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="w-2.5 h-2.5 rounded-full bg-warning-600 mr-2 animate-pulse"></div>
               <WifiOff className="w-3.5 h-3.5 text-warning-600 mr-1.5" />
               <span className="text-xs font-bold uppercase tracking-wider text-ink-soft font-display">
-                {language === 'bn' ? 'অফলাইন মোড' : 'Offline Mode'}
+                {language === 'bn' ? 'Offline Mode' : 'Offline Mode'}
               </span>
             </>
           ) : (
@@ -119,7 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="w-2.5 h-2.5 rounded-full bg-success-600 mr-2"></div>
               <Wifi className="w-3.5 h-3.5 text-success-600 mr-1.5" />
               <span className="text-xs font-bold uppercase tracking-wider text-ink-soft font-display">
-                {language === 'bn' ? 'অনলাইন মোড' : 'Online Mode'}
+                {language === 'bn' ? 'Online Mode' : 'Online Mode'}
               </span>
             </>
           )}
@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
           className="bg-forest-700 text-white px-3.5 py-2 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-forest-800 transition-colors cursor-pointer shadow-2xs font-display"
         >
-          {language === 'en' ? 'BN | বাংলা' : 'EN | English'}
+          {language === 'en' ? 'বাংলা + English' : 'English'}
         </button>
       </div>
     </header>

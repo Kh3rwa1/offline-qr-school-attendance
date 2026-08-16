@@ -175,11 +175,21 @@ SMS_PROVIDER="console"
 
     it('handles bin/attendease CLI wrapper execution', () => {
       const helpOutput = execSync(`bash bin/attendease --help`, { encoding: 'utf8' });
-      expect(helpOutput).toContain('AttendEase OS CLI');
+      expect(helpOutput).toContain('AttendEase OS CLI (1.3.0)');
       expect(helpOutput).toContain('status');
       expect(helpOutput).toContain('backup');
       expect(helpOutput).toContain('update');
       expect(helpOutput).toContain('rollback');
+    });
+
+    it('fails closed when backup is invoked without BACKUP_ENCRYPTION_KEY', () => {
+      const noKeyEnv = path.join(testBackupDir, '.env.nokey');
+      fs.writeFileSync(noKeyEnv, 'SESSION_SECRET="some-session-secret-32-chars-long"\n');
+      expect(() => {
+        execSync(`bash scripts/install.sh --config="${noKeyEnv}" backup`, {
+          stdio: 'pipe',
+        });
+      }).toThrow();
     });
   });
 

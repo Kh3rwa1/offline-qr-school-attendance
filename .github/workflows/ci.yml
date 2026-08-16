@@ -297,9 +297,9 @@ jobs:
           docker compose down -v || true
 
   installer-matrix-test:
-    name: Clean Installer Matrix (${{ matrix.os }})
+    name: Clean Appliance Lifecycle Matrix (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04]
@@ -307,15 +307,89 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Execute Installer Dry-Run & Secret Permission Validation
+      - name: Make Scripts Executable
+        run: chmod +x scripts/install.sh bin/attendease scripts/generate-secrets.sh scripts/verify-restore.sh
+
+      - name: Execute Installer Pre-Flight Dry-Run
         run: |
-          chmod +x scripts/install.sh bin/attendease scripts/generate-secrets.sh
           ./scripts/install.sh --dry-run
           ./bin/attendease --help
 
       - name: Verify Restrictive File Permissions (0600 .env)
         run: |
           test "$(stat -c "%a" .env)" = "600" || test "$(stat -c "%a" .env)" = "700"
+
+      - name: Execute Full Unattended Production Installation
+        run: |
+          ./scripts/install.sh -y
+
+      - name: Verify Appliance Health via Port 80 (Caddy) & Port 3000 (Direct)
+        run: |
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "App and Caddy are ready and passing probes!"
+              break
+            fi
+            echo "Waiting for ports 3000 and 80 to become ready... ($i/20)"
+            sleep 2
+          done
+          ./bin/attendease status
+
+      - name: Execute Encrypted Snapshot Backup
+        run: |
+          ./bin/attendease backup
+          test -n "$(ls -1 ./backups/*.sql.gz.enc)"
+
+      - name: Simulate Host Daemon Restart & Self-Healing Repair
+        run: |
+          docker compose down
+          ./bin/attendease repair
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Repaired stack is ready!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Execute Application Update Cycle
+        run: |
+          ./bin/attendease update
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Updated stack is ready!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Execute Application Rollback Cycle
+        run: |
+          ./bin/attendease rollback
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Rolled back stack is ready!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Execute Database Restore from Backup Snapshot
+        run: |
+          LATEST_BACKUP=$(ls -1t ./backups/*.sql.gz.enc | head -n 1)
+          ./bin/attendease restore "${LATEST_BACKUP}" -y
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Restored stack is ready!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Clean Uninstallation & Purge
+        if: always()
+        run: |
+          ./bin/attendease uninstall -y --purge || true
 
   pr-load-smoke-gate:
     name: Mandatory Pull-Request Load Smoke Gate

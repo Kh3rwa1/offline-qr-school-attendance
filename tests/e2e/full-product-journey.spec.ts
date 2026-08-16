@@ -37,19 +37,19 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('School Administration & Operations')).toBeVisible();
+    await expect(page.getByText(/School Administration|Overview/i)).toBeVisible();
 
     // 2. Navigate to Student Roster
     await page.goto(`${baseUrl}/app/school-admin/students`);
-    await expect(page.getByRole('heading', { name: 'Student Roster Directory' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Students/i })).toBeVisible();
 
     // 3. Navigate to Academic Sections
     await page.goto(`${baseUrl}/app/school-admin/academics`);
-    await expect(page.getByRole('heading', { name: 'Academic Structure & Class Sections' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Classes and Sections/i })).toBeVisible();
 
     // 4. Navigate to User Management
     await page.goto(`${baseUrl}/app/school-admin/users`);
-    await expect(page.getByRole('heading', { name: 'School User Management' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /School Staff/i })).toBeVisible();
   });
 
   test('Teacher executes offline roll review and server finalization check', async ({ page }) => {
@@ -59,11 +59,11 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
     // 2. View offline workspace
     await page.goto(`${baseUrl}/app/teacher/offline`);
-    await expect(page.getByText('Offline Synchronization Ledger')).toBeVisible();
+    await expect(page.getByText('Offline Synchronization Ledger').or(page.getByText(/Offline Attendance/i))).toBeVisible();
   });
 
   test('Report Viewer inspects daily roll sheet and longitudinal trends', async ({ page }) => {
@@ -73,19 +73,19 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.locator('#login-password').fill('ReportViewerPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('Attendance Reports & Analytics')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
 
     // 2. Daily roll inspection
     await page.goto(`${baseUrl}/app/reports/daily`);
-    await expect(page.getByRole('heading', { name: 'Daily Attendance Inspection' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Daily Attendance|Daily Log/i })).toBeVisible();
 
     // 3. Longitudinal trends
     await page.goto(`${baseUrl}/app/reports/trends`);
-    await expect(page.getByRole('heading', { name: 'Longitudinal Attendance Trends' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Monthly Trends/i })).toBeVisible();
 
     // 4. Export center
     await page.goto(`${baseUrl}/app/reports/exports`);
-    await expect(page.getByRole('heading', { name: 'Government Export & Audit Center' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Download Official Reports|Export & Download/i })).toBeVisible();
   });
 });
 

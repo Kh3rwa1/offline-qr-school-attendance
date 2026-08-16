@@ -197,7 +197,25 @@ export const TeacherDashboard: React.FC = () => {
             .filter((s) => s.sessionDate === todayStr)
             .first();
           if (localSession) {
+            if (res.session?.id && localSession.serverSessionId !== res.session.id) {
+              await offlineDb.sessions.update(localSession.id, { serverSessionId: res.session.id });
+              localSession.serverSessionId = res.session.id;
+            }
             setSession(localSession);
+          } else if (res.session) {
+            try {
+              const newLocal = await createOfflineSession({
+                schoolId: activeSchoolId,
+                classSectionId: selectedClassId,
+                teacherId: user?.id || 'teacher',
+                sessionDate: todayStr,
+              });
+              newLocal.serverSessionId = res.session.id;
+              await offlineDb.sessions.update(newLocal.id, { serverSessionId: res.session.id });
+              setSession(newLocal);
+            } catch {
+              setSession({ ...res.session, serverSessionId: res.session.id });
+            }
           }
           return;
         }
@@ -344,7 +362,7 @@ export const TeacherDashboard: React.FC = () => {
     studentId: string,
     newStatus: 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE' | 'EXCUSED'
   ) => {
-    if (!activeSchoolId || !session) return;
+    if (!activeSchoolId || !selectedClassId) return;
 
     setAllStudents((prev) =>
       prev.map((st) => (st.studentId === studentId ? { ...st, status: newStatus } : st))
@@ -371,26 +389,62 @@ export const TeacherDashboard: React.FC = () => {
     });
 
     try {
-      if (navigator.onLine && session.id) {
-        await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${session.id}/records/manual`, {
-          method: 'POST',
-          body: JSON.stringify({
-            studentId,
-            status: newStatus,
-            reason: `Updated by class teacher`,
-          }),
-        });
+      let currentSession = session;
+      let serverSessionId = currentSession?.serverSessionId;
+
+      if (!serverSessionId && currentSession?.id && /^[0-9a-fA-F-]{36}$/.test(currentSession.id) && !currentSession.id.startsWith('sess-')) {
+        serverSessionId = currentSession.id;
       }
 
+      if (navigator.onLine) {
+        if (!serverSessionId) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          try {
+            const createRes = await api<{ success: boolean; data: any }>(
+              `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  classSectionId: selectedClassId,
+                  sessionDate: todayStr,
+                  sessionType: 'DAILY',
+                }),
+              }
+            );
+            if (createRes?.data?.id) {
+              serverSessionId = createRes.data.id;
+              if (currentSession?.id) {
+                await offlineDb.sessions.update(currentSession.id, { serverSessionId });
+                setSession((prev: any) => (prev ? { ...prev, serverSessionId } : prev));
+              }
+            }
+          } catch (sessionErr) {
+            console.warn('Could not auto-create server session:', sessionErr);
+          }
+        }
+
+        if (serverSessionId) {
+          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/manual`, {
+            method: 'POST',
+            body: JSON.stringify({
+              studentId,
+              newStatus,
+              reason: 'Teacher manual override',
+            }),
+          });
+        }
+      }
+
+      const effectiveSessionId = currentSession?.id || serverSessionId || `sess-${Date.now()}`;
       const timestamp = new Date().toISOString();
       const outboxEvent: OutboxEventItem = {
-        clientEventId: `manual-${session.id}-${studentId}-${Date.now()}`,
+        clientEventId: `manual-${effectiveSessionId}-${studentId}-${Date.now()}`,
         schoolId: activeSchoolId,
-        sessionId: session.id,
+        sessionId: serverSessionId || effectiveSessionId,
         sessionMetadata: {
-          clientSessionId: session.clientSessionId || session.id,
+          clientSessionId: currentSession?.clientSessionId || effectiveSessionId,
           classSectionId: selectedClassId,
-          sessionDate: session.sessionDate || new Date().toISOString().slice(0, 10),
+          sessionDate: currentSession?.sessionDate || new Date().toISOString().slice(0, 10),
           sessionType: 'DAILY',
         },
         studentId,
@@ -398,25 +452,29 @@ export const TeacherDashboard: React.FC = () => {
         statusValue: newStatus,
         clientTimestamp: timestamp,
         source: 'MANUAL',
-        syncStatus: 'PENDING',
+        syncStatus: serverSessionId && navigator.onLine ? 'SYNCED' : 'PENDING',
         retryCount: 0,
         createdAt: timestamp,
       };
 
       await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
-        const sessionRosterItem = await offlineDb.sessionRosters
-          .where('[sessionId+studentId]')
-          .equals([session.id, studentId])
-          .first();
-        if (sessionRosterItem && sessionRosterItem.id) {
-          await offlineDb.sessionRosters.update(sessionRosterItem.id, { status: newStatus });
+        if (currentSession?.id) {
+          const sessionRosterItem = await offlineDb.sessionRosters
+            .where('[sessionId+studentId]')
+            .equals([currentSession.id, studentId])
+            .first();
+          if (sessionRosterItem && sessionRosterItem.id) {
+            await offlineDb.sessionRosters.update(sessionRosterItem.id, { status: newStatus });
+          }
         }
-        await offlineDb.syncOutbox.put(outboxEvent);
+        if (!navigator.onLine || !serverSessionId) {
+          await offlineDb.syncOutbox.put(outboxEvent);
+        }
       });
 
       await refreshOutbox();
     } catch (err: any) {
-      console.warn('Manual status update saved locally:', err);
+      console.warn('Manual status update error:', err);
     }
   };
 
@@ -593,21 +651,52 @@ export const TeacherDashboard: React.FC = () => {
 
   // Finalize Attendance for Today
   const handleFinalizeAttendance = async () => {
-    if (!session || !activeSchoolId) return;
+    if (!activeSchoolId || !selectedClassId) return;
     setIsFinishing(true);
     try {
-      if (navigator.onLine && session.id) {
-        await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${session.id}/status`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            status: 'FINALIZED',
-            autoMarkAbsentForUnmarked: true,
-            reason: 'Class teacher finalized daily attendance',
-          }),
-        });
+      let serverSessionId = session?.serverSessionId;
+      if (!serverSessionId && session?.id && /^[0-9a-fA-F-]{36}$/.test(session.id) && !session.id.startsWith('sess-')) {
+        serverSessionId = session.id;
       }
 
-      await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
+      if (navigator.onLine) {
+        if (!serverSessionId) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          try {
+            const createRes = await api<{ success: boolean; data: any }>(
+              `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  classSectionId: selectedClassId,
+                  sessionDate: todayStr,
+                  sessionType: 'DAILY',
+                }),
+              }
+            );
+            if (createRes?.data?.id) {
+              serverSessionId = createRes.data.id;
+            }
+          } catch (createErr) {
+            console.warn('Could not resolve server session to finalize:', createErr);
+          }
+        }
+
+        if (serverSessionId) {
+          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              status: 'FINALIZED',
+              autoMarkAbsentForUnmarked: true,
+              reason: 'Class teacher finalized daily attendance',
+            }),
+          });
+        }
+      }
+
+      if (session?.id) {
+        await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
+      }
       setSession((prev: any) => (prev ? { ...prev, status: 'FINALIZED' } : null));
       setShowConfirmFinish(false);
       showFeedback({ kind: 'success', text: t('finalizedSuccess') });
@@ -647,15 +736,13 @@ export const TeacherDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 text-xs font-bold font-display border border-success-100 dark:border-success-600/30 mb-2">
-            <span>{t('offlineQrAttendance')}</span>
-            <span className="text-forest-400">•</span>
             <span>{t('gateAttendance')}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('classroomDashboard')}
           </h1>
           <p className="t-body text-xs text-ink-soft mt-0.5">
-            {activeSchoolName} • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -746,6 +833,7 @@ export const TeacherDashboard: React.FC = () => {
         </div>
       </div>
 
+
       {/* If No Assigned Classes / Teacher */}
       {!isAssigned && classes.length === 0 && (
         <div className="p-8 rounded-3xl bg-amber-50/60 border border-amber-200 dark:border-amber-600/30 text-left">
@@ -781,7 +869,13 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.cameIn}
               </div>
               <p className="text-[11px] text-forest-700/80 font-medium mt-1">
-                {stats.total > 0 ? `${Math.round((stats.cameIn / stats.total) * 100)}% of class` : 'Gate arrivals'}
+                {stats.total > 0
+                  ? language === 'bn'
+                    ? `মোট শিক্ষার্থীর ${Math.round((stats.cameIn / stats.total) * 100)}%`
+                    : `${Math.round((stats.cameIn / stats.total) * 100)}% of class`
+                  : language === 'bn'
+                  ? 'গেটের আগমন'
+                  : 'Gate arrivals'}
               </p>
             </div>
 
@@ -799,7 +893,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.missing}
               </div>
               <p className="text-[11px] text-danger-800/80 font-medium mt-1">
-                Not yet marked present
+                {language === 'bn' ? 'এখনও উপস্থিত চিহ্নিত হয়নি' : 'Not yet marked present'}
               </p>
             </div>
 
@@ -817,7 +911,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.late}
               </div>
               <p className="text-[11px] text-amber-800/80 font-medium mt-1">
-                Arrived after start time
+                {language === 'bn' ? 'দেরিতে এসেছে' : 'Arrived after start time'}
               </p>
             </div>
 
@@ -835,7 +929,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.leave}
               </div>
               <p className="text-[11px] text-ink-muted font-medium mt-1">
-                Approved leave
+                {language === 'bn' ? 'অনুমোদিত ছুটি' : 'Approved leave'}
               </p>
             </div>
           </div>
@@ -843,14 +937,14 @@ export const TeacherDashboard: React.FC = () => {
           {/* Action Bar: Finish Attendance Button */}
           <div className="flex items-center justify-between bg-surface p-4 rounded-3xl border border-line">
             <div className="text-xs font-bold text-ink font-display pl-2">
-              <span>{selectedClassName}</span> • <span className="text-forest-700 dark:text-forest-600 font-bold">{stats.cameIn} of {stats.total} Present</span>
+              <span>{selectedClassName}</span> • <span className="text-forest-700 dark:text-forest-600 font-bold">{stats.cameIn} / {stats.total} {t('statusPresent')}</span>
             </div>
 
             <Button
               variant="primary"
               size="lg"
               onClick={() => setShowConfirmFinish(true)}
-              className="px-6 py-3 rounded-full text-sm font-extrabold shadow-sm"
+              className="px-6 py-3 rounded-full text-sm font-extrabold shadow-sm min-h-[44px]"
               disabled={stats.total === 0 || session?.status === 'FINALIZED'}
               leftIcon={<Check className="w-5 h-5" />}
             >
@@ -870,7 +964,9 @@ export const TeacherDashboard: React.FC = () => {
                       {arrivals.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">Students who walked through the school gate today.</p>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    {language === 'bn' ? 'যে সকল শিক্ষার্থী আজ গেট দিয়ে বিদ্যালয়ে প্রবেশ করেছে।' : 'Students who walked through the school gate today.'}
+                  </p>
                 </div>
               </div>
 
@@ -880,7 +976,7 @@ export const TeacherDashboard: React.FC = () => {
                     <EmptyState
                       kind="generic"
                       title={t('noArrivalsYet')}
-                      description="When students arrive through the school gate, their names appear here automatically."
+                      description={language === 'bn' ? 'শিক্ষার্থীরা গেট দিয়ে প্রবেশ করলে তাদের নাম স্বয়ংক্রিয়ভাবে এখানে দেখা যাবে।' : 'When students arrive through the school gate, their names appear here automatically.'}
                     />
                   </div>
                 ) : (
@@ -898,7 +994,7 @@ export const TeacherDashboard: React.FC = () => {
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
                           <span className="text-[11px] text-ink-muted font-mono">
-                            {new Date(st.time).toLocaleTimeString('en-IN', {
+                            {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
@@ -925,7 +1021,9 @@ export const TeacherDashboard: React.FC = () => {
                       {missingStudents.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">Students not yet recorded at the gate. Mark them manually if in class.</p>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    {language === 'bn' ? 'যেসব শিক্ষার্থীর গেট রেকর্ড পাওয়া যায়নি। ক্লাসে উপস্থিত থাকলে চিহ্নিত করুন।' : 'Students not yet recorded at the gate. Mark them manually if in class.'}
+                  </p>
                 </div>
               </div>
 
@@ -935,7 +1033,7 @@ export const TeacherDashboard: React.FC = () => {
                     <EmptyState
                       kind="generic"
                       title={t('noMissingStudents')}
-                      description="All students in this class have arrived or are accounted for."
+                      description={language === 'bn' ? 'এই ক্লাসের সকল শিক্ষার্থীর উপস্থিতি গ্রহণ সম্পন্ন হয়েছে।' : 'All students in this class have arrived or are accounted for.'}
                     />
                   </div>
                 ) : (
@@ -952,32 +1050,32 @@ export const TeacherDashboard: React.FC = () => {
                           <h4 className="text-xs font-extrabold text-ink font-display">
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
-                          <span className="text-[11px] text-ink-muted">
-                            Roll #{st.rollNumber}
+                          <span className="text-[11px] text-ink-muted font-mono">
+                            {language === 'bn' ? 'রোল:' : 'Roll:'} #{st.rollNumber}
                           </span>
                         </div>
                       </div>
 
-                      {/* Status Override Action Buttons */}
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Status Override Action Buttons - Big 44px Touch Targets */}
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(st.studentId, 'PRESENT')}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display cursor-pointer transition-colors"
+                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
                         >
                           {t('markPresent')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(st.studentId, 'LATE')}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 dark:border-amber-600/30 font-display cursor-pointer transition-colors"
+                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 dark:border-amber-600/30 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
                         >
                           {t('markLate')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(st.studentId, 'LEAVE')}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-colors"
+                          className="min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-extrabold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
                         >
                           {t('markLeave')}
                         </button>
@@ -989,104 +1087,119 @@ export const TeacherDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Camera Scanner HUD & USB Scanner */}
-          <div className="app-card p-6 max-w-xl mx-auto space-y-4" data-testid="camera-hud">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Camera className="w-5 h-5 text-forest-700 dark:text-forest-600" />
-                <h3 className="text-base font-extrabold text-ink font-display">{t('cameraHud')}</h3>
+          {/* Phone Backup Scanner (Collapsed by default, expandable details) */}
+          <details className="app-card max-w-xl mx-auto overflow-hidden group border border-line" data-testid="phone-backup-details">
+            <summary className="p-4 sm:p-5 flex items-center justify-between cursor-pointer list-none select-none bg-surface hover:bg-surface-soft transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-forest-50 text-forest-700 dark:text-forest-400 border border-forest-100 dark:border-forest-600/30">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-ink font-display">{t('phoneBackup')}</h3>
+                  <p className="text-[11px] text-ink-muted">{t('phoneBackupDesc')}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {isCameraActive ? (
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full cursor-pointer hover:bg-amber-100 font-display"
-                  >
-                    <CameraOff className="w-3.5 h-3.5" />
-                    <span>{t('stopCamera')}</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void startCamera(videoEl)}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full cursor-pointer hover:bg-emerald-100 font-display"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>{t('startCamera')}</span>
-                  </button>
+              <ChevronDown className="w-4 h-4 text-ink-muted group-open:rotate-180 transition-transform" />
+            </summary>
+
+            <div className="p-6 pt-2 space-y-4 border-t border-line" data-testid="camera-hud">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-forest-700 dark:text-forest-600" />
+                  <h3 className="text-sm font-extrabold text-ink font-display">{t('cameraHud')}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isCameraActive ? (
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full cursor-pointer hover:bg-amber-100 font-display"
+                    >
+                      <CameraOff className="w-3.5 h-3.5" />
+                      <span>{t('stopCamera')}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void startCamera(videoEl)}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full cursor-pointer hover:bg-emerald-100 font-display"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>{t('startCamera')}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="relative aspect-video max-h-[36vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line"
+                data-testid="camera-viewfinder"
+              >
+                <video
+                  ref={videoCallbackRef}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                />
+
+                {cameraError && (
+                  <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
+                    <AlertCircle className="w-10 h-10 text-amber-400" />
+                    <p className="text-sm font-semibold max-w-xs">
+                      {cameraStatus === 'permission_denied' ? t('cameraDenied') : cameraError}
+                    </p>
+                    <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)}>
+                      {t('retryCamera')}
+                    </Button>
+                  </div>
+                )}
+
+                {!cameraError && (
+                  <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
+                    <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
+                      <span>
+                        {cameraStatus === 'starting'
+                          ? t('cameraStarting')
+                          : isCameraActive
+                          ? t('cameraActive')
+                          : t('cameraStopped')}
+                      </span>
+                    </div>
+                    {isCameraActive && (
+                      <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
+                    )}
+                    <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
+                      {t('alignQrCode')}
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
 
-            <div
-              className="relative aspect-video max-h-[36vh] rounded-3xl bg-slate-950 overflow-hidden flex items-center justify-center border border-line"
-              data-testid="camera-viewfinder"
-            >
-              <video
-                ref={videoCallbackRef}
-                className="w-full h-full object-cover"
-                muted
-                playsInline
-              />
-
-              {cameraError && (
-                <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
-                  <AlertCircle className="w-10 h-10 text-amber-400" />
-                  <p className="text-sm font-semibold max-w-xs">
-                    {cameraStatus === 'permission_denied' ? t('cameraDenied') : cameraError}
-                  </p>
-                  <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)}>
-                    {t('retryCamera')}
-                  </Button>
+              {/* USB Token input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const value = scanInput.trim();
+                  setScanInput('');
+                  if (value) void handleScan(value, 'USB');
+                }}
+                className="flex flex-col sm:flex-row gap-3 pt-2"
+              >
+                <div className="relative flex-1">
+                  <Usb className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value)}
+                    placeholder={t('usbScannerPlaceholder')}
+                    className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
+                  />
                 </div>
-              )}
-
-              {!cameraError && (
-                <div className="absolute inset-0 border-2 border-emerald-400/30 rounded-3xl pointer-events-none flex flex-col justify-between p-4">
-                  <div className="flex justify-between items-center text-[11px] font-mono text-emerald-400 font-bold">
-                    <span>
-                      {cameraStatus === 'starting'
-                        ? t('cameraStarting')
-                        : isCameraActive
-                        ? t('cameraActive')
-                        : t('cameraStopped')}
-                    </span>
-                  </div>
-                  {isCameraActive && (
-                    <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
-                  )}
-                  <div className="text-center text-[11px] font-bold text-white bg-slate-900/80 py-1.5 px-4 rounded-full mx-auto backdrop-blur-sm border border-emerald-400/30 font-display">
-                    {t('alignQrCode')}
-                  </div>
-                </div>
-              )}
+                <Button type="submit" variant="primary" size="md" className="min-h-[44px] w-full sm:w-auto justify-center">
+                  {t('scanToken')}
+                </Button>
+              </form>
             </div>
-
-            {/* USB Token input */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const value = scanInput.trim();
-                setScanInput('');
-                if (value) void handleScan(value, 'USB');
-              }}
-              className="flex flex-col sm:flex-row gap-3 pt-2"
-            >
-              <div className="relative flex-1">
-                <Usb className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  value={scanInput}
-                  onChange={(e) => setScanInput(e.target.value)}
-                  placeholder={t('usbScannerPlaceholder')}
-                  className="w-full pl-11 pr-4 py-3 bg-surface-soft border border-line rounded-full text-xs font-semibold text-ink placeholder:text-slate-500 focus:bg-surface focus:border-forest-700 outline-none"
-                />
-              </div>
-              <Button type="submit" variant="primary" size="md" className="min-h-[44px] w-full sm:w-auto justify-center">
-                {t('scanToken')}
-              </Button>
-            </form>
-          </div>
+          </details>
 
       {/* Finish Attendance Confirmation Modal */}
       <AnimatePresence>

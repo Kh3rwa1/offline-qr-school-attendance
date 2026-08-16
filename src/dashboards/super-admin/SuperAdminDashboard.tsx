@@ -7,6 +7,7 @@ import { RollingNumber } from '../../components/shared/RollingNumber';
 import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { PLAIN_TERMS } from '../../utils/superAdminPlainTermsMapper';
 import { 
   Plus, 
   CheckCircle2, 
@@ -58,7 +59,10 @@ export const SuperAdminDashboard: React.FC = () => {
       {/* Top Header Row with Buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display"
+            title={PLAIN_TERMS.multiTenantHub.en}
+          >
             <span>Multi-Tenant Platform Hub</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
@@ -198,6 +202,9 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
               <p className="t-body text-xs text-ink-soft leading-relaxed">
                 Headmaster certification completed for 3,840 student meals. Ready for block portal sync.
+              </p>
+              <p className="t-body text-[11px] text-ink-muted leading-relaxed mt-1">
+                {PLAIN_TERMS.blockPortalSync.en}
               </p>
             </div>
 

@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
+import { useLanguage } from '../../app/LanguageProvider';
+import { getUserSafeError } from '../../errors/userSafeErrors';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
-import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { Toast } from '../../components/shared/Toast';
 import { EmptyState } from '../../components/shared/EmptyState';
-import { RefreshCw, Languages, Play } from 'lucide-react';
+import { RefreshCw, Send, CheckCircle2, Clock, AlertTriangle, RotateCcw } from 'lucide-react';
 
 interface NotificationJobItem {
   id: string;
@@ -26,8 +27,8 @@ interface NotificationJobItem {
 
 export const NotificationOperations: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
+  const { language, t } = useLanguage();
   const queryClient = useQueryClient();
-  const [selectedLang, setSelectedLang] = useState<'EN' | 'BN' | 'HI'>('EN');
 
   // Query: Real Queue
   const { data, isLoading, error, refetch } = useQuery({
@@ -58,11 +59,12 @@ export const NotificationOperations: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'notifications'] });
       setActionError(null);
-      setSuccessToast('Queue batch processed by background worker.');
+      setSuccessToast(language === 'bn' ? 'বার্তা পাঠানোর কাজ শুরু হয়েছে।' : 'Sending messages in progress.');
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Worker execution failed');
+      const safe = getUserSafeError(err, language);
+      setActionError(safe.message);
     },
   });
 
@@ -76,22 +78,47 @@ export const NotificationOperations: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'notifications'] });
       setActionError(null);
-      setSuccessToast('Job re-queued for delivery.');
+      setSuccessToast(language === 'bn' ? 'বার্তাটি পুনরায় পাঠানোর জন্য যোগ করা হয়েছে।' : 'Message re-queued for sending.');
       setTimeout(() => setSuccessToast(null), 4000);
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Job retry failed');
+      const safe = getUserSafeError(err, language);
+      setActionError(safe.message);
     },
   });
 
   const jobs = data?.jobs || [];
   const summary = data?.summary || { total: 0, delivered: 0, failed: 0, queued: 0 };
 
-  if (isLoading) return <LoadingState type="table" message="Loading guardian notification queue…" />;
-  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load notification queue'} onRetry={() => refetch()} />;
+  if (isLoading) return <LoadingState type="table" message={language === 'bn' ? 'বার্তার বিবরণ লোড হচ্ছে…' : 'Loading parent messages…'} />;
+  if (error) return <ErrorState message={(error as any)?.message || 'Failed to load notifications'} onRetry={() => refetch()} />;
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'DELIVERED':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+            ✓ {t('statusSent')}
+          </span>
+        );
+      case 'QUEUED':
+      case 'PROCESSING':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+            ⏳ {t('statusWaiting')}
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
+            ⚠ {t('statusCouldNotSend')}
+          </span>
+        );
+    }
+  };
 
   return (
-    <div className="space-y-8 text-left" id="notification-operations-view">
+    <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="notification-operations-view">
       {/* Toast Notification */}
       {successToast && (
         <div className="fixed top-6 right-6 z-50">
@@ -106,13 +133,13 @@ export const NotificationOperations: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-3xl border border-line shadow-xs">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Guardian SMS Dispatch Console
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
+            {t('navParentMessages')}
           </h1>
-          <p className="t-body text-sm text-ink-soft mt-1">
-            Automated, CDAC DLT-compliant SMS notifications dispatched to parents for {activeSchoolName}.
+          <p className="t-body text-xs text-ink-soft mt-1">
+            {language === 'bn' ? `${activeSchoolName}-এর অনুপস্থিত শিক্ষার্থীদের অভিভাবকদের এসএমএস বার্তা প্রেরণ।` : `Automated attendance SMS notifications to parents for ${activeSchoolName}.`}
           </p>
         </div>
 
@@ -120,203 +147,113 @@ export const NotificationOperations: React.FC = () => {
           <Button
             variant="primary"
             size="md"
-            disabled={processMutation.isPending}
+            disabled={processMutation.isPending || summary.queued === 0}
             isLoading={processMutation.isPending}
             onClick={() => processMutation.mutate()}
-            leftIcon={<Play className="w-4 h-4" />}
+            leftIcon={<Send className="w-4 h-4" />}
+            className="min-h-[44px] rounded-2xl font-display text-xs"
           >
-            {processMutation.isPending ? 'Processing Queue…' : 'Run Worker Now'}
+            {language === 'bn' ? 'অপেক্ষমাণ বার্তা এখনই পাঠান' : 'Send Waiting Messages Now'}
           </Button>
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Total Dispatched"
-          value={`${summary.total} Alerts`}
-          trend={{ value: `${summary.delivered} Delivered`, isPositive: true }}
-          variant="hero-forest"
-        />
-        <StatCard
-          title="Delivered Successfully"
-          value={`${summary.delivered} SMS`}
-          trend={{ value: "Telecom ACK Received", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="Queued in Dispatch"
-          value={`${summary.queued} Pending`}
-          trend={{ value: "Rate-limited Queue", isPositive: true }}
-          variant="default"
-        />
-        <StatCard
-          title="Delivery Failures"
-          value={`${summary.failed} Failed`}
-          trend={{ value: summary.failed === 0 ? "Zero Errors" : "Retry Available", isPositive: summary.failed === 0 }}
-          variant="default"
-        />
-      </div>
-
-      {/* Template Preview and Language Selector */}
-      <div className="app-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Languages className="w-4 h-4 text-forest-700 dark:text-forest-600" />
-            <h3 className="font-extrabold text-sm text-ink font-display">Multi-lingual DLT Message Templates (Preview)</h3>
+      {/* 3 Clean Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-ink-muted">
+            <span className="text-xs font-bold uppercase font-display">{t('statusSent')}</span>
+            <CheckCircle2 className="w-4 h-4 text-forest-700 dark:text-forest-600" />
           </div>
-          <p className="t-body text-xs text-ink-soft mt-1">
-            Preview standard CDAC templates. Live SMS notifications are automatically dispatched in each student's preferred language configured in school registry.
-          </p>
-          <p className="text-xs text-ink font-medium mt-2 bg-surface-soft p-2.5 rounded-2xl border border-line">
-            {selectedLang === 'EN' && 'English: "Dear Parent, [Student Name] (Roll: [Roll]) was marked ABSENT today at [School Name]. Please contact school if unexpected."'}
-            {selectedLang === 'BN' && 'বাংলা: "প্রিয় অভিভাবক, [ছাত্র/ছাত্রীর নাম] আজ বিদ্যালয়ে অনুপস্থিত রয়েছে। প্রয়োজনে প্রধান শিক্ষকের সাথে যোগাযোগ করুন।"'}
-            {selectedLang === 'HI' && 'हिन्दी: "प्रिय अभिभावक, आपका बच्चा [छात्र का नाम] আজ विद्यालय में अनुपस्थित है।"'}
-          </p>
+          <div className="text-3xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">
+            {summary.delivered}
+          </div>
         </div>
 
-        <div className="flex gap-1.5 p-1 bg-surface-soft rounded-full border border-line">
-          {(['EN', 'BN', 'HI'] as const).map((lang) => (
-            <button
-              key={lang}
-              onClick={() => setSelectedLang(lang)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
-                selectedLang === lang ? 'bg-forest-700 text-white shadow-2xs' : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              {lang === 'EN' ? 'English' : lang === 'BN' ? 'বাংলা' : 'हिन्दी'}
-            </button>
-          ))}
+        <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-ink-muted">
+            <span className="text-xs font-bold uppercase font-display">{t('statusWaiting')}</span>
+            <Clock className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="text-3xl font-extrabold text-amber-800 font-display font-mono">
+            {summary.queued}
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-surface border border-line shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-ink-muted">
+            <span className="text-xs font-bold uppercase font-display">{t('statusCouldNotSend')}</span>
+            <AlertTriangle className="w-4 h-4 text-danger-700" />
+          </div>
+          <div className="text-3xl font-extrabold text-danger-800 font-display font-mono">
+            {summary.failed}
+          </div>
         </div>
       </div>
 
       {/* SMS Queue Table */}
       <div className="app-card overflow-hidden">
-        <div className="p-6 border-b border-line flex items-center justify-between">
-          <h3 className="text-lg font-extrabold text-ink font-display">Live SMS Dispatch Queue</h3>
+        <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between">
+          <h3 className="text-base font-extrabold text-ink font-display">
+            {language === 'bn' ? 'অভিভাবকদের বার্তার তালিকা' : 'Parent Messages Log'}
+          </h3>
           <button
             type="button"
             onClick={() => refetch()}
-            className="p-2 rounded-full bg-surface-soft hover:bg-surface text-ink-soft hover:text-ink transition-all cursor-pointer border border-line"
-            title="Refresh queue"
+            className="p-2 rounded-full hover:bg-surface-soft text-ink-muted cursor-pointer"
+            aria-label="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
 
         {jobs.length === 0 ? (
-          <div className="p-8">
+          <div className="p-12">
             <EmptyState
-              kind="notifications"
-              title="No SMS jobs in queue"
-              description="When absence rolls are submitted, parent notifications are queued here automatically."
+              kind="generic"
+              title={language === 'bn' ? 'কোনো বার্তা অপেক্ষমাণ নেই' : 'No messages waiting'}
+              description={language === 'bn' ? 'উপস্থিতি গ্রহণ সমাপ্ত হলে স্বয়ংক্রিয়ভাবে অনুপস্থিত শিক্ষার্থীদের অভিভাবকদের বার্তা তৈরি হবে।' : 'Absent student notifications are queued automatically when attendance is finalized.'}
             />
           </div>
         ) : (
-          <>
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase font-display">
-                  <tr>
-                    <th className="px-6 py-4">Student & Guardian</th>
-                    <th className="px-6 py-4">Language</th>
-                    <th className="px-6 py-4">Message Content</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Queued At / Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                  {jobs.map((sms) => (
-                    <tr key={sms.id} className="table-row-hover">
-                      <td className="px-6 py-4">
-                        <p className="font-extrabold text-ink text-sm font-display">
-                          {sms.studentName || 'Student'}
-                        </p>
-                        <p className="text-[11px] font-mono text-ink-muted font-bold">{sms.recipientPhone}</p>
-                      </td>
-                      <td className="px-6 py-4 font-bold text-ink-soft uppercase font-mono">
-                        {sms.language}
-                      </td>
-                      <td className="px-6 py-4 max-w-sm text-ink-soft truncate">
-                        {sms.messageText}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase font-display ${
-                          sms.status === 'DELIVERED'
-                            ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                            : sms.status === 'QUEUED' || sms.status === 'PROCESSING'
-                            ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
-                            : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                        }`}>
-                          {sms.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {sms.status === 'PERMANENT_FAILURE' || sms.status === 'FAILED' ? (
-                          <button
-                            type="button"
-                            onClick={() => retryMutation.mutate(sms.id)}
-                            className="px-3 py-1 rounded-full text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer"
-                          >
-                            Retry Job
-                          </button>
-                        ) : (
-                          <span className="font-mono text-ink-muted text-[11px]">
-                            {new Date(sms.queuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Stacked Cards */}
-            <div className="md:hidden divide-y divide-line">
-              {jobs.map((sms) => (
-                <div key={sms.id} className="p-4 space-y-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h4 className="font-extrabold text-ink text-sm font-display">{sms.studentName || 'Student'}</h4>
-                      <span className="text-xs font-mono font-bold text-ink-muted block mt-0.5">{sms.recipientPhone}</span>
-                    </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase font-display shrink-0 ${
-                      sms.status === 'DELIVERED'
-                        ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30'
-                        : sms.status === 'QUEUED' || sms.status === 'PROCESSING'
-                        ? 'bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30'
-                        : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                    }`}>
-                      {sms.status}
-                    </span>
+          <div className="divide-y divide-line">
+            {jobs.map((job) => (
+              <div
+                key={job.id}
+                className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface hover:bg-surface-soft transition-colors"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-base font-extrabold text-ink font-display">
+                      {job.studentName || (language === 'bn' ? 'শিক্ষার্থী' : 'Student')}
+                    </h4>
+                    {getStatusBadge(job.status)}
                   </div>
-
-                  <p className="text-xs text-ink-soft line-clamp-2 bg-surface-soft p-2.5 rounded-xl border border-line">
-                    {sms.messageText}
+                  <p className="text-xs text-ink-muted font-mono">
+                    {language === 'bn' ? 'মোবাইল নং:' : 'Mobile:'} {job.recipientPhone} • {job.queuedAt ? new Date(job.queuedAt).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
                   </p>
-
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-line text-ink-soft">
-                    <span className="font-mono text-[11px] text-ink-muted uppercase">Lang: {sms.language}</span>
-                    {sms.status === 'PERMANENT_FAILURE' || sms.status === 'FAILED' ? (
-                      <button
-                        type="button"
-                        onClick={() => retryMutation.mutate(sms.id)}
-                        className="min-h-[44px] px-4 py-1.5 rounded-xl text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer flex items-center"
-                      >
-                        Retry Job
-                      </button>
-                    ) : (
-                      <span className="font-mono text-ink-muted text-[11px]">
-                        Queued: {new Date(sms.queuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-xs text-ink-soft bg-surface-soft p-2.5 rounded-xl border border-line mt-1 max-w-xl">
+                    {job.messageText}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  {(job.status === 'FAILED' || job.status === 'PERMANENT_FAILURE') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => retryMutation.mutate(job.id)}
+                      isLoading={retryMutation.isPending}
+                      leftIcon={<RotateCcw className="w-4 h-4" />}
+                      className="min-h-[44px] rounded-2xl font-display text-xs"
+                    >
+                      {t('statusTryAgain')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

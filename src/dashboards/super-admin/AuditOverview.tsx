@@ -7,6 +7,7 @@ import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { Download, RefreshCw } from 'lucide-react';
+import { PLAIN_TERMS, AUDIT_ACTION_PLAIN, getAuditActionPlainText } from '../../utils/superAdminPlainTermsMapper';
 
 interface AuditLogItem {
   id: string;
@@ -75,6 +76,9 @@ export const AuditOverview: React.FC = () => {
           <p className="t-body text-sm text-ink-soft mt-1">
             Immutable platform-wide audit trail of administrative actions, school provisioning, and security lifecycle transitions.
           </p>
+          <p className="t-body text-xs text-ink-muted mt-1">
+            {PLAIN_TERMS.auditTrail.en}
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -110,12 +114,14 @@ export const AuditOverview: React.FC = () => {
           trend={{ value: "Tenants Provisioned/Updated", isPositive: true }}
           variant="default"
         />
-        <StatCard
-          title="Audit Policy"
-          value="7-Year Statutory"
-          trend={{ value: "Govt. of India Standard", isPositive: true }}
-          variant="default"
-        />
+        <div title={PLAIN_TERMS.auditRetention.en}>
+          <StatCard
+            title="Audit Policy"
+            value="7-Year Statutory"
+            trend={{ value: "Govt. of India Standard", isPositive: true }}
+            variant="default"
+          />
+        </div>
       </div>
 
       {/* Controls Bar */}
@@ -130,14 +136,14 @@ export const AuditOverview: React.FC = () => {
             className="px-4 py-2.5 rounded-full bg-surface-soft border border-line text-xs font-bold text-ink outline-none focus:border-forest-700 transition-all cursor-pointer"
           >
             <option value="ALL">All Actions</option>
-            <option value="USER_LOGIN">USER_LOGIN</option>
-            <option value="USER_LOGOUT">USER_LOGOUT</option>
-            <option value="SCHOOL_PROVISIONED">SCHOOL_PROVISIONED</option>
-            <option value="SCHOOL_STATUS_CHANGED">SCHOOL_STATUS_CHANGED</option>
-            <option value="MEMBER_INVITED">MEMBER_INVITED</option>
-            <option value="SUSPEND_MEMBERSHIP">SUSPEND_MEMBERSHIP</option>
-            <option value="CARD_ENROLLED">CARD_ENROLLED</option>
-            <option value="READER_STATUS_CHANGED">READER_STATUS_CHANGED</option>
+            <option value="USER_LOGIN">USER_LOGIN — {AUDIT_ACTION_PLAIN.USER_LOGIN}</option>
+            <option value="USER_LOGOUT">USER_LOGOUT — {AUDIT_ACTION_PLAIN.USER_LOGOUT}</option>
+            <option value="SCHOOL_PROVISIONED">SCHOOL_PROVISIONED — {AUDIT_ACTION_PLAIN.SCHOOL_PROVISIONED}</option>
+            <option value="SCHOOL_STATUS_CHANGED">SCHOOL_STATUS_CHANGED — {AUDIT_ACTION_PLAIN.SCHOOL_STATUS_CHANGED}</option>
+            <option value="MEMBER_INVITED">MEMBER_INVITED — {AUDIT_ACTION_PLAIN.MEMBER_INVITED}</option>
+            <option value="SUSPEND_MEMBERSHIP">SUSPEND_MEMBERSHIP — {AUDIT_ACTION_PLAIN.SUSPEND_MEMBERSHIP}</option>
+            <option value="CARD_ENROLLED">CARD_ENROLLED — {AUDIT_ACTION_PLAIN.CARD_ENROLLED}</option>
+            <option value="READER_STATUS_CHANGED">READER_STATUS_CHANGED — {AUDIT_ACTION_PLAIN.READER_STATUS_CHANGED}</option>
           </select>
         </div>
 
@@ -155,7 +161,7 @@ export const AuditOverview: React.FC = () => {
       <div className="app-card overflow-hidden">
         <div className="p-6 border-b border-line flex items-center justify-between">
           <h3 className="text-lg font-extrabold text-ink font-display">Live Governance Stream</h3>
-          <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-3 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display">
+          <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-3 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display" title={PLAIN_TERMS.walBackup.en}>
             Database WAL Backed
           </span>
         </div>
@@ -192,6 +198,9 @@ export const AuditOverview: React.FC = () => {
                         <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-mono">
                           {log.action}
                         </span>
+                        <p className="text-[11px] text-ink-muted mt-1 font-sans">
+                          {getAuditActionPlainText(log.action)}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <p className="font-extrabold text-ink text-sm font-display">
@@ -224,9 +233,14 @@ export const AuditOverview: React.FC = () => {
               {logs.map((log) => (
                 <div key={log.id} className="p-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-mono">
-                      {log.action}
-                    </span>
+                    <div>
+                      <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-mono">
+                        {log.action}
+                      </span>
+                      <p className="text-[11px] text-ink-muted mt-1">
+                        {getAuditActionPlainText(log.action)}
+                      </p>
+                    </div>
                     <span className="text-[11px] font-mono text-ink-muted">
                       {new Date(log.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
                     </span>

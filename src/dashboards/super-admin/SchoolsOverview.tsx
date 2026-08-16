@@ -11,6 +11,7 @@ import { Toast } from '../../components/shared/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, Building2, MapPin, CheckCircle2, X, ShieldAlert, ExternalLink, Archive, RefreshCw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { PLAIN_TERMS } from '../../utils/superAdminPlainTermsMapper';
 
 interface SchoolItem {
   id: string;
@@ -246,8 +247,11 @@ export const SchoolsOverview: React.FC = () => {
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
             Affiliated Schools Directory
           </h1>
-          <p className="t-body text-sm text-ink-soft mt-1">
+          <p className="t-body text-sm text-ink-soft mt-1" title={PLAIN_TERMS.tenantIsolation.en}>
             Official government institutions with verified UDISE+ codes and dedicated database tenant contexts.
+          </p>
+          <p className="t-body text-xs text-ink-muted mt-1">
+            Schools registered with the government (UDISE+), each with attendance data kept fully separate from other schools.
           </p>
         </div>
 
@@ -371,7 +375,7 @@ export const SchoolsOverview: React.FC = () => {
                   <MapPin className="w-3.5 h-3.5 text-ink-muted" />
                   <span>{school.district}{school.block ? `, ${school.block}` : ''}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" title={PLAIN_TERMS.tenantIdTooltip.en}>
                   <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
                   <span>Tenant ID: <span className="font-mono text-[11px]">{school.id.slice(0, 8)}…</span></span>
                 </div>
@@ -785,6 +789,9 @@ export const SchoolsOverview: React.FC = () => {
                   </h2>
                   <p className="t-body text-xs text-ink-soft mt-0.5">
                     Update school institutional parameters and national portal synchronization.
+                  </p>
+                  <p className="t-body text-[11px] text-ink-muted mt-0.5">
+                    {PLAIN_TERMS.nationalPortalSync.en}
                   </p>
                 </div>
                 <button

@@ -11,7 +11,12 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
+
+    const phoneBackup = page.getByTestId('phone-backup-details');
+    if (await phoneBackup.isVisible()) {
+      await phoneBackup.locator('summary').click();
+    }
 
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
     await expect(scannerInput).toBeVisible();
@@ -20,7 +25,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       await context.clearPermissions();
     }
     await page.reload();
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
+    if (await phoneBackup.isVisible()) {
+      await phoneBackup.locator('summary').click();
+    }
     await expect(scannerInput).toBeVisible();
   });
 
@@ -82,7 +90,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
     await page.waitForFunction((id) => {
       const sel = document.querySelector('select');
@@ -92,7 +100,16 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.getByRole('button', { name: 'Download roster' }).click();
     await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Start offline session' }).click();
+    const startBtn = page.getByRole('button', { name: 'Start offline session' });
+    if (await startBtn.isVisible()) {
+      await startBtn.click();
+    }
+    await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+
+    const phoneBackup = page.getByTestId('phone-backup-details');
+    if (await phoneBackup.isVisible()) {
+      await phoneBackup.locator('summary').click();
+    }
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
 
     await scannerInput.fill(revokedToken);
@@ -155,7 +172,7 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
     await page.waitForFunction((id) => {
       const sel = document.querySelector('select');
@@ -165,17 +182,24 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.getByRole('button', { name: 'Download roster' }).click();
     await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Start offline session' }).click();
+    const startBtn3 = page.getByRole('button', { name: 'Start offline session' });
+    if (await startBtn3.isVisible()) {
+      await startBtn3.click();
+    }
     await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
     // Reload once online so service worker caches page shell
     await page.reload();
     await page.evaluate(() => navigator.serviceWorker?.ready);
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
     await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
     // Go offline and scan valid token
     await context.setOffline(true);
+    const phoneBackup = page.getByTestId('phone-backup-details');
+    if (await phoneBackup.isVisible()) {
+      await phoneBackup.locator('summary').click();
+    }
     const scannerInput = page.getByPlaceholder('USB scanner token (press Enter)');
     await scannerInput.fill(validToken);
     await scannerInput.press('Enter');
@@ -191,19 +215,20 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
       await reopened.locator('#login-password').fill('TeacherPassword123!');
       await reopened.locator('button[type="submit"]').click();
     }
-    await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(reopened.getByText('Today’s attendance').or(reopened.getByText(/Today’s attendance/i))).toBeVisible();
 
     // Reconnect online & sync
     await context.setOffline(false);
     await reopened.waitForTimeout(500);
     await reopened.reload();
-    await expect(reopened.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(reopened.getByText('Today’s attendance').or(reopened.getByText(/Today’s attendance/i))).toBeVisible();
 
     const pushBtn = reopened.getByRole('button', { name: /Push Local Outbox/i });
     if (await pushBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await pushBtn.click();
       await expect(pushBtn).toBeDisabled({ timeout: 10000 });
     } else {
+      // Alternatively click telemetry / outbox card
       await reopened.getByText('Offline Outbox').click();
       await reopened.waitForTimeout(1000);
     }
@@ -241,10 +266,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page1.locator('#login-phone').fill('9100000002');
     await page1.locator('#login-password').fill('TeacherPassword123!');
     await page1.locator('button[type="submit"]').click();
-    await expect(page1.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page1.getByText('Today’s attendance').or(page1.getByText(/Today’s attendance/i))).toBeVisible();
 
     await page2.goto(`${baseUrl}/app/teacher`);
-    await expect(page2.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page2.getByText('Today’s attendance').or(page2.getByText(/Today’s attendance/i))).toBeVisible();
 
     const sync1 = page1.getByRole('button', { name: 'Synchronize now' });
     const sync2 = page2.getByRole('button', { name: 'Synchronize now' });

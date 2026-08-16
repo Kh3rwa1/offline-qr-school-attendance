@@ -681,6 +681,7 @@ export async function manualStatusUpdate(params: {
           attendanceSessionId: sessionId,
           studentId,
           status: newStatus,
+          captureMethod: 'MANUAL',
           firstScannedAt: new Date(),
           lastUpdatedAt: new Date(),
         })
@@ -708,7 +709,7 @@ export async function manualStatusUpdate(params: {
         clientTimestamp: new Date(),
         serverReceivedAt: new Date(),
         actorId,
-        metadata: { previousStatus: 'UNMARKED', newStatus, reason },
+        metadata: { note: 'Created via manual status change', reason },
       });
 
       return newRec;
@@ -752,6 +753,7 @@ export async function manualStatusUpdate(params: {
       .update(attendanceRecords)
       .set({
         status: newStatus,
+        captureMethod: 'MANUAL',
         lastUpdatedAt: new Date(),
       })
       .where(eq(attendanceRecords.id, record.id))

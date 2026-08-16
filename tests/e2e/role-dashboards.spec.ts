@@ -27,7 +27,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
     await expect(page.getByRole('button', { name: 'Download roster' })).toBeVisible();
   });
 
@@ -57,7 +57,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('Offline QR Attendance')).toBeVisible();
+    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
     await page.goto(`${baseUrl}/app/super-admin`);
     await expect(page.locator('#unauthorized-403-heading')).toBeVisible();

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { db, withTenantContext } from '../../db';
 import {
+  schools,
   rfidReaders,
   rfidCredentials,
   rfidScanEvents,
@@ -173,21 +174,34 @@ export async function processZebraIotWebhook(params: {
     throw new Error(`OVERSIZED_BATCH: Batch contains ${reads.length} reads, maximum permitted is ${MAX_BATCH_READS}`);
   }
 
-  // 3. Query Reader from Database with Tenant Isolation
-  const reader = await withTenantContext(schoolId, async (tx) => {
+  // 3. Query Reader and School Timezone from Database with Tenant Isolation
+  const { reader, schoolTimezone } = await withTenantContext(schoolId, async (tx) => {
     const [byUuid] = /^[0-9a-fA-F-]{36}$/.test(readerSearchKey)
       ? await tx
           .select()
           .from(rfidReaders)
           .where(and(eq(rfidReaders.id, readerSearchKey), eq(rfidReaders.schoolId, schoolId)))
       : [];
-    if (byUuid) return byUuid;
 
-    const [byDeviceId] = await tx
-      .select()
-      .from(rfidReaders)
-      .where(and(eq(rfidReaders.deviceId, readerSearchKey), eq(rfidReaders.schoolId, schoolId)));
-    return byDeviceId;
+    let foundReader = byUuid;
+    if (!foundReader) {
+      const [byDeviceId] = await tx
+        .select()
+        .from(rfidReaders)
+        .where(and(eq(rfidReaders.deviceId, readerSearchKey), eq(rfidReaders.schoolId, schoolId)));
+      foundReader = byDeviceId;
+    }
+
+    const [sc] = await tx
+      .select({ timezone: schools.timezone })
+      .from(schools)
+      .where(eq(schools.id, schoolId))
+      .limit(1);
+
+    return {
+      reader: foundReader,
+      schoolTimezone: sc?.timezone || 'Asia/Kolkata',
+    };
   });
 
   if (!reader) {
@@ -198,13 +212,13 @@ export async function processZebraIotWebhook(params: {
     throw new Error(`FORBIDDEN_READER: Reader status is '${reader.status}'`);
   }
 
-  // 4. Authenticate Reader (HMAC Signature or Bearer Token)
-  const readerSecret =
-    (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
-    process.env.RFID_HMAC_SECRET;
+  // 4. Authenticate Reader (Strict per-reader fail-closed HMAC Signature or Bearer Token)
+  const readerSecret = reader.sharedSecretEncrypted
+    ? decryptReaderSecret(reader.sharedSecretEncrypted)
+    : null;
 
-  if (!readerSecret) {
-    throw new Error('CONFIG_ERROR: No cryptographic secret or token configured for reader authentication');
+  if (!readerSecret && !reader.bearerTokenDigest) {
+    throw new Error('CONFIG_ERROR: Reader has no provisioned shared secret or bearer token digest (fail-closed)');
   }
 
   const signatureHeader =
@@ -217,13 +231,13 @@ export async function processZebraIotWebhook(params: {
 
   let isAuthValid = false;
 
-  if (signatureHeader) {
+  if (signatureHeader && readerSecret) {
     isAuthValid = verifyZebraHmacSignature(rawBody, signatureHeader, readerSecret);
   } else if (authHeader) {
-    // Check bearer token against readerSecret or bearerTokenDigest if stored
+    // Check bearer token against bearerTokenDigest if stored, or readerSecret
     if (reader.bearerTokenDigest) {
       isAuthValid = verifyBearerToken(authHeader, reader.bearerTokenDigest);
-    } else {
+    } else if (readerSecret) {
       isAuthValid = verifyBearerToken(authHeader, readerSecret);
     }
   }
@@ -429,15 +443,19 @@ export async function processZebraIotWebhook(params: {
 
     if (redis) {
       try {
-        const cached = await redis.get(debounceKey);
-        if (cached) isDebounced = true;
+        // Atomic acquire lock in Redis (NX = only set if not exists, PX = millisecond TTL)
+        // If acquired is null, key already exists within cooldown window -> atomic duplicate!
+        const acquired = await redis.set(debounceKey, '1', 'PX', cooldownMs, 'NX');
+        if (!acquired) {
+          isDebounced = true;
+        }
       } catch {
         // Fall back to database query
       }
     }
 
     if (!isDebounced) {
-      const cooldownThreshold = new Date(Date.now() - cooldownMs);
+      const cooldownThreshold = new Date(scanTimeMs - cooldownMs);
       const recent = await withTenantContext(schoolId, async (tx) => {
         const [event] = await tx
           .select({ id: rfidScanEvents.id })
@@ -529,8 +547,8 @@ export async function processZebraIotWebhook(params: {
       continue;
     }
 
-    // 10. Find or Resolve Today's Attendance Session
-    const todayDate = new Date().toISOString().slice(0, 10);
+    // 10. Find or Resolve Today's Attendance Session (using school's configured timezone)
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: schoolTimezone }).format(scanDate);
     // Use reader's assigned classSection if configured, otherwise student's active enrolled classSection
     let targetClassSectionId = reader.assignedClassSectionId || studentInfo.classSectionId;
 
@@ -559,8 +577,7 @@ export async function processZebraIotWebhook(params: {
             schoolId,
             readerId: reader.id,
             credentialId: credential.id,
-            attendanceSessionId: session!.id,
-            clientEventId,
+            clientEventId: `${clientEventId}-finalized-${Date.now()}`,
             idempotencyKey,
             vendorEventId,
             epcDigest,
@@ -570,8 +587,8 @@ export async function processZebraIotWebhook(params: {
             peakRssi,
             readCount,
             scanTimestamp: new Date(scanTimeMs),
-            decision: 'NO_ACTIVE_SESSION',
-            rejectionCode: 'SESSION_FINALIZED',
+            decision: 'UNREGISTERED_CARD',
+            rejectionCode: 'SESSION_ALREADY_FINALIZED',
             captureMethod: 'RFID_GATE',
             securityMode: 'UHF_EPC',
             payloadHash,
@@ -583,18 +600,19 @@ export async function processZebraIotWebhook(params: {
         epcDigest,
         epcLastFour: epcLast4,
         tidDigest,
-        decision: 'REJECTED',
-        reason: 'SESSION_FINALIZED',
+        decision: 'UNREGISTERED_CARD',
+        reason: 'SESSION_ALREADY_FINALIZED',
       });
       continue;
     }
 
-    // If no open session exists today, auto-create an OPEN session for today's gate attendance
+    // If no session exists for today, resolve assigned teacher and auto-open session
     if (!session) {
-      // Find assigned teacher for this class section
-      const assignment = await withTenantContext(schoolId, async (tx) => {
-        const [a] = await tx
-          .select({ teacherId: teacherAssignments.teacherId })
+      const teacherAssignment = await withTenantContext(schoolId, async (tx) => {
+        const [ta] = await tx
+          .select({
+            teacherId: teacherAssignments.teacherId,
+          })
           .from(teacherAssignments)
           .where(
             and(
@@ -603,10 +621,12 @@ export async function processZebraIotWebhook(params: {
             )
           )
           .limit(1);
-        return a;
+        return ta;
       });
 
-      if (!assignment?.teacherId) {
+      const assignedTeacherId = teacherAssignment?.teacherId;
+
+      if (!assignedTeacherId) {
         rejectedCount++;
         await withTenantContext(schoolId, async (tx) => {
           await tx
@@ -615,7 +635,7 @@ export async function processZebraIotWebhook(params: {
               schoolId,
               readerId: reader.id,
               credentialId: credential.id,
-              clientEventId,
+              clientEventId: `${clientEventId}-no-teacher-${Date.now()}`,
               idempotencyKey,
               vendorEventId,
               epcDigest,
@@ -650,16 +670,18 @@ export async function processZebraIotWebhook(params: {
           .values({
             schoolId,
             classSectionId: targetClassSectionId,
-            teacherId: assignment.teacherId,
+            teacherId: assignedTeacherId,
             sessionDate: todayDate,
-            sessionType: 'DAILY',
             status: 'OPEN',
+            startedAt: new Date(scanTimeMs),
+            sourceMode: 'RFID_GATE',
           })
           .onConflictDoNothing()
           .returning();
+
         if (newSession) return newSession;
 
-        // In case of concurrent race, select the winner session
+        // In case of race condition inserting session
         const [winner] = await tx
           .select()
           .from(attendanceSessions)
@@ -682,7 +704,30 @@ export async function processZebraIotWebhook(params: {
 
     // 11. Atomically Claim Scan Event & Record Attendance
     const recordResult = await withTenantContext(schoolId, async (tx) => {
-      // 11a. Insert Scan Event with Idempotency Key Claim
+      // 11a. Row-level serialization lock on credential to eliminate check-then-insert race conditions
+      await tx.execute(sql`SELECT id FROM rfid_credentials WHERE id = ${credential.id} FOR UPDATE`);
+
+      // 11b. Check for recent ACCEPTED event within cooldown threshold
+      const cooldownThreshold = new Date(scanTimeMs - cooldownMs);
+      const [recentAccepted] = await tx
+        .select({ id: rfidScanEvents.id })
+        .from(rfidScanEvents)
+        .where(
+          and(
+            eq(rfidScanEvents.schoolId, schoolId),
+            eq(rfidScanEvents.readerId, reader.id),
+            eq(rfidScanEvents.credentialId, credential.id),
+            eq(rfidScanEvents.decision, 'ACCEPTED'),
+            gt(rfidScanEvents.scanTimestamp, cooldownThreshold)
+          )
+        )
+        .limit(1);
+
+      if (recentAccepted) {
+        return { isDuplicate: true, isExisting: false, scanEventId: recentAccepted.id, recordId: undefined };
+      }
+
+      // 11c. Insert Scan Event with Idempotency Key Claim
       const [claimedEvent] = await tx
         .insert(rfidScanEvents)
         .values({
@@ -708,17 +753,17 @@ export async function processZebraIotWebhook(params: {
         .onConflictDoNothing()
         .returning();
 
-      // If already claimed concurrently, fetch existing event
+      // If already claimed concurrently with exact same idempotencyKey, fetch existing event
       if (!claimedEvent) {
         const [existingEvent] = await tx
           .select()
           .from(rfidScanEvents)
           .where(and(eq(rfidScanEvents.schoolId, schoolId), eq(rfidScanEvents.idempotencyKey, idempotencyKey)))
           .limit(1);
-        return { isExisting: true, scanEventId: existingEvent?.id || clientEventId, recordId: undefined };
+        return { isDuplicate: false, isExisting: true, scanEventId: existingEvent?.id || clientEventId, recordId: undefined };
       }
 
-      // 11b. Check existing attendance record in this session
+      // 11d. Check existing attendance record in this session
       const [existingRecord] = await tx
         .select()
         .from(attendanceRecords)
@@ -733,8 +778,11 @@ export async function processZebraIotWebhook(params: {
       let recordId = existingRecord?.id;
 
       if (existingRecord) {
-        // Only update if not manually marked EXCUSED or already PRESENT
-        if (existingRecord.status !== 'PRESENT' && existingRecord.status !== 'EXCUSED') {
+        // Protect manual attendance records:
+        // If marked with captureMethod === 'MANUAL' or status is already PRESENT or EXCUSED,
+        // NEVER overwrite teacher's manual decision with RFID_GATE!
+        const isManual = existingRecord.captureMethod === 'MANUAL';
+        if (!isManual && existingRecord.status !== 'PRESENT' && existingRecord.status !== 'EXCUSED') {
           await tx
             .update(attendanceRecords)
             .set({
@@ -761,7 +809,7 @@ export async function processZebraIotWebhook(params: {
         recordId = insertedRecord?.id;
       }
 
-      // 11c. Record Attendance Event Audit Log (strictly no raw EPC/TID)
+      // 11e. Record Attendance Event Audit Log (strictly no raw EPC/TID)
       await tx.insert(attendanceEvents).values({
         schoolId,
         clientEventId,
@@ -781,8 +829,48 @@ export async function processZebraIotWebhook(params: {
         },
       });
 
-      return { isExisting: false, scanEventId: claimedEvent.id, recordId };
+      return { isDuplicate: false, isExisting: false, scanEventId: claimedEvent.id, recordId };
     });
+
+    if (recordResult.isDuplicate) {
+      duplicateCount++;
+      await withTenantContext(schoolId, async (tx) => {
+        await tx
+          .insert(rfidScanEvents)
+          .values({
+            schoolId,
+            readerId: reader.id,
+            credentialId: credential.id,
+            clientEventId: `${clientEventId}-debounced-${Date.now()}`,
+            idempotencyKey,
+            vendorEventId,
+            epcDigest,
+            epcLastFour: epcLast4,
+            tidDigest,
+            antennaPort,
+            peakRssi,
+            readCount,
+            scanTimestamp: new Date(scanTimeMs),
+            decision: 'DUPLICATE',
+            rejectionCode: 'DEBOUNCE_COOLDOWN_ACTIVE',
+            captureMethod: 'RFID_GATE',
+            securityMode: 'UHF_EPC',
+            payloadHash,
+          })
+          .onConflictDoNothing();
+      });
+
+      results.push({
+        epcDigest,
+        epcLastFour: epcLast4,
+        tidDigest,
+        decision: 'DUPLICATE',
+        reason: 'ALREADY_PROCESSED_COOLDOWN_ACTIVE',
+        duplicate: true,
+        scanEventId: recordResult.scanEventId,
+      });
+      continue;
+    }
 
     if (recordResult.isExisting) {
       duplicateCount++;

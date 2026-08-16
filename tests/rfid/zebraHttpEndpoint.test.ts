@@ -8,6 +8,7 @@ import { credentialService } from '../../src/services/rfid/credentialService';
 import {
   rfidReaders,
   rfidCredentials,
+  attendanceSessions,
   attendanceRecords,
   students,
   enrollments,
@@ -389,5 +390,180 @@ describe('HTTP API /api/v1/schools/:schoolId/rfid/zebra/reads Ingest Suite', () 
 
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('UNAUTHORIZED_READER');
+  });
+
+  it('Fail-Closed: Reader without its own provisioned secret cannot authenticate via global secret fallback', async () => {
+    const unprovisionedDeviceId = 'FX9600-NO-SECRET-01';
+    await withTenantContext(schoolId, async (tx) => {
+      await tx.insert(rfidReaders).values({
+        schoolId,
+        deviceId: unprovisionedDeviceId,
+        name: 'Unprovisioned Gate',
+        adapterType: 'NETWORK',
+        securityCapability: 'ZEBRA_FX9600',
+        status: 'ACTIVE',
+        sharedSecretEncrypted: null,
+        bearerTokenDigest: null,
+      });
+    });
+
+    const payload = {
+      type: 'tag_read',
+      reader_name: unprovisionedDeviceId,
+      data: [{ idHex: testEpc }],
+    };
+    const rawBody = JSON.stringify(payload);
+    const signature = crypto.createHmac('sha256', hmacSecret).update(rawBody, 'utf8').digest('hex');
+
+    const res = await dispatchRfidRoute(schoolId, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-reader-id': unprovisionedDeviceId,
+        'x-zebra-signature': signature,
+      },
+      body: payload,
+      rawBody: Buffer.from(rawBody),
+    });
+
+    // Must fail closed with 500 CONFIG_ERROR or 401 UNAUTHORIZED_READER
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.body.error).toMatch(/CONFIG_ERROR|UNAUTHORIZED_READER/);
+  });
+
+  it('Manual Attendance Protection: Manually marked ABSENT record is never overwritten to PRESENT by gate scan', async () => {
+    const manualStudentCode = 'ZG-MANUAL-STD-01';
+    const manualEpc = 'E28011700000020B85799999';
+    const manualDigest = computeEpcDigest(manualEpc);
+
+    // Create student & enrollment
+    const [manualStudent] = await withTenantContext(schoolId, async (tx) => {
+      return tx
+        .insert(students)
+        .values({
+          schoolId,
+          name: 'Manual Test Student',
+          studentCode: manualStudentCode,
+          status: 'ACTIVE',
+        })
+        .returning();
+    });
+
+    await withTenantContext(schoolId, async (tx) => {
+      await tx.insert(enrollments).values({
+        schoolId,
+        studentId: manualStudent.id,
+        classSectionId: testClassSectionId,
+        academicYearId: testAcademicYearId,
+        rollNumber: 301,
+        startDate: '2026-01-01',
+        status: 'ACTIVE',
+      });
+    });
+
+    // Enroll credential
+    const cred = await credentialService.enrollCredential({
+      schoolId,
+      studentId: manualStudent.id,
+      credentialDigest: manualDigest,
+      securityMode: 'UHF_EPC',
+      keyVersion: 1,
+      operatorUserId: adminUserId,
+    });
+    await credentialService.activateCredential(cred.id, schoolId, adminUserId);
+
+    // Resolve today's date in school timezone
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+
+    // Create or find open attendance session
+    let [session] = await withTenantContext(schoolId, async (tx) => {
+      return tx
+        .select()
+        .from(attendanceSessions)
+        .where(
+          and(
+            eq(attendanceSessions.schoolId, schoolId),
+            eq(attendanceSessions.classSectionId, testClassSectionId),
+            eq(attendanceSessions.sessionDate, todayDate)
+          )
+        );
+    });
+
+    if (!session) {
+      [session] = await withTenantContext(schoolId, async (tx) => {
+        return tx
+          .insert(attendanceSessions)
+          .values({
+            schoolId,
+            classSectionId: testClassSectionId,
+            teacherId: teacherUserId,
+            sessionDate: todayDate,
+            status: 'OPEN',
+            startedAt: new Date(),
+            sourceMode: 'MANUAL',
+          })
+          .returning();
+      });
+    }
+
+    // Teacher manually marks student as ABSENT
+    await withTenantContext(schoolId, async (tx) => {
+      await tx
+        .insert(attendanceRecords)
+        .values({
+          schoolId,
+          attendanceSessionId: session.id,
+          studentId: manualStudent.id,
+          status: 'ABSENT',
+          captureMethod: 'MANUAL',
+          lastUpdatedAt: new Date(),
+        })
+        .onConflictDoNothing();
+    });
+
+    // An RFID Gate scan arrives for this student
+    const payload = {
+      type: 'tag_read',
+      reader_name: testReaderDeviceId,
+      data: [
+        {
+          idHex: manualEpc,
+          antenna: 1,
+          peakRssi: -50,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const signature = crypto.createHmac('sha256', hmacSecret).update(rawBody, 'utf8').digest('hex');
+
+    const res = await dispatchRfidRoute(schoolId, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-reader-id': testReaderDeviceId,
+        'x-zebra-signature': signature,
+      },
+      body: payload,
+      rawBody: Buffer.from(rawBody),
+    });
+
+    expect(res.status).toBe(200);
+
+    // Verify the record REMAINS ABSENT and was NOT overwritten by RFID_GATE
+    const [finalRecord] = await withTenantContext(schoolId, async (tx) => {
+      return tx
+        .select()
+        .from(attendanceRecords)
+        .where(
+          and(
+            eq(attendanceRecords.schoolId, schoolId),
+            eq(attendanceRecords.attendanceSessionId, session.id),
+            eq(attendanceRecords.studentId, manualStudent.id)
+          )
+        );
+    });
+
+    expect(finalRecord.status).toBe('ABSENT');
+    expect(finalRecord.captureMethod).toBe('MANUAL');
   });
 });

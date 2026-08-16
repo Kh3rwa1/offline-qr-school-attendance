@@ -45,6 +45,9 @@ rfidRouter.post(
       if (errMsg.includes('FORBIDDEN_READER')) {
         return res.status(403).json({ success: false, error: 'FORBIDDEN_READER', message: errMsg });
       }
+      if (errMsg.includes('CONFIG_ERROR')) {
+        return res.status(500).json({ success: false, error: 'CONFIG_ERROR', message: errMsg });
+      }
       console.error('Zebra IoT Connector webhook error:', error);
       return res.status(500).json({ success: false, error: 'ZEBRA_INGEST_ERROR', message: errMsg });
     }

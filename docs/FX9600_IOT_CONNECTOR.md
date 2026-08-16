@@ -85,4 +85,4 @@ Authorization: Bearer <reader_provisioning_secret>
 > [!NOTE]
 > Zebra FX9600 integration is implemented and software-tested against documented IoT Connector payload contracts. Physical FX9600 hardware validation is pending and is not implied by CI.
 > 
-> For on-site commissioning procedures, test cases, and sign-off forms, see [docs/FX9600_HARDWARE_ACCEPTANCE_PACK.md](file:///Users/dulorai/Documents/offline-qr-school-attendance/docs/FX9600_HARDWARE_ACCEPTANCE_PACK.md).
+> For on-site commissioning procedures, test cases, and sign-off forms, see [docs/FX9600_HARDWARE_ACCEPTANCE_PACK.md](./FX9600_HARDWARE_ACCEPTANCE_PACK.md).

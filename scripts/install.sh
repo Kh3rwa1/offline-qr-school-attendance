@@ -212,6 +212,8 @@ ensure_secrets() {
 
   mkdir -p ./backups
   chmod 0700 ./backups
+dcompose() {
+  docker compose --env-file "${CONFIG_FILE}" "$@"
 }
 
 # ==============================================================================
@@ -224,7 +226,7 @@ cmd_install() {
   ensure_secrets
 
   echo "\n⚙️ Validating Compose Configuration (QR-only scope)..."
-  docker compose config --quiet
+  dcompose config --quiet
 
   if [ "${DRY_RUN}" -eq 1 ]; then
     echo "\n✅ Pre-flight dry-run diagnostic complete. All system prerequisites and security validations passed."
@@ -232,7 +234,7 @@ cmd_install() {
   fi
 
   echo "\n🚀 Launching Production Container Services..."
-  docker compose up -d --build
+  dcompose up -d --build
 
   echo "\n⏳ Awaiting System Readiness (/readyz)..."
   MAX_ATTEMPTS=45
@@ -250,12 +252,12 @@ cmd_install() {
 
   if [ ${HEALTHY} -ne 1 ]; then
     echo "❌ Error: AttendEase OS failed to pass readiness probes within 90s." >&2
-    docker compose logs --tail=50 >&2
+    dcompose logs --tail=50 >&2
     exit 1
   fi
 
   # Record installed state
-  APP_IMAGE_ID=$(docker compose images -q app 2>/dev/null || echo "local-build")
+  APP_IMAGE_ID=$(dcompose images -q app 2>/dev/null || echo "local-build")
   cat <<EOF > "${STATE_FILE}"
 {
   "version": "${VERSION}",
@@ -291,7 +293,7 @@ EOF
 
 cmd_status() {
   log_header "AttendEase OS — System Health Status"
-  docker compose ps
+  dcompose ps
   echo ""
   
   if curl -sf "http://127.0.0.1:3000/api/v1/health" >/dev/null 2>&1; then
@@ -320,10 +322,10 @@ cmd_diagnostics() {
   df -h .
   echo ""
   echo "--- Docker Containers ---"
-  docker compose ps -a
+  dcompose ps -a
   echo ""
   echo "--- Recent Container Logs ---"
-  docker compose logs --tail=30
+  dcompose logs --tail=30
 }
 
 cmd_backup() {
@@ -345,7 +347,7 @@ cmd_backup() {
     exit 1
   fi
 
-  docker compose exec -T db pg_dump -U attendance_migration -d school_attendance | \
+  dcompose exec -T db pg_dump -U attendance_migration -d school_attendance | \
     gzip -c | \
     openssl enc -aes-256-cbc -pbkdf2 -salt -pass pass:"${BACKUP_KEY}" > "${TARGET_ENC}"
 
@@ -385,7 +387,7 @@ cmd_restore() {
   echo " • Decrypting and streaming backup to PostgreSQL..."
   openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_KEY}" -in "${RESTORE_TARGET}" | \
     gunzip -c | \
-    docker compose exec -T db psql -U attendance_migration -d school_attendance
+    dcompose exec -T db psql -U attendance_migration -d school_attendance
 
   echo "✅ Database restore successfully completed."
 }
@@ -393,7 +395,7 @@ cmd_restore() {
 cmd_repair() {
   log_header "AttendEase OS — Self-Healing Repair Routine"
   echo " • Restarting unhealthy containers..."
-  docker compose restart
+  dcompose restart
   sleep 5
   cmd_status
 }
@@ -405,13 +407,13 @@ cmd_update() {
   cmd_backup
   PRE_UPDATE_BACKUP=$(find ./backups -name "*.sql.gz.enc" 2>/dev/null | sort -r | head -n 1 || true)
 
-  CURRENT_IMAGE_ID=$(docker compose images -q app 2>/dev/null || echo "unknown")
+  CURRENT_IMAGE_ID=$(dcompose images -q app 2>/dev/null || echo "unknown")
 
   echo "\n2. Pulling latest release container images..."
-  docker compose pull app caddy
+  dcompose pull app caddy
 
   echo "\n3. Restarting application services with updated image..."
-  docker compose up -d --no-deps app caddy
+  dcompose up -d --no-deps app caddy
 
   echo "\n4. Testing post-update readiness probes..."
   MAX_RETRIES=15
@@ -428,7 +430,7 @@ cmd_update() {
   done
 
   if [ ${HEALTHY} -eq 1 ]; then
-    NEW_IMAGE_ID=$(docker compose images -q app 2>/dev/null || echo "unknown")
+    NEW_IMAGE_ID=$(dcompose images -q app 2>/dev/null || echo "unknown")
     cat <<EOF > "${STATE_FILE}"
 {
   "version": "${VERSION}",
@@ -443,7 +445,7 @@ EOF
   else
     echo "❌ Upgrade failed health checks! Rolling back to previous application state..." >&2
     if [ -n "${CURRENT_IMAGE_ID}" ] && [ "${CURRENT_IMAGE_ID}" != "unknown" ]; then
-      docker compose up -d --no-deps app caddy
+      dcompose up -d --no-deps app caddy
     fi
     echo "⚠️ Note: If database schema migrations were applied, run: ./scripts/install.sh restore ${PRE_UPDATE_BACKUP}" >&2
     exit 1
@@ -457,7 +459,7 @@ cmd_rollback() {
     LAST_BACKUP=$(grep '"last_backup"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2- | tr -d '", ' || true)
     if [ -n "${PREV_IMAGE}" ] && [ "${PREV_IMAGE}" != "null" ]; then
       echo " • Reverting container stack to previous recorded state (${PREV_IMAGE})..."
-      docker compose restart app caddy
+      dcompose restart app caddy
       if [ -n "${LAST_BACKUP}" ] && [ -f "${LAST_BACKUP}" ]; then
         echo " • Previous pre-update backup available at: ${LAST_BACKUP}"
       fi
@@ -467,7 +469,7 @@ cmd_rollback() {
   fi
 
   echo " • Restarting existing container stack..."
-  docker compose restart
+  dcompose restart
   echo "✅ Rollback applied."
 }
 
@@ -483,11 +485,11 @@ cmd_uninstall() {
 
   if [ "${PURGE}" -eq 1 ]; then
     echo " • Stopping containers and purging all database volumes..."
-    docker compose down -v
+    dcompose down -v
     rm -f "${STATE_FILE}"
   else
     echo " • Stopping containers (retaining database volumes)..."
-    docker compose down
+    dcompose down
   fi
   echo "✅ AttendEase OS stopped and uninstalled."
 }

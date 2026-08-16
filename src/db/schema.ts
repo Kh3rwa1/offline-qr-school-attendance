@@ -519,7 +519,7 @@ export const rfidReaderStatusEnum = pgEnum('rfid_reader_status', [
 ]);
 
 export const rfidSecurityModeEnum = pgEnum('rfid_security_mode', [
-  'SECURE', 'UID_LEGACY',
+  'SECURE', 'UID_LEGACY', 'UHF_EPC',
 ]);
 
 export const rfidAdapterTypeEnum = pgEnum('rfid_adapter_type', [
@@ -527,7 +527,7 @@ export const rfidAdapterTypeEnum = pgEnum('rfid_adapter_type', [
 ]);
 
 export const captureMethodEnum = pgEnum('capture_method', [
-  'QR', 'RFID_SECURE', 'RFID_UID_LEGACY', 'MANUAL',
+  'QR', 'RFID_SECURE', 'RFID_UID_LEGACY', 'RFID_GATE', 'RFID_UHF', 'MANUAL',
 ]);
 
 export const scanDecisionEnum = pgEnum('scan_decision', [

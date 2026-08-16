@@ -26,6 +26,8 @@ export const CSRF_HEADER_NAME = 'x-csrf-token';
  * 
  * 1. Webhooks with independent cryptographic authentication:
  *    - `/api/v1/notifications/callback`: DLT SMS provider delivery callback, verified by HMAC-SHA256 signature in X-Callback-Signature header.
+ *    - `/api/v1/schools/:schoolId/rfid/zebra/reads`: Machine webhook for Zebra FX9600 IoT Connector tag-read events (authenticated via HMAC signature or Bearer token, no browser cookies).
+ *    - `/api/v1/schools/:schoolId/rfid/scans`: Machine webhook for smartcard gate scans (reader HMAC/signature authenticated, no browser cookies).
  * 
  * 2. Unauthenticated public endpoints:
  *    - `/api/v1/auth/login`: Public credential authentication (session does not exist prior to this call).
@@ -136,7 +138,13 @@ export function clearCsrfCookies(res: Response): void {
  */
 export function isRouteExempt(path: string, originalUrl?: string): boolean {
   const url = originalUrl || path;
-  if (process.env.FEATURE_RFID === 'true' && (url.includes('/rfid/scans') || path.includes('/rfid/scans'))) {
+  if (
+    process.env.FEATURE_RFID === 'true' &&
+    (url.includes('/rfid/scans') ||
+      path.includes('/rfid/scans') ||
+      url.includes('/rfid/zebra/reads') ||
+      path.includes('/rfid/zebra/reads'))
+  ) {
     return true;
   }
   return EXEMPT_ROUTES.some((rule) => (rule.exact ? path === rule.path || url === rule.path : path.startsWith(rule.path) || url.startsWith(rule.path)));

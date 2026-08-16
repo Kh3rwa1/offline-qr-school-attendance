@@ -15,6 +15,7 @@ import {
   enrollments,
   academicYears,
   classSections,
+  teacherAssignments,
 } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -28,9 +29,14 @@ import {
 } from '../../src/services/rfid/cryptoService';
 import fixtureData from '../fixtures/zebra-iot-connector.json';
 
+function generateHmac(rawBody: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
+}
+
 describe('Zebra FX9600 IoT Connector Service', () => {
   let schoolId: string;
   let adminUserId: string;
+  let teacherUserId: string;
   const testReaderDeviceId = 'FX9600-GATE-01';
   let testReaderId: string;
   let testStudentId: string;
@@ -48,6 +54,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
     const seeded = await seedDatabase();
     schoolId = seeded.schoolA.id;
     adminUserId = seeded.adminUser.id;
+    teacherUserId = seeded.teacherUser.id;
 
     // Get current Academic Year
     const [ay] = await withTenantContext(schoolId, async (tx) => {
@@ -55,11 +62,23 @@ describe('Zebra FX9600 IoT Connector Service', () => {
     });
     testAcademicYearId = ay.id;
 
-    // Get or create class section
+    // Get seeded class section (Class 5 Section A with assigned teacher)
     const [sec] = await withTenantContext(schoolId, async (tx) => {
-      return tx.select().from(classSections).where(eq(classSections.schoolId, schoolId)).limit(1);
+      return tx.select().from(classSections).where(and(eq(classSections.schoolId, schoolId), eq(classSections.className, 'Class 5'))).limit(1);
     });
     testClassSectionId = sec.id;
+
+    // Ensure teacher assignment exists for Class 5
+    await withTenantContext(schoolId, async (tx) => {
+      await tx
+        .insert(teacherAssignments)
+        .values({
+          schoolId,
+          teacherId: teacherUserId,
+          classSectionId: testClassSectionId,
+        })
+        .onConflictDoNothing();
+    });
 
     // Create test student
     const [st] = await withTenantContext(schoolId, async (tx) => {
@@ -105,7 +124,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       schoolId,
       studentId: testStudentId,
       credentialDigest: testEpcDigest,
-      securityMode: 'SECURE',
+      securityMode: 'UHF_EPC',
       keyVersion: 1,
       operatorUserId: adminUserId,
     });
@@ -142,8 +161,72 @@ describe('Zebra FX9600 IoT Connector Service', () => {
     });
   });
 
-  describe('processZebraIotWebhook Ingest Flow', () => {
-    it('successfully processes valid EPC tag read and marks student PRESENT', async () => {
+  describe('Webhook Authentication Enforcement (WP1)', () => {
+    it('rejects requests with missing HMAC signature and missing Bearer token', async () => {
+      const payload = {
+        type: 'tag_read',
+        reader_name: testReaderDeviceId,
+        data: [{ idHex: testEpc }],
+      };
+      const rawBody = JSON.stringify(payload);
+
+      await expect(
+        processZebraIotWebhook({
+          schoolId,
+          rawBody,
+          parsedBody: payload,
+          headers: {
+            'x-reader-id': testReaderDeviceId,
+          },
+        })
+      ).rejects.toThrow('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
+    });
+
+    it('rejects requests with invalid HMAC signature', async () => {
+      const payload = {
+        type: 'tag_read',
+        reader_name: testReaderDeviceId,
+        data: [{ idHex: testEpc }],
+      };
+      const rawBody = JSON.stringify(payload);
+
+      await expect(
+        processZebraIotWebhook({
+          schoolId,
+          rawBody,
+          parsedBody: payload,
+          headers: {
+            'x-reader-id': testReaderDeviceId,
+            'x-zebra-signature': 'deadbeef0000111122223333444455556666777788889999aaaabbbbccccdddd',
+          },
+        })
+      ).rejects.toThrow('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
+    });
+
+    it('accepts requests authenticated with valid Bearer token', async () => {
+      const payload = {
+        type: 'heartbeat',
+        reader_name: testReaderDeviceId,
+        status: 'OPERATIONAL',
+      };
+      const rawBody = JSON.stringify(payload);
+
+      const res = await processZebraIotWebhook({
+        schoolId,
+        rawBody,
+        parsedBody: payload,
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          authorization: `Bearer ${hmacSecret}`,
+        },
+      });
+
+      expect(res.success).toBe(true);
+    });
+  });
+
+  describe('processZebraIotWebhook Ingest Flow & Taxonomy', () => {
+    it('successfully processes valid EPC tag read with HMAC and marks student PRESENT', async () => {
       const payload = {
         type: 'tag_read',
         reader_name: testReaderDeviceId,
@@ -158,12 +241,15 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       };
 
       const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
+
       const res = await processZebraIotWebhook({
         schoolId,
         rawBody,
         parsedBody: payload,
         headers: {
           'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
         },
       });
 
@@ -192,7 +278,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       expect(record.status).toBe('PRESENT');
       expect(record.captureMethod).toBe('RFID');
 
-      // Verify scan event does NOT contain raw EPC
+      // Verify scan event taxonomy and ensure zero raw EPC in logs
       const [scanEvent] = await withTenantContext(schoolId, async (tx) => {
         return tx
           .select()
@@ -207,6 +293,8 @@ describe('Zebra FX9600 IoT Connector Service', () => {
 
       expect(scanEvent).toBeDefined();
       expect(scanEvent.decision).toBe('ACCEPTED');
+      expect(scanEvent.captureMethod).toBe('RFID_GATE');
+      expect(scanEvent.securityMode).toBe('UHF_EPC');
       // Ensure zero occurrence of raw EPC string in scanEvent columns
       expect(JSON.stringify(scanEvent)).not.toContain(testEpc);
     });
@@ -243,7 +331,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
           schoolId,
           studentId: debStudentId,
           credentialDigest: debounceDigest,
-          securityMode: 'SECURE',
+          securityMode: 'UHF_EPC',
           keyVersion: 1,
           status: 'ACTIVE',
           createdByUserId: adminUserId,
@@ -264,13 +352,17 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       };
 
       const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
 
       // First Walk
       const res1 = await processZebraIotWebhook({
         schoolId,
         rawBody,
         parsedBody: payload,
-        headers: { 'x-reader-id': testReaderDeviceId },
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
       });
       expect(res1.acceptedCount).toBe(1);
 
@@ -279,13 +371,175 @@ describe('Zebra FX9600 IoT Connector Service', () => {
         schoolId,
         rawBody,
         parsedBody: payload,
-        headers: { 'x-reader-id': testReaderDeviceId },
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
       });
 
       expect(res2.duplicateCount).toBe(1);
       expect(res2.acceptedCount).toBe(0);
       expect(res2.results[0].decision).toBe('DUPLICATE');
       expect(res2.results[0].duplicate).toBe(true);
+    });
+
+    it('processes a doorway burst of 50 duplicate reads in one payload down to 1 ACCEPTED and 49 DUPLICATE without service errors', async () => {
+      const burstEpc = 'E28011700000020B85795050';
+      const burstDigest = computeEpcDigest(burstEpc);
+
+      await withTenantContext(schoolId, async (tx) => {
+        const [st] = await tx
+          .insert(students)
+          .values({
+            schoolId,
+            name: 'Burst Student',
+            studentCode: 'ZG-STD-BURST',
+            status: 'ACTIVE',
+          })
+          .returning();
+
+        await tx.insert(enrollments).values({
+          schoolId,
+          studentId: st.id,
+          classSectionId: testClassSectionId,
+          academicYearId: testAcademicYearId,
+          rollNumber: 104,
+          startDate: '2026-01-01',
+          status: 'ACTIVE',
+        });
+
+        await tx.insert(rfidCredentials).values({
+          schoolId,
+          studentId: st.id,
+          credentialDigest: burstDigest,
+          securityMode: 'UHF_EPC',
+          keyVersion: 1,
+          status: 'ACTIVE',
+          createdByUserId: adminUserId,
+        });
+      });
+
+      // Construct a burst payload with 50 tag reads of the same EPC
+      const burstReads = Array.from({ length: 50 }, (_, i) => ({
+        idHex: burstEpc,
+        antenna: (i % 4) + 1,
+        peakRssi: -50 - (i % 10),
+        timestamp: new Date(Date.now() + i * 10).toISOString(),
+      }));
+
+      const payload = {
+        type: 'tag_read',
+        reader_name: testReaderDeviceId,
+        data: burstReads,
+      };
+
+      const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
+
+      const res = await processZebraIotWebhook({
+        schoolId,
+        rawBody,
+        parsedBody: payload,
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.processedCount).toBe(50);
+      expect(res.acceptedCount).toBe(1);
+      expect(res.duplicateCount).toBe(49);
+      expect(res.rejectedCount).toBe(0);
+    });
+
+    it('rejects read with NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER if class section has no assigned teacher (WP4)', async () => {
+      // Create a class section with NO teacher assigned
+      let unassignedClassSectionId: string;
+      const unassignedEpc = 'E28011700000020B85790000';
+      const unassignedDigest = computeEpcDigest(unassignedEpc);
+
+      await withTenantContext(schoolId, async (tx) => {
+        const [sec] = await tx
+          .insert(classSections)
+          .values({
+            schoolId,
+            academicYearId: testAcademicYearId,
+            className: 'Class 10',
+            sectionName: 'Unassigned',
+          })
+          .returning();
+        unassignedClassSectionId = sec.id;
+
+        const [st] = await tx
+          .insert(students)
+          .values({
+            schoolId,
+            name: 'Unassigned Section Student',
+            studentCode: 'ZG-STD-NO-TEACHER',
+            status: 'ACTIVE',
+          })
+          .returning();
+
+        await tx.insert(enrollments).values({
+          schoolId,
+          studentId: st.id,
+          classSectionId: unassignedClassSectionId,
+          academicYearId: testAcademicYearId,
+          rollNumber: 105,
+          startDate: '2026-01-01',
+          status: 'ACTIVE',
+        });
+
+        await tx.insert(rfidCredentials).values({
+          schoolId,
+          studentId: st.id,
+          credentialDigest: unassignedDigest,
+          securityMode: 'UHF_EPC',
+          keyVersion: 1,
+          status: 'ACTIVE',
+          createdByUserId: adminUserId,
+        });
+      });
+
+      const payload = {
+        type: 'tag_read',
+        reader_name: testReaderDeviceId,
+        data: [{ idHex: unassignedEpc, antenna: 1, peakRssi: -55 }],
+      };
+
+      const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
+
+      const res = await processZebraIotWebhook({
+        schoolId,
+        rawBody,
+        parsedBody: payload,
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
+      });
+
+      expect(res.rejectedCount).toBe(1);
+      expect(res.results[0].decision).toBe('REJECTED');
+      expect(res.results[0].reason).toBe('NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER');
+
+      // Verify no session was created for unassigned class section
+      const todayDate = new Date().toISOString().slice(0, 10);
+      const sessions = await withTenantContext(schoolId, async (tx) => {
+        return tx
+          .select()
+          .from(attendanceSessions)
+          .where(
+            and(
+              eq(attendanceSessions.schoolId, schoolId),
+              eq(attendanceSessions.classSectionId, unassignedClassSectionId),
+              eq(attendanceSessions.sessionDate, todayDate)
+            )
+          );
+      });
+      expect(sessions).toHaveLength(0);
     });
 
     it('rejects unknown unregistered EPC tag', async () => {
@@ -304,11 +558,16 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       };
 
       const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
+
       const res = await processZebraIotWebhook({
         schoolId,
         rawBody,
         parsedBody: payload,
-        headers: { 'x-reader-id': testReaderDeviceId },
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
       });
 
       expect(res.rejectedCount).toBe(1);
@@ -345,7 +604,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
           schoolId,
           studentId: st.id,
           credentialDigest: revokedDigest,
-          securityMode: 'SECURE',
+          securityMode: 'UHF_EPC',
           keyVersion: 1,
           status: 'REVOKED',
           createdByUserId: adminUserId,
@@ -366,11 +625,16 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       };
 
       const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
+
       const res = await processZebraIotWebhook({
         schoolId,
         rawBody,
         parsedBody: payload,
-        headers: { 'x-reader-id': testReaderDeviceId },
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
       });
 
       expect(res.rejectedCount).toBe(1);
@@ -394,18 +658,24 @@ describe('Zebra FX9600 IoT Connector Service', () => {
       ).rejects.toThrow('UNAUTHORIZED_READER');
     });
 
-    it('handles heartbeat keepalive payloads cleanly', async () => {
+    it('handles heartbeat keepalive payloads cleanly with HMAC signature', async () => {
       const payload = {
         type: 'heartbeat',
         reader_name: testReaderDeviceId,
         status: 'OPERATIONAL',
       };
 
+      const rawBody = JSON.stringify(payload);
+      const signature = generateHmac(rawBody, hmacSecret);
+
       const res = await processZebraIotWebhook({
         schoolId,
-        rawBody: JSON.stringify(payload),
+        rawBody,
         parsedBody: payload,
-        headers: { 'x-reader-id': testReaderDeviceId },
+        headers: {
+          'x-reader-id': testReaderDeviceId,
+          'x-zebra-signature': signature,
+        },
       });
 
       expect(res.success).toBe(true);
@@ -420,16 +690,20 @@ describe('Zebra FX9600 IoT Connector Service', () => {
   });
 
   describe('Route Dispatch & FEATURE_RFID Mount Isolation', () => {
-    it('POST /:schoolId/rfid/zebra/reads endpoint processes webhook successfully', async () => {
+    it('POST /:schoolId/rfid/zebra/reads endpoint processes webhook successfully with HMAC signature', async () => {
       const { rfidRouter } = await import('../../src/routes/rfidRoutes');
       const payload = {
         type: 'tag_read',
         reader_name: testReaderDeviceId,
         data: [{ idHex: testEpc, antenna: 1, peakRssi: -55, timestamp: new Date().toISOString() }],
       };
-      const rawBodyBuf = Buffer.from(JSON.stringify(payload));
+      const rawBodyStr = JSON.stringify(payload);
+      const rawBodyBuf = Buffer.from(rawBodyStr);
+      const signature = generateHmac(rawBodyStr, hmacSecret);
+
       const headersMap: Record<string, string> = {
         'x-reader-id': testReaderDeviceId,
+        'x-zebra-signature': signature,
         'content-type': 'application/json',
       };
 
@@ -470,6 +744,60 @@ describe('Zebra FX9600 IoT Connector Service', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
+    });
+
+    it('POST /:schoolId/rfid/zebra/reads returns 401 on missing HMAC and missing Bearer', async () => {
+      const { rfidRouter } = await import('../../src/routes/rfidRoutes');
+      const payload = {
+        type: 'tag_read',
+        reader_name: testReaderDeviceId,
+        data: [{ idHex: testEpc }],
+      };
+      const rawBodyStr = JSON.stringify(payload);
+      const rawBodyBuf = Buffer.from(rawBodyStr);
+
+      const headersMap: Record<string, string> = {
+        'x-reader-id': testReaderDeviceId,
+        'content-type': 'application/json',
+      };
+
+      const res = await new Promise<{ statusCode: number; body: any }>((resolve) => {
+        const req: any = {
+          method: 'POST',
+          url: `/${schoolId}/rfid/zebra/reads`,
+          originalUrl: `/${schoolId}/rfid/zebra/reads`,
+          params: { schoolId },
+          headers: headersMap,
+          get: (name: string) => headersMap[name.toLowerCase()],
+          header: (name: string) => headersMap[name.toLowerCase()],
+          body: payload,
+          rawBody: rawBodyBuf,
+          ip: '127.0.0.1',
+          socket: { remoteAddress: '127.0.0.1' },
+        };
+
+        const mockRes: any = {
+          statusCode: 200,
+          setHeader() {},
+          status(code: number) {
+            this.statusCode = code;
+            return this;
+          },
+          json(data: any) {
+            this.body = data;
+            resolve({ statusCode: this.statusCode, body: this.body });
+            return this;
+          },
+        };
+
+        (rfidRouter as any).handle(req, mockRes, (err: any) => {
+          if (err) resolve({ statusCode: 500, body: { error: err.message } });
+          else resolve({ statusCode: 404, body: { error: 'NOT_FOUND' } });
+        });
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.error).toBe('UNAUTHORIZED_READER');
     });
 
     it('FEATURE_RFID=false omits rfidRouter from mounted routes in server', async () => {
@@ -534,5 +862,3 @@ describe('Zebra FX9600 IoT Connector Service', () => {
     });
   });
 });
-
-

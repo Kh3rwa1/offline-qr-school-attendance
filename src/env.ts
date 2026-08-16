@@ -29,7 +29,7 @@ const envSchema = z.object({
   RFID_MAX_ROSTER_AGE_HOURS: z.string().default('4'),
   RFID_OFFLINE_QUEUE_CAPACITY: z.string().default('10000'),
   RFID_OFFLINE_FAIL_MODE: z.string().default('CLOSED'),
-  RFID_READER_SCAN_RATE_LIMIT: z.string().default('120'),
+  RFID_READER_SCAN_RATE_LIMIT: z.string().default('600'),
   RFID_GATEWAY_URL: z.string().optional(),
 });
 

@@ -12,7 +12,6 @@ import {
   academicYears,
   classSections,
   teacherAssignments,
-  schoolMemberships,
 } from '../../db/schema';
 import { eq, and, gt, desc, inArray } from 'drizzle-orm';
 import {
@@ -161,8 +160,7 @@ export async function processZebraIotWebhook(params: {
   // 3. Authenticate Reader (HMAC Signature or Bearer Token)
   const readerSecret =
     (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
-    process.env.RFID_HMAC_SECRET ||
-    (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+    process.env.RFID_HMAC_SECRET;
 
   if (!readerSecret) {
     throw new Error('CONFIG_ERROR: No cryptographic secret or token configured for reader authentication');
@@ -182,13 +180,10 @@ export async function processZebraIotWebhook(params: {
     isAuthValid = verifyZebraHmacSignature(rawBody, signatureHeader, readerSecret);
   } else if (authHeader) {
     isAuthValid = verifyBearerToken(authHeader, readerSecret);
-  } else if (process.env.NODE_ENV === 'test') {
-    // In test harness if test secret matches directly
-    isAuthValid = true;
   }
 
   if (!isAuthValid) {
-    throw new Error('UNAUTHORIZED_READER: Invalid HMAC signature or Bearer token');
+    throw new Error('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
   }
 
   // 4. Update Reader Heartbeat / Last Seen
@@ -291,8 +286,8 @@ export async function processZebraIotWebhook(params: {
           scanTimestamp: new Date(scanTimeMs),
           decision: 'UNKNOWN_CARD',
           rejectionCode: 'UNKNOWN_EPC_TAG',
-          captureMethod: 'RFID_SECURE',
-          securityMode: 'SECURE',
+          captureMethod: 'RFID_GATE',
+          securityMode: 'UHF_EPC',
           payloadHash,
         });
       });
@@ -326,8 +321,8 @@ export async function processZebraIotWebhook(params: {
           scanTimestamp: new Date(scanTimeMs),
           decision: rejectionDecision,
           rejectionCode: `CARD_${credential.status}`,
-          captureMethod: 'RFID_SECURE',
-          securityMode: 'SECURE',
+          captureMethod: 'RFID_GATE',
+          securityMode: 'UHF_EPC',
           payloadHash,
         });
       });
@@ -358,18 +353,18 @@ export async function processZebraIotWebhook(params: {
       const cooldownThreshold = new Date(Date.now() - cooldownMs);
       const recent = await withTenantContext(schoolId, async (tx) => {
         const [event] = await tx
-          .select()
+          .select({ id: rfidScanEvents.id })
           .from(rfidScanEvents)
+          .innerJoin(rfidCredentials, eq(rfidScanEvents.credentialId, rfidCredentials.id))
           .where(
             and(
               eq(rfidScanEvents.schoolId, schoolId),
               eq(rfidScanEvents.readerId, reader.id),
               eq(rfidScanEvents.decision, 'ACCEPTED'),
-              gt(rfidScanEvents.scanTimestamp, cooldownThreshold)
+              gt(rfidScanEvents.scanTimestamp, cooldownThreshold),
+              eq(rfidCredentials.credentialDigest, epcDigest)
             )
           )
-          .innerJoin(rfidCredentials, eq(rfidScanEvents.credentialId, rfidCredentials.id))
-          .where(eq(rfidCredentials.credentialDigest, epcDigest))
           .limit(1);
         return event;
       });
@@ -440,9 +435,9 @@ export async function processZebraIotWebhook(params: {
 
     // If no open session exists today, auto-create an OPEN session for today's gate attendance
     if (!session) {
-      session = await withTenantContext(schoolId, async (tx) => {
-        // Find assigned teacher for this class section
-        const [assignment] = await tx
+      // Find assigned teacher for this class section
+      const assignment = await withTenantContext(schoolId, async (tx) => {
+        const [a] = await tx
           .select({ teacherId: teacherAssignments.teacherId })
           .from(teacherAssignments)
           .where(
@@ -452,34 +447,42 @@ export async function processZebraIotWebhook(params: {
             )
           )
           .limit(1);
+        return a;
+      });
 
-        let teacherId = assignment?.teacherId;
+      if (!assignment?.teacherId) {
+        rejectedCount++;
+        await withTenantContext(schoolId, async (tx) => {
+          await tx.insert(rfidScanEvents).values({
+            schoolId,
+            readerId: reader.id,
+            credentialId: credential.id,
+            clientEventId,
+            scanTimestamp: new Date(scanTimeMs),
+            decision: 'NO_ACTIVE_SESSION',
+            rejectionCode: 'NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER',
+            captureMethod: 'RFID_GATE',
+            securityMode: 'UHF_EPC',
+            payloadHash,
+          });
+        });
 
-        if (!teacherId) {
-          // Fallback to any teacher or admin in the school
-          const [membership] = await tx
-            .select({ userId: schoolMemberships.userId })
-            .from(schoolMemberships)
-            .where(
-              and(
-                eq(schoolMemberships.schoolId, schoolId),
-                eq(schoolMemberships.status, 'ACTIVE')
-              )
-            )
-            .limit(1);
-          teacherId = membership?.userId;
-        }
+        results.push({
+          epcDigest,
+          epcLastFour: epcLast4,
+          decision: 'REJECTED',
+          reason: 'NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER',
+        });
+        continue;
+      }
 
-        if (!teacherId) {
-          throw new Error('CONFIG_ERROR: No teacher or staff user found in school to anchor attendance session');
-        }
-
+      session = await withTenantContext(schoolId, async (tx) => {
         const [newSession] = await tx
           .insert(attendanceSessions)
           .values({
             schoolId,
             classSectionId: targetClassSectionId,
-            teacherId,
+            teacherId: assignment.teacherId,
             sessionDate: todayDate,
             sessionType: 'DAILY',
             status: 'OPEN',
@@ -563,8 +566,8 @@ export async function processZebraIotWebhook(params: {
           clientEventId,
           scanTimestamp: new Date(scanTimeMs),
           decision: 'ACCEPTED',
-          captureMethod: 'RFID_SECURE',
-          securityMode: 'SECURE',
+          captureMethod: 'RFID_GATE',
+          securityMode: 'UHF_EPC',
           payloadHash,
         })
         .returning();

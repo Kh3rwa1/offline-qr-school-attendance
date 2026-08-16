@@ -121,7 +121,7 @@ rfidRouter.post(
         schoolId,
         studentId,
         credentialDigest,
-        securityMode: 'SECURE',
+        securityMode: 'UHF_EPC',
         keyVersion: 1,
         operatorUserId: user.id,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,

@@ -11,13 +11,13 @@ BEGIN
     CREATE TYPE rfid_reader_status AS ENUM ('PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED', 'RETIRED');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rfid_security_mode') THEN
-    CREATE TYPE rfid_security_mode AS ENUM ('SECURE', 'UID_LEGACY');
+    CREATE TYPE rfid_security_mode AS ENUM ('SECURE', 'UID_LEGACY', 'UHF_EPC');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rfid_adapter_type') THEN
     CREATE TYPE rfid_adapter_type AS ENUM ('GATEWAY', 'USB_HID', 'WEB_SERIAL', 'NETWORK');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'capture_method') THEN
-    CREATE TYPE capture_method AS ENUM ('QR', 'RFID_SECURE', 'RFID_UID_LEGACY', 'MANUAL');
+    CREATE TYPE capture_method AS ENUM ('QR', 'RFID_SECURE', 'RFID_UID_LEGACY', 'RFID_GATE', 'RFID_UHF', 'MANUAL');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'scan_decision') THEN
     CREATE TYPE scan_decision AS ENUM (

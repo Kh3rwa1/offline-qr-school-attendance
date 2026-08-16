@@ -8,7 +8,7 @@ export async function enrollCredential(params: {
   schoolId: string;
   studentId: string;
   credentialDigest: string;
-  securityMode: 'SECURE' | 'UID_LEGACY';
+  securityMode: 'SECURE' | 'UID_LEGACY' | 'UHF_EPC';
   keyVersion: number;
   operatorUserId: string;
   expiresAt?: Date;

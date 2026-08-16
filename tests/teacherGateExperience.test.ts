@@ -190,7 +190,7 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
     });
 
     // 3. Create today's session and simulate Zebra RFID write to attendanceRecords
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
     let sessionId = '';
     await withTenantContext(school.id, async (tx) => {
       const [sess] = await tx
@@ -501,7 +501,7 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
           schoolId: school.id,
           classSectionId: cs.id,
           teacherId: teacherUser.id,
-          sessionDate: new Date().toISOString().slice(0, 10),
+          sessionDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()),
           sessionType: 'DAILY',
           status: 'OPEN',
         })
@@ -671,7 +671,7 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
           schoolId: school.id,
           classSectionId: cs.id,
           teacherId: teacherUser.id,
-          sessionDate: new Date().toISOString().slice(0, 10),
+          sessionDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()),
           sessionType: 'DAILY',
           status: 'OPEN',
         })

@@ -221,21 +221,21 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
                               <button
                                 type="button"
                                 onClick={() => statusMutation.mutate({ readerId: r.id, status: 'APPROVED' })}
-                                className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer min-h-[36px]"
+                                className="px-3.5 py-2 rounded-xl text-sm font-bold text-forest-700 dark:text-forest-600 bg-success-50 hover:bg-success-100 border border-success-100 dark:border-success-600/30 font-display cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                               >
-                                {language === 'bn' ? 'অনুমোদন' : 'Approve'}
+                                {t('approveDevice')}
                               </button>
                             )}
                             {r.status !== 'REVOKED' ? (
                               <button
                                 type="button"
                                 onClick={() => statusMutation.mutate({ readerId: r.id, status: 'REVOKED' })}
-                                className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer min-h-[36px]"
+                                className="px-3.5 py-2 rounded-xl text-sm font-bold text-danger-800 bg-danger-50 hover:bg-danger-100 border border-danger-100 dark:border-danger-600/30 font-display cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                               >
-                                {language === 'bn' ? 'বন্ধ করুন' : 'Revoke'}
+                                {t('revokeDevice')}
                               </button>
                             ) : (
-                              <span className="text-[11px] text-ink-muted font-bold font-display">{t('statusCancelled')}</span>
+                              <span className="text-sm text-ink-muted font-bold font-display">{t('statusCancelled')}</span>
                             )}
                           </div>
                         </td>

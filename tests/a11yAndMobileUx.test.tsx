@@ -80,7 +80,29 @@ describe('WCAG 2.2 AA / AAA Accessibility & Mobile UX Tests', () => {
     });
   });
 
-  describe('3. Touch Target Minimum 44x44px Dimensions', () => {
+  describe('3. Strict Touch Target Minimum 44x44px Dimensions & Zero Sub-44px Classes', () => {
+    it('should verify zero sub-44px dimensions across all non-super-admin dashboard source files', () => {
+      const targetPaths = [
+        '../src/dashboards/school-admin/UserManagement.tsx',
+        '../src/dashboards/school-admin/SchoolAdminDashboard.tsx',
+        '../src/dashboards/teacher/OfflineWorkspace.tsx',
+        '../src/dashboards/teacher/TeacherDashboard.tsx',
+        '../src/dashboards/rfid-operator/RfidOperatorDashboard.tsx',
+        '../src/dashboards/report-viewer/ReportViewerDashboard.tsx',
+        '../src/components/rfid/ReaderManagement.tsx',
+        '../src/components/ui/Button.tsx',
+      ];
+
+      for (const relPath of targetPaths) {
+        const fullPath = path.resolve(__dirname, relPath);
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        expect(content).not.toContain('min-h-[36px]');
+        expect(content).not.toContain('min-w-[36px]');
+        expect(content).not.toContain('min-h-[32px]');
+        expect(content).not.toContain('min-h-[30px]');
+      }
+    });
+
     it('should inspect all rendered controls in BentoScannerGrid and verify min 44px touch targets', () => {
       const mockSession = {
         id: 'sess-1',
@@ -121,10 +143,8 @@ describe('WCAG 2.2 AA / AAA Accessibility & Mobile UX Tests', () => {
           classNames.includes('min-h-[48px]') ||
           classNames.includes('h-18') ||
           classNames.includes('h-20') ||
-          classNames.includes('h-16') ||
-          classNames.includes('py-2.5') ||
-          classNames.includes('py-3');
-        expect(satisfiesTarget, `Button "${btn.textContent}" must satisfy minimum 44px touch target`).toBe(true);
+          classNames.includes('h-16');
+        expect(satisfiesTarget, `Button "${btn.textContent}" must explicitly enforce >=44px minimum height via CSS class`).toBe(true);
       });
     });
 
@@ -149,10 +169,8 @@ describe('WCAG 2.2 AA / AAA Accessibility & Mobile UX Tests', () => {
         const classNames = btn.className;
         const satisfiesTarget =
           classNames.includes('min-h-[44px]') ||
-          classNames.includes('min-h-[48px]') ||
-          classNames.includes('py-2.5') ||
-          classNames.includes('py-3');
-        expect(satisfiesTarget, `Header button "${btn.textContent}" must satisfy minimum 44px touch target`).toBe(true);
+          classNames.includes('min-h-[48px]');
+        expect(satisfiesTarget, `Header button "${btn.textContent}" must explicitly enforce >=44px minimum height`).toBe(true);
       });
     });
   });

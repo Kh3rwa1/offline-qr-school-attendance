@@ -474,33 +474,28 @@ export const TeacherDashboard: React.FC = () => {
 
   // Handle Outbox Sync
   const handlePushOutbox = async () => {
+    if (!activeSchoolId) return;
     setIsSyncing(true);
     try {
       const deviceIdentifier = getDeviceIdentifier();
-      let sid = activeSchoolId;
-      if (!sid) {
-        const first = await offlineDb.syncOutbox.toCollection().first();
-        if (first) sid = first.schoolId;
-      }
-      if (sid) {
-        let attempts = 0;
-        while (attempts < 3) {
-          try {
-            await syncOutboxEvents({ schoolId: sid, deviceIdentifier });
-            break;
-          } catch (e: any) {
-            attempts++;
-            if (e.message === 'DEVICE_IDENTIFIER_REQUIRED' || e.message === 'DEVICE_NOT_FOUND') {
-              try {
-                await api(`/api/v1/schools/${sid}/devices/register`, {
-                  method: 'POST',
-                  body: JSON.stringify({ deviceIdentifier, label: 'Teacher Browser Device' }),
-                });
-              } catch {}
-            }
-            if (attempts >= 3) throw e;
-            await new Promise((r) => setTimeout(r, 600));
+      const sid = activeSchoolId;
+      let attempts = 0;
+      while (attempts < 3) {
+        try {
+          await syncOutboxEvents({ schoolId: sid, deviceIdentifier });
+          break;
+        } catch (e: any) {
+          attempts++;
+          if (e.message === 'DEVICE_IDENTIFIER_REQUIRED' || e.message === 'DEVICE_NOT_FOUND') {
+            try {
+              await api(`/api/v1/schools/${sid}/devices/register`, {
+                method: 'POST',
+                body: JSON.stringify({ deviceIdentifier, label: 'Teacher Browser Device' }),
+              });
+            } catch {}
           }
+          if (attempts >= 3) throw e;
+          await new Promise((r) => setTimeout(r, 600));
         }
       }
       await syncNow().catch(() => {});

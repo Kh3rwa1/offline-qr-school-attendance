@@ -319,6 +319,9 @@ export async function syncOutboxEvents(params: {
   customFetch?: typeof fetch;
 }) {
   const { schoolId, deviceIdentifier, customFetch } = params;
+  if (!schoolId) {
+    throw new Error('SCHOOL_ID_REQUIRED');
+  }
   if (!deviceIdentifier) throw new Error('DEVICE_IDENTIFIER_REQUIRED');
   const fetchImpl = customFetch || (typeof fetch !== 'undefined' ? fetch : undefined);
 
@@ -328,32 +331,33 @@ export async function syncOutboxEvents(params: {
 
   // A browser crash or tab close can leave a batch marked SYNCING. Requeue it
   // before selecting work so those events cannot become permanently invisible.
-  await offlineDb.syncOutbox.where('syncStatus').equals('SYNCING').modify({
-    syncStatus: 'FAILED',
-    failureClass: 'RETRYABLE',
-    syncError: 'SYNC_INTERRUPTED',
-  });
+  await offlineDb.syncOutbox
+    .where('syncStatus')
+    .equals('SYNCING')
+    .and((e) => e.schoolId === schoolId)
+    .modify({
+      syncStatus: 'FAILED',
+      failureClass: 'RETRYABLE',
+      syncError: 'SYNC_INTERRUPTED',
+    });
 
-  // Fetch pending or failed outbox events
+  // Fetch pending or failed outbox events strictly scoped to active schoolId
   const pendingEvents = await offlineDb.syncOutbox
     .where('syncStatus')
     .equals('PENDING')
+    .and((e) => e.schoolId === schoolId)
     .toArray();
 
   const failedEvents = await offlineDb.syncOutbox
     .where('syncStatus')
     .equals('FAILED')
+    .and((e) => e.schoolId === schoolId)
     .toArray();
 
   const eventsToSync = [...pendingEvents, ...failedEvents].filter((event) => event.retryCount < MAX_SYNC_RETRIES && event.failureClass !== 'PERMANENT' && event.failureClass !== 'CONFLICT');
 
   if (eventsToSync.length === 0) {
     return { processedCount: 0, syncedCount: 0, failedCount: 0, results: [], sessionMappings: [] };
-  }
-
-  const effectiveSchoolId = schoolId || eventsToSync[0]?.schoolId;
-  if (!effectiveSchoolId) {
-    throw new Error('SCHOOL_ID_REQUIRED');
   }
 
   const allResults: any[] = [];
@@ -383,7 +387,7 @@ export async function syncOutboxEvents(params: {
     };
 
     try {
-      const response = await fetchImpl(`/api/v1/schools/${effectiveSchoolId}/sync/attendance-events`, {
+      const response = await fetchImpl(`/api/v1/schools/${schoolId}/sync/attendance-events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -426,7 +430,25 @@ export async function syncOutboxEvents(params: {
 }
 
 // 5. Get Pending Outbox Count
-export async function getOutboxStatus() {
+export async function getOutboxStatus(schoolId?: string) {
+  if (schoolId) {
+    const pendingCount = await offlineDb.syncOutbox.where('syncStatus').equals('PENDING').and((e) => e.schoolId === schoolId).count();
+    const failedCount = await offlineDb.syncOutbox.where('syncStatus').equals('FAILED').and((e) => e.schoolId === schoolId).count();
+    const syncingCount = await offlineDb.syncOutbox.where('syncStatus').equals('SYNCING').and((e) => e.schoolId === schoolId).count();
+    const syncedCount = await offlineDb.syncOutbox.where('syncStatus').equals('SYNCED').and((e) => e.schoolId === schoolId).count();
+    const permanentFailureCount = await offlineDb.syncOutbox.where('syncStatus').equals('PERMANENT_FAILURE').and((e) => e.schoolId === schoolId).count();
+    const conflictCount = await offlineDb.syncOutbox.where('syncStatus').equals('CONFLICT').and((e) => e.schoolId === schoolId).count();
+    return {
+      pendingCount,
+      failedCount,
+      syncingCount,
+      syncedCount,
+      permanentFailureCount,
+      conflictCount,
+      unsyncedTotal: pendingCount + failedCount + syncingCount + permanentFailureCount + conflictCount,
+    };
+  }
+
   const pendingCount = await offlineDb.syncOutbox.where('syncStatus').equals('PENDING').count();
   const failedCount = await offlineDb.syncOutbox.where('syncStatus').equals('FAILED').count();
   const syncingCount = await offlineDb.syncOutbox.where('syncStatus').equals('SYNCING').count();

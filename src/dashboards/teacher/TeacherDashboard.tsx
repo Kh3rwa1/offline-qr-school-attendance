@@ -203,7 +203,19 @@ export const TeacherDashboard: React.FC = () => {
             }
             setSession(localSession);
           } else if (res.session) {
-            setSession({ ...res.session, serverSessionId: res.session.id });
+            try {
+              const newLocal = await createOfflineSession({
+                schoolId: activeSchoolId,
+                classSectionId: selectedClassId,
+                teacherId: user?.id || 'teacher',
+                sessionDate: todayStr,
+              });
+              newLocal.serverSessionId = res.session.id;
+              await offlineDb.sessions.update(newLocal.id, { serverSessionId: res.session.id });
+              setSession(newLocal);
+            } catch {
+              setSession({ ...res.session, serverSessionId: res.session.id });
+            }
           }
           return;
         }

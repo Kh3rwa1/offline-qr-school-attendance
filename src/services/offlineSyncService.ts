@@ -122,7 +122,10 @@ export async function processOfflineQRCode(params: {
 }) {
   const { schoolId, sessionId, rawToken, actorId, clientTimestamp, source = 'CAMERA' } = params;
 
-  const session = await offlineDb.sessions.get(sessionId);
+  let session = await offlineDb.sessions.get(sessionId);
+  if (!session) {
+    session = await offlineDb.sessions.where('serverSessionId').equals(sessionId).first();
+  }
   if (!session || session.schoolId !== schoolId) {
     return {
       success: false,
@@ -130,6 +133,8 @@ export async function processOfflineQRCode(params: {
       message: 'This attendance session is not available on this device',
     };
   }
+
+  const effectiveLocalSessionId = session.id;
 
   // Compute SHA-256 digest of raw token
   const tokenHash = await computeSHA256(rawToken);
@@ -163,10 +168,30 @@ export async function processOfflineQRCode(params: {
   }
 
   // Check if student belongs to session roster snapshot
-  const sessionRosterItem = await offlineDb.sessionRosters
+  let sessionRosterItem = await offlineDb.sessionRosters
     .where('[sessionId+studentId]')
-    .equals([sessionId, student.studentId])
+    .equals([effectiveLocalSessionId, student.studentId])
     .first();
+
+  if (!sessionRosterItem && sessionId !== effectiveLocalSessionId) {
+    sessionRosterItem = await offlineDb.sessionRosters
+      .where('[sessionId+studentId]')
+      .equals([sessionId, student.studentId])
+      .first();
+  }
+
+  if (!sessionRosterItem && student.classSectionId === session.classSectionId) {
+    const newId = await offlineDb.sessionRosters.put({
+      sessionId: effectiveLocalSessionId,
+      studentId: student.studentId,
+      studentCode: student.studentCode,
+      studentName: student.name,
+      studentNameBn: student.nameBn,
+      rollNumber: student.rollNumber,
+      status: 'UNMARKED',
+    });
+    sessionRosterItem = await offlineDb.sessionRosters.get(newId);
+  }
 
   if (!sessionRosterItem) {
     return {

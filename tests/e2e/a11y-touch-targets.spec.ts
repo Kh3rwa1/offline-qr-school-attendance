@@ -92,6 +92,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await addStaffBtn.click();
         const fullNameInput = page.locator('#add-staff-modal-title');
         await expect(fullNameInput).toBeVisible();
+        await page.waitForTimeout(250); // wait for scale animation to settle
 
         // Check password reveal button inside modal
         const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password|পাসওয়ার্ড/i }).first();

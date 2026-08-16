@@ -82,6 +82,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await inviteBtn.click();
     const modalTitle = page.locator('#add-staff-modal-title');
     await expect(modalTitle).toBeVisible();
+    await page.waitForTimeout(250); // wait for scale animation to settle
 
     const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password|পাসওয়ার্ড/i }).first();
     await expect(pwdToggle).toBeVisible();

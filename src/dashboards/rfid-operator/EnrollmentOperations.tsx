@@ -10,37 +10,37 @@ export const EnrollmentOperations: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-          UHF EPC Gen2 Badge Enrollment
+          Give Student Badge
         </h1>
         <p className="t-body text-sm text-ink-soft mt-1">
-          Assign passive UHF EPC Gen2 badges for Zebra FX9600 gate attendance at {activeSchoolName}.
+          Link attendance cards to students at {activeSchoolName}.
         </p>
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Gate Integration"
-          value="Zebra FX9600"
-          trend={{ value: "IoT Connector Webhook", isPositive: true }}
+          title="Gate Attendance"
+          value="Ready"
+          trend={{ value: "School Gate Ready", isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
-          title="Protocol Standard"
-          value="EPC Gen 2"
-          trend={{ value: "ISO 18000-63 Standard", isPositive: true }}
+          title="Badge Type"
+          value="Standard Badge"
+          trend={{ value: "Walk-Through Entry", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Credential Security"
-          value="SHA-256 Vault"
-          trend={{ value: "Zero Raw-EPC Storage", isPositive: true }}
+          title="Student Protection"
+          value="Safe & Private"
+          trend={{ value: "Secure Records", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Badge Availability"
-          value="Ready"
-          trend={{ value: "Handheld / Gate Ingest", isPositive: true }}
+          title="Badge Setup"
+          value="Instant"
+          trend={{ value: "Takes 5 Seconds", isPositive: true }}
           variant="default"
         />
       </div>

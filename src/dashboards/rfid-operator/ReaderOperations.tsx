@@ -11,10 +11,10 @@ export const ReaderOperations: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Zebra FX9600 Gate Readers
+            School Gate Boxes
           </h1>
           <p className="t-body text-sm text-ink-soft mt-1">
-            Configure Zebra FX9600 fixed UHF RFID readers and IoT Connector webhooks at {activeSchoolName}.
+            Manage attendance gate boxes installed at {activeSchoolName}.
           </p>
         </div>
       </div>
@@ -22,27 +22,27 @@ export const ReaderOperations: React.FC = () => {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          title="Zebra FX9600 Readers"
-          value="Fixed UHF"
-          trend={{ value: "4/8 Antenna Ports", isPositive: true }}
+          title="Gate Boxes"
+          value="Connected"
+          trend={{ value: "Entrance & Exit", isPositive: true }}
           variant="hero-forest"
         />
         <StatCard
-          title="Ingest Latency"
-          value="< 50 ms"
-          trend={{ value: "IoT Webhook Ingest", isPositive: true }}
+          title="Doorway Speed"
+          value="Instant"
+          trend={{ value: "Walk-Through Entry", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Tag Protocol"
-          value="EPC Gen 2"
-          trend={{ value: "ISO 18000-63 Standard", isPositive: true }}
+          title="Badge Type"
+          value="Student Badges"
+          trend={{ value: "Standard Cards", isPositive: true }}
           variant="default"
         />
         <StatCard
-          title="Security Ingest"
-          value="HMAC-SHA256"
-          trend={{ value: "Webhook Signature Verified", isPositive: true }}
+          title="Connection"
+          value="Protected"
+          trend={{ value: "Verified School Gate", isPositive: true }}
           variant="default"
         />
       </div>

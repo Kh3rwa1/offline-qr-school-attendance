@@ -11,6 +11,7 @@ import {
   manualStatusUpdate,
   getAttendanceSessionDetails,
   getDailyClassReport,
+  getTodayGateAttendance,
   SessionStatus,
   AttendanceStatus,
 } from '../services/attendanceService';
@@ -66,6 +67,33 @@ router.get(
     } catch (error: any) {
       console.error('Error fetching assigned classes:', error);
       res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_CLASSES' });
+    }
+  }
+);
+
+// 1b. Get Today Gate Attendance (Teacher-safe Gate Ingest Overview & Poll)
+router.get(
+  '/today-gate',
+  requireAuth,
+  requireTenant,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const user = req.user!;
+      const userRole = req.userRole!;
+      const classSectionId = req.query.classSectionId as string | undefined;
+
+      const result = await getTodayGateAttendance({
+        schoolId,
+        classSectionId,
+        actorId: user.id,
+        userRole,
+      });
+
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error('Error fetching today gate attendance:', error);
+      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_TODAY_GATE' });
     }
   }
 );

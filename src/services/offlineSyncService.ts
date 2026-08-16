@@ -282,7 +282,7 @@ async function markSyncFailure(event: OutboxEventItem, error: string, failureCla
 
 function getCsrfHeader(): Record<string, string> {
   if (typeof document === 'undefined') return {};
-  const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/);
+  const match = document.cookie.match(/(?:^|; )(?:XSRF-TOKEN|csrfToken)=([^;]*)/i);
   const token = match ? decodeURIComponent(match[1]) : null;
   return token ? { 'x-csrf-token': token } : {};
 }
@@ -326,6 +326,11 @@ export async function syncOutboxEvents(params: {
     return { processedCount: 0, syncedCount: 0, failedCount: 0, results: [], sessionMappings: [] };
   }
 
+  const effectiveSchoolId = schoolId || eventsToSync[0]?.schoolId;
+  if (!effectiveSchoolId) {
+    throw new Error('SCHOOL_ID_REQUIRED');
+  }
+
   const allResults: any[] = [];
   const allMappings: any[] = [];
   let syncedCount = 0;
@@ -353,7 +358,7 @@ export async function syncOutboxEvents(params: {
     };
 
     try {
-      const response = await fetchImpl(`/api/v1/schools/${schoolId}/sync/attendance-events`, {
+      const response = await fetchImpl(`/api/v1/schools/${effectiveSchoolId}/sync/attendance-events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -22,17 +22,17 @@ export interface ButtonProps
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-forest-700 hover:bg-forest-800 text-white shadow-md shadow-forest-700/20 border border-transparent font-bold active:bg-forest-900',
+    'bg-forest-700 hover:bg-forest-800 text-white shadow-md shadow-forest-700/20 border border-transparent font-bold active:bg-forest-900 disabled:bg-slate-300 disabled:text-slate-900 disabled:shadow-none',
   secondary:
-    'bg-surface hover:bg-surface-soft text-ink border border-line hover:border-ink-muted shadow-2xs font-semibold active:bg-line-soft',
+    'bg-surface hover:bg-surface-soft text-ink border border-line hover:border-ink-muted shadow-2xs font-semibold active:bg-line-soft disabled:bg-slate-100 disabled:text-slate-800',
   outline:
-    'bg-transparent hover:bg-surface-soft text-forest-700 dark:text-forest-500 border border-forest-600 font-semibold',
+    'bg-transparent hover:bg-surface-soft text-forest-700 dark:text-forest-500 border border-forest-600 font-semibold disabled:border-slate-300 disabled:text-slate-800',
   ghost:
-    'bg-transparent hover:bg-surface-soft text-ink-soft hover:text-ink border border-transparent font-semibold',
+    'bg-transparent hover:bg-surface-soft text-ink-soft hover:text-ink border border-transparent font-semibold disabled:text-slate-800',
   danger:
-    'bg-danger-600 hover:bg-danger-800 text-white shadow-md shadow-danger-600/20 border border-transparent font-bold',
+    'bg-danger-600 hover:bg-danger-800 text-white shadow-md shadow-danger-600/20 border border-transparent font-bold disabled:bg-slate-300 disabled:text-slate-900',
   success:
-    'bg-success-600 hover:bg-success-800 text-white shadow-md shadow-success-600/20 border border-transparent font-bold',
+    'bg-success-600 hover:bg-success-800 text-white shadow-md shadow-success-600/20 border border-transparent font-bold disabled:bg-slate-300 disabled:text-slate-900',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -63,7 +63,7 @@ export const Button: React.FC<ButtonProps> = ({
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       type={type}
       disabled={isDisabled}
-      className={`inline-flex items-center justify-center rounded-full font-display transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none select-none text-center ${
+      className={`inline-flex items-center justify-center rounded-full font-display transition-all cursor-pointer disabled:cursor-not-allowed disabled:transform-none select-none text-center ${
         fullWidth ? 'w-full' : ''
       } ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...(rest as any)}

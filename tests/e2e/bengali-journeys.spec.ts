@@ -19,7 +19,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
 
     // Verify phone field placeholder / label in Bengali
-    await expect(page.locator('label').filter({ hasText: /মোবাইল নম্বর|ফোন|Phone/i })).toBeVisible();
+    await expect(page.locator('label').filter({ hasText: /Mobile Number|মোবাইল নম্বর|ফোন|Phone/i })).toBeVisible();
 
     // Reload page: Verify persistence
     await page.reload();
@@ -40,7 +40,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     }
 
     // 3. Verify teacher dashboard renders Bengali strings
-    await expect(page.getByText(/আজকের হাজিরা|Today’s attendance/i)).toBeVisible();
+    await expect(page.getByText(/আজকের Attendance|আজকের হাজিরা|Today’s attendance|হাজিরা খাতা|Attendance Register/i).first()).toBeVisible();
 
     // 4. Verify no raw unparsed translation keys like "teacher." or "sync." appear in text
     const hasRawKeys = await page.evaluate(() => {

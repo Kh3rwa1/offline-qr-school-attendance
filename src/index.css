@@ -44,19 +44,19 @@
     --font-mono: 'JetBrains Mono', monospace;
 
     /* Forest Accent Palette */
-    --forest-900: #0d3828;
-    --forest-800: #104331;
-    --forest-700: #144e39;
-    --forest-600: #1a6247;
-    --forest-500: #227b5a;
+    --forest-900: #09261b;
+    --forest-800: #0d3828;
+    --forest-700: #0f3e2b;
+    --forest-600: #14532d;
+    --forest-500: #166534;
 
     /* Canvas & Surfaces (Donezo Light) */
     --canvas: #eef2f5;
     --surface: #ffffff;
     --surface-soft: #f8fafc;
     --ink: #0f172a;
-    --ink-soft: #1e293b;
-    --ink-muted: #334155;
+    --ink-soft: #0f172a;
+    --ink-muted: #1e293b;
     --line: #cbd5e1;
     --line-soft: #e2e8f0;
 

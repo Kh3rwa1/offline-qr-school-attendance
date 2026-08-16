@@ -109,7 +109,7 @@ export const Sidebar: React.FC = () => {
                   to={item.href}
                   end={item.href === '/app/super-admin' || item.href === '/app/school-admin' || item.href === '/app/teacher' || item.href === '/app/rfid'}
                   className={({ isActive }) =>
-                    `flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs transition-all relative group ${
+                    `flex items-center justify-between px-3.5 py-2.5 min-h-[44px] rounded-2xl text-xs transition-all relative group ${
                       isActive
                         ? 'text-ink font-bold bg-surface-soft shadow-2xs border border-line/60'
                         : 'text-ink-soft hover:text-ink hover:bg-surface-soft/60 font-medium'
@@ -155,7 +155,7 @@ export const Sidebar: React.FC = () => {
                 whileHover={{ x: 2, scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => void logout()}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl hover:text-danger-600 hover:bg-danger-50 transition-all font-display text-left cursor-pointer"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 min-h-[44px] rounded-2xl hover:text-danger-600 hover:bg-danger-50 transition-all font-display text-left cursor-pointer"
               >
                 <LogOut className="w-4 h-4 text-ink-muted group-hover:text-danger-600 transition-colors" />
                 <span>Logout Session</span>

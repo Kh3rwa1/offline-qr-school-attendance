@@ -55,10 +55,10 @@
     --surface: #ffffff;
     --surface-soft: #f8fafc;
     --ink: #0f172a;
-    --ink-soft: #475569;
-    --ink-muted: #94a3b8;
-    --line: #e2e8f0;
-    --line-soft: #f1f5f9;
+    --ink-soft: #334155;
+    --ink-muted: #475569;
+    --line: #cbd5e1;
+    --line-soft: #e2e8f0;
 
     /* Semantic Success */
     --success-50: #f0fdf4;
@@ -69,8 +69,8 @@
     /* Semantic Warning */
     --warning-50: #fffbeb;
     --warning-100: #fef3c7;
-    --warning-600: #d97706;
-    --warning-800: #92400e;
+    --warning-600: #b45309;
+    --warning-800: #78350f;
 
     /* Semantic Danger */
     --danger-50: #fef2f2;
@@ -90,9 +90,9 @@
     --canvas: #0b1512;
     --surface: #122019;
     --surface-soft: #182c23;
-    --ink: #f1f5f9;
-    --ink-soft: #94a3b8;
-    --ink-muted: #64748b;
+    --ink: #f8fafc;
+    --ink-soft: #cbd5e1;
+    --ink-muted: #94a3b8;
     --line: #1f382c;
     --line-soft: #1a3026;
 

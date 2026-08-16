@@ -72,11 +72,15 @@ export async function assertAllInteractiveElementsTouchTarget(
     const box = await el.boundingBox();
     if (!box || box.width === 0 || box.height === 0) continue;
 
-    // Check if element is inside an aria-hidden container
-    const isAriaHidden = await el.evaluate((node) => {
-      return Boolean(node.closest('[aria-hidden="true"]'));
+    // Check if element is inside an aria-hidden or sr-only container
+    const isAssistiveHidden = await el.evaluate((node) => {
+      return Boolean(
+        node.closest('[aria-hidden="true"]') ||
+        node.closest('.sr-only') ||
+        node.classList.contains('sr-only')
+      );
     });
-    if (isAriaHidden) continue;
+    if (isAssistiveHidden) continue;
 
     const metadata = await el.evaluate((node) => {
       const el = node as HTMLElement;

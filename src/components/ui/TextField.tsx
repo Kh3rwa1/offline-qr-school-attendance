@@ -78,11 +78,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         </div>
 
         {error ? (
-          <p id={inputId ? `${inputId}-error` : undefined} className="text-xs font-semibold text-danger-600 flex items-center gap-1">
+          <p id={inputId ? `${inputId}-error` : undefined} className="text-sm font-semibold text-danger-600 flex items-center gap-1">
             <span>{error}</span>
           </p>
         ) : helperText ? (
-          <p className="text-xs text-ink-muted">{helperText}</p>
+          <p className="text-sm text-ink-soft">{helperText}</p>
         ) : null}
       </div>
     );

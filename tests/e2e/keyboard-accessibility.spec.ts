@@ -108,7 +108,7 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
 
-    const langToggle = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i }).first();
+    const langToggle = page.getByRole('button', { name: 'বাংলা' }).or(page.getByRole('button', { name: /বাংলা \+ English|বাং \+ EN/i })).first();
     await expect(langToggle).toBeVisible();
 
     await langToggle.focus();

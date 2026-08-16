@@ -25,7 +25,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     expect(submitBox).not.toBeNull();
     expect(submitBox!.height).toBeGreaterThanOrEqual(44);
 
-    const langToggle = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i }).first();
+    const langToggle = page.getByRole('button', { name: 'বাংলা' }).or(page.getByRole('button', { name: 'English' })).first();
     await expect(langToggle).toBeVisible();
     const langBox = await langToggle.boundingBox();
     expect(langBox).not.toBeNull();

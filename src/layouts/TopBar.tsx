@@ -145,7 +145,7 @@ export const TopBar: React.FC = () => {
             onClick={() => setLanguage('en')}
             title="English"
             aria-label="English"
-            className={`px-3 py-1.5 rounded-full text-sm font-bold font-display transition-all cursor-pointer min-h-[36px] ${
+            className={`px-3.5 py-2 rounded-full text-sm font-bold font-display transition-all cursor-pointer min-h-[44px] min-w-[44px] ${
               language === 'en'
                 ? 'bg-forest-700 text-white shadow-xs'
                 : 'text-ink-soft hover:text-ink'
@@ -158,7 +158,7 @@ export const TopBar: React.FC = () => {
             onClick={() => setLanguage('bn')}
             title="বাংলা + English"
             aria-label="বাংলা + English"
-            className={`px-3 py-1.5 rounded-full text-sm font-bold font-display transition-all cursor-pointer min-h-[36px] ${
+            className={`px-3.5 py-2 rounded-full text-sm font-bold font-display transition-all cursor-pointer min-h-[44px] min-w-[44px] ${
               language === 'bn'
                 ? 'bg-forest-700 text-white shadow-xs'
                 : 'text-ink-soft hover:text-ink'

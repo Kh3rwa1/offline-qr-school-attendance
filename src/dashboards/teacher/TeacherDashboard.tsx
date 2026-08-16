@@ -13,6 +13,7 @@ import {
   Check,
   Usb,
   Building2,
+  Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '../../components/shared/Button';
@@ -65,7 +66,7 @@ interface StudentStatusRow {
 export const TeacherDashboard: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   const { user } = useSession();
-  const { outboxCount, syncNow, refreshOutbox } = useOfflineStatus();
+  const { isOnline, outboxCount, syncNow, refreshOutbox } = useOfflineStatus();
   const { language, t } = useLanguage();
 
   const [classes, setClasses] = useState<any[]>([]);
@@ -162,9 +163,10 @@ export const TeacherDashboard: React.FC = () => {
     void refreshOutbox();
   }, [loadClasses, refreshOutbox]);
 
-  // Fetch Live Today Gate Attendance & Poll every 4 seconds
+  // Fetch Live Today Gate Attendance & Poll every 3 seconds
   const fetchTodayGateData = useCallback(async () => {
     if (!activeSchoolId || !selectedClassId) return;
+
     const todayStr = new Date().toISOString().slice(0, 10);
 
     if (navigator.onLine) {
@@ -272,6 +274,60 @@ export const TeacherDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchTodayGateData]);
 
+  // Handle Download Class Roster
+  const handleDownloadRoster = async () => {
+    if (!activeSchoolId || !selectedClassId) return;
+    try {
+      showFeedback({ kind: 'success', text: t('downloadingRoster') });
+      const deviceId = getDeviceIdentifier();
+      try {
+        await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
+      } catch (dlErr: any) {
+        try {
+          await api(`/api/v1/schools/${activeSchoolId}/devices/register`, {
+            method: 'POST',
+            body: JSON.stringify({ deviceIdentifier: deviceId, label: 'Teacher Browser Device' }),
+          });
+          await downloadAndStoreRosterPackage(activeSchoolId, selectedClassId, deviceId);
+        } catch {
+          throw dlErr;
+        }
+      }
+      showFeedback({ kind: 'success', text: 'Roster and active QR digests downloaded successfully.' });
+      void fetchTodayGateData();
+    } catch (err: any) {
+      showFeedback({ kind: 'error', text: err.message || 'Error downloading roster' });
+    }
+  };
+
+  // Handle Start Session
+  const handleStartSession = async () => {
+    if (!activeSchoolId || !selectedClassId) return;
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let localSession = await offlineDb.sessions
+        .where('classSectionId')
+        .equals(selectedClassId)
+        .and((s) => s.sessionDate === todayStr)
+        .first();
+
+      if (!localSession) {
+        localSession = await createOfflineSession({
+          schoolId: activeSchoolId,
+          classSectionId: selectedClassId,
+          teacherId: user?.id || 'teacher',
+          sessionDate: todayStr,
+        });
+      }
+
+      setSession(localSession);
+      showFeedback({ kind: 'success', text: t('sessionStarted') });
+      void fetchTodayGateData();
+    } catch (err: any) {
+      showFeedback({ kind: 'error', text: err.message || 'Could not start session' });
+    }
+  };
+
   // Handle Scan Action
   const handleScan = useCallback(
     async (rawToken: string, source: 'CAMERA' | 'USB') => {
@@ -325,7 +381,7 @@ export const TeacherDashboard: React.FC = () => {
             playScanSuccessFeedback();
             showFeedback({
               kind: 'success',
-              text: `${result.student.name} (#${result.student.rollNumber}) ${t('markedPresent')}`,
+              text: `${result.student.name} (#${result.student.rollNumber}) marked PRESENT`,
             });
             void fetchTodayGateData();
           }
@@ -364,15 +420,18 @@ export const TeacherDashboard: React.FC = () => {
       setIsCameraActive(true);
       setCameraStatus('live');
     } catch (err: any) {
+      console.warn('Camera start error:', err);
       setIsCameraActive(false);
       const isDenied =
         err?.name === 'NotAllowedError' ||
         err?.name === 'PermissionDeniedError' ||
-        err?.message?.includes('Permission');
+        err?.message?.includes('Permission') ||
+        err?.message?.includes('permission') ||
+        err?.message?.includes('denied');
       setCameraStatus(isDenied ? 'permission_denied' : 'error');
-      setCameraError(isDenied ? t('cameraDenied') : (err?.message || t('cameraDenied')));
+      setCameraError(isDenied ? 'permission_denied' : (err?.message || 'error'));
     }
-  }, [videoEl, t]);
+  }, [videoEl]);
 
   const stopCamera = useCallback(() => {
     if (cameraScannerRef.current) {
@@ -404,7 +463,7 @@ export const TeacherDashboard: React.FC = () => {
     };
   }, [handleScan]);
 
-  // Push Outbox
+  // Handle Outbox Sync
   const handlePushOutbox = async () => {
     setIsSyncing(true);
     try {
@@ -415,7 +474,25 @@ export const TeacherDashboard: React.FC = () => {
         if (first) sid = first.schoolId;
       }
       if (sid) {
-        await syncOutboxEvents({ schoolId: sid, deviceIdentifier });
+        let attempts = 0;
+        while (attempts < 3) {
+          try {
+            await syncOutboxEvents({ schoolId: sid, deviceIdentifier });
+            break;
+          } catch (e: any) {
+            attempts++;
+            if (e.message === 'DEVICE_IDENTIFIER_REQUIRED' || e.message === 'DEVICE_NOT_FOUND') {
+              try {
+                await api(`/api/v1/schools/${sid}/devices/register`, {
+                  method: 'POST',
+                  body: JSON.stringify({ deviceIdentifier, label: 'Teacher Browser Device' }),
+                });
+              } catch {}
+            }
+            if (attempts >= 3) throw e;
+            await new Promise((r) => setTimeout(r, 600));
+          }
+        }
       }
       await syncNow().catch(() => {});
       await refreshOutbox();
@@ -428,21 +505,29 @@ export const TeacherDashboard: React.FC = () => {
     }
   };
 
-  // Finalize Attendance for Today
-  const handleFinalizeAttendance = async () => {
+  // Status manual override handler
+  const handleUpdateStatus = async (
+    studentId: string,
+    newStatus: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED' | 'LEAVE'
+  ) => {
     if (!activeSchoolId || !selectedClassId) return;
-    setIsFinishing(true);
     try {
-      let serverSessionId = session?.serverSessionId;
-      if (!serverSessionId && session?.id && /^[0-9a-fA-F-]{36}$/.test(session.id) && !session.id.startsWith('sess-')) {
-        serverSessionId = session.id;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let currentSession = session;
+      if (!currentSession) {
+        currentSession =
+          (await offlineDb.sessions
+            .where('classSectionId')
+            .equals(selectedClassId)
+            .and((s) => s.sessionDate === todayStr)
+            .first()) || null;
       }
 
+      let serverSessionId = currentSession?.serverSessionId;
       if (navigator.onLine) {
         if (!serverSessionId) {
-          const todayStr = new Date().toISOString().slice(0, 10);
           try {
-            const createRes = await api<{ success: boolean; data: any }>(
+            const createRes = await api<{ success: boolean; data?: { id: string } }>(
               `/api/v1/schools/${activeSchoolId}/attendance/sessions`,
               {
                 method: 'POST',
@@ -455,48 +540,119 @@ export const TeacherDashboard: React.FC = () => {
             );
             if (createRes?.data?.id) {
               serverSessionId = createRes.data.id;
+              if (currentSession?.id) {
+                await offlineDb.sessions.update(currentSession.id, { serverSessionId });
+                setSession((prev: any) => (prev ? { ...prev, serverSessionId } : prev));
+              }
             }
-          } catch (createErr) {
-            console.warn('Could not resolve server session:', createErr);
+          } catch (sessionErr) {
+            console.warn('Could not auto-create server session:', sessionErr);
           }
         }
 
         if (serverSessionId) {
-          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/status`, {
-            method: 'PATCH',
+          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/manual`, {
+            method: 'POST',
             body: JSON.stringify({
-              status: 'FINALIZED',
-              autoMarkAbsentForUnmarked: true,
-              reason: 'Class teacher finalized daily attendance',
+              studentId,
+              newStatus,
+              reason: 'Teacher manual override',
             }),
           });
         }
       }
 
-      if (session?.id) {
-        await offlineDb.sessions.update(session.id, { status: 'FINALIZED' });
-      }
-      setSession((prev: any) => (prev ? { ...prev, status: 'FINALIZED' } : null));
-      setShowConfirmFinish(false);
-      showFeedback({ kind: 'success', text: t('finalizedSuccess') });
+      const effectiveSessionId = currentSession?.id || serverSessionId || `sess-${Date.now()}`;
+      const timestamp = new Date().toISOString();
+      const outboxEvent: OutboxEventItem = {
+        clientEventId: `manual-${effectiveSessionId}-${studentId}-${Date.now()}`,
+        schoolId: activeSchoolId,
+        sessionId: serverSessionId || effectiveSessionId,
+        sessionMetadata: {
+          clientSessionId: currentSession?.clientSessionId || effectiveSessionId,
+          classSectionId: selectedClassId,
+          sessionDate: currentSession?.sessionDate || new Date().toISOString().slice(0, 10),
+          sessionType: 'DAILY',
+        },
+        studentId,
+        eventType: 'MANUAL_STATUS_UPDATE',
+        statusValue: newStatus,
+        clientTimestamp: timestamp,
+        source: 'MANUAL',
+        syncStatus: serverSessionId && navigator.onLine ? 'SYNCED' : 'PENDING',
+        retryCount: 0,
+        createdAt: timestamp,
+      };
+
+      await offlineDb.transaction('rw', [offlineDb.sessionRosters, offlineDb.syncOutbox], async () => {
+        if (currentSession?.id) {
+          const sessionRosterItem = await offlineDb.sessionRosters
+            .where('[sessionId+studentId]')
+            .equals([currentSession.id, studentId])
+            .first();
+          if (sessionRosterItem && sessionRosterItem.id) {
+            await offlineDb.sessionRosters.update(sessionRosterItem.id, { status: newStatus });
+          }
+        }
+        if (!navigator.onLine || !serverSessionId) {
+          await offlineDb.syncOutbox.put(outboxEvent);
+        }
+      });
+
+      await refreshOutbox();
       void fetchTodayGateData();
     } catch (err: any) {
-      showFeedback({ kind: 'error', text: err.message || 'Error finishing attendance' });
+      console.warn('Manual status update error:', err);
+    }
+  };
+
+  // Finalize attendance session
+  const handleFinalizeAttendance = async () => {
+    if (!activeSchoolId || !selectedClassId) return;
+    setIsFinishing(true);
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let localSession = await offlineDb.sessions
+        .where('classSectionId')
+        .equals(selectedClassId)
+        .and((s) => s.sessionDate === todayStr)
+        .first();
+
+      if (localSession) {
+        await offlineDb.sessions.update(localSession.id, { status: 'FINALIZED' });
+        localSession.status = 'FINALIZED';
+        setSession(localSession);
+      }
+
+      if (navigator.onLine) {
+        const serverSessionId = localSession?.serverSessionId;
+        if (serverSessionId) {
+          await api(`/api/v1/schools/${activeSchoolId}/attendance/sessions/${serverSessionId}/finalize`, {
+            method: 'PATCH',
+          });
+        }
+      }
+
+      showFeedback({ kind: 'success', text: t('attendanceFinalized') });
+      setShowConfirmFinish(false);
+      void fetchTodayGateData();
+    } catch (err: any) {
+      showFeedback({ kind: 'error', text: err.message || 'Error finalizing attendance' });
     } finally {
       setIsFinishing(false);
     }
   };
-
-  const missingStudents = allStudents.filter(
-    (s) => s.status === 'UNMARKED' || s.status === 'ABSENT'
-  );
 
   const selectedClassObj = classes.find(
     (c) => (c.classSectionId || c.id) === selectedClassId
   );
   const selectedClassName = selectedClassObj
     ? `${selectedClassObj.className} – ${selectedClassObj.sectionName}`
-    : 'Class';
+    : t('classLabel');
+
+  const missingStudents = allStudents.filter(
+    (s) => s.status === 'UNMARKED' || s.status === 'ABSENT'
+  );
 
   return (
     <div className="space-y-6 text-left max-w-6xl mx-auto" id="teacher-dashboard-view">
@@ -514,6 +670,9 @@ export const TeacherDashboard: React.FC = () => {
       {/* Top Header Card */}
       <div className="bg-surface p-6 sm:p-7 rounded-3xl border border-line shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 text-forest-700 dark:text-forest-600 text-sm font-bold font-display border border-success-100 mb-2">
+            <span>{t('todayAttendance')}</span>
+          </div>
           <div className="flex items-center gap-2 text-forest-700 dark:text-forest-600 font-bold text-sm font-display mb-1">
             <Building2 className="w-4 h-4" />
             <span>{activeSchoolName}</span>
@@ -528,38 +687,66 @@ export const TeacherDashboard: React.FC = () => {
 
         <div className="flex items-center gap-3 flex-wrap">
           {/* Class Picker */}
-          <div className="flex items-center gap-2 bg-surface-soft p-1.5 rounded-2xl border border-line">
-            <span className="text-sm font-bold text-ink-soft px-2 font-display">{t('classLabel')}</span>
-            <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              className="px-3.5 py-2 rounded-xl bg-surface border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
-            >
-              {classes.map((c) => {
-                const idVal = c.classSectionId || c.id;
-                return (
-                  <option key={idVal} value={idVal}>
-                    {c.className} – {c.sectionName}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          {classes.length > 0 && (
+            <div className="flex items-center gap-2 bg-surface-soft p-1.5 rounded-2xl border border-line">
+              <span className="text-sm font-bold text-ink-soft px-2 font-display">{t('classLabel')}</span>
+              <select
+                value={selectedClassId}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  setSelectedClassId(newId);
+                  try {
+                    localStorage.setItem('attendance.classSectionId', newId);
+                  } catch {}
+                }}
+                className="px-3.5 py-2 rounded-xl bg-surface border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
+              >
+                {classes.map((c) => {
+                  const idVal = c.classSectionId || c.id;
+                  return (
+                    <option key={idVal} value={idVal}>
+                      {c.className} – {c.sectionName}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
+          {/* Download Roster Button */}
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={handleDownloadRoster}
+            leftIcon={<Download className="w-4 h-4" />}
+            className="min-h-[44px] text-sm font-bold rounded-2xl"
+          >
+            {t('downloadRoster')}
+          </Button>
+
+          {/* Start Session Button */}
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleStartSession}
+            disabled={!selectedClassId || (!!session && session.status !== 'FINALIZED')}
+            className="min-h-[44px] text-sm font-bold rounded-2xl"
+          >
+            {session && session.status !== 'FINALIZED' ? t('sessionOpen') : t('startSession')}
+          </Button>
 
           {/* Sync Outbox Button */}
-          {outboxCount > 0 && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={handlePushOutbox}
-              disabled={isSyncing}
-              isLoading={isSyncing}
-              leftIcon={<RefreshCw className="w-4 h-4" />}
-              className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
-            >
-              {t('sendRecordsNow')} ({outboxCount})
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handlePushOutbox}
+            disabled={!isOnline || outboxCount === 0 || isSyncing}
+            isLoading={isSyncing}
+            leftIcon={<RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />}
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold"
+          >
+            {isSyncing ? t('syncingOutbox') : t('pushOutbox')} ({outboxCount})
+          </Button>
         </div>
       </div>
 
@@ -760,9 +947,30 @@ export const TeacherDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-sm font-bold bg-danger-50 text-danger-800 border border-danger-200 font-display">
-                    {t('statusAbsent')}
-                  </span>
+                  {/* Status Override Buttons - Big 44px Touch Targets */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(st.studentId, 'PRESENT')}
+                      className="min-h-[44px] px-3.5 py-2 rounded-2xl text-sm font-extrabold bg-success-50 hover:bg-success-100 text-forest-700 dark:text-forest-600 border border-success-100 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      {t('markPresent')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(st.studentId, 'LATE')}
+                      className="min-h-[44px] px-3.5 py-2 rounded-2xl text-sm font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      {t('markLate')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(st.studentId, 'LEAVE')}
+                      className="min-h-[44px] px-3.5 py-2 rounded-2xl text-sm font-extrabold bg-surface-soft hover:bg-surface text-ink-soft border border-line font-display cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      {t('markLeave')}
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -771,7 +979,7 @@ export const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Phone Backup QR / USB Scanner Accordion */}
-      <details className="app-card overflow-hidden group">
+      <details data-testid="phone-backup-details" className="app-card overflow-hidden group">
         <summary className="p-4 sm:p-5 flex items-center justify-between cursor-pointer list-none select-none hover:bg-surface-soft transition-colors">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-forest-50 text-forest-700 dark:text-forest-600">
@@ -825,11 +1033,11 @@ export const TeacherDashboard: React.FC = () => {
               playsInline
             />
 
-            {cameraError && (
+            {Boolean(cameraError) && (
               <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
                 <AlertCircle className="w-10 h-10 text-amber-400" />
                 <p className="text-sm font-semibold max-w-xs">
-                  {cameraStatus === 'permission_denied' ? t('cameraDenied') : cameraError}
+                  {t('cameraDenied')}
                 </p>
                 <Button variant="secondary" size="sm" onClick={() => void startCamera(videoEl)} className="min-h-[44px]">
                   {t('retryCamera')}

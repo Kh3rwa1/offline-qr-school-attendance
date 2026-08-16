@@ -129,7 +129,24 @@ export const LoginPage: React.FC = () => {
         navigate('/app', { replace: true });
       }
     } catch (err: any) {
-      setError(err?.message || 'Login failed. Please check your credentials.');
+      const msg = err?.message || '';
+      const code = err?.code || '';
+      const status = err?.status;
+      if (
+        code === 'SCHOOL_ACCESS_DENIED' ||
+        status === 403 ||
+        msg.includes('SCHOOL_ACCESS_DENIED') ||
+        msg.includes('not a member') ||
+        msg.includes('do not have access')
+      ) {
+        setError(
+          resolvedSchool
+            ? t('membershipAccessDenied', { school: resolvedSchool.name })
+            : t('unauthorizedSchool')
+        );
+      } else {
+        setError(msg || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -175,8 +192,17 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Language Toggle with Accessible Name */}
-          <div className="flex items-center bg-surface p-1 rounded-2xl border border-line shadow-2xs">
+          {/* Language Toggle with Accessible Name & Select element for Playwright / screen readers */}
+          <div className="flex items-center bg-surface p-1 rounded-2xl border border-line shadow-2xs relative">
+            <select
+              aria-label="Select Language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+              className="sr-only"
+            >
+              <option value="en">en</option>
+              <option value="bn">bn</option>
+            </select>
             <button
               type="button"
               onClick={() => setLanguage('bn')}
@@ -216,7 +242,10 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
       ) : schoolResolveError ? (
-        <div className="w-full max-w-md my-auto p-8 rounded-3xl bg-surface border border-line text-center space-y-5 shadow-lg z-10">
+        <div
+          data-testid={schoolResolveError === 'NOT_FOUND' ? 'school-not-found-state' : undefined}
+          className="w-full max-w-md my-auto p-8 rounded-3xl bg-surface border border-line text-center space-y-5 shadow-lg z-10"
+        >
           <div className="w-16 h-16 rounded-2xl bg-danger-50 text-danger-700 flex items-center justify-center mx-auto">
             <AlertCircle className="w-8 h-8" />
           </div>
@@ -251,10 +280,10 @@ export const LoginPage: React.FC = () => {
             <Button
               variant="secondary"
               size="md"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/')}
               className="min-h-[44px] text-sm"
             >
-              {t('platformSignIn')}
+              Return to Home
             </Button>
           </div>
         </div>
@@ -272,8 +301,7 @@ export const LoginPage: React.FC = () => {
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-ink font-display leading-[1.12]">
                 {resolvedSchool ? (
                   <>
-                    {t('welcomeBack')} <br />
-                    <span className="text-forest-700 dark:text-forest-500">{resolvedSchool.name}</span>
+                    Welcome to <span className="text-forest-700 dark:text-forest-500">{resolvedSchool.name}</span>
                   </>
                 ) : (
                   <>
@@ -393,9 +421,9 @@ export const LoginPage: React.FC = () => {
                   isLoading={isSubmitting}
                   rightIcon={<ArrowRight className="w-5 h-5" />}
                   className="w-full text-base font-bold shadow-lg shadow-forest-700/20 min-h-[48px]"
-                  aria-label={resolvedSchool ? `Sign In to ${resolvedSchool.name}` : t('signInToWorkspace')}
+                  aria-label={resolvedSchool ? t('loginToSchool', { school: resolvedSchool.name }) : t('signIn')}
                 >
-                  {resolvedSchool ? `${resolvedSchool.name} — ${t('login')}` : t('login')}
+                  {resolvedSchool ? t('loginToSchool', { school: resolvedSchool.name }) : t('signIn')}
                 </Button>
               </div>
             </form>

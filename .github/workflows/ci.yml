@@ -248,6 +248,7 @@ jobs:
       REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_01234567890123456789
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
+      BACKUP_ENCRYPTION_KEY: ci_backup_encryption_key_32bytes_long
       RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
       RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
       KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789

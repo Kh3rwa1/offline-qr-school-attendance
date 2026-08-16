@@ -12,7 +12,7 @@ import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
-import { canonicalizeEpc, computeEpcDigest, getEpcLastFour } from '../services/rfid/cryptoService';
+import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
 
 export const rfidRouter = Router();
 
@@ -109,18 +109,26 @@ rfidRouter.post(
   requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
   tenantHandler(async ({ req, schoolId, user }) => {
     try {
-      const { studentId, epc, expiresAt } = req.body;
+      const { studentId, epc, tid, expiresAt } = req.body;
       if (!studentId || !epc) {
         return { status: 400, body: { success: false, error: 'studentId and epc are required' } };
       }
       const canonical = canonicalizeEpc(epc);
       const credentialDigest = computeEpcDigest(canonical);
       const epcLastFour = getEpcLastFour(canonical);
+      let tidDigest: string | undefined;
+      if (tid && typeof tid === 'string') {
+        const canonicalTid = canonicalizeTid(tid);
+        tidDigest = computeTidDigest(canonicalTid);
+      }
 
       const credential = await credentialService.enrollCredential({
         schoolId,
         studentId,
+        credentialType: 'UHF_EPC_GEN2',
         credentialDigest,
+        epcLastFour,
+        tidDigest,
         securityMode: 'UHF_EPC',
         keyVersion: 1,
         operatorUserId: user.id,

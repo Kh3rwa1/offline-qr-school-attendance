@@ -276,7 +276,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
 
       expect(record).toBeDefined();
       expect(record.status).toBe('PRESENT');
-      expect(record.captureMethod).toBe('RFID');
+      expect(record.captureMethod).toBe('RFID_GATE');
 
       // Verify scan event taxonomy and ensure zero raw EPC in logs
       const [scanEvent] = await withTenantContext(schoolId, async (tx) => {

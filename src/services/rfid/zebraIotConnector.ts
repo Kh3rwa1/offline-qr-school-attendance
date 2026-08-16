@@ -13,16 +13,21 @@ import {
   classSections,
   teacherAssignments,
 } from '../../db/schema';
-import { eq, and, gt, desc, inArray } from 'drizzle-orm';
+import { eq, and, gt, desc, inArray, sql } from 'drizzle-orm';
 import {
   canonicalizeEpc,
+  canonicalizeTid,
   computeEpcDigest,
+  computeTidDigest,
   getEpcLastFour,
   verifyZebraHmacSignature,
   verifyBearerToken,
 } from './cryptoService';
 import { decryptReaderSecret } from './readerService';
 import { getRedisClient } from '../redisService';
+
+export const MAX_PAYLOAD_BYTES = 512 * 1024; // 512 KB
+export const MAX_BATCH_READS = 250;
 
 export interface ZebraTagReadRaw {
   epc?: string;
@@ -36,9 +41,13 @@ export interface ZebraTagReadRaw {
   firstSeen?: string | number;
   lastSeen?: string | number;
   reads?: number;
+  read_count?: number;
+  count?: number;
   format?: string;
   tid?: string;
   tidHex?: string;
+  vendorEventId?: string;
+  eventId?: string;
 }
 
 export interface ZebraIotPayload {
@@ -57,6 +66,7 @@ export interface ZebraIotPayload {
 export interface IngestTagResult {
   epcDigest: string;
   epcLastFour: string;
+  tidDigest?: string;
   decision: string;
   reason?: string;
   studentId?: string;
@@ -81,10 +91,30 @@ export interface ZebraIngestResponse {
 }
 
 /**
+ * Validates payload against prototype-pollution attacks.
+ */
+function sanitizePayloadObject(obj: any): boolean {
+  if (!obj || typeof obj !== 'object') return true;
+  for (const key of Object.keys(obj)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      return false;
+    }
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
+      if (!sanitizePayloadObject(obj[key])) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Normalizes varied Zebra IoT Connector JSON shapes into a uniform array of tag reads.
  */
 export function extractZebraTagReads(body: any): { reads: ZebraTagReadRaw[]; readerIdentifier?: string; eventType?: string } {
   if (!body) return { reads: [] };
+
+  if (!sanitizePayloadObject(body)) {
+    throw new Error('MALFORMED_PAYLOAD: Prototype pollution keys detected');
+  }
 
   // Case 1: Root is an Array of tag reads
   if (Array.isArray(body)) {
@@ -119,7 +149,13 @@ export async function processZebraIotWebhook(params: {
 }): Promise<ZebraIngestResponse> {
   const { schoolId, rawBody, parsedBody, headers } = params;
 
-  // 1. Identify Reader from Headers or Payload
+  // 1. Enforce Payload Size Bounds
+  const rawBytesLength = Buffer.isBuffer(rawBody) ? rawBody.length : Buffer.byteLength(rawBody || '', 'utf8');
+  if (rawBytesLength > MAX_PAYLOAD_BYTES) {
+    throw new Error(`OVERSIZED_PAYLOAD: Payload size ${rawBytesLength} exceeds maximum limit of ${MAX_PAYLOAD_BYTES} bytes`);
+  }
+
+  // 2. Identify Reader from Headers or Payload
   const headerReaderId =
     (headers['x-reader-id'] as string) ||
     (headers['x-zebra-reader-id'] as string) ||
@@ -132,7 +168,12 @@ export async function processZebraIotWebhook(params: {
     throw new Error('UNAUTHORIZED_READER: Missing reader identification in headers or payload');
   }
 
-  // 2. Query Reader from Database
+  // Enforce batch size limit
+  if (reads.length > MAX_BATCH_READS) {
+    throw new Error(`OVERSIZED_BATCH: Batch contains ${reads.length} reads, maximum permitted is ${MAX_BATCH_READS}`);
+  }
+
+  // 3. Query Reader from Database with Tenant Isolation
   const reader = await withTenantContext(schoolId, async (tx) => {
     const [byUuid] = /^[0-9a-fA-F-]{36}$/.test(readerSearchKey)
       ? await tx
@@ -157,7 +198,7 @@ export async function processZebraIotWebhook(params: {
     throw new Error(`FORBIDDEN_READER: Reader status is '${reader.status}'`);
   }
 
-  // 3. Authenticate Reader (HMAC Signature or Bearer Token)
+  // 4. Authenticate Reader (HMAC Signature or Bearer Token)
   const readerSecret =
     (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
     process.env.RFID_HMAC_SECRET;
@@ -179,14 +220,19 @@ export async function processZebraIotWebhook(params: {
   if (signatureHeader) {
     isAuthValid = verifyZebraHmacSignature(rawBody, signatureHeader, readerSecret);
   } else if (authHeader) {
-    isAuthValid = verifyBearerToken(authHeader, readerSecret);
+    // Check bearer token against readerSecret or bearerTokenDigest if stored
+    if (reader.bearerTokenDigest) {
+      isAuthValid = verifyBearerToken(authHeader, reader.bearerTokenDigest);
+    } else {
+      isAuthValid = verifyBearerToken(authHeader, readerSecret);
+    }
   }
 
   if (!isAuthValid) {
     throw new Error('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
   }
 
-  // 4. Update Reader Heartbeat / Last Seen
+  // 5. Update Reader Heartbeat / Last Seen
   await withTenantContext(schoolId, async (tx) => {
     await tx
       .update(rfidReaders)
@@ -197,7 +243,7 @@ export async function processZebraIotWebhook(params: {
       .where(eq(rfidReaders.id, reader.id));
   });
 
-  // If this is solely a heartbeat / keepalive payload with no tag reads
+  // Heartbeat / keepalive payload with no tag reads
   if (reads.length === 0 && (eventType === 'heartbeat' || parsedBody.type === 'heartbeat')) {
     return {
       success: true,
@@ -220,7 +266,7 @@ export async function processZebraIotWebhook(params: {
   const cooldownMs = parseInt(process.env.RFID_DUPLICATE_TAP_COOLDOWN_MS || '30000', 10);
   const payloadHash = crypto.createHash('sha256').update(rawBody).digest('hex');
 
-  // 5. Process Tag Reads
+  // 6. Process Tag Reads
   for (const read of reads) {
     const rawEpc = read.epc || read.idHex || read.tag_id;
     if (!rawEpc) {
@@ -237,11 +283,18 @@ export async function processZebraIotWebhook(params: {
     let canonicalEpcHex: string;
     let epcDigest: string;
     let epcLast4: string;
+    let tidDigest: string | undefined;
 
     try {
       canonicalEpcHex = canonicalizeEpc(rawEpc);
       epcDigest = computeEpcDigest(canonicalEpcHex);
       epcLast4 = getEpcLastFour(canonicalEpcHex);
+
+      const rawTid = read.tid || read.tidHex;
+      if (rawTid && typeof rawTid === 'string') {
+        const canonicalTidHex = canonicalizeTid(rawTid);
+        tidDigest = computeTidDigest(canonicalTidHex);
+      }
     } catch (err: any) {
       rejectedCount++;
       results.push({
@@ -257,9 +310,19 @@ export async function processZebraIotWebhook(params: {
     const scanDate = typeof timestampVal === 'number' ? new Date(timestampVal) : new Date(timestampVal);
     const scanTimeMs = isNaN(scanDate.getTime()) ? Date.now() : scanDate.getTime();
     const truncatedSecond = Math.floor(scanTimeMs / 1000);
-    const clientEventId = `${reader.id}-${epcDigest}-${truncatedSecond}`;
+    const antennaPort = typeof read.antenna === 'number' ? read.antenna : typeof read.antenna_port === 'number' ? read.antenna_port : parseInt(String(read.antenna || read.antenna_port || '1'), 10) || 1;
+    const peakRssi = typeof read.peakRssi === 'number' ? Math.round(read.peakRssi) : typeof read.rssi === 'number' ? Math.round(read.rssi) : parseInt(String(read.peakRssi || read.rssi || '-60'), 10) || -60;
+    const readCount = typeof read.reads === 'number' ? read.reads : typeof read.read_count === 'number' ? read.read_count : typeof read.count === 'number' ? read.count : 1;
+    const vendorEventId = read.vendorEventId || read.eventId || undefined;
 
-    // 6. Lookup Active Credential by Digest
+    // Stable, deterministic client event ID and idempotency key
+    const clientEventId = `${reader.id}-${epcDigest}-${truncatedSecond}`;
+    const idempotencyKey = crypto
+      .createHash('sha256')
+      .update(`${schoolId}:${reader.id}:${vendorEventId || `${epcDigest}:${truncatedSecond}:${antennaPort}`}`)
+      .digest('hex');
+
+    // 7. Lookup Active Credential by Digest
     const credential = await withTenantContext(schoolId, async (tx) => {
       const [cred] = await tx
         .select()
@@ -277,24 +340,36 @@ export async function processZebraIotWebhook(params: {
 
     if (!credential) {
       rejectedCount++;
-      // Record rejected event for security monitoring (never storing raw EPC)
+      // Record rejected event with idempotency check
       await withTenantContext(schoolId, async (tx) => {
-        await tx.insert(rfidScanEvents).values({
-          schoolId,
-          readerId: reader.id,
-          clientEventId,
-          scanTimestamp: new Date(scanTimeMs),
-          decision: 'UNKNOWN_CARD',
-          rejectionCode: 'UNKNOWN_EPC_TAG',
-          captureMethod: 'RFID_GATE',
-          securityMode: 'UHF_EPC',
-          payloadHash,
-        });
+        await tx
+          .insert(rfidScanEvents)
+          .values({
+            schoolId,
+            readerId: reader.id,
+            clientEventId,
+            idempotencyKey,
+            vendorEventId,
+            epcDigest,
+            epcLastFour: epcLast4,
+            tidDigest,
+            antennaPort,
+            peakRssi,
+            readCount,
+            scanTimestamp: new Date(scanTimeMs),
+            decision: 'UNKNOWN_CARD',
+            rejectionCode: 'UNKNOWN_EPC_TAG',
+            captureMethod: 'RFID_GATE',
+            securityMode: 'UHF_EPC',
+            payloadHash,
+          })
+          .onConflictDoNothing();
       });
 
       results.push({
         epcDigest,
         epcLastFour: epcLast4,
+        tidDigest,
         decision: 'UNKNOWN_CARD',
         reason: 'UNREGISTERED_EPC_BADGE',
       });
@@ -313,30 +388,42 @@ export async function processZebraIotWebhook(params: {
           : 'UNKNOWN_CARD';
 
       await withTenantContext(schoolId, async (tx) => {
-        await tx.insert(rfidScanEvents).values({
-          schoolId,
-          readerId: reader.id,
-          credentialId: credential.id,
-          clientEventId,
-          scanTimestamp: new Date(scanTimeMs),
-          decision: rejectionDecision,
-          rejectionCode: `CARD_${credential.status}`,
-          captureMethod: 'RFID_GATE',
-          securityMode: 'UHF_EPC',
-          payloadHash,
-        });
+        await tx
+          .insert(rfidScanEvents)
+          .values({
+            schoolId,
+            readerId: reader.id,
+            credentialId: credential.id,
+            clientEventId,
+            idempotencyKey,
+            vendorEventId,
+            epcDigest,
+            epcLastFour: epcLast4,
+            tidDigest,
+            antennaPort,
+            peakRssi,
+            readCount,
+            scanTimestamp: new Date(scanTimeMs),
+            decision: rejectionDecision,
+            rejectionCode: `CARD_${credential.status}`,
+            captureMethod: 'RFID_GATE',
+            securityMode: 'UHF_EPC',
+            payloadHash,
+          })
+          .onConflictDoNothing();
       });
 
       results.push({
         epcDigest,
         epcLastFour: epcLast4,
+        tidDigest,
         decision: rejectionDecision,
         reason: `CREDENTIAL_${credential.status}`,
       });
       continue;
     }
 
-    // 7. Debounce / Duplicate Walk Check
+    // 8. Debounce / Duplicate Walk Check
     const debounceKey = `rfid:debounce:${schoolId}:${reader.id}:${epcDigest}`;
     let isDebounced = false;
 
@@ -373,9 +460,37 @@ export async function processZebraIotWebhook(params: {
 
     if (isDebounced) {
       duplicateCount++;
+      // Record debounced scan event
+      await withTenantContext(schoolId, async (tx) => {
+        await tx
+          .insert(rfidScanEvents)
+          .values({
+            schoolId,
+            readerId: reader.id,
+            credentialId: credential.id,
+            clientEventId: `${clientEventId}-debounced-${Date.now()}`,
+            idempotencyKey,
+            vendorEventId,
+            epcDigest,
+            epcLastFour: epcLast4,
+            tidDigest,
+            antennaPort,
+            peakRssi,
+            readCount,
+            scanTimestamp: new Date(scanTimeMs),
+            decision: 'DUPLICATE',
+            rejectionCode: 'DEBOUNCE_COOLDOWN_ACTIVE',
+            captureMethod: 'RFID_GATE',
+            securityMode: 'UHF_EPC',
+            payloadHash,
+          })
+          .onConflictDoNothing();
+      });
+
       results.push({
         epcDigest,
         epcLastFour: epcLast4,
+        tidDigest,
         decision: 'DUPLICATE',
         reason: 'ALREADY_PROCESSED_COOLDOWN_ACTIVE',
         duplicate: true,
@@ -383,7 +498,7 @@ export async function processZebraIotWebhook(params: {
       continue;
     }
 
-    // 8. Lookup Student & Active Class Section Enrollment
+    // 9. Lookup Student & Active Class Section Enrollment
     const studentInfo = await withTenantContext(schoolId, async (tx) => {
       const [st] = await tx
         .select({
@@ -407,15 +522,17 @@ export async function processZebraIotWebhook(params: {
       results.push({
         epcDigest,
         epcLastFour: epcLast4,
+        tidDigest,
         decision: 'SUSPENDED_CARD',
         reason: 'STUDENT_INACTIVE_OR_UNENROLLED',
       });
       continue;
     }
 
-    // 9. Find or Resolve Today's Attendance Session
+    // 10. Find or Resolve Today's Attendance Session
     const todayDate = new Date().toISOString().slice(0, 10);
-    let targetClassSectionId = studentInfo.classSectionId;
+    // Use reader's assigned classSection if configured, otherwise student's active enrolled classSection
+    let targetClassSectionId = reader.assignedClassSectionId || studentInfo.classSectionId;
 
     let session = await withTenantContext(schoolId, async (tx) => {
       const [s] = await tx
@@ -425,13 +542,52 @@ export async function processZebraIotWebhook(params: {
           and(
             eq(attendanceSessions.schoolId, schoolId),
             eq(attendanceSessions.classSectionId, targetClassSectionId),
-            eq(attendanceSessions.sessionDate, todayDate),
-            inArray(attendanceSessions.status, ['DRAFT', 'OPEN', 'REOPENED'])
+            eq(attendanceSessions.sessionDate, todayDate)
           )
         )
         .limit(1);
       return s;
     });
+
+    // Check if session is already finalized
+    if (session && session.status === 'FINALIZED') {
+      rejectedCount++;
+      await withTenantContext(schoolId, async (tx) => {
+        await tx
+          .insert(rfidScanEvents)
+          .values({
+            schoolId,
+            readerId: reader.id,
+            credentialId: credential.id,
+            attendanceSessionId: session!.id,
+            clientEventId,
+            idempotencyKey,
+            vendorEventId,
+            epcDigest,
+            epcLastFour: epcLast4,
+            tidDigest,
+            antennaPort,
+            peakRssi,
+            readCount,
+            scanTimestamp: new Date(scanTimeMs),
+            decision: 'NO_ACTIVE_SESSION',
+            rejectionCode: 'SESSION_FINALIZED',
+            captureMethod: 'RFID_GATE',
+            securityMode: 'UHF_EPC',
+            payloadHash,
+          })
+          .onConflictDoNothing();
+      });
+
+      results.push({
+        epcDigest,
+        epcLastFour: epcLast4,
+        tidDigest,
+        decision: 'REJECTED',
+        reason: 'SESSION_FINALIZED',
+      });
+      continue;
+    }
 
     // If no open session exists today, auto-create an OPEN session for today's gate attendance
     if (!session) {
@@ -453,23 +609,35 @@ export async function processZebraIotWebhook(params: {
       if (!assignment?.teacherId) {
         rejectedCount++;
         await withTenantContext(schoolId, async (tx) => {
-          await tx.insert(rfidScanEvents).values({
-            schoolId,
-            readerId: reader.id,
-            credentialId: credential.id,
-            clientEventId,
-            scanTimestamp: new Date(scanTimeMs),
-            decision: 'NO_ACTIVE_SESSION',
-            rejectionCode: 'NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER',
-            captureMethod: 'RFID_GATE',
-            securityMode: 'UHF_EPC',
-            payloadHash,
-          });
+          await tx
+            .insert(rfidScanEvents)
+            .values({
+              schoolId,
+              readerId: reader.id,
+              credentialId: credential.id,
+              clientEventId,
+              idempotencyKey,
+              vendorEventId,
+              epcDigest,
+              epcLastFour: epcLast4,
+              tidDigest,
+              antennaPort,
+              peakRssi,
+              readCount,
+              scanTimestamp: new Date(scanTimeMs),
+              decision: 'NO_ACTIVE_SESSION',
+              rejectionCode: 'NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER',
+              captureMethod: 'RFID_GATE',
+              securityMode: 'UHF_EPC',
+              payloadHash,
+            })
+            .onConflictDoNothing();
         });
 
         results.push({
           epcDigest,
           epcLastFour: epcLast4,
+          tidDigest,
           decision: 'REJECTED',
           reason: 'NO_OPEN_SESSION_AND_NO_ASSIGNED_TEACHER',
         });
@@ -487,14 +655,70 @@ export async function processZebraIotWebhook(params: {
             sessionType: 'DAILY',
             status: 'OPEN',
           })
+          .onConflictDoNothing()
           .returning();
-        return newSession;
+        if (newSession) return newSession;
+
+        // In case of concurrent race, select the winner session
+        const [winner] = await tx
+          .select()
+          .from(attendanceSessions)
+          .where(
+            and(
+              eq(attendanceSessions.schoolId, schoolId),
+              eq(attendanceSessions.classSectionId, targetClassSectionId),
+              eq(attendanceSessions.sessionDate, todayDate)
+            )
+          )
+          .limit(1);
+        return winner;
       });
     }
 
-    // 10. Atomically Record Attendance & Scan Event
+    if (!session) {
+      rejectedCount++;
+      continue;
+    }
+
+    // 11. Atomically Claim Scan Event & Record Attendance
     const recordResult = await withTenantContext(schoolId, async (tx) => {
-      // Check existing attendance record in this session
+      // 11a. Insert Scan Event with Idempotency Key Claim
+      const [claimedEvent] = await tx
+        .insert(rfidScanEvents)
+        .values({
+          schoolId,
+          readerId: reader.id,
+          credentialId: credential.id,
+          attendanceSessionId: session!.id,
+          clientEventId,
+          idempotencyKey,
+          vendorEventId,
+          epcDigest,
+          epcLastFour: epcLast4,
+          tidDigest,
+          antennaPort,
+          peakRssi,
+          readCount,
+          scanTimestamp: new Date(scanTimeMs),
+          decision: 'ACCEPTED',
+          captureMethod: 'RFID_GATE',
+          securityMode: 'UHF_EPC',
+          payloadHash,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      // If already claimed concurrently, fetch existing event
+      if (!claimedEvent) {
+        const [existingEvent] = await tx
+          .select()
+          .from(rfidScanEvents)
+          .where(and(eq(rfidScanEvents.schoolId, schoolId), eq(rfidScanEvents.idempotencyKey, idempotencyKey)))
+          .limit(1);
+        return { isExisting: true, scanEventId: existingEvent?.id || clientEventId, recordId: undefined };
+      }
+
+      // 11b. Check existing attendance record in this session
       const [existingRecord] = await tx
         .select()
         .from(attendanceRecords)
@@ -509,12 +733,13 @@ export async function processZebraIotWebhook(params: {
       let recordId = existingRecord?.id;
 
       if (existingRecord) {
-        if (existingRecord.status !== 'PRESENT') {
+        // Only update if not manually marked EXCUSED or already PRESENT
+        if (existingRecord.status !== 'PRESENT' && existingRecord.status !== 'EXCUSED') {
           await tx
             .update(attendanceRecords)
             .set({
               status: 'PRESENT',
-              captureMethod: 'RFID',
+              captureMethod: 'RFID_GATE',
               lastUpdatedAt: new Date(),
             })
             .where(eq(attendanceRecords.id, existingRecord.id));
@@ -527,15 +752,16 @@ export async function processZebraIotWebhook(params: {
             attendanceSessionId: session!.id,
             studentId: studentInfo.studentId,
             status: 'PRESENT',
-            captureMethod: 'RFID',
+            captureMethod: 'RFID_GATE',
             firstScannedAt: new Date(scanTimeMs),
             lastUpdatedAt: new Date(),
           })
+          .onConflictDoNothing()
           .returning();
-        recordId = insertedRecord.id;
+        recordId = insertedRecord?.id;
       }
 
-      // Record Attendance Event Audit Log
+      // 11c. Record Attendance Event Audit Log (strictly no raw EPC/TID)
       await tx.insert(attendanceEvents).values({
         schoolId,
         clientEventId,
@@ -549,31 +775,28 @@ export async function processZebraIotWebhook(params: {
         captureMethod: 'RFID_GATE',
         sourceReaderId: reader.id,
         metadata: {
-          antenna: read.antenna || read.antenna_port || 1,
-          peakRssi: read.peakRssi || read.rssi || null,
+          antenna: antennaPort,
+          peakRssi,
           method: 'UHF_GATE_FX9600',
         },
       });
 
-      // Record RFID Scan Event (with zero raw EPC)
-      const [scanEvent] = await tx
-        .insert(rfidScanEvents)
-        .values({
-          schoolId,
-          readerId: reader.id,
-          credentialId: credential.id,
-          attendanceSessionId: session!.id,
-          clientEventId,
-          scanTimestamp: new Date(scanTimeMs),
-          decision: 'ACCEPTED',
-          captureMethod: 'RFID_GATE',
-          securityMode: 'UHF_EPC',
-          payloadHash,
-        })
-        .returning();
-
-      return { recordId, scanEventId: scanEvent.id };
+      return { isExisting: false, scanEventId: claimedEvent.id, recordId };
     });
+
+    if (recordResult.isExisting) {
+      duplicateCount++;
+      results.push({
+        epcDigest,
+        epcLastFour: epcLast4,
+        tidDigest,
+        decision: 'DUPLICATE',
+        reason: 'IDEMPOTENT_TRANSACTION_RETRY',
+        duplicate: true,
+        scanEventId: recordResult.scanEventId,
+      });
+      continue;
+    }
 
     // Set Redis Debounce Cache
     if (redis) {
@@ -588,6 +811,7 @@ export async function processZebraIotWebhook(params: {
     results.push({
       epcDigest,
       epcLastFour: epcLast4,
+      tidDigest,
       decision: 'ACCEPTED',
       studentId: studentInfo.studentId,
       studentName: studentInfo.fullName,

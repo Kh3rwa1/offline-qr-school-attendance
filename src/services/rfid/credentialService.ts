@@ -8,12 +8,26 @@ export async function enrollCredential(params: {
   schoolId: string;
   studentId: string;
   credentialDigest: string;
-  securityMode: 'SECURE' | 'UID_LEGACY' | 'UHF_EPC';
-  keyVersion: number;
+  credentialType?: string;
+  epcLastFour?: string;
+  tidDigest?: string;
+  securityMode?: 'SECURE' | 'UID_LEGACY' | 'UHF_EPC';
+  keyVersion?: number;
   operatorUserId: string;
   expiresAt?: Date;
 }) {
-  const { schoolId, studentId, credentialDigest, securityMode, keyVersion, operatorUserId, expiresAt } = params;
+  const {
+    schoolId,
+    studentId,
+    credentialDigest,
+    credentialType = 'UHF_EPC_GEN2',
+    epcLastFour,
+    tidDigest,
+    securityMode = 'UHF_EPC',
+    keyVersion = 1,
+    operatorUserId,
+    expiresAt,
+  } = params;
 
   return withTenantContext(schoolId, async (tx) => {
     const [student] = await tx
@@ -51,7 +65,10 @@ export async function enrollCredential(params: {
       .values({
         schoolId,
         studentId,
+        credentialType,
         credentialDigest,
+        epcLastFour,
+        tidDigest,
         securityMode,
         keyVersion,
         status: 'PENDING',

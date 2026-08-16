@@ -68,7 +68,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await expect(usersNav).toBeVisible();
     await usersNav.click();
 
-    await expect(page.getByRole('button', { name: /Invite Staff|Add Member|New User|নতুন কর্মী/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -86,7 +86,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
-    await expect(page.getByText(/Gate Operator Station|Operator Station|RFID Operator/i).first()).toBeVisible();
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

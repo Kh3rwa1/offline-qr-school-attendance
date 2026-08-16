@@ -51,7 +51,7 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await usersNav.click();
 
     // 3. Focus and activate Add Staff button via Space/Enter
-    const addStaffBtn = page.getByRole('button', { name: /Invite Staff|Add Member|New User|নতুন কর্মী/i }).first();
+    const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
     await addStaffBtn.focus();
     await page.keyboard.press('Enter');

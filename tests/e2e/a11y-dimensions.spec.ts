@@ -72,7 +72,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await expect(usersTab).toBeVisible();
     await usersTab.click();
 
-    const inviteBtn = page.getByRole('button', { name: /Invite Staff|Add Member|New User|নতুন কর্মী/i }).first();
+    const inviteBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(inviteBtn).toBeVisible();
     const inviteBox = await inviteBtn.boundingBox();
     expect(inviteBox).not.toBeNull();

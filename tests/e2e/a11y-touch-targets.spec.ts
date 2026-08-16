@@ -79,7 +79,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await usersNav.click();
 
         // 2. Test User Directory page interactive targets
-        const addStaffBtn = page.getByRole('button', { name: /Invite Staff|Add Member|New User|নতুন কর্মী/i }).first();
+        const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
         await expect(addStaffBtn).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {

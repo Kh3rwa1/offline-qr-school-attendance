@@ -71,7 +71,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await usersNav.click();
 
     // 4. Verify localized Add Staff button
-    const addStaffBtn = page.getByRole('button', { name: /Invite Staff|Add Member|New User|নতুন কর্মী/i }).first();
+    const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
   });
 
@@ -88,8 +88,9 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
       await langBtn.click();
     }
 
-    // 3. Verify RFID Operator Station heading in Bengali/English
-    await expect(page.getByText(/Gate Operator Station|Operator Station|গেট অপারেটর স্টেশন/i).first()).toBeVisible();
+    // 3. Verify RFID Operator Station container and heading
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
+    await expect(page.getByText(/School Gate|Gate Operator|স্কুল গেট/i).first()).toBeVisible();
   });
 
   test('Report Viewer portal in Bengali renders localized charts, metrics & badges', async ({ page }) => {

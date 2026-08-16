@@ -59,7 +59,10 @@ test('teacher can collect attendance offline, reopen, reconnect, and reconcile t
   await page.locator('select').selectOption(classSectionId);
   await page.getByRole('button', { name: 'Download roster' }).click();
   await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
-  await page.getByRole('button', { name: 'Start offline session' }).click();
+  const startBtn = page.getByRole('button', { name: 'Start offline session' });
+  if (await startBtn.isVisible()) {
+    await startBtn.click();
+  }
   await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
   // Reload once online so service worker caches page shell

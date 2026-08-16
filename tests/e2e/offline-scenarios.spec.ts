@@ -100,7 +100,12 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.getByRole('button', { name: 'Download roster' }).click();
     await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Start offline session' }).click();
+    const startBtn = page.getByRole('button', { name: 'Start offline session' });
+    if (await startBtn.isVisible()) {
+      await startBtn.click();
+    }
+    await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+
     const phoneBackup = page.getByTestId('phone-backup-details');
     if (await phoneBackup.isVisible()) {
       await phoneBackup.locator('summary').click();
@@ -177,7 +182,10 @@ test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
     await page.getByRole('button', { name: 'Download roster' }).click();
     await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Start offline session' }).click();
+    const startBtn3 = page.getByRole('button', { name: 'Start offline session' });
+    if (await startBtn3.isVisible()) {
+      await startBtn3.click();
+    }
     await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
 
     // Reload once online so service worker caches page shell

@@ -130,11 +130,19 @@ export const LoginPage: React.FC = () => {
       }
     } catch (err: any) {
       const msg = err?.message || '';
-      if (msg.includes('SCHOOL_ACCESS_DENIED') || msg.includes('not a member')) {
+      const code = err?.code || '';
+      const status = err?.status;
+      if (
+        code === 'SCHOOL_ACCESS_DENIED' ||
+        status === 403 ||
+        msg.includes('SCHOOL_ACCESS_DENIED') ||
+        msg.includes('not a member') ||
+        msg.includes('do not have access')
+      ) {
         setError(
           resolvedSchool
-            ? `This mobile number is not a member of ${resolvedSchool.name}.`
-            : 'Login failed. You do not belong to this school.'
+            ? t('membershipAccessDenied', { school: resolvedSchool.name })
+            : t('unauthorizedSchool')
         );
       } else {
         setError(msg || 'Login failed. Please check your credentials.');

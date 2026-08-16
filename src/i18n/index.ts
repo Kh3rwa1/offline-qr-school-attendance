@@ -54,6 +54,8 @@ export const translations = {
     schoolNotFoundDesc: 'We could not find an active school workspace at this address. Please verify the URL or contact your school administrator.',
     schoolSuspendedTitle: 'This school workspace is suspended',
     schoolSuspendedDesc: 'This institutional workspace is currently inactive or suspended by the district authority.',
+    membershipAccessDenied: 'This mobile number is not a member of {school}.',
+    unauthorizedSchool: 'Login failed. You do not belong to this school.',
     backToHome: 'Return to Home',
     platformSignIn: 'Platform Sign In',
 
@@ -591,6 +593,8 @@ export const translations = {
     schoolNotFoundDesc: 'এই Address-এ কোনো Active School Workspace পাওয়া যায়নি। URL Verify করুন বা School Admin-এর সাথে যোগাযোগ করুন।',
     schoolSuspendedTitle: 'এই School Workspace Suspended আছে',
     schoolSuspendedDesc: 'এই Institutional Workspace-টি District Authority দ্বারা সাময়িকভাবে Suspended আছে।',
+    membershipAccessDenied: 'এই Mobile Number-টি {school}-এর অন্তর্ভুক্ত নয়।',
+    unauthorizedSchool: 'Login ব্যর্থ হয়েছে। আপনি এই School-এর অন্তর্ভুক্ত নন।',
     backToHome: 'Home-এ ফিরে যান',
     platformSignIn: 'Platform Sign In',
 

@@ -9,7 +9,8 @@ export async function runMigrations() {
   const db = getDb();
 
   const migrationsFolder = path.join(process.cwd(), 'drizzle');
-  if (env.DATABASE_URL) {
+  const isPlaceholderDbUrl = env.DATABASE_URL?.includes('replace-with-') || env.DATABASE_URL?.includes('replace_with_');
+  if (env.DATABASE_URL && !isPlaceholderDbUrl) {
     await migratePostgres(db, { migrationsFolder });
   } else {
     await migratePglite(db, { migrationsFolder });

@@ -49,13 +49,13 @@ export async function initRedis(): Promise<Redis | null> {
         if (!isResolved) {
           isResolved = true;
           const err = new Error('REDIS_CONNECT_TIMEOUT: Timed out waiting for Redis ready state.');
-          if (process.env.NODE_ENV === 'production') {
+          if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
             reject(err);
           } else {
             resolve(null);
           }
         }
-      }, 5000);
+      }, 2000);
 
       client.on('ready', async () => {
         if (isResolved) return;
@@ -69,22 +69,25 @@ export async function initRedis(): Promise<Redis | null> {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutTimer);
-            if (process.env.NODE_ENV === 'production') reject(pingErr);
+            if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') reject(pingErr);
             else resolve(null);
           }
         }
       });
 
       client.on('error', (err) => {
-        console.error('[RedisService] Connection error:', err.message);
-        if (!isResolved && process.env.NODE_ENV === 'production') {
+        if (!isResolved && process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
           isResolved = true;
           clearTimeout(timeoutTimer);
           reject(err);
+        } else if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutTimer);
+          resolve(null);
         }
       });
     } catch (err: any) {
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
         reject(err);
       } else {
         resolve(null);

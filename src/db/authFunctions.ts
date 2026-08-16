@@ -20,7 +20,8 @@ if (
 function getAuthPool(): pg.Pool | null {
   if (authPoolInstance) return authPoolInstance;
   const authUrl = process.env.AUTH_DATABASE_URL;
-  if (authUrl && (authUrl.startsWith('postgres://') || authUrl.startsWith('postgresql://'))) {
+  const isPlaceholder = authUrl?.includes('replace-with-') || authUrl?.includes('replace_with_');
+  if (authUrl && !isPlaceholder && (authUrl.startsWith('postgres://') || authUrl.startsWith('postgresql://'))) {
     authPoolInstance = new pg.Pool({
       connectionString: authUrl,
       max: 5,

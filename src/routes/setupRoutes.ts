@@ -53,7 +53,7 @@ export async function isSystemBootstrapped(): Promise<boolean> {
 }
 
 // 1. GET /api/v1/setup/status
-setupRouter.get('/status', async (_req: Request, res: Response) => {
+setupRouter.get('/status', rateLimitPolicies.setupStatus, async (_req: Request, res: Response) => {
   try {
     const bootstrapped = await isSystemBootstrapped();
 
@@ -100,7 +100,7 @@ setupRouter.get('/status', async (_req: Request, res: Response) => {
 });
 
 // 2. POST /api/v1/setup/initialize
-setupRouter.post('/initialize', rateLimitPolicies.setup, async (req: Request, res: Response) => {
+setupRouter.post('/initialize', rateLimitPolicies.setupInitialize, async (req: Request, res: Response) => {
   try {
     const bootstrapped = await isSystemBootstrapped();
     if (bootstrapped) {
@@ -229,7 +229,7 @@ setupRouter.post('/initialize', rateLimitPolicies.setup, async (req: Request, re
 });
 
 // 3. POST /api/v1/setup/import-roster
-setupRouter.post('/import-roster', requireAuth, async (req: Request, res: Response) => {
+setupRouter.post('/import-roster', rateLimitPolicies.setupImport, requireAuth, async (req: Request, res: Response) => {
   try {
     const authReq = req as any;
     const session = authReq.sessionContext;

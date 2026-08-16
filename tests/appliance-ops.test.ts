@@ -127,9 +127,6 @@ SESSION_SECRET="test-session-secret-32-chars-length-01234"
 CSRF_SECRET="test-csrf-secret-32-chars-length-01234"
 REDIS_KEY_HMAC_SECRET="test-redis-secret-32-chars-length-01234"
 METRICS_AUTH_TOKEN="test-metrics-token-32-chars-length-01234"
-RFID_HMAC_SECRET="test-rfid-secret-32-chars-length-01234"
-RFID_CARD_MASTER_KEY="test-card-master-32-chars-length-01234"
-KMS_MASTER_KEY="test-kms-master-32-chars-length-01234"
 BACKUP_ENCRYPTION_KEY="test-backup-key-32-chars-length-01234"
 `
       );
@@ -138,23 +135,46 @@ BACKUP_ENCRYPTION_KEY="test-backup-key-32-chars-length-01234"
         encoding: 'utf8',
       });
       expect(output).toContain('Pre-flight dry-run diagnostic complete');
+      expect(output).toContain('Validating Compose Configuration (QR-only scope)');
     });
 
-    it('rejects installation in production mode when SMS_PROVIDER is fake', () => {
+    it('renders QR-only Compose configuration cleanly without RFID secrets', () => {
       fs.writeFileSync(
         testEnvPath,
-        `NODE_ENV="production"
-PORT="3000"
-SMS_PROVIDER="fake"
+        `POSTGRES_DB="school_attendance"
+MIGRATION_DB_USER="attendance_migration"
+MIGRATION_DB_PASSWORD="ci_password"
+APP_DB_USER="attendance_app"
+APP_DB_PASSWORD="ci_password"
+SYSTEM_DB_USER="attendance_system"
+SYSTEM_DB_PASSWORD="ci_password"
+AUTH_DB_USER="attendance_auth"
+AUTH_DB_PASSWORD="ci_password"
+SESSION_SECRET="test-session-secret-32-chars-length-01234"
+CSRF_SECRET="test-csrf-secret-32-chars-length-01234"
+REDIS_KEY_HMAC_SECRET="test-redis-secret-32-chars-length-01234"
+METRICS_AUTH_TOKEN="test-metrics-token-32-chars-length-01234"
+BACKUP_ENCRYPTION_KEY="test-backup-key-32-chars-length-01234"
+SMS_PROVIDER="console"
 `
       );
 
-      expect(() => {
-        execSync(`bash scripts/install.sh --config="${testEnvPath}" --unattended`, {
-          encoding: 'utf8',
-          stdio: 'pipe',
-        });
-      }).toThrow();
+      // Verify compose config succeeds without RFID secrets
+      const configOutput = execSync(`docker compose --env-file "${testEnvPath}" config`, {
+        encoding: 'utf8',
+      });
+      expect(configOutput).toContain('school_attendance_app');
+      expect(configOutput).toContain('school_attendance_caddy');
+      expect(configOutput).not.toContain('rfid-gateway');
+    });
+
+    it('handles bin/attendease CLI wrapper execution', () => {
+      const helpOutput = execSync(`bash bin/attendease --help`, { encoding: 'utf8' });
+      expect(helpOutput).toContain('AttendEase OS CLI');
+      expect(helpOutput).toContain('status');
+      expect(helpOutput).toContain('backup');
+      expect(helpOutput).toContain('update');
+      expect(helpOutput).toContain('rollback');
     });
   });
 

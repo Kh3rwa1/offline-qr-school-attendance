@@ -105,7 +105,7 @@ export const OfflineWorkspace: React.FC = () => {
           title={t('phoneStorage')}
           value={t('phoneStorageSafe')}
           trend={{ 
-            value: language === 'bn' ? 'অফলাইনে স্বয়ংক্রিয় সংরক্ষণ' : 'Saved for offline use', 
+            value: language === 'bn' ? 'Offline use-এর জন্য Save আছে' : 'Saved for offline use', 
             isPositive: true 
           }}
           variant="default"
@@ -114,7 +114,7 @@ export const OfflineWorkspace: React.FC = () => {
           title={t('syncSafe')}
           value={t('syncSafeDesc')}
           trend={{ 
-            value: language === 'bn' ? 'সার্ভারের সাথে নিরাপদ সংযোগ' : 'Protected student records', 
+            value: language === 'bn' ? 'Student Records Safe আছে' : 'Protected student records', 
             isPositive: true 
           }}
           variant="default"
@@ -177,14 +177,12 @@ export const OfflineWorkspace: React.FC = () => {
                         </td>
                         <td className="px-6 py-4">
                           <span className="bg-surface-soft px-2.5 py-1 rounded-lg border border-line text-[11px] font-bold">
-                            {e.source === 'CAMERA' 
-                              ? (language === 'bn' ? 'ক্যামেরা স্ক্যান' : 'Camera Scan')
-                              : (language === 'bn' ? 'সরাসরি উপস্থিতি' : 'Manual Mark')}
+                            {e.source === 'CAMERA' ? 'Camera Scan' : 'Manual Mark'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-ink-muted font-mono">
                           {e.clientTimestamp 
-                            ? new Date(e.clientTimestamp).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' }) 
+                            ? new Date(e.clientTimestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) 
                             : '—'}
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -217,9 +215,7 @@ export const OfflineWorkspace: React.FC = () => {
                           {e.studentName || e.studentId || t('student')}
                         </span>
                         <span className="text-[11px] text-ink-muted mt-0.5 block">
-                          {e.source === 'CAMERA' 
-                            ? (language === 'bn' ? 'ক্যামেরা স্ক্যান' : 'Camera Scan')
-                            : (language === 'bn' ? 'সরাসরি উপস্থিতি' : 'Manual Mark')}
+                          {e.source === 'CAMERA' ? 'Camera Scan' : 'Manual Mark'}
                         </span>
                       </div>
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border font-display shrink-0 ${pill.className}`}>
@@ -230,7 +226,7 @@ export const OfflineWorkspace: React.FC = () => {
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-line text-ink-soft">
                       <span className="text-[11px] text-ink-muted font-mono">
                         {e.clientTimestamp 
-                          ? new Date(e.clientTimestamp).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' }) 
+                          ? new Date(e.clientTimestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) 
                           : '—'}
                       </span>
                     </div>

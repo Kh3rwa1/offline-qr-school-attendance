@@ -50,7 +50,7 @@ export const ReportViewerDashboard: React.FC = () => {
     void fetchAnalytics();
   }, [activeSchoolId, language]);
 
-  if (loading) return <LoadingState type="stat-cards" message={language === 'bn' ? 'রিপোর্ট লোড হচ্ছে…' : 'Loading reports & analytics…'} />;
+  if (loading) return <LoadingState type="stat-cards" message={language === 'bn' ? 'Report Loading হচ্ছে…' : 'Loading reports & analytics…'} />;
   if (error) return <ErrorState message={error} onRetry={fetchAnalytics} />;
 
   const hasSessions = (summary?.totalSessionsRecorded ?? 0) > 0;
@@ -68,14 +68,14 @@ export const ReportViewerDashboard: React.FC = () => {
               {t('navReports')}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-soft border border-line text-[11px] font-bold text-ink-muted uppercase tracking-wider font-mono">
-              {language === 'bn' ? 'অফিসিয়াল রিপোর্ট' : 'Official Reports'}
+              {language === 'bn' ? 'Official Reports' : 'Official Reports'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('navReports')}
           </h1>
           <p className="t-body text-xs text-ink-soft mt-1">
-            {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {activeSchoolName} • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -109,7 +109,7 @@ export const ReportViewerDashboard: React.FC = () => {
           value={hasSessions ? `${attendanceRate}%` : '—'}
           trend={{ 
             value: hasSessions 
-              ? (language === 'bn' ? 'গড় উপস্থিতির হার' : 'Average attendance rate') 
+              ? (language === 'bn' ? 'Average Attendance Rate' : 'Average attendance rate') 
               : t('noAttendanceDataYet'), 
             isPositive: attendanceRate >= 75 
           }}
@@ -130,7 +130,7 @@ export const ReportViewerDashboard: React.FC = () => {
           title={t('chronicAbsenceRisk')}
           value={flaggedAbsences}
           trend={{ 
-            value: flaggedAbsences === 0 ? t('lowRisk') : (language === 'bn' ? 'অনুপস্থিতির সংখ্যা' : 'Recorded absences'), 
+            value: flaggedAbsences === 0 ? t('lowRisk') : (language === 'bn' ? 'Recorded Absences' : 'Recorded absences'), 
             isPositive: flaggedAbsences === 0 
           }}
           variant="default"
@@ -140,7 +140,7 @@ export const ReportViewerDashboard: React.FC = () => {
           title={t('exportFormats')}
           value="Excel / CSV"
           trend={{ 
-            value: language === 'bn' ? 'সরকারি রিপোর্টের জন্য প্রস্তুত' : 'Ready for download', 
+            value: language === 'bn' ? 'Download-এর জন্য Ready' : 'Ready for download', 
             isPositive: true 
           }}
           variant="default"
@@ -168,7 +168,7 @@ export const ReportViewerDashboard: React.FC = () => {
                 {t('overallCompliance')}
               </h3>
               <span className="text-xs font-bold text-forest-700 dark:text-forest-600 bg-success-50 px-2.5 py-1 rounded-full border border-success-100 dark:border-success-600/30 font-display">
-                {totalSessions} {language === 'bn' ? 'টি সেশন' : 'Sessions'}
+                {totalSessions} {language === 'bn' ? 'টি Sessions' : 'Sessions'}
               </span>
             </div>
 
@@ -215,7 +215,7 @@ export const ReportViewerDashboard: React.FC = () => {
                 {t('reportModules')}
               </h3>
               <span className="text-xs font-bold text-ink-muted bg-surface-soft px-2.5 py-1 rounded-full border border-line font-display">
-                3 {language === 'bn' ? 'টি উপলব্ধ' : 'Available'}
+                3 {language === 'bn' ? 'টি Available' : 'Available'}
               </span>
             </div>
 

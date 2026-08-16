@@ -200,7 +200,7 @@ export const SetupWizardPage: React.FC = () => {
           className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg bg-slate-900 transition"
         >
           <Globe className="w-3.5 h-3.5" />
-          <span>{language === 'en' ? 'বাংলা' : 'English'}</span>
+          <span>{language === 'en' ? 'বাংলা + English' : 'English'}</span>
         </button>
       </div>
 

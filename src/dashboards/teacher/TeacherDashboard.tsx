@@ -741,8 +741,8 @@ export const TeacherDashboard: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-display">
             {t('classroomDashboard')}
           </h1>
-          <p className="t-body text-xs text-ink-soft mt-0.5">
-            {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          <p className="t-body text-xs text-ink-soft mt-1">
+            {activeSchoolName} • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -806,10 +806,12 @@ export const TeacherDashboard: React.FC = () => {
           </Button>
 
           {/* Language Switcher */}
-          <div className="inline-flex rounded-full bg-surface-soft border border-line p-1">
+          <div className="inline-flex rounded-full bg-surface-soft border border-line p-1" role="group" aria-label="Language selection">
             <button
               type="button"
               onClick={() => setLanguage('en')}
+              title="English"
+              aria-label="English"
               className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
                 language === 'en'
                   ? 'bg-forest-700 text-white shadow-xs'
@@ -821,13 +823,15 @@ export const TeacherDashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => setLanguage('bn')}
+              title="বাংলা + English"
+              aria-label="বাংলা + English"
               className={`px-3 py-1 rounded-full text-xs font-bold font-display transition-all cursor-pointer ${
                 language === 'bn'
                   ? 'bg-forest-700 text-white shadow-xs'
                   : 'text-ink-soft hover:text-ink'
               }`}
             >
-              বাংলা
+              বাং + EN
             </button>
           </div>
         </div>
@@ -871,10 +875,10 @@ export const TeacherDashboard: React.FC = () => {
               <p className="text-[11px] text-forest-700/80 font-medium mt-1">
                 {stats.total > 0
                   ? language === 'bn'
-                    ? `মোট শিক্ষার্থীর ${Math.round((stats.cameIn / stats.total) * 100)}%`
+                    ? `Class-এর ${Math.round((stats.cameIn / stats.total) * 100)}%`
                     : `${Math.round((stats.cameIn / stats.total) * 100)}% of class`
                   : language === 'bn'
-                  ? 'গেটের আগমন'
+                  ? 'Gate Arrivals'
                   : 'Gate arrivals'}
               </p>
             </div>
@@ -893,7 +897,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.missing}
               </div>
               <p className="text-[11px] text-danger-800/80 font-medium mt-1">
-                {language === 'bn' ? 'এখনও উপস্থিত চিহ্নিত হয়নি' : 'Not yet marked present'}
+                {language === 'bn' ? 'এখনও Present Mark করা হয়নি' : 'Not yet marked present'}
               </p>
             </div>
 
@@ -911,7 +915,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.late}
               </div>
               <p className="text-[11px] text-amber-800/80 font-medium mt-1">
-                {language === 'bn' ? 'দেরিতে এসেছে' : 'Arrived after start time'}
+                {language === 'bn' ? 'Late এসেছে' : 'Arrived after start time'}
               </p>
             </div>
 
@@ -929,7 +933,7 @@ export const TeacherDashboard: React.FC = () => {
                 {stats.leave}
               </div>
               <p className="text-[11px] text-ink-muted font-medium mt-1">
-                {language === 'bn' ? 'অনুমোদিত ছুটি' : 'Approved leave'}
+                {language === 'bn' ? 'Approved Leave' : 'Approved leave'}
               </p>
             </div>
           </div>
@@ -965,7 +969,7 @@ export const TeacherDashboard: React.FC = () => {
                     </span>
                   </h3>
                   <p className="text-xs text-ink-soft mt-0.5">
-                    {language === 'bn' ? 'যে সকল শিক্ষার্থী আজ গেট দিয়ে বিদ্যালয়ে প্রবেশ করেছে।' : 'Students who walked through the school gate today.'}
+                    {language === 'bn' ? 'আজ যারা Gate দিয়ে এসেছে।' : 'Students who walked through the school gate today.'}
                   </p>
                 </div>
               </div>
@@ -976,7 +980,7 @@ export const TeacherDashboard: React.FC = () => {
                     <EmptyState
                       kind="generic"
                       title={t('noArrivalsYet')}
-                      description={language === 'bn' ? 'শিক্ষার্থীরা গেট দিয়ে প্রবেশ করলে তাদের নাম স্বয়ংক্রিয়ভাবে এখানে দেখা যাবে।' : 'When students arrive through the school gate, their names appear here automatically.'}
+                      description={language === 'bn' ? 'Students Gate দিয়ে প্রবেশ করলে এখানে automatically দেখা যাবে।' : 'When students arrive through the school gate, their names appear here automatically.'}
                     />
                   </div>
                 ) : (
@@ -994,7 +998,7 @@ export const TeacherDashboard: React.FC = () => {
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
                           <span className="text-[11px] text-ink-muted font-mono">
-                            {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', {
+                            {new Date(st.time).toLocaleTimeString('en-IN', {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
@@ -1022,7 +1026,7 @@ export const TeacherDashboard: React.FC = () => {
                     </span>
                   </h3>
                   <p className="text-xs text-ink-soft mt-0.5">
-                    {language === 'bn' ? 'যেসব শিক্ষার্থীর গেট রেকর্ড পাওয়া যায়নি। ক্লাসে উপস্থিত থাকলে চিহ্নিত করুন।' : 'Students not yet recorded at the gate. Mark them manually if in class.'}
+                    {language === 'bn' ? 'যাদের Gate Record নেই। ক্লাসে থাকলে Present Mark করুন।' : 'Students not yet recorded at the gate. Mark them manually if in class.'}
                   </p>
                 </div>
               </div>
@@ -1033,7 +1037,7 @@ export const TeacherDashboard: React.FC = () => {
                     <EmptyState
                       kind="generic"
                       title={t('noMissingStudents')}
-                      description={language === 'bn' ? 'এই ক্লাসের সকল শিক্ষার্থীর উপস্থিতি গ্রহণ সম্পন্ন হয়েছে।' : 'All students in this class have arrived or are accounted for.'}
+                      description={language === 'bn' ? 'এই ক্লাসের সব Students-এর Attendance Record করা হয়েছে।' : 'All students in this class have arrived or are accounted for.'}
                     />
                   </div>
                 ) : (
@@ -1051,7 +1055,7 @@ export const TeacherDashboard: React.FC = () => {
                             {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                           </h4>
                           <span className="text-[11px] text-ink-muted font-mono">
-                            {language === 'bn' ? 'রোল:' : 'Roll:'} #{st.rollNumber}
+                            {language === 'bn' ? 'Roll:' : 'Roll:'} #{st.rollNumber}
                           </span>
                         </div>
                       </div>

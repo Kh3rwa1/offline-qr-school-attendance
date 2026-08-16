@@ -18,10 +18,12 @@ describe('i18n Translation Completeness & Key Parity', () => {
     });
   });
 
-  it('should translate correctly via translate helper in both languages', () => {
+  it('should translate correctly via translate helper in both languages using Bengalish standards', () => {
     expect(translate('login', 'en')).toBe('Log In');
-    expect(translate('login', 'bn')).toBe('লগ ইন করুন');
-    expect(translate('navSchoolStaff', 'bn')).toBe('বিদ্যালয়ের কর্মী');
-    expect(translate('navParentMessages', 'bn')).toBe('অভিভাবকের বার্তা');
+    expect(translate('login', 'bn')).toBe('Login করুন');
+    expect(translate('navSchoolStaff', 'bn')).toBe('School Staff');
+    expect(translate('navParentMessages', 'bn')).toBe('Parent Messages');
+    expect(translate('internetConnected', 'bn')).toBe('ইন্টারনেট Connected');
+    expect(translate('sendRecordsNow', 'bn')).toBe('Saved Records Send করুন');
   });
 });

@@ -7,6 +7,8 @@ on:
         description: 'Enforce physical reader and fail closed if absent (true/false)'
         required: true
         default: 'false'
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 

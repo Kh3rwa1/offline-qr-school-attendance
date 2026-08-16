@@ -852,3 +852,215 @@ export async function getDailyClassReport(schoolId: string, classSectionId: stri
 
   return getAttendanceSessionDetails(schoolId, session.id);
 }
+
+export async function getTodayGateAttendance(params: {
+  schoolId: string;
+  classSectionId?: string;
+  actorId: string;
+  userRole: string;
+}) {
+  const { schoolId, classSectionId, actorId, userRole } = params;
+  const todayDate = new Date().toISOString().slice(0, 10);
+
+  let targetClassSectionId = classSectionId;
+  if (!targetClassSectionId) {
+    const assignedClasses = await getTeacherAssignedClasses({ schoolId, teacherId: actorId, userRole });
+    if (assignedClasses.length > 0) {
+      targetClassSectionId = assignedClasses[0].classSectionId;
+    }
+  }
+
+  if (!targetClassSectionId) {
+    return {
+      session: null,
+      isAssigned: false,
+      message: 'Ask the headmaster to assign this class',
+      stats: { cameIn: 0, missing: 0, late: 0, leave: 0, total: 0 },
+      arrivals: [],
+      missingStudents: [],
+      allStudents: [],
+    };
+  }
+
+  // Check teacher assignment
+  const [assignedTeacher] = await db
+    .select({
+      id: teacherAssignments.id,
+      teacherId: teacherAssignments.teacherId,
+    })
+    .from(teacherAssignments)
+    .where(
+      and(
+        eq(teacherAssignments.schoolId, schoolId),
+        eq(teacherAssignments.classSectionId, targetClassSectionId)
+      )
+    )
+    .limit(1);
+
+  // Fetch or create today's session
+  let [session] = await db
+    .select()
+    .from(attendanceSessions)
+    .where(
+      and(
+        eq(attendanceSessions.schoolId, schoolId),
+        eq(attendanceSessions.classSectionId, targetClassSectionId),
+        eq(attendanceSessions.sessionDate, todayDate)
+      )
+    )
+    .limit(1);
+
+  if (!session && assignedTeacher) {
+    try {
+      const created = await createAttendanceSession({
+        schoolId,
+        classSectionId: targetClassSectionId,
+        teacherId: assignedTeacher.teacherId,
+        sessionDate: todayDate,
+        sessionType: 'DAILY',
+        actorId,
+        userRole,
+      });
+      session = created.session;
+    } catch {
+      const [reFetched] = await db
+        .select()
+        .from(attendanceSessions)
+        .where(
+          and(
+            eq(attendanceSessions.schoolId, schoolId),
+            eq(attendanceSessions.classSectionId, targetClassSectionId),
+            eq(attendanceSessions.sessionDate, todayDate)
+          )
+        )
+        .limit(1);
+      session = reFetched;
+    }
+  }
+
+  if (!session && !assignedTeacher) {
+    return {
+      session: null,
+      isAssigned: false,
+      message: 'Ask the headmaster to assign this class',
+      stats: { cameIn: 0, missing: 0, late: 0, leave: 0, total: 0 },
+      arrivals: [],
+      missingStudents: [],
+      allStudents: [],
+    };
+  }
+
+  const [sec] = await db
+    .select()
+    .from(classSections)
+    .where(and(eq(classSections.schoolId, schoolId), eq(classSections.id, targetClassSectionId)))
+    .limit(1);
+
+  const studentRows = await db
+    .select({
+      studentId: students.id,
+      name: students.name,
+      nameBn: students.nameBn,
+      studentCode: students.studentCode,
+      rollNumber: enrollments.rollNumber,
+    })
+    .from(enrollments)
+    .innerJoin(students, eq(enrollments.studentId, students.id))
+    .where(
+      and(
+        eq(enrollments.schoolId, schoolId),
+        eq(enrollments.classSectionId, targetClassSectionId),
+        eq(enrollments.status, 'ACTIVE')
+      )
+    )
+    .orderBy(enrollments.rollNumber);
+
+  let records: any[] = [];
+  if (session) {
+    records = await db
+      .select({
+        id: attendanceRecords.id,
+        studentId: attendanceRecords.studentId,
+        status: attendanceRecords.status,
+        captureMethod: attendanceRecords.captureMethod,
+        lastUpdatedAt: attendanceRecords.lastUpdatedAt,
+      })
+      .from(attendanceRecords)
+      .where(
+        and(
+          eq(attendanceRecords.schoolId, schoolId),
+          eq(attendanceRecords.attendanceSessionId, session.id)
+        )
+      );
+  }
+
+  const recordMap = new Map<string, { status: string; captureMethod: string; lastUpdatedAt: Date }>();
+  for (const r of records) {
+    recordMap.set(r.studentId, {
+      status: r.status,
+      captureMethod: r.captureMethod,
+      lastUpdatedAt: r.lastUpdatedAt,
+    });
+  }
+
+  const allStudents = studentRows.map((s: any) => {
+    const rec = recordMap.get(s.studentId);
+    const status = (rec?.status as AttendanceStatus) || 'UNMARKED';
+    return {
+      studentId: s.studentId,
+      name: s.name,
+      nameBn: s.nameBn || s.name,
+      studentCode: s.studentCode,
+      rollNumber: s.rollNumber,
+      status,
+      captureMethod: rec?.captureMethod || null,
+      updatedAt: rec?.lastUpdatedAt ? new Date(rec.lastUpdatedAt).toISOString() : null,
+    };
+  });
+
+  const cameIn = allStudents.filter((s: any) => s.status === 'PRESENT').length;
+  const late = allStudents.filter((s: any) => s.status === 'LATE').length;
+  const leave = allStudents.filter((s: any) => s.status === 'EXCUSED' || s.status === 'LEAVE').length;
+  const missing = allStudents.filter((s: any) => s.status === 'UNMARKED' || s.status === 'ABSENT').length;
+  const total = allStudents.length;
+
+  const arrivals = allStudents
+    .filter((s: any) => s.status === 'PRESENT' || s.status === 'LATE')
+    .map((s: any) => ({
+      studentId: s.studentId,
+      name: s.name,
+      nameBn: s.nameBn,
+      rollNumber: s.rollNumber,
+      status: s.status,
+      captureMethod: s.captureMethod || 'RFID_GATE',
+      time: s.updatedAt || new Date().toISOString(),
+    }));
+
+  const missingStudents = allStudents.filter((s: any) => s.status === 'UNMARKED' || s.status === 'ABSENT');
+
+  return {
+    success: true,
+    isAssigned: true,
+    classSection: sec ? { id: sec.id, className: sec.className, sectionName: sec.sectionName } : null,
+    session: session
+      ? {
+          id: session.id,
+          sessionDate: session.sessionDate,
+          status: session.status,
+          classSectionId: session.classSectionId,
+          teacherId: session.teacherId,
+        }
+      : null,
+    stats: {
+      cameIn,
+      missing,
+      late,
+      leave,
+      total,
+    },
+    arrivals,
+    missingStudents,
+    allStudents,
+  };
+}
+

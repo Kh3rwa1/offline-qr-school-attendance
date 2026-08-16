@@ -269,22 +269,22 @@ export function getNavigationForRole(role: UserRole | string | undefined): Navig
 
     // Teacher
     {
-      id: 'teacher-classes',
-      label: 'My Classes',
-      href: '/app/teacher/classes',
-      icon: 'classes',
-      permissions: ['attendance.sessions.read'],
-    },
-    {
       id: 'teacher-scanner',
-      label: 'Live Scanner',
+      label: "Today's attendance",
       href: '/app/teacher',
       icon: 'scanner',
       permissions: ['attendance.sessions.create'],
     },
     {
+      id: 'teacher-classes',
+      label: 'Class list',
+      href: '/app/teacher/classes',
+      icon: 'classes',
+      permissions: ['attendance.sessions.read'],
+    },
+    {
       id: 'teacher-offline',
-      label: 'Offline Outbox',
+      label: 'Phone backup',
       href: '/app/teacher/offline',
       icon: 'offline',
       permissions: ['attendance.sessions.create'],
@@ -316,35 +316,35 @@ export function getNavigationForRole(role: UserRole | string | undefined): Navig
     // RFID Operator
     {
       id: 'rfid-dashboard',
-      label: 'Station Dashboard',
+      label: 'Overview',
       href: '/app/rfid',
       icon: 'station',
       permissions: ['rfid.dashboard.read'],
     },
     {
       id: 'rfid-readers',
-      label: 'Reader Gateways',
+      label: 'Gates',
       href: '/app/rfid/readers',
       icon: 'readers',
       permissions: ['rfid.readers.read'],
     },
     {
       id: 'rfid-cards',
-      label: 'Smartcard Directory',
+      label: 'Student badges',
       href: '/app/rfid/cards',
       icon: 'cards',
       permissions: ['rfid.cards.read'],
     },
     {
       id: 'rfid-enrollment',
-      label: 'Card Enrollment',
+      label: 'Give badge',
       href: '/app/rfid/enrollment',
       icon: 'enrollment',
       permissions: ['rfid.cards.enroll'],
     },
     {
       id: 'rfid-events',
-      label: 'Tap Event Logs',
+      label: 'Who walked in',
       href: '/app/rfid/events',
       icon: 'events',
       permissions: ['rfid.events.read'],

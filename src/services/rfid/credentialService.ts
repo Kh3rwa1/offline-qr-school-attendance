@@ -1,8 +1,13 @@
 import { withTenantContext } from '../../db';
-import { rfidCredentials, students } from '../../db/schema';
+import { rfidCredentials, students, enrollments } from '../../db/schema';
 import { eq, and, inArray, desc, lt, isNotNull, sql } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
-import { redactCredentialDigest } from './cryptoService';
+import {
+  redactCredentialDigest,
+  canonicalizeEpc,
+  computeEpcDigest,
+  getEpcLastFour,
+} from './cryptoService';
 
 export async function enrollCredential(params: {
   schoolId: string;
@@ -372,26 +377,110 @@ export async function getCredentialById(credentialId: string, schoolId: string) 
 
 export async function bulkEnroll(params: {
   schoolId: string;
-  entries: Array<{ studentId: string; credentialDigest: string; securityMode: 'SECURE' | 'UID_LEGACY'; keyVersion: number }>;
+  entries: Array<{
+    studentId?: string;
+    studentCode?: string;
+    rollNumber?: number | string;
+    classSectionId?: string;
+    epc?: string;
+    credentialDigest?: string;
+    securityMode?: string;
+    keyVersion?: number;
+  }>;
   operatorUserId: string;
 }) {
-  const results = [];
-  for (const entry of params.entries) {
-    try {
-      const res = await enrollCredential({
-        schoolId: params.schoolId,
-        studentId: entry.studentId,
-        credentialDigest: entry.credentialDigest,
-        securityMode: entry.securityMode,
-        keyVersion: entry.keyVersion,
-        operatorUserId: params.operatorUserId,
-      });
-      results.push({ studentId: entry.studentId, success: true, credentialId: res.id });
-    } catch (err: any) {
-      results.push({ studentId: entry.studentId, success: false, error: err.message });
+  return withTenantContext(params.schoolId, async (tx) => {
+    const results = [];
+    for (const entry of params.entries) {
+      try {
+        let resolvedStudentId = entry.studentId;
+
+        // If studentId not provided, resolve by studentCode
+        if (!resolvedStudentId && entry.studentCode) {
+          const [st] = await tx
+            .select({ id: students.id })
+            .from(students)
+            .where(
+              and(
+                eq(students.schoolId, params.schoolId),
+                eq(students.studentCode, entry.studentCode.trim())
+              )
+            )
+            .limit(1);
+          if (st) resolvedStudentId = st.id;
+        }
+
+        // Or resolve by rollNumber
+        if (!resolvedStudentId && entry.rollNumber !== undefined) {
+          const rollNum = Number(entry.rollNumber);
+          const conditions = [
+            eq(enrollments.schoolId, params.schoolId),
+            eq(enrollments.rollNumber, rollNum),
+            eq(enrollments.status, 'ACTIVE'),
+          ];
+          if (entry.classSectionId) {
+            conditions.push(eq(enrollments.classSectionId, entry.classSectionId));
+          }
+          const [enr] = await tx
+            .select({ studentId: enrollments.studentId })
+            .from(enrollments)
+            .where(and(...conditions))
+            .limit(1);
+          if (enr) resolvedStudentId = enr.studentId;
+        }
+
+        if (!resolvedStudentId) {
+          throw new Error('STUDENT_NOT_FOUND: Could not resolve student by ID, code, or roll number');
+        }
+
+        let digest = entry.credentialDigest;
+        let epcLastFour: string | undefined = undefined;
+        const credentialType = 'UHF_EPC_GEN2';
+
+        if (entry.epc) {
+          const canonical = canonicalizeEpc(entry.epc);
+          digest = computeEpcDigest(canonical);
+          epcLastFour = getEpcLastFour(canonical);
+        }
+
+        if (!digest) {
+          throw new Error('MISSING_EPC_OR_DIGEST: Either epc or credentialDigest must be provided');
+        }
+
+        const res = await enrollCredential({
+          schoolId: params.schoolId,
+          studentId: resolvedStudentId,
+          credentialDigest: digest,
+          credentialType,
+          epcLastFour,
+          securityMode: (entry.securityMode as any) || 'UHF_EPC',
+          keyVersion: entry.keyVersion || 1,
+          operatorUserId: params.operatorUserId,
+        });
+
+        // Activate directly
+        await activateCredential(res.id, params.schoolId, params.operatorUserId);
+
+        results.push({
+          studentId: resolvedStudentId,
+          studentCode: entry.studentCode,
+          rollNumber: entry.rollNumber,
+          success: true,
+          credentialId: res.id,
+          epcLastFour,
+        });
+      } catch (err: any) {
+        results.push({
+          studentId: entry.studentId,
+          studentCode: entry.studentCode,
+          rollNumber: entry.rollNumber,
+          success: false,
+          error: err.message,
+        });
+      }
     }
-  }
-  return results;
+    return results;
+  });
 }
 
 // Export object for convenience

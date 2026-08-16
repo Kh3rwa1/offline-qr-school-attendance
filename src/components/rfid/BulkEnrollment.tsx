@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
@@ -34,27 +34,32 @@ export default function BulkEnrollment() {
         } else {
           // Parse CSV
           const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-          if (lines.length < 2) throw new Error('CSV must contain a header row and at least 1 data row');
+          if (lines.length < 2) throw new Error('CSV must contain a header row and at least 1 student row');
           const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+          
           const studentIdIdx = headers.indexOf('studentid');
-          const digestIdx = headers.indexOf('credentialdigest') !== -1 ? headers.indexOf('credentialdigest') : headers.indexOf('digest');
-          const modeIdx = headers.indexOf('securitymode') !== -1 ? headers.indexOf('securitymode') : headers.indexOf('mode');
-          const versionIdx = headers.indexOf('keyversion') !== -1 ? headers.indexOf('keyversion') : headers.indexOf('version');
+          const studentCodeIdx = headers.indexOf('studentcode') !== -1 ? headers.indexOf('studentcode') : headers.indexOf('code');
+          const rollNumberIdx = headers.indexOf('rollnumber') !== -1 ? headers.indexOf('rollnumber') : headers.indexOf('roll');
+          const epcIdx = headers.indexOf('epc') !== -1 ? headers.indexOf('epc') : (headers.indexOf('badge') !== -1 ? headers.indexOf('badge') : (headers.indexOf('badgecode') !== -1 ? headers.indexOf('badgecode') : headers.indexOf('credentialdigest')));
 
-          if (studentIdIdx === -1 || digestIdx === -1) {
-            throw new Error('CSV header must include at least "studentId" and "credentialDigest" columns');
+          if (studentIdIdx === -1 && studentCodeIdx === -1 && rollNumberIdx === -1) {
+            throw new Error('CSV header must contain "studentCode", "rollNumber", or "studentId" column');
+          }
+          if (epcIdx === -1) {
+            throw new Error('CSV header must contain "epc" or "badge" column');
           }
 
           const entries = [];
           for (let i = 1; i < lines.length; i++) {
             const cols = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
-            if (cols.length > studentIdIdx && cols.length > digestIdx) {
-              entries.push({
-                studentId: cols[studentIdIdx],
-                credentialDigest: cols[digestIdx],
-                securityMode: modeIdx !== -1 && cols[modeIdx] === 'UID_LEGACY' ? 'UID_LEGACY' : 'SECURE',
-                keyVersion: versionIdx !== -1 ? parseInt(cols[versionIdx], 10) || 1 : 1,
-              });
+            if (cols.length > epcIdx && cols[epcIdx]) {
+              const entry: any = {
+                epc: cols[epcIdx],
+              };
+              if (studentIdIdx !== -1 && cols[studentIdIdx]) entry.studentId = cols[studentIdIdx];
+              if (studentCodeIdx !== -1 && cols[studentCodeIdx]) entry.studentCode = cols[studentCodeIdx];
+              if (rollNumberIdx !== -1 && cols[rollNumberIdx]) entry.rollNumber = cols[rollNumberIdx];
+              entries.push(entry);
             }
           }
           setParsedEntries(entries);
@@ -84,116 +89,131 @@ export default function BulkEnrollment() {
       queryClient.invalidateQueries({ queryKey: ['schools', activeSchoolId, 'rfid'] });
     },
     onError: (err: any) => {
-      setParseError(err.message || 'Bulk enrollment failed');
+      setParseError(err.message || 'Bulk badge assignment failed');
     },
   });
 
+  const successCount = results.filter(r => r.success).length;
+  const failureCount = results.length - successCount;
+
   return (
     <div className="app-card p-6 max-w-3xl mx-auto text-left">
-      <h2 className="text-xl font-extrabold text-ink font-display mb-2">Bulk Smartcard Provisioning</h2>
-      <p className="t-body text-xs text-ink-soft mb-6 font-medium">Batch-enroll DESFire smartcards for multiple students simultaneously.</p>
+      <h2 className="text-xl font-extrabold text-ink font-display mb-2">Give Badges in Bulk</h2>
+      <p className="t-body text-xs text-ink-soft mb-6 font-medium">Upload a list of students and their badge codes to activate them all at once.</p>
 
-      <div className="bg-warning-50 p-4 rounded-2xl flex gap-3 mb-6 border border-warning-100 dark:border-warning-600/30">
-        <AlertTriangle className="text-warning-800 shrink-0 w-5 h-5" />
-        <div className="text-xs text-warning-800">
-          <p className="font-bold font-display">Cryptographic Digest Requirement</p>
-          <p className="mt-0.5">Upload pre-computed SHA-256 card digests. Never transmit raw un-diversified master keys.</p>
+      <div className="bg-surface-soft p-4 rounded-2xl border border-line mb-6 text-xs text-ink-soft flex items-start gap-3">
+        <FileText className="w-5 h-5 text-forest-700 dark:text-forest-600 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-bold text-ink font-display">Supported CSV Columns</p>
+          <p className="mt-1">
+            Your CSV should include <code className="font-mono font-bold text-forest-700 bg-surface px-1.5 py-0.5 rounded border border-line">studentCode, epc</code> or <code className="font-mono font-bold text-forest-700 bg-surface px-1.5 py-0.5 rounded border border-line">rollNumber, epc</code>.
+          </p>
         </div>
       </div>
 
       {parseError && (
-        <div className="mb-5">
+        <div className="mb-6">
           <Toast kind="error" message={parseError} onDismiss={() => setParseError(null)} autoDismiss={false} />
         </div>
       )}
 
-      {results.length === 0 ? (
+      {/* File Upload Box */}
+      <div className="border-2 border-dashed border-line hover:border-forest-700 p-8 rounded-2xl text-center mb-6 cursor-pointer bg-surface hover:bg-surface-soft transition-colors relative">
+        <input
+          type="file"
+          accept=".csv,.json"
+          onChange={handleUpload}
+          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+        />
+        <Upload className="w-8 h-8 text-forest-700 dark:text-forest-600 mx-auto mb-3" />
+        <h3 className="font-bold text-ink text-sm font-display mb-1">
+          {file ? file.name : 'Choose a CSV file or drag and drop here'}
+        </h3>
+        <p className="text-[11px] text-ink-muted">Accepts .csv or .json files</p>
+      </div>
+
+      {/* Parsed Preview */}
+      {parsedEntries.length > 0 && results.length === 0 && (
         <div className="space-y-4">
-          <div className="border-2 border-dashed border-line rounded-2xl p-8 text-center bg-surface-soft">
-            <Upload className="w-8 h-8 text-ink-muted mx-auto mb-2" />
-            <p className="text-xs text-ink font-bold mb-1 font-display">Select JSON or CSV Batch File</p>
-            <p className="text-[11px] text-ink-muted mb-3 font-mono">Columns: studentId, credentialDigest, securityMode, keyVersion</p>
-            <input
-              type="file"
-              onChange={handleUpload}
-              className="text-xs text-ink-soft cursor-pointer"
-              accept=".csv,.json"
-            />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-ink font-display">
+              Ready to give badges to {parsedEntries.length} students
+            </span>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={bulkMutation.isPending}
+              isLoading={bulkMutation.isPending}
+              onClick={() => bulkMutation.mutate()}
+            >
+              {bulkMutation.isPending ? 'Saving Badges…' : `Save ${parsedEntries.length} Badges`}
+            </Button>
           </div>
 
-          {parsedEntries.length > 0 && (
-            <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-ink font-display">Ready for Provisioning</p>
-                <p className="text-[11px] text-ink-muted font-mono">{parsedEntries.length} valid credential records parsed</p>
+          <div className="max-h-48 overflow-y-auto border border-line rounded-2xl bg-surface divide-y divide-line text-xs font-mono">
+            {parsedEntries.slice(0, 10).map((entry, idx) => (
+              <div key={idx} className="p-2.5 flex justify-between items-center text-ink-soft">
+                <span>{entry.studentCode ? `Code: ${entry.studentCode}` : (entry.rollNumber ? `Roll: #${entry.rollNumber}` : `ID: ${entry.studentId}`)}</span>
+                <span className="font-bold text-forest-700 dark:text-forest-600">•••• {entry.epc ? entry.epc.slice(-4) : '****'}</span>
               </div>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={bulkMutation.isPending}
-                isLoading={bulkMutation.isPending}
-                onClick={() => bulkMutation.mutate()}
-              >
-                {bulkMutation.isPending ? 'Enrolling Batch…' : `Enroll ${parsedEntries.length} Cards`}
-              </Button>
-            </div>
-          )}
+            ))}
+            {parsedEntries.length > 10 && (
+              <div className="p-2 text-center text-ink-muted text-[11px] font-sans">
+                …and {parsedEntries.length - 10} more rows
+              </div>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="bg-surface-soft p-3 rounded-2xl border border-line text-center">
-              <div className="text-xl font-extrabold text-ink font-display font-mono">{results.length}</div>
-              <div className="text-[11px] text-ink-muted font-bold">Total Batch</div>
+      )}
+
+      {/* Results */}
+      {results.length > 0 && (
+        <div className="space-y-4 mt-6">
+          <div className="p-4 rounded-2xl bg-surface-soft border border-line flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-forest-700 dark:text-forest-600" />
+              <span className="text-xs font-bold text-ink font-display">
+                {successCount} badges saved successfully
+              </span>
             </div>
-            <div className="bg-success-50 p-3 rounded-2xl border border-success-100 dark:border-success-600/30 text-center">
-              <div className="text-xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">{results.filter(r => r.success).length}</div>
-              <div className="text-[11px] text-forest-700 dark:text-forest-600 font-bold">Enrolled</div>
-            </div>
-            <div className="bg-danger-50 p-3 rounded-2xl border border-danger-100 dark:border-danger-600/30 text-center">
-              <div className="text-xl font-extrabold text-danger-800 font-display font-mono">{results.filter(r => !r.success).length}</div>
-              <div className="text-[11px] text-danger-800 font-bold">Failed / Duplicate</div>
-            </div>
+            {failureCount > 0 && (
+              <span className="text-xs font-bold text-danger-800 bg-danger-50 px-2.5 py-1 rounded-full border border-danger-100 dark:border-danger-600/30">
+                {failureCount} errors
+              </span>
+            )}
           </div>
 
-          <div className="max-h-64 overflow-auto border border-line rounded-2xl">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-surface-soft border-b border-line text-ink-muted font-bold uppercase sticky top-0 font-display">
-                <tr>
-                  <th className="p-3">Student ID</th>
-                  <th className="p-3">Result</th>
-                  <th className="p-3">Message / Error</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line font-medium text-ink bg-surface">
-                {results.map((r, i) => (
-                  <tr key={i} className="table-row-hover">
-                    <td className="p-3 font-mono text-ink">{r.studentId}</td>
-                    <td className="p-3">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-display ${
-                        r.success ? 'bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30' : 'bg-danger-50 text-danger-800 border border-danger-100 dark:border-danger-600/30'
-                      }`}>
-                        {r.success ? 'Success' : 'Failed'}
-                      </span>
-                    </td>
-                    <td className="p-3 text-ink-soft">{r.error || (r.success ? 'Enrolled in database' : 'Failed')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="max-h-56 overflow-y-auto border border-line rounded-2xl bg-surface divide-y divide-line text-xs">
+            {results.map((r, idx) => (
+              <div key={idx} className="p-3 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-ink font-display">{r.studentCode ? `Code: ${r.studentCode}` : (r.rollNumber ? `Roll: #${r.rollNumber}` : `Student ${idx + 1}`)}</span>
+                  {r.epcLastFour && <span className="text-ink-muted text-[11px] ml-2 font-mono">•••• {r.epcLastFour}</span>}
+                </div>
+                {r.success ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-success-50 text-forest-700 dark:text-forest-600 border border-success-100 dark:border-success-600/30 font-display">
+                    Saved
+                  </span>
+                ) : (
+                  <span className="text-danger-800 text-[11px] font-medium">{r.error}</span>
+                )}
+              </div>
+            ))}
           </div>
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setResults([]);
-              setParsedEntries([]);
-              setFile(null);
-            }}
-          >
-            Upload Another Batch
-          </Button>
+          <div className="flex justify-end pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFile(null);
+                setParsedEntries([]);
+                setResults([]);
+              }}
+            >
+              Upload Another File
+            </Button>
+          </div>
         </div>
       )}
     </div>

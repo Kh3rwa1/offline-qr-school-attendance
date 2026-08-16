@@ -579,8 +579,26 @@ rfidRouter.get(
       }
 
       const query = db
-        .select()
+        .select({
+          id: rfidScanEvents.id,
+          scanTimestamp: rfidScanEvents.scanTimestamp,
+          credentialId: rfidScanEvents.credentialId,
+          studentId: rfidCredentials.studentId,
+          readerId: rfidScanEvents.readerId,
+          decision: rfidScanEvents.decision,
+          antennaPort: rfidScanEvents.antennaPort,
+          peakRssi: rfidScanEvents.peakRssi,
+          epcLastFour: rfidScanEvents.epcLastFour,
+          studentName: students.name,
+          studentNameBn: students.nameBn,
+          studentCode: students.studentCode,
+          readerName: rfidReaders.name,
+          readerLocation: rfidReaders.location,
+        })
         .from(rfidScanEvents)
+        .leftJoin(rfidCredentials, eq(rfidScanEvents.credentialId, rfidCredentials.id))
+        .leftJoin(students, eq(rfidCredentials.studentId, students.id))
+        .leftJoin(rfidReaders, eq(rfidScanEvents.readerId, rfidReaders.id))
         .where(and(...conditions))
         .orderBy(desc(rfidScanEvents.scanTimestamp), desc(rfidScanEvents.id))
         .limit(limit + 1);
@@ -588,6 +606,22 @@ rfidRouter.get(
       const rows = await query;
       const hasMore = rows.length > limit;
       const scans = hasMore ? rows.slice(0, limit) : rows;
+
+      const formattedScans = scans.map((s: any) => ({
+        id: s.id,
+        time: s.scanTimestamp ? new Date(s.scanTimestamp).toISOString() : new Date().toISOString(),
+        student: s.studentName || (s.epcLastFour ? `Badge •••• ${s.epcLastFour}` : 'Unknown Student'),
+        studentName: s.studentName,
+        studentNameBn: s.studentNameBn,
+        studentCode: s.studentCode,
+        studentId: s.studentId,
+        decision: s.decision,
+        method: 'Gate attendance',
+        reader: s.readerName || 'Gate Reader',
+        location: s.readerLocation || 'Main Gate',
+        antennaPort: s.antennaPort,
+        epcLastFour: s.epcLastFour,
+      }));
 
       let nextCursor: string | null = null;
       if (hasMore && scans.length > 0) {
@@ -602,7 +636,9 @@ rfidRouter.get(
         status: 200,
         body: {
           success: true,
-          report: scans,
+          report: formattedScans,
+          recentScans: formattedScans,
+          scans: formattedScans,
           nextCursor,
           hasMore,
           limit,

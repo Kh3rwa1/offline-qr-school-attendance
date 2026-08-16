@@ -11,36 +11,37 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
   const { data: scansData, isLoading, error, refetch } = useQuery({
     queryKey: ['schools', schoolId, 'rfid', 'reports', 'scans'],
     queryFn: async () => {
-      if (!schoolId) return { recentScans: [] };
+      if (!schoolId) return { recentScans: [], report: [] };
       return api<{
         success: boolean;
-        readersOnline: number;
-        readersOffline: number;
-        activeCards: number;
-        suspendedCards: number;
-        recentScans: any[];
+        readersOnline?: number;
+        readersOffline?: number;
+        activeCards?: number;
+        suspendedCards?: number;
+        recentScans?: any[];
+        report?: any[];
       }>(`/api/v1/schools/${schoolId}/rfid/reports/scans`);
     },
     enabled: Boolean(schoolId),
   });
 
-  const scans = scansData?.recentScans || [];
-  const filteredScans = scans.filter((s) => filterMethod === 'ALL' || s.method === filterMethod);
+  const scans = scansData?.recentScans || scansData?.report || [];
+  const filteredScans = scans.filter((s: any) => filterMethod === 'ALL' || s.method === filterMethod || (filterMethod === 'GATE' && (s.method === 'Gate attendance' || s.method === 'RFID_GATE')));
 
   const totalScans = scans.length;
-  const acceptedScans = scans.filter((s) => s.decision === 'ACCEPTED').length;
+  const acceptedScans = scans.filter((s: any) => s.decision === 'ACCEPTED').length;
   const rejectedScans = totalScans - acceptedScans;
 
   const handleExportCSV = () => {
     const csvContent = [
       ['Time', 'Student', 'Decision', 'Method', 'Reader', 'Location'].join(','),
-      ...filteredScans.map((s) => [
+      ...filteredScans.map((s: any) => [
         `"${s.time}"`,
-        `"${s.student}"`,
+        `"${s.student || s.studentName || ''}"`,
         `"${s.decision}"`,
-        `"${s.method}"`,
-        `"${s.reader}"`,
-        `"${s.location}"`,
+        `"${s.method || 'Gate attendance'}"`,
+        `"${s.reader || s.readerName || ''}"`,
+        `"${s.location || s.readerLocation || ''}"`,
       ].join(',')),
     ].join('\n');
 
@@ -48,7 +49,7 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `rfid-scans-${schoolId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `gate-arrivals-${schoolId}-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -57,8 +58,8 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
     <div className="app-card p-6 text-left">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
         <div>
-          <h2 className="text-xl font-extrabold text-ink font-display">Gate Tap & Capture Report</h2>
-          <p className="t-body text-xs text-ink-soft">Real-time gate telemetry logs recorded from hardware readers.</p>
+          <h2 className="text-xl font-extrabold text-ink font-display">Who Walked In Today</h2>
+          <p className="t-body text-xs text-ink-soft">Real-time gate attendance arrivals recorded at school gates.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -86,24 +87,23 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
           onChange={(e) => setFilterMethod(e.target.value)}
           className="border border-line px-4 py-2 rounded-full text-xs font-bold text-ink bg-surface-soft outline-none focus:border-forest-700 font-display cursor-pointer"
         >
-          <option value="ALL">All Methods</option>
-          <option value="RFID_SECURE">RFID Secure (DESFire)</option>
-          <option value="OFFLINE_BUFFER">Offline Synced Taps</option>
+          <option value="ALL">All Entries</option>
+          <option value="GATE">Gate Attendance</option>
         </select>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-surface-soft p-4 rounded-2xl border border-line text-center">
           <div className="text-2xl font-extrabold text-ink font-display font-mono">{totalScans}</div>
-          <div className="text-[11px] text-ink-muted font-bold">Total Gate Taps</div>
+          <div className="text-[11px] text-ink-muted font-bold">Total Gate Entries</div>
         </div>
         <div className="bg-success-50 p-4 rounded-2xl border border-success-100 dark:border-success-600/30 text-center">
           <div className="text-2xl font-extrabold text-forest-700 dark:text-forest-600 font-display font-mono">{acceptedScans}</div>
-          <div className="text-[11px] text-forest-700 dark:text-forest-600 font-bold">Verified & Accepted</div>
+          <div className="text-[11px] text-forest-700 dark:text-forest-600 font-bold">Marked Present</div>
         </div>
         <div className="bg-danger-50 p-4 rounded-2xl border border-danger-100 dark:border-danger-600/30 text-center">
           <div className="text-2xl font-extrabold text-danger-800 font-display font-mono">{rejectedScans}</div>
-          <div className="text-[11px] text-danger-800 font-bold">Rejected / Anomalies</div>
+          <div className="text-[11px] text-danger-800 font-bold">Duplicates & Unenrolled</div>
         </div>
       </div>
 
@@ -111,8 +111,8 @@ export default function RfidReports({ schoolId }: { schoolId: string }) {
         <div className="p-8 border border-line rounded-2xl">
           <EmptyState
             kind="generic"
-            title="No gate scans found"
-            description="No gate scans found for this school."
+            title="No one has walked in yet today."
+            description="Gate arrivals will appear automatically when students walk past the school gate."
           />
         </div>
       ) : (

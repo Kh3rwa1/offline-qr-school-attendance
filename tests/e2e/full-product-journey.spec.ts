@@ -73,7 +73,7 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.locator('#login-password').fill('ReportViewerPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('Attendance Reports & Analytics').or(page.getByText(/Reports & Analytics/i))).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
 
     // 2. Daily roll inspection
     await page.goto(`${baseUrl}/app/reports/daily`);

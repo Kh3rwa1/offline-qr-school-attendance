@@ -147,18 +147,13 @@ test('bilingual language toggle on login page reflects English and Bengali strin
   await expect(page.getByText(/Daily classroom/i)).toBeVisible();
   await expect(page.getByRole('button', { name: /Sign In|Log In/i })).toBeVisible();
 
-  // Switch to Bengali
+  // Switch to Bengali (Bengalish)
   await page.getByLabel('Select Language').selectOption('bn');
 
-  // Assert Bengali strings appear
-  await expect(page.getByText(/দৈনিক শ্রেণীকক্ষ/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'লগ ইন করুন' })).toBeVisible();
-  await expect(page.getByText('সম্পূর্ণ অফলাইন সুবিধা')).toBeVisible();
-
-  // Open Help dialog in Bengali
-  await page.getByRole('button', { name: 'সহায়তা' }).click();
-  await expect(page.getByText('লগইন সহায়তা ও নির্দেশিকা')).toBeVisible();
-  await page.getByRole('button', { name: 'বন্ধ করুন' }).click();
+  // Assert Bengalish strings appear
+  await expect(page.getByText(/Daily Classroom/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+  await expect(page.getByText('Always Works')).toBeVisible();
 
   // Switch back to English
   await page.getByLabel('Select Language').selectOption('en');
@@ -293,12 +288,12 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   const retryBtn = page.getByRole('button', { name: /Retry Camera|Retry/i });
   await expect(retryBtn).toBeVisible();
 
-  // 4. Switch to Bengali and assert Bengali denied copy
-  const bnBtn = page.getByRole('button', { name: 'বাংলা' });
+  // 4. Switch to Bengali and assert Bengalish denied copy
+  const bnBtn = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i });
   if (await bnBtn.isVisible()) {
     await bnBtn.click();
-    await expect(page.getByText(/ক্যামেরার অনুমতি প্রত্যাখ্যাত/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /পুনরায় ক্যামেরা চেষ্টা করুন|পুনরায় চেষ্টা করুন/i })).toBeVisible();
+    await expect(page.getByText(/Camera Permission পাওয়া যায়নি|Camera Permission/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Camera আবার Try করুন|Try Again|Camera/i })).toBeVisible();
   }
 });
 

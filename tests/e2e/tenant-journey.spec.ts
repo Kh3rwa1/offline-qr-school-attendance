@@ -8,15 +8,19 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
 
     // Verify brand, hero copy and presence of landing elements
     await expect(page.getByText('AttendEase', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Attendance infrastructure built for zero-connectivity classrooms.')).toBeVisible();
-    await expect(page.getByText('From Discovery to Morning Rollout')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: /Morning attendance in under 2 minutes/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /From first call to first morning/i })
+    ).toBeVisible();
 
     // Verify login form is NOT shown on root "/"
     await expect(page.locator('#login-phone')).not.toBeVisible();
 
-    // Verify Stage 5 honest copy (workspace path instead of fake subdomain)
-    await page.getByRole('button', { name: /5\.?\s*Provision School/i }).click();
-    await expect(page.getByText('Generate a stable workspace path /s/green-valley')).toBeVisible();
+    // Verify Step 5 honest copy (private school page instead of fake subdomain)
+    await page.getByRole('button', { name: /5\.?\s*School setup/i }).click();
+    await expect(page.getByText(/secure page and admin login/i)).toBeVisible();
 
     // Click "School Sign In" button on landing page and assert navigation to /login
     const schoolSignInBtn = page.getByRole('button', { name: 'School Sign In' }).first();
@@ -43,13 +47,13 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await page.locator('input[placeholder="Green Valley High School"]').fill('Ballygunge Govt High School');
     await page.locator('input[placeholder="Kolkata, West Bengal"]').fill('Kolkata');
 
-    // Submit form
-    await page.getByRole('button', { name: 'Submit Request' }).click();
+    // Submit form (submit button lives inside the dialog form)
+    await page.getByTestId('demo-request-form').getByRole('button', { name: /Request Demo/i }).click();
 
     // Verify success confirmation card
     await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Demo Request Received')).toBeVisible();
-    await expect(page.getByText('Principal Animesh Das')).toBeVisible();
+    await expect(page.getByText(/Demo request received/i)).toBeVisible();
+    await expect(page.getByText('9876500001')).toBeVisible();
   });
 
   test('3. Unknown school slug shows dedicated 404 empty state without inventing names', async ({ page }) => {

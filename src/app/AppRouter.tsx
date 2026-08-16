@@ -19,6 +19,8 @@ const SchoolsOverview = lazy(() => import('../dashboards/super-admin/SchoolsOver
 const SecurityOverview = lazy(() => import('../dashboards/super-admin/SecurityOverview'));
 const AuditOverview = lazy(() => import('../dashboards/super-admin/AuditOverview'));
 const SetupWizardPage = lazy(() => import('./SetupWizardPage'));
+const PrivacyPage = lazy(() => import('./PrivacyPage'));
+const TermsPage = lazy(() => import('./TermsPage'));
 
 const UserManagement = lazy(() => import('../dashboards/school-admin/UserManagement'));
 const StudentRoster = lazy(() => import('../dashboards/school-admin/StudentRoster'));
@@ -91,6 +93,8 @@ export const AppRouter: React.FC = () => {
         {/* Public Acquisition Landing Page */}
         <Route path="/" element={<HomeOrLanding />} />
         <Route path="/welcome" element={<LandingPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/setup" element={<SetupWizardPage />} />
 
         {/* Global and Path-Based Login Routes */}

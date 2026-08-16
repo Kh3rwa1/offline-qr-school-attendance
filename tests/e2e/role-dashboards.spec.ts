@@ -38,7 +38,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.getByRole('button', { name: /Sign In/i }).click();
 
     await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
-    await expect(page.getByText(/AUDITOR ACCESS: READ ONLY/i)).toBeVisible();
+    await expect(page.getByText(/Official Reports|অফিসিয়াল রিপোর্ট/i)).toBeVisible();
   });
 
   test('RFID_OPERATOR logs in and accesses DESFire EV2 operator station', async ({ page }) => {

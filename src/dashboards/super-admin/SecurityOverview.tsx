@@ -6,6 +6,7 @@ import { StatCard } from '../../components/shared/StatCard';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
 import { Button } from '../../components/shared/Button';
+import { PLAIN_TERMS } from '../../utils/superAdminPlainTermsMapper';
 
 interface SystemHealthResponse {
   success: boolean;
@@ -51,6 +52,9 @@ export const SecurityOverview: React.FC = () => {
           <p className="t-body text-sm text-ink-soft mt-1">
             Government of India Digital Personal Data Protection (DPDP) and state school tenant security telemetry.
           </p>
+          <p className="t-body text-xs text-ink-muted mt-1">
+            {PLAIN_TERMS.dpdp.en}
+          </p>
         </div>
 
         <Button
@@ -65,30 +69,38 @@ export const SecurityOverview: React.FC = () => {
 
       {/* Telemetry Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          title="Database Isolation"
-          value={isDbConnected ? 'Active (RLS)' : 'DEGRADED'}
-          trend={{ value: isDbConnected ? 'PostgreSQL Tenant Context' : 'Database Offline', isPositive: isDbConnected }}
-          variant={isDbConnected ? 'hero-forest' : 'default'}
-        />
-        <StatCard
-          title="Distributed Cache"
-          value={telemetry?.redis || 'UNKNOWN'}
-          trend={{ value: isRedisActive ? 'Redis Rate Limiter' : 'In-Memory Fallback Active', isPositive: isRedisActive }}
-          variant="default"
-        />
-        <StatCard
-          title="KMS Cryptography"
-          value={telemetry?.kmsProviderMode || 'UNKNOWN'}
-          trend={{ value: telemetry?.rfidCardProofEnforced ? 'Hardware Proof Enforced' : 'Card Proof Optional', isPositive: Boolean(telemetry?.rfidCardProofEnforced) }}
-          variant="default"
-        />
-        <StatCard
-          title="Automated Backups"
-          value={hasBackup ? new Date(telemetry!.latestBackupTimestamp!).toLocaleDateString() : 'UNKNOWN'}
-          trend={{ value: hasBackup ? 'Verified Snapshot Available' : 'No Automated Snapshot Recorded', isPositive: hasBackup }}
-          variant="default"
-        />
+        <div title={PLAIN_TERMS.rls.en}>
+          <StatCard
+            title="Database Isolation"
+            value={isDbConnected ? 'Active (RLS)' : 'DEGRADED'}
+            trend={{ value: isDbConnected ? 'PostgreSQL Tenant Context' : 'Database Offline', isPositive: isDbConnected }}
+            variant={isDbConnected ? 'hero-forest' : 'default'}
+          />
+        </div>
+        <div title={PLAIN_TERMS.rateLimiting.en}>
+          <StatCard
+            title="Distributed Cache"
+            value={telemetry?.redis || 'UNKNOWN'}
+            trend={{ value: isRedisActive ? 'Redis Rate Limiter' : 'In-Memory Fallback Active', isPositive: isRedisActive }}
+            variant="default"
+          />
+        </div>
+        <div title={PLAIN_TERMS.kms.en}>
+          <StatCard
+            title="KMS Cryptography"
+            value={telemetry?.kmsProviderMode || 'UNKNOWN'}
+            trend={{ value: telemetry?.rfidCardProofEnforced ? 'Hardware Proof Enforced' : 'Card Proof Optional', isPositive: Boolean(telemetry?.rfidCardProofEnforced) }}
+            variant="default"
+          />
+        </div>
+        <div title={PLAIN_TERMS.walBackup.en}>
+          <StatCard
+            title="Automated Backups"
+            value={hasBackup ? new Date(telemetry!.latestBackupTimestamp!).toLocaleDateString() : 'UNKNOWN'}
+            trend={{ value: hasBackup ? 'Verified Snapshot Available' : 'No Automated Snapshot Recorded', isPositive: hasBackup }}
+            variant="default"
+          />
+        </div>
       </div>
 
       {/* Security Architecture Component Inspection */}
@@ -105,6 +117,9 @@ export const SecurityOverview: React.FC = () => {
           </div>
           <p className="t-body text-xs text-ink-soft leading-relaxed">
             PostgreSQL database-level Row-Level Security prevents teachers and administrators from viewing attendance records of any other institution. Each query is cryptographically bound to the active school identifier.
+          </p>
+          <p className="t-body text-xs text-ink-muted leading-relaxed italic">
+            {PLAIN_TERMS.rls.en}
           </p>
           <div className="pt-2">
             {isDbConnected ? (
@@ -134,6 +149,9 @@ export const SecurityOverview: React.FC = () => {
           <p className="t-body text-xs text-ink-soft leading-relaxed">
             Student QR identity badges and NFC smartcards generate dynamic AES-CMAC challenge-response signatures. Replay attacks and photocopied QR badges are automatically rejected by monotonic counters.
           </p>
+          <p className="t-body text-xs text-ink-muted leading-relaxed italic">
+            {PLAIN_TERMS.aesCmac.en}
+          </p>
           <div className="pt-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-display">
               <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
@@ -155,6 +173,9 @@ export const SecurityOverview: React.FC = () => {
           <p className="t-body text-xs text-ink-soft leading-relaxed">
             Sliding-window rate limiters prevent reader buffer overflows during rush-hour morning gate check-in spikes. Offline batch sync endpoints use cryptographic envelope hashing to detect duplicate uploads.
           </p>
+          <p className="t-body text-xs text-ink-muted leading-relaxed italic">
+            {PLAIN_TERMS.rateLimiting.en} {PLAIN_TERMS.envelopeHashing.en}
+          </p>
           <div className="pt-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-warning-50 text-warning-800 border border-warning-100 dark:border-warning-600/30 font-display">
               <CheckCircle2 className="w-3.5 h-3.5 text-warning-600" />
@@ -175,6 +196,9 @@ export const SecurityOverview: React.FC = () => {
           </div>
           <p className="t-body text-xs text-ink-soft leading-relaxed">
             Continuous Write-Ahead Log archiving and daily snapshots encrypted with AES-256-GCM ensure zero data loss even in the event of hardware failure at local school gateways.
+          </p>
+          <p className="t-body text-xs text-ink-muted leading-relaxed italic">
+            {PLAIN_TERMS.walBackup.en}
           </p>
           <div className="pt-2">
             {hasBackup ? (

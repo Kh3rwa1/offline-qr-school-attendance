@@ -325,8 +325,8 @@ jobs:
 
       - name: Verify Appliance Health via Port 80 (Caddy) & Port 3000 (Direct)
         run: |
-          curl -fsS http://127.0.0.1:3000/readyz
-          curl -fsS http://127.0.0.1/readyz
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1/readyz
           ./bin/attendease status
 
       - name: Execute Encrypted Snapshot Backup
@@ -338,23 +338,23 @@ jobs:
         run: |
           docker compose down
           ./bin/attendease repair
-          curl -fsS http://127.0.0.1:3000/readyz
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
 
       - name: Execute Application Update Cycle
         run: |
           ./bin/attendease update
-          curl -fsS http://127.0.0.1:3000/readyz
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
 
       - name: Execute Application Rollback Cycle
         run: |
           ./bin/attendease rollback
-          curl -fsS http://127.0.0.1:3000/readyz
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
 
       - name: Execute Database Restore from Backup Snapshot
         run: |
           LATEST_BACKUP=$(ls -1t ./backups/*.sql.gz.enc | head -n 1)
           ./bin/attendease restore "${LATEST_BACKUP}" -y
-          curl -fsS http://127.0.0.1:3000/readyz
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
 
       - name: Clean Uninstallation & Purge
         if: always()

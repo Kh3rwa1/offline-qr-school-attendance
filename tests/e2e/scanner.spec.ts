@@ -201,16 +201,17 @@ test('live camera scanner initializes getUserMedia with environment facing mode 
   await page.getByRole('button', { name: 'Download roster' }).click();
   await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
+  const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
   const startBtn = page.getByRole('button', { name: 'Start offline session' });
-  if (await startBtn.isVisible()) {
+  if (!(await sessionOpenBtn.isVisible())) {
+    await expect(startBtn).toBeVisible();
     await startBtn.click();
-    await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+    await expect(sessionOpenBtn).toBeVisible();
   }
 
   const phoneBackup = page.getByTestId('phone-backup-details');
-  if (await phoneBackup.isVisible()) {
-    await phoneBackup.locator('summary').click();
-  }
+  await expect(phoneBackup).toBeVisible();
+  await phoneBackup.locator('summary').click();
 
   // 1. Assert getUserMedia was called with facingMode: 'environment'
   await expect.poll(async () => {
@@ -266,17 +267,18 @@ test('camera permission denied renders bilingual error HUD and interactive retry
     await page.getByRole('button', { name: 'Download roster' }).click();
     await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
+    const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
     const startBtn = page.getByRole('button', { name: 'Start offline session' });
-    if (await startBtn.isVisible()) {
+    if (!(await sessionOpenBtn.isVisible())) {
+      await expect(startBtn).toBeVisible();
       await startBtn.click();
-      await expect(page.getByRole('button', { name: 'Session open' })).toBeVisible();
+      await expect(sessionOpenBtn).toBeVisible();
     }
   }
 
   const phoneBackupDenied = page.getByTestId('phone-backup-details');
-  if (await phoneBackupDenied.isVisible()) {
-    await phoneBackupDenied.locator('summary').click();
-  }
+  await expect(phoneBackupDenied).toBeVisible();
+  await phoneBackupDenied.locator('summary').click();
 
   // 1. Assert HUD is NOT LIVE
   await expect(page.getByText(/CAMERA:\s*LIVE/i)).toHaveCount(0);

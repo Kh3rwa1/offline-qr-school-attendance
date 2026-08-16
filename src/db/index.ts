@@ -69,7 +69,8 @@ export function isDbPoolOverloaded(): boolean {
 export function getDb() {
   if (dbInstance) return dbInstance;
 
-  if (env.DATABASE_URL) {
+  const isPlaceholderDbUrl = env.DATABASE_URL?.includes('replace-with-') || env.DATABASE_URL?.includes('replace_with_');
+  if (env.DATABASE_URL && !isPlaceholderDbUrl) {
     validateDatabaseConnectionBudget();
     const pool = new pg.Pool({
       connectionString: env.DATABASE_URL,
@@ -96,7 +97,8 @@ const rawDb = getDb();
 
 function getSystemDb() {
   if (systemDbInstance) return systemDbInstance;
-  if (!env.SYSTEM_DATABASE_URL || env.SYSTEM_DATABASE_URL === env.DATABASE_URL) {
+  const isPlaceholderSysUrl = env.SYSTEM_DATABASE_URL?.includes('replace-with-') || env.SYSTEM_DATABASE_URL?.includes('replace_with_');
+  if (!env.SYSTEM_DATABASE_URL || isPlaceholderSysUrl || env.SYSTEM_DATABASE_URL === env.DATABASE_URL) {
     systemDbInstance = rawDb;
     return systemDbInstance;
   }

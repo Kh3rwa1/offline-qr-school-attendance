@@ -4,10 +4,14 @@ set -euo pipefail
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 
 if [ -f ".env" ]; then
+  PRESET_KEY="${BACKUP_ENCRYPTION_KEY:-}"
   set -a
   # shellcheck disable=SC1091
   source .env
   set +a
+  if [ -n "${PRESET_KEY}" ]; then
+    BACKUP_ENCRYPTION_KEY="${PRESET_KEY}"
+  fi
 fi
 
 BACKUP_FILE="${1:-}"

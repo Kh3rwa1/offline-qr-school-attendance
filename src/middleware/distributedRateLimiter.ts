@@ -17,10 +17,12 @@ function getRateLimiterRedisClient(): Redis | null {
   if (!redisUrl) return null;
   if (!redisClientInstance) {
     redisClientInstance = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
-      enableOfflineQueue: true,
-      lazyConnect: false,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+      retryStrategy: () => null,
     });
+    redisClientInstance.on('error', () => {});
   }
   return redisClientInstance;
 }
@@ -30,18 +32,15 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
 
   let store: any = undefined;
 
-  // Use RedisStore when REDIS_URL is provided
-  if (process.env.REDIS_URL) {
+  // Use RedisStore when REDIS_URL is provided in production or when integration testing Redis
+  if (process.env.REDIS_URL && (process.env.NODE_ENV === 'production' || process.env.TEST_REDIS_RATE_LIMITER === 'true') && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
     store = new RedisStore({
       sendCommand: async (...args: string[]) => {
         const client = getRateLimiterRedisClient();
         if (client) {
           return client.call(args[0], ...args.slice(1)) as any;
         }
-        if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
-          throw new Error(`REDIS_RATE_LIMITER_UNAVAILABLE: Active Redis client is mandatory for production rate limit policy '${prefix}'.`);
-        }
-        return 1 as any;
+        throw new Error(`REDIS_RATE_LIMITER_UNAVAILABLE: Active Redis client is mandatory for production rate limit policy '${prefix}'.`);
       },
       prefix: `rl:${prefix}:`,
     });
@@ -108,6 +107,24 @@ export const rateLimitPolicies = {
   setup: createDistributedRateLimiter({
     prefix: 'setup',
     maxRequests: 5,
+    windowMs: 15 * 60 * 1000,
+  }),
+
+  setupStatus: createDistributedRateLimiter({
+    prefix: 'setup-status',
+    maxRequests: 60,
+    windowMs: 15 * 60 * 1000,
+  }),
+
+  setupInitialize: createDistributedRateLimiter({
+    prefix: 'setup-init',
+    maxRequests: 5,
+    windowMs: 15 * 60 * 1000,
+  }),
+
+  setupImport: createDistributedRateLimiter({
+    prefix: 'setup-import',
+    maxRequests: 10,
     windowMs: 15 * 60 * 1000,
   }),
 

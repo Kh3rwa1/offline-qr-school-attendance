@@ -207,4 +207,27 @@ describe('First-Run Setup Wizard API Integration Suite', () => {
     expect(importBody.enrolledCount).toBe(3);
     expect(importBody.classesCreated).toBe(2);
   });
+
+  it('strictly enforces rate limiting on /api/v1/setup/initialize returning 429 after 5 requests', async () => {
+    // Send 5 rapid validation-error requests to consume the rate limit quota
+    for (let i = 0; i < 5; i++) {
+      await fetch(`${baseUrl}/api/v1/setup/initialize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin: { fullName: 'Bad', phoneNumber: 'bad', password: 'bad' } }),
+      });
+    }
+
+    // 6th request must be blocked by rate limiter with 429
+    const rateLimitedRes = await fetch(`${baseUrl}/api/v1/setup/initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ admin: { fullName: 'Blocked', phoneNumber: '+919999999999', password: 'Password12345!' } }),
+    });
+
+    expect(rateLimitedRes.status).toBe(429);
+    const rateLimitedBody = await rateLimitedRes.json();
+    expect(rateLimitedBody.error).toBe('TOO_MANY_REQUESTS');
+    expect(rateLimitedBody.retryAfterSeconds).toBeDefined();
+  });
 });

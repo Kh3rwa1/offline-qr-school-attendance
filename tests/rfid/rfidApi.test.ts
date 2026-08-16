@@ -45,6 +45,8 @@ describe('RFID Router & Middleware Integration Suite', () => {
 
   beforeAll(async () => {
     process.env.RFID_HMAC_SECRET = hmacSecret;
+    process.env.RFID_CARD_MASTER_KEY = hmacSecret;
+    process.env.SMS_PROVIDER = 'console';
     process.env.NODE_ENV = 'test';
 
     const seeded = await seedDatabase();
@@ -554,9 +556,16 @@ describe('RFID Router & Middleware Integration Suite', () => {
       process.env.SESSION_SECRET = 'a'.repeat(32);
       process.env.CSRF_SECRET = 'a'.repeat(32);
       process.env.REDIS_KEY_HMAC_SECRET = 'a'.repeat(32);
+      process.env.METRICS_AUTH_TOKEN = 'a'.repeat(32);
+      process.env.SMS_PROVIDER = 'console';
       process.env.RFID_HMAC_SECRET = 'a'.repeat(32);
       process.env.RFID_CARD_MASTER_KEY = 'a'.repeat(32);
       process.env.KMS_MASTER_KEY = 'a'.repeat(32);
+      process.env.BACKUP_ENCRYPTION_KEY = 'a'.repeat(32);
+      process.env.MIGRATION_DB_PASSWORD = 'a'.repeat(32);
+      process.env.APP_DB_PASSWORD = 'a'.repeat(32);
+      process.env.SYSTEM_DB_PASSWORD = 'a'.repeat(32);
+      process.env.AUTH_DB_PASSWORD = 'a'.repeat(32);
       process.env.AUTH_DATABASE_URL = 'invalid-malformed-database-url';
 
       expect(() => validateProductionEnv()).toThrow('FATAL_AUTH_DATABASE_URL_MALFORMED');

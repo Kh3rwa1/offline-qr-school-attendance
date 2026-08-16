@@ -106,10 +106,10 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     // 1. Log in as report viewer
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000004');
-    await page.locator('#login-password').fill('ReportPassword123!');
+    await page.locator('#login-password').fill('ReportViewerPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In/i }).click();
 
-    await expect(page.getByText(/Attendance Intelligence|Official Reports/i).first()).toBeVisible();
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 
     // 2. Measure tab navigation buttons
     const tabs = page.locator('nav button, div[role="tablist"] button');

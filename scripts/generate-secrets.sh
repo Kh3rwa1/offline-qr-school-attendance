@@ -119,6 +119,11 @@ if [ -z "${POSTGRES_DB}" ]; then
   set_var "POSTGRES_DB" "${POSTGRES_DB}"
 fi
 
+SMS_PROV="$(get_var 'SMS_PROVIDER')"
+if [ -z "${SMS_PROV}" ] || [ "${SMS_PROV}" = "fake" ]; then
+  set_var "SMS_PROVIDER" "console"
+fi
+
 MIGRATION_USER="$(get_var 'MIGRATION_DB_USER')"
 [ -z "${MIGRATION_USER}" ] && MIGRATION_USER="attendance_migration" && set_var "MIGRATION_DB_USER" "${MIGRATION_USER}"
 MIGRATION_PASS="$(get_var 'MIGRATION_DB_PASSWORD')"

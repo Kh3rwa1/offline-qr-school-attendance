@@ -275,6 +275,8 @@ export const UserManagement: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <select
+                id="staff-role-filter"
+                aria-label={t('allRoles')}
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
@@ -431,10 +433,12 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-ink mb-1 font-display">
+                  <label htmlFor="staff-role-select" className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('staffRoleLabel')} *
                   </label>
                   <select
+                    id="staff-role-select"
+                    aria-label={t('staffRoleLabel')}
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                     className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"

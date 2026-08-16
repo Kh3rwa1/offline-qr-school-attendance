@@ -95,6 +95,7 @@ export async function generateScaleDataset(
       await db.insert(schools).values({
         id: schoolId,
         name: schoolName,
+        slug: `scale-school-${s}`,
         udiseCode,
         district: 'Benchmark District',
         status: 'ACTIVE',

@@ -126,6 +126,7 @@ export async function runFullScaleLoadTest(
       await db.insert(schools).values({
         id: sId,
         name: 'Benchmark School 1',
+        slug: 'benchmark-school-1',
         udiseCode: '19100101',
         district: 'Benchmark District',
         status: 'ACTIVE',

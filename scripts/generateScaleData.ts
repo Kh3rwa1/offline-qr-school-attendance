@@ -17,6 +17,7 @@ export async function generateScaleDataProfile(targetSchools = 100, studentsPerS
       await db.insert(schools).values({
         id: schoolId,
         name: `Scale School ${s}`,
+        slug: `scale-school-${s}`,
         udiseCode: `19100${100 + s}`,
         district: 'Dhaka',
         status: 'ACTIVE',

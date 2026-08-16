@@ -245,8 +245,11 @@ cmd_install() {
     exit 0
   fi
 
+  echo "\n🚀 Building Production Container Images..."
+  dcompose build
+
   echo "\n🚀 Launching Production Container Services..."
-  dcompose up -d --build
+  dcompose up -d
 
   echo "\n⏳ Awaiting System Readiness (/readyz)..."
   MAX_ATTEMPTS=45

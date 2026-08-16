@@ -26,12 +26,16 @@ export const OfflineStatusProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshOutbox = useCallback(async () => {
     try {
-      const status = await getOutboxStatus();
+      if (!activeSchoolId) {
+        setOutboxCount(0);
+        return;
+      }
+      const status = await getOutboxStatus(activeSchoolId);
       setOutboxCount(status.unsyncedTotal);
     } catch {
       // Non-IndexedDB fallback
     }
-  }, []);
+  }, [activeSchoolId]);
 
   const syncNow = useCallback(async () => {
     if (!isOnline || isSyncing || !activeSchoolId) return;

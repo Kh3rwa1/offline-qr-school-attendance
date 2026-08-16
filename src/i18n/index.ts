@@ -684,6 +684,8 @@ export const translations = {
     loadingRoster: 'Loading student enrollment roster…',
     loadingStaff: 'Loading staff directory…',
     allRoles: 'All Roles',
+    approveDevice: 'Approve',
+    revokeDevice: 'Revoke',
   },
   bn: {
     // App & Navigation
@@ -1368,6 +1370,8 @@ export const translations = {
     loadingRoster: 'শিক্ষার্থীদের তালিকা লোড হচ্ছে…',
     loadingStaff: 'কর্মীদের তালিকা লোড হচ্ছে…',
     allRoles: 'সকল পদবী',
+    approveDevice: 'অনুমোদন',
+    revokeDevice: 'বন্ধ করুন',
   },
 };
 

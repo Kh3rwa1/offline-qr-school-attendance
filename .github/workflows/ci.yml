@@ -325,8 +325,14 @@ jobs:
 
       - name: Verify Appliance Health via Port 80 (Caddy) & Port 3000 (Direct)
         run: |
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1/readyz
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "App and Caddy are ready and passing probes!"
+              break
+            fi
+            echo "Waiting for ports 3000 and 80 to become ready... ($i/20)"
+            sleep 2
+          done
           ./bin/attendease status
 
       - name: Execute Encrypted Snapshot Backup
@@ -338,23 +344,47 @@ jobs:
         run: |
           docker compose down
           ./bin/attendease repair
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Repaired stack is ready!"
+              break
+            fi
+            sleep 2
+          done
 
       - name: Execute Application Update Cycle
         run: |
           ./bin/attendease update
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Updated stack is ready!"
+              break
+            fi
+            sleep 2
+          done
 
       - name: Execute Application Rollback Cycle
         run: |
           ./bin/attendease rollback
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Rolled back stack is ready!"
+              break
+            fi
+            sleep 2
+          done
 
       - name: Execute Database Restore from Backup Snapshot
         run: |
           LATEST_BACKUP=$(ls -1t ./backups/*.sql.gz.enc | head -n 1)
           ./bin/attendease restore "${LATEST_BACKUP}" -y
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3000/readyz
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
+              echo "Restored stack is ready!"
+              break
+            fi
+            sleep 2
+          done
 
       - name: Clean Uninstallation & Purge
         if: always()

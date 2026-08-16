@@ -192,8 +192,17 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Language Toggle with Accessible Buttons */}
+          {/* Language Toggle with Accessible Buttons & Select */}
           <div className="flex items-center bg-surface p-1 rounded-2xl border border-line shadow-2xs relative">
+            <select
+              aria-label="Select Language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+              className="sr-only"
+            >
+              <option value="en">English</option>
+              <option value="bn">বাংলা</option>
+            </select>
             <button
               type="button"
               onClick={() => setLanguage('bn')}

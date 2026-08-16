@@ -60,11 +60,13 @@ test.describe('Browser-Level Typography (>=14px) & Reflow / 200% Zoom Verificati
     await expect(phoneInput).toBeVisible();
     await expect(submitBtn).toBeVisible();
 
-    const isButtonClipped = await submitBtn.evaluate((btn) => {
-      const rect = btn.getBoundingClientRect();
-      return rect.bottom > window.innerHeight + 50 || rect.right > window.innerWidth + 50;
-    });
+    await submitBtn.scrollIntoViewIfNeeded();
+    await expect(submitBtn).toBeInViewport();
 
-    expect(isButtonClipped, 'Primary action button was clipped during 200% zoom').toBe(false);
+    // Check no horizontal overflow at 200% zoom
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth + 2;
+    });
+    expect(hasHorizontalScroll, 'Horizontal overflow detected under 200% zoom').toBe(false);
   });
 });

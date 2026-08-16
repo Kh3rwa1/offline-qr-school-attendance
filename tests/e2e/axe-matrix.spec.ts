@@ -62,9 +62,10 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
     // Navigate to User Management
-    const usersNav = page.getByRole('button', { name: /Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
-      page.getByRole('link', { name: /Staff|Users/i })
+    const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
+      page.getByRole('button', { name: /Staff|Users/i })
     ).first();
+    await expect(usersNav).toBeVisible();
     await usersNav.click();
 
     await expect(page.getByRole('button', { name: /Invite Staff|Add Member|New User|নতুন কর্মী/i }).first()).toBeVisible();

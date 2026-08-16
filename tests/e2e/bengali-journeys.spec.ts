@@ -64,8 +64,8 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     }
 
     // 3. Navigate to User Management
-    const usersNav = page.getByRole('button', { name: /Staff Directory|Staff & Roles|Users|কর্মী ও ভূমিকা|সদস্য/i }).or(
-      page.getByRole('link', { name: /Staff|Users|কর্মী/i })
+    const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|কর্মী ও ভূমিকা|সদস্য/i }).or(
+      page.getByRole('button', { name: /Staff|Users|কর্মী/i })
     ).first();
     await expect(usersNav).toBeVisible();
     await usersNav.click();

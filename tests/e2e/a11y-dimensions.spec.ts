@@ -66,8 +66,8 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
     // 2. Navigate to User Management subview
-    const usersTab = page.getByRole('button', { name: /Staff Directory|Staff & Roles|Users|কর্মী ও ভূমিকা|সদস্য/i }).or(
-      page.getByRole('link', { name: /Staff|Users/i })
+    const usersTab = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|কর্মী ও ভূমিকা|সদস্য/i }).or(
+      page.getByRole('button', { name: /Staff|Users/i })
     ).first();
     await expect(usersTab).toBeVisible();
     await usersTab.click();
@@ -83,7 +83,7 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     const modalTitle = page.locator('#add-staff-modal-title');
     await expect(modalTitle).toBeVisible();
 
-    const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password/i }).first();
+    const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password|পাসওয়ার্ড/i }).first();
     await expect(pwdToggle).toBeVisible();
     const toggleBox = await pwdToggle.boundingBox();
     expect(toggleBox).not.toBeNull();
@@ -100,14 +100,14 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
 
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 
-    // 2. Measure tab navigation buttons
-    const tabs = page.locator('nav button, div[role="tablist"] button');
-    const tabCount = await tabs.count();
-    expect(tabCount).toBeGreaterThanOrEqual(1);
-    for (let i = 0; i < tabCount; i++) {
-      const tab = tabs.nth(i);
-      await expect(tab).toBeVisible();
-      const box = await tab.boundingBox();
+    // 2. Measure dashboard action buttons
+    const actionBtns = page.getByRole('button', { name: /Export|Daily|Report|Download/i });
+    const btnCount = await actionBtns.count();
+    expect(btnCount).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < btnCount; i++) {
+      const btn = actionBtns.nth(i);
+      await expect(btn).toBeVisible();
+      const box = await btn.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }

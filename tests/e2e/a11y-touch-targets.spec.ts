@@ -71,8 +71,8 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
         // 1. Navigate to User Management
-        const usersNav = page.getByRole('button', { name: /Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
-          page.getByRole('link', { name: /Staff|Users/i })
+        const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
+          page.getByRole('button', { name: /Staff|Users/i })
         ).first();
 
         await expect(usersNav).toBeVisible();
@@ -94,7 +94,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await expect(fullNameInput).toBeVisible();
 
         // Check password reveal button inside modal
-        const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password/i }).first();
+        const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password|পাসওয়ার্ড/i }).first();
         if (await pwdToggle.isVisible()) {
           const toggleBox = await pwdToggle.boundingBox();
           expect(toggleBox).not.toBeNull();

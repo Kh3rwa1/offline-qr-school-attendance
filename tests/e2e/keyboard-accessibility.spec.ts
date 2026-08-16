@@ -44,8 +44,8 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
     // 2. Navigate to User Management
-    const usersNav = page.getByRole('button', { name: /Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
-      page.getByRole('link', { name: /Staff|Users/i })
+    const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
+      page.getByRole('button', { name: /Staff|Users/i })
     ).first();
     await expect(usersNav).toBeVisible();
     await usersNav.click();

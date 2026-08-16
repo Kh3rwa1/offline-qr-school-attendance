@@ -277,12 +277,85 @@ export function redactCredentialDigest(digest: string): string {
   return '*'.repeat(prefixLength) + digest.slice(-8);
 }
 
+/**
+ * UHF EPC Gen 2 / ISO 18000-63 Cryptographic Helpers
+ */
+
+/**
+ * Canonicalizes an EPC hexadecimal string (converts to uppercase, strips prefixes, spaces, colons, hyphens).
+ */
+export function canonicalizeEpc(epc: string): string {
+  if (!epc || typeof epc !== 'string') {
+    throw new Error('EPC is required and must be a string');
+  }
+  let cleaned = epc.trim();
+  // Strip common EPC URI prefixes if present (e.g., urn:epc:tag:... or 0x)
+  if (cleaned.startsWith('0x') || cleaned.startsWith('0X')) {
+    cleaned = cleaned.slice(2);
+  }
+  cleaned = cleaned.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+  if (cleaned.length < 8 || cleaned.length > 128) {
+    throw new Error(`Invalid UHF EPC length: ${cleaned.length} hex chars (expected 8-128 chars).`);
+  }
+  return cleaned;
+}
+
+/**
+ * Computes a stable SHA-256 digest of a canonical EPC hex string.
+ */
+export function computeEpcDigest(epc: string, salt: string = ''): string {
+  const canonical = canonicalizeEpc(epc);
+  const input = salt ? `${canonical}:${salt}` : canonical;
+  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+/**
+ * Returns the last 4 characters of an EPC for operator support display without exposing the full EPC.
+ */
+export function getEpcLastFour(epc: string): string {
+  try {
+    const canonical = canonicalizeEpc(epc);
+    return canonical.slice(-4);
+  } catch {
+    return '****';
+  }
+}
+
+/**
+ * Verifies a Zebra IoT Connector webhook HMAC-SHA256 signature against the raw body.
+ */
+export function verifyZebraHmacSignature(rawBody: string | Buffer, signatureHex: string, secret: string): boolean {
+  if (!rawBody || !signatureHex || !secret) return false;
+  try {
+    const cleanSig = signatureHex.replace(/^sha256=/i, '').trim();
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    return timingSafeEqual(cleanSig.toLowerCase(), expected.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifies a shared bearer token header (Authorization: Bearer <token>) over HTTPS.
+ */
+export function verifyBearerToken(authHeader: string | undefined, expectedToken: string): boolean {
+  if (!authHeader || !expectedToken) return false;
+  const parts = authHeader.trim().split(' ');
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') return false;
+  return timingSafeEqual(parts[1], expectedToken);
+}
+
 export const generateHmacDigest = computeCredentialDigest;
 export const verifySignature = verifyEnvelopeSignature;
 
 export const cryptoService = {
   canonicalizeUid,
   canonicalizeUidBuffer,
+  canonicalizeEpc,
+  computeEpcDigest,
+  getEpcLastFour,
+  verifyZebraHmacSignature,
+  verifyBearerToken,
   aesCmac,
   computeDiversifiedKey,
   computeCredentialDigest,
@@ -297,3 +370,4 @@ export const cryptoService = {
   verifyCardProof,
   redactCredentialDigest,
 };
+

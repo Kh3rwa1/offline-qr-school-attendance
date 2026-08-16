@@ -30,11 +30,12 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
   const [isProvisionOpen, setIsProvisionOpen] = useState(false);
   const [provisionForm, setProvisionForm] = useState({
     deviceId: '',
-    name: 'Gate 1 Turnstile A',
-    location: 'Main Entrance',
+    name: 'Main Gate FX9600',
+    location: 'North Entrance Gate',
     directionMode: 'IN' as const,
-    adapterType: 'GATEWAY' as const,
-    securityCapability: 'DESFIRE_EV2_EV3' as const,
+    adapterType: 'NETWORK' as const,
+    securityCapability: 'ZEBRA_FX9600' as const,
+    readerModel: 'ZEBRA_FX9600',
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -61,11 +62,12 @@ export default function ReaderManagement({ schoolId }: { schoolId: string }) {
       setIsProvisionOpen(false);
       setProvisionForm({
         deviceId: '',
-        name: 'Gate 1 Turnstile A',
-        location: 'Main Entrance',
+        name: 'Main Gate FX9600',
+        location: 'North Entrance Gate',
         directionMode: 'IN',
-        adapterType: 'GATEWAY',
-        securityCapability: 'DESFIRE_EV2_EV3',
+        adapterType: 'NETWORK',
+        securityCapability: 'ZEBRA_FX9600',
+        readerModel: 'ZEBRA_FX9600',
       });
       setFormError(null);
     },

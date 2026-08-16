@@ -1,0 +1,47 @@
+{
+  "standardPayload": {
+    "type": "tag_read",
+    "reader_name": "FX9600-GATE-01",
+    "timestamp": "2026-08-16T08:30:00.000Z",
+    "data": [
+      {
+        "idHex": "E28011700000020B85794820",
+        "antenna": 1,
+        "peakRssi": -58,
+        "firstSeen": "2026-08-16T08:30:00.010Z",
+        "lastSeen": "2026-08-16T08:30:00.120Z",
+        "reads": 14,
+        "format": "epc"
+      },
+      {
+        "idHex": "3034257BF400B7800004CB09",
+        "antenna": 2,
+        "peakRssi": -64,
+        "firstSeen": "2026-08-16T08:30:00.050Z",
+        "lastSeen": "2026-08-16T08:30:00.200Z",
+        "reads": 8,
+        "format": "epc"
+      }
+    ]
+  },
+  "arrayPayload": [
+    {
+      "epc": "E28011700000020B85794820",
+      "antenna_port": 1,
+      "rssi": -55,
+      "timestamp": 1786869000000
+    }
+  ],
+  "singleTagPayload": {
+    "epc": "E28011700000020B85794820",
+    "antenna": 1,
+    "peakRssi": -60,
+    "timestamp": "2026-08-16T08:30:00.000Z"
+  },
+  "heartbeatPayload": {
+    "type": "heartbeat",
+    "reader_name": "FX9600-GATE-01",
+    "status": "OPERATIONAL",
+    "timestamp": "2026-08-16T08:30:00.000Z"
+  }
+}

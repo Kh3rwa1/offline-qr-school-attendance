@@ -21,13 +21,13 @@ export const RfidOperatorDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-success-50 border border-success-100 dark:border-success-600/30 text-[11px] font-bold text-forest-700 dark:text-forest-600 uppercase tracking-wider mb-2 font-display">
-            <span>MIFARE DESFire EV2 Operator Console</span>
+            <span>Zebra FX9600 UHF RFID Operator Console</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-display">
-            Smartcard Operations
+            UHF RFID Gate Operations
           </h1>
           <p className="t-body text-sm text-ink-soft mt-1">
-            Plan, provision, and monitor MIFARE DESFire EV3 hardware readers for {activeSchoolName}.
+            Plan, provision, and monitor Zebra FX9600 fixed UHF readers and EPC Gen2 badge attendance for {activeSchoolName}.
           </p>
         </div>
 
@@ -38,7 +38,7 @@ export const RfidOperatorDashboard: React.FC = () => {
             onClick={() => setSubView('enroll')}
             leftIcon={<Plus className="w-4 h-4" />}
           >
-            Enroll Smartcard
+            Enroll EPC Badge
           </Button>
 
           <Button
@@ -55,29 +55,29 @@ export const RfidOperatorDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Gate Terminals"
-          value="4 Online"
-          trend={{ value: "DESFire EV3 Verified", isPositive: true }}
+          value="Fixed FX9600"
+          trend={{ value: "Zebra IoT Connector Webhook", isPositive: true }}
           variant="hero-forest"
           onClick={() => setSubView('readers')}
         />
         <StatCard
-          title="Active Cards"
-          value={1005}
-          trend={{ value: "Diversification Keys Active", isPositive: true }}
+          title="Active Badges"
+          value="EPC Gen 2"
+          trend={{ value: "SHA-256 Vault Protected", isPositive: true }}
           variant="default"
           onClick={() => setSubView('cards')}
         />
         <StatCard
           title="Tap Velocity"
-          value="4.2 /s"
+          value="Gate Stream"
           trend={{ value: "Zero Replay Collisions", isPositive: true }}
           variant="default"
           onClick={() => setSubView('reports')}
         />
         <StatCard
-          title="Cryptographic Suite"
-          value="AES-128"
-          trend={{ value: "CMAC Authentication", isPositive: true }}
+          title="Tag Standard"
+          value="ISO 18000-63"
+          trend={{ value: "Passive UHF EPC Gen2", isPositive: true }}
           variant="default"
           onClick={() => setSubView('dashboard')}
         />
@@ -89,11 +89,11 @@ export const RfidOperatorDashboard: React.FC = () => {
           {(
             [
               ['dashboard', 'Overview'],
-              ['readers', 'Gate Readers'],
-              ['cards', 'Card Status'],
-              ['enroll', 'NFC Enroll'],
+              ['readers', 'Zebra FX9600 Readers'],
+              ['cards', 'Badge Status'],
+              ['enroll', 'EPC Enroll'],
               ['bulk', 'Bulk Provision'],
-              ['reports', 'Tap Logs'],
+              ['reports', 'Gate Logs'],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -111,7 +111,7 @@ export const RfidOperatorDashboard: React.FC = () => {
         </div>
 
         <div className="px-3 text-xs font-bold text-ink-muted font-mono">
-          PC/SC Subsystem: <span className="text-forest-700 dark:text-forest-600 font-bold">READY</span>
+          Zebra IoT Connector: <span className="text-forest-700 dark:text-forest-600 font-bold">READY</span>
         </div>
       </div>
 

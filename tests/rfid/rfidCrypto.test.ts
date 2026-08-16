@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
 import {
   canonicalizeUid,
+  canonicalizeEpc,
+  computeEpcDigest,
+  getEpcLastFour,
+  verifyZebraHmacSignature,
   generateHmacDigest,
   timingSafeEqual,
   generateNonce,
@@ -104,4 +108,60 @@ describe('RFID Crypto Service', () => {
       expect(verifySignature(payload + 'x', signature, secret)).toBe(false);
     });
   });
+
+  describe('UHF EPC Gen2 Cryptographic Utilities', () => {
+    describe('canonicalizeEpc', () => {
+      it('canonicalizes standard hex EPC', () => {
+        expect(canonicalizeEpc('e28011700000020b85794820')).toBe('E28011700000020B85794820');
+      });
+
+      it('strips 0x prefix and delimiters', () => {
+        expect(canonicalizeEpc('0x-e2-80-11-70:00:00:02:0b-85794820')).toBe('E28011700000020B85794820');
+      });
+
+      it('rejects non-hex characters and invalid lengths', () => {
+        expect(() => canonicalizeEpc('INVALID_NON_HEX_TAG')).toThrow();
+        expect(() => canonicalizeEpc('1234')).toThrow(); // Too short (< 8 chars)
+        expect(() => canonicalizeEpc('')).toThrow();
+      });
+    });
+
+    describe('computeEpcDigest', () => {
+      it('produces stable SHA-256 hash', () => {
+        const epc = 'E28011700000020B85794820';
+        const expected = crypto.createHash('sha256').update(epc).digest('hex');
+        expect(computeEpcDigest(epc)).toBe(expected);
+      });
+
+      it('different EPCs produce distinct digests', () => {
+        expect(computeEpcDigest('E28011700000020B85794820')).not.toBe(
+          computeEpcDigest('3034257BF400B7800004CB09')
+        );
+      });
+    });
+
+    describe('getEpcLastFour', () => {
+      it('returns last 4 hex chars', () => {
+        expect(getEpcLastFour('E28011700000020B85794820')).toBe('4820');
+      });
+    });
+
+    describe('verifyZebraHmacSignature', () => {
+      const secret = 'zebra-webhook-secret-key-32-chars';
+      const rawPayload = JSON.stringify({ type: 'tag_read', data: [{ epc: 'E28011700000020B85794820' }] });
+
+      it('accepts valid HMAC signature', () => {
+        const sig = crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
+        expect(verifyZebraHmacSignature(rawPayload, sig, secret)).toBe(true);
+        expect(verifyZebraHmacSignature(rawPayload, `sha256=${sig}`, secret)).toBe(true);
+      });
+
+      it('rejects tampered body or incorrect secret', () => {
+        const sig = crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
+        expect(verifyZebraHmacSignature(rawPayload + ' ', sig, secret)).toBe(false);
+        expect(verifyZebraHmacSignature(rawPayload, sig, 'wrong-secret')).toBe(false);
+      });
+    });
+  });
 });
+

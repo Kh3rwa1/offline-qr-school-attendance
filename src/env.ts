@@ -13,12 +13,12 @@ const envSchema = z.object({
   CSRF_SECRET: z.string().min(32).optional(),
   ALLOW_TEST_BYPASS: z.string().default('false'),
   APP_URL: z.string().optional(),
-  FEATURE_RFID: z.string().default('false'),
+  FEATURE_RFID: z.string().default('true'),
   
   KMS_MASTER_KEY: z.string().optional(),
   AUTH_DATABASE_URL: z.string().optional(),
   RFID_CARD_MASTER_KEY: z.string().optional(),
-  RFID_REQUIRE_CARD_PROOF: z.string().default('true'),
+  RFID_REQUIRE_CARD_PROOF: z.string().default('false'),
   // RFID Configuration
   ALLOW_LEGACY_RFID_UID_MODE: z.string().default('false'),
   RFID_HMAC_SECRET: z.string().optional(),
@@ -29,7 +29,7 @@ const envSchema = z.object({
   RFID_MAX_ROSTER_AGE_HOURS: z.string().default('4'),
   RFID_OFFLINE_QUEUE_CAPACITY: z.string().default('10000'),
   RFID_OFFLINE_FAIL_MODE: z.string().default('CLOSED'),
-  RFID_READER_SCAN_RATE_LIMIT: z.string().default('120'),
+  RFID_READER_SCAN_RATE_LIMIT: z.string().default('600'),
   RFID_GATEWAY_URL: z.string().optional(),
 });
 
@@ -62,7 +62,7 @@ export function validateProductionEnv() {
       'AUTH_DB_PASSWORD',
     ];
     if (process.env.FEATURE_RFID === 'true') {
-      secretVars.push('RFID_HMAC_SECRET', 'RFID_CARD_MASTER_KEY', 'KMS_MASTER_KEY');
+      secretVars.push('RFID_HMAC_SECRET');
     }
 
     for (const varName of secretVars) {

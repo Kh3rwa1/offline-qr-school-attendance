@@ -1,6 +1,12 @@
-# AttendEase OS — Rural School QR Attendance Appliance
+# AttendEase OS — UHF RFID Gate Attendance Appliance for Zebra FX9600
 
-An offline-first, bilingual (**English** + **বাংলা**) QR card attendance appliance built specifically for rural government schools in West Bengal. Engineered to run reliably on low-end Android smartphones (2–4 GB RAM, Chrome browser) over intermittent 2G/4G connectivity, with one-command installation, browser setup wizard, automated AES-256 encrypted backups, and fail-closed tenant security.
+An enterprise, bilingual (**English** + **বাংলা**) UHF RFID gate attendance appliance built for **Zebra FX9600** fixed RFID readers (EPC Class 1 Gen 2 / ISO 18000-63) with legacy offline QR support. Engineered for walk-through gate attendance in schools, supporting Zebra IoT Connector HTTP webhooks, HMAC-SHA256 signature verification, per-reader Bearer authentication, duplicate debounce filtering, teacher review/finalization, automated AES-256 encrypted backups, and fail-closed tenant security.
+
+> **Hardware Architecture**:
+> - **Fixed Reader**: Zebra FX9600 UHF Fixed Reader (Ethernet / PoE, 4 or 8 antenna ports).
+> - **Tags**: Passive UHF EPC Gen2 badges/cards (ISO 18000-63).
+> - **Integration**: Zebra IoT Connector HTTP/HTTPS webhook (`POST /api/v1/schools/:schoolId/rfid/zebra/reads`).
+> - **Legacy / Unsupported**: MIFARE / DESFire / PC/SC smartcard readers are **not supported**.
 
 ---
 
@@ -84,15 +90,16 @@ We maintain complete honesty regarding hardware maturity and subsystem status:
 
 | Subsystem | Scope / Maturity | Status | Configuration Notes |
 | :--- | :--- | :--- | :--- |
-| **Bilingual UI (English / বাংলা)** | Production QR Pilot | 🟢 **Production Ready** | One-tap language switcher across login, classroom scanner, roll review, and setup wizard. |
-| **Phone Camera Viewfinder** | Production QR Pilot | 🟢 **Production Ready** | `getUserMedia` with environment-facing autofocus, permission recovery HUD, and sound/haptics. |
-| **USB / OTG Barcode Scanner** | Production QR Pilot | 🟢 **Production Ready** | High-speed keyboard-wedge hardware listener with audio chimes and duplicate protection. |
-| **IndexedDB Offline Outbox** | Production QR Pilot | 🟢 **Production Ready** | Atomic Dexie outbox with SHA-256 cryptographic verification and duplicate rejection. |
-| **Session Finalization & Auto-Absent**| Production QR Pilot | 🟢 **Production Ready** | Atomic PostgreSQL transaction converting unmarked students to ABSENT and queuing parent alerts. |
-| **Tenant Isolation (PostgreSQL RLS)**| Production QR Pilot | 🟢 **Production Ready** | Row-Level Security enforced at the database level with strict multi-tenant boundary isolation. |
-| **Encrypted Backups & Recovery** | Production QR Pilot | 🟢 **Production Ready** | Automated AES-256 PBKDF2 local dumps with tested R2 disaster recovery replication drill. |
+| **Zebra FX9600 Ingest API** | UHF Gate Attendance | 🟢 **Production Ready (Coded / Fixtures)** | Zebra IoT Connector HTTP webhook (`POST /api/v1/schools/:schoolId/rfid/zebra/reads`) with HMAC-SHA256 & Bearer token auth. |
+| **UHF EPC Credential Vault** | UHF Gate Attendance | 🟢 **Production Ready** | SHA-256 canonical EPC hashing with zero raw-EPC logging in scan events. |
+| **Teacher Gate Review & Finalize** | Gate Attendance | 🟢 **Production Ready** | Live gate tap feed, unmarked roster, manual overrides, and 1-click session finalization. |
+| **Bilingual UI (English / বাংলা)** | Primary UI | 🟢 **Production Ready** | One-tap language switcher across login, teacher dashboard, roll review, and setup wizard. |
+| **Session Finalization & Auto-Absent**| Gate Attendance | 🟢 **Production Ready** | Atomic PostgreSQL transaction converting unmarked students to ABSENT and queuing parent alerts. |
+| **Tenant Isolation (PostgreSQL RLS)**| Platform Core | 🟢 **Production Ready** | Row-Level Security enforced at the database level with strict multi-tenant boundary isolation. |
+| **Encrypted Backups & Recovery** | Platform Core | 🟢 **Production Ready** | Automated AES-256 PBKDF2 local dumps with tested R2 disaster recovery replication drill. |
+| **Legacy QR Scanning** | Fallback Offline | 🟢 **Production Ready** | Client-side Dexie outbox and camera/USB barcode scanner available as secondary fallback. |
+| **MIFARE / DESFire / PC/SC Readers** | Unsupported | 🔴 **Unsupported / Deprecated** | AttendEase exclusively uses UHF EPC Class 1 Gen 2 badges with Zebra FX9600. PC/SC smartcard readers not supported. |
 | **Indian DLT SMS Gateway** | Optional Add-on | 🟡 *Provider Dependent* | Database queue active; dispatches to real telecom carrier if credentials provided, falls back safely to console mock. |
-| **RFID / DESFire Gateway** | Experimental | ⚪ *Isolated (OFF)* | Gated behind `FEATURE_RFID=false` and Docker Compose profile `["rfid"]`. Excluded from standard QR deployments. |
 
 ---
 

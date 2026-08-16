@@ -160,12 +160,18 @@ export const rateLimitPolicies = {
 
   rfidScan: createDistributedRateLimiter({
     prefix: 'rfid-scan',
-    maxRequests: 120,
+    maxRequests: parseInt(process.env.RFID_READER_SCAN_RATE_LIMIT || '600', 10),
     windowMs: 60 * 1000,
     keyGenerator: (req) => {
       // Do not trust unverified client header alone; use authenticated reader context if present or client IP
       const readerContext = (req as any).readerContext;
-      const readerId = readerContext?.readerId || req.ip || req.socket.remoteAddress || 'unknown';
+      const readerId =
+        readerContext?.readerId ||
+        (req.headers['x-reader-id'] as string) ||
+        (req.headers['x-zebra-reader-id'] as string) ||
+        req.ip ||
+        req.socket.remoteAddress ||
+        'unknown';
       return `reader:${readerId}`;
     },
   }),

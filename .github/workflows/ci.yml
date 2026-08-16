@@ -614,9 +614,9 @@ jobs:
     needs:
       - static-check-and-unit-tests
       - playwright-e2e
-      - rls-and-redis-integration
-      - backup-restore-drill
-      - docker-smoke-test
+      - postgres-rls-redis-integration
+      - backup-and-restore-drill
+      - docker-compose-production-smoke
       - k8s-manifest-validation
       - k8s-kind-cluster-drill
       - branch-protection-check

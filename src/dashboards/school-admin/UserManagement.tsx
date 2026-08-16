@@ -13,6 +13,7 @@ import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, UserPlus, X, Users, Eye, EyeOff, Shield } from 'lucide-react';
 import { UserRole } from '../../auth/permissions';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 
 interface MemberItem {
   membershipId: string;
@@ -32,6 +33,7 @@ export const UserManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const inviteModalRef = useModalFocusTrap<HTMLDivElement>(isInviteOpen, () => setIsInviteOpen(false));
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -373,6 +375,7 @@ export const UserManagement: React.FC = () => {
             aria-labelledby="add-staff-modal-title"
           >
             <motion.div
+              ref={inviteModalRef}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}

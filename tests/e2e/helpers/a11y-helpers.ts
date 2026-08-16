@@ -91,16 +91,31 @@ export async function assertAllInteractiveElementsTouchTarget(
       };
     });
 
+    const effectiveBox = await el.evaluate((node) => {
+      const el = node as HTMLElement;
+      if (el.tagName === 'INPUT' && (el.getAttribute('type') === 'checkbox' || el.getAttribute('type') === 'radio')) {
+        const parentLabel = el.closest('label');
+        if (parentLabel) {
+          const rect = parentLabel.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }
+      }
+      return null;
+    });
+
+    const targetWidth = effectiveBox ? effectiveBox.width : box.width;
+    const targetHeight = effectiveBox ? effectiveBox.height : box.height;
+
     // Touch targets must satisfy minSize in width and height
     // We provide clear diagnostic failures
     expect(
-      box.width,
-      `Touch target width violation for <${metadata.tag}> "${metadata.ariaLabel || metadata.text}" at ${contextName}: width ${box.width}px < ${minSize}px`
+      targetWidth,
+      `Touch target width violation for <${metadata.tag}> "${metadata.ariaLabel || metadata.text}" at ${contextName}: width ${targetWidth}px < ${minSize}px`
     ).toBeGreaterThanOrEqual(minSize - 0.5); // 0.5px rounding tolerance
 
     expect(
-      box.height,
-      `Touch target height violation for <${metadata.tag}> "${metadata.ariaLabel || metadata.text}" at ${contextName}: height ${box.height}px < ${minSize}px`
+      targetHeight,
+      `Touch target height violation for <${metadata.tag}> "${metadata.ariaLabel || metadata.text}" at ${contextName}: height ${targetHeight}px < ${minSize}px`
     ).toBeGreaterThanOrEqual(minSize - 0.5);
 
     inspected.totalChecked++;

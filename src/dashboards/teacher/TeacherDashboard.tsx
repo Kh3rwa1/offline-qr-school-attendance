@@ -699,6 +699,7 @@ export const TeacherDashboard: React.FC = () => {
             <div className="flex items-center gap-2 bg-surface-soft p-1.5 rounded-2xl border border-line">
               <span className="text-sm font-bold text-ink-soft px-2 font-display">{t('classLabel')}</span>
               <select
+                aria-label={t('classLabel')}
                 value={selectedClassId}
                 onChange={(e) => {
                   const newId = e.target.value;
@@ -811,7 +812,7 @@ export const TeacherDashboard: React.FC = () => {
           <div className="text-4xl sm:text-5xl font-extrabold text-amber-800 font-display mt-3 font-mono">
             {stats.late}
           </div>
-          <p className="text-sm text-amber-800/80 font-medium mt-1">
+          <p className="text-sm text-amber-900 font-medium mt-1">
             {t('statusLate')}
           </p>
         </div>

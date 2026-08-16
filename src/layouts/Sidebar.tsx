@@ -177,7 +177,7 @@ export const Sidebar: React.FC = () => {
         <h4 className="text-sm font-extrabold font-display leading-tight">
           Offline PWA App
         </h4>
-        <p className="text-xs text-emerald-300/80 mt-1 font-medium">
+        <p className="text-xs text-emerald-100 mt-1 font-medium">
           Zero-connectivity attendance cache
         </p>
         <motion.button
@@ -186,7 +186,7 @@ export const Sidebar: React.FC = () => {
           onClick={() => {
             window.location.href = '/app/teacher/offline';
           }}
-          className="mt-4 w-full py-2.5 px-3 rounded-full bg-forest-700 hover:bg-forest-800 text-white text-xs font-bold transition-all shadow-md font-display cursor-pointer"
+          className="mt-4 w-full py-2.5 px-3 min-h-[44px] rounded-full bg-forest-700 hover:bg-forest-800 text-white text-xs font-bold transition-all shadow-md font-display cursor-pointer"
         >
           Offline Workspace
         </motion.button>

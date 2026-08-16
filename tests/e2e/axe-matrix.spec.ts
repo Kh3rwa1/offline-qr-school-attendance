@@ -19,7 +19,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     expect(enViolations, `Axe violations on English Login page: ${JSON.stringify(enViolations, null, 2)}`).toEqual([]);
 
     // Bengali
-    const langToggle = page.getByRole('button', { name: 'বাংলা' }).or(page.getByRole('button', { name: /বাংলা \+ English|বাং \+ EN/i })).first();
+    const langToggle = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     if (await langToggle.isVisible()) {
       await langToggle.click();
       await page.waitForTimeout(100);

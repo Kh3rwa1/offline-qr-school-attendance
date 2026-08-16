@@ -368,3 +368,10 @@ tbody tr:hover {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.dark-tracker-card {
+  background: linear-gradient(135deg, #09261b 0%, #104331 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(9, 38, 27, 0.25), 0 8px 10px -6px rgba(9, 38, 27, 0.25);
+}

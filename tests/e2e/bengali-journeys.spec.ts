@@ -19,7 +19,7 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
 
     // Verify phone field placeholder / label in Bengali
-    await expect(page.locator('label').filter({ hasText: /Mobile Number|মোবাইল নম্বর|ফোন|Phone/i })).toBeVisible();
+    await expect(page.locator('label').filter({ hasText: /Mobile Number|মোবাইল নম্বর|ফোন|Phone/i }).first()).toBeVisible();
 
     // Reload page: Verify persistence
     await page.reload();

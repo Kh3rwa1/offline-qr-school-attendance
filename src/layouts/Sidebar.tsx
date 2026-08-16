@@ -169,7 +169,7 @@ export const Sidebar: React.FC = () => {
       <motion.div
         whileHover={{ y: -2 }}
         transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-        className="dark-tracker-card p-5 relative overflow-hidden text-white mt-6 rounded-[28px]"
+        className="dark-tracker-card bg-[#09261b] p-5 relative overflow-hidden text-white mt-6 rounded-[28px]"
       >
         <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center mb-3">
           <Download className="w-4 h-4 text-emerald-400" />

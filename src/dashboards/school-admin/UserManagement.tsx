@@ -13,6 +13,7 @@ import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, UserPlus, X, Users, Eye, EyeOff, Shield } from 'lucide-react';
 import { UserRole } from '../../auth/permissions';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 
 interface MemberItem {
   membershipId: string;
@@ -32,6 +33,7 @@ export const UserManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const inviteModalRef = useModalFocusTrap<HTMLDivElement>(isInviteOpen, () => setIsInviteOpen(false));
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -273,6 +275,8 @@ export const UserManagement: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <select
+                id="staff-role-filter"
+                aria-label={t('allRoles')}
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
@@ -373,6 +377,7 @@ export const UserManagement: React.FC = () => {
             aria-labelledby="add-staff-modal-title"
           >
             <motion.div
+              ref={inviteModalRef}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -428,10 +433,12 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-ink mb-1 font-display">
+                  <label htmlFor="staff-role-select" className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('staffRoleLabel')} *
                   </label>
                   <select
+                    id="staff-role-select"
+                    aria-label={t('staffRoleLabel')}
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                     className="w-full px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
@@ -459,7 +466,7 @@ export const UserManagement: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2.5 text-ink-muted hover:text-ink cursor-pointer min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-ink-muted hover:text-ink cursor-pointer w-11 h-11 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center"
                       aria-label={showPassword ? t('hidePassword') : t('showPassword')}
                     >
                       {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}

@@ -44,21 +44,21 @@
     --font-mono: 'JetBrains Mono', monospace;
 
     /* Forest Accent Palette */
-    --forest-900: #0d3828;
-    --forest-800: #104331;
-    --forest-700: #144e39;
-    --forest-600: #1a6247;
-    --forest-500: #227b5a;
+    --forest-900: #09261b;
+    --forest-800: #0d3828;
+    --forest-700: #0f3e2b;
+    --forest-600: #14532d;
+    --forest-500: #166534;
 
     /* Canvas & Surfaces (Donezo Light) */
     --canvas: #eef2f5;
     --surface: #ffffff;
     --surface-soft: #f8fafc;
     --ink: #0f172a;
-    --ink-soft: #475569;
-    --ink-muted: #94a3b8;
-    --line: #e2e8f0;
-    --line-soft: #f1f5f9;
+    --ink-soft: #0f172a;
+    --ink-muted: #1e293b;
+    --line: #cbd5e1;
+    --line-soft: #e2e8f0;
 
     /* Semantic Success */
     --success-50: #f0fdf4;
@@ -69,8 +69,8 @@
     /* Semantic Warning */
     --warning-50: #fffbeb;
     --warning-100: #fef3c7;
-    --warning-600: #d97706;
-    --warning-800: #92400e;
+    --warning-600: #b45309;
+    --warning-800: #78350f;
 
     /* Semantic Danger */
     --danger-50: #fef2f2;
@@ -90,9 +90,9 @@
     --canvas: #0b1512;
     --surface: #122019;
     --surface-soft: #182c23;
-    --ink: #f1f5f9;
-    --ink-soft: #94a3b8;
-    --ink-muted: #64748b;
+    --ink: #f8fafc;
+    --ink-soft: #cbd5e1;
+    --ink-muted: #94a3b8;
     --line: #1f382c;
     --line-soft: #1a3026;
 
@@ -233,6 +233,14 @@
   }
 }
 
+.hero-forest-card {
+  background: linear-gradient(135deg, #153a2d 0%, #1a4d3b 100%);
+  color: #ffffff;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  box-shadow: 0 10px 25px -5px rgba(21, 58, 45, 0.3), 0 8px 10px -6px rgba(21, 58, 45, 0.2);
+}
+
 .animate-fade-in-rise {
   animation: fadeInRise 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -359,4 +367,11 @@ tbody tr:hover {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.dark-tracker-card {
+  background: linear-gradient(135deg, #09261b 0%, #104331 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(9, 38, 27, 0.25), 0 8px 10px -6px rgba(9, 38, 27, 0.25);
 }

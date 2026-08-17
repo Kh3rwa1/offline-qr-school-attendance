@@ -44,11 +44,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
 
         <div className="relative flex items-center">
           {prefixText ? (
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-ink-muted select-none pointer-events-none">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-ink-soft select-none pointer-events-none">
               {prefixText}
             </span>
           ) : startIcon ? (
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none flex items-center">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft pointer-events-none flex items-center">
               {startIcon}
             </span>
           ) : null}
@@ -78,11 +78,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         </div>
 
         {error ? (
-          <p id={inputId ? `${inputId}-error` : undefined} className="text-xs font-semibold text-danger-600 flex items-center gap-1">
+          <p id={inputId ? `${inputId}-error` : undefined} className="text-sm font-semibold text-danger-600 flex items-center gap-1">
             <span>{error}</span>
           </p>
         ) : helperText ? (
-          <p className="text-xs text-ink-muted">{helperText}</p>
+          <p className="text-sm text-ink-soft">{helperText}</p>
         ) : null}
       </div>
     );

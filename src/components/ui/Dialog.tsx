@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 
 export interface DialogProps {
   isOpen: boolean;
@@ -32,17 +33,7 @@ export const Dialog: React.FC<DialogProps> = ({
   maxWidth = 'md',
   showCloseButton = true,
 }) => {
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  const dialogRef = useModalFocusTrap<HTMLDivElement>(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -101,7 +92,7 @@ export const Dialog: React.FC<DialogProps> = ({
                     type="button"
                     onClick={onClose}
                     aria-label="Close dialog"
-                    className="p-2 rounded-full text-ink-muted hover:text-ink hover:bg-surface-soft transition-colors cursor-pointer shrink-0 -mr-2 -mt-2"
+                    className="p-2 rounded-full text-ink-muted hover:text-ink hover:bg-surface-soft transition-colors cursor-pointer shrink-0 -mr-2 -mt-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   >
                     <X className="w-5 h-5" />
                   </button>

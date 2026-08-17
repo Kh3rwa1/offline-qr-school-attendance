@@ -60,7 +60,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
             onClick={() => setShowPassword((prev) => !prev)}
             tabIndex={-1}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
           >
             {showPassword ? (
               <EyeOff className="w-4 h-4" strokeWidth={2} />
@@ -71,11 +71,11 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
         </div>
 
         {error ? (
-          <p id={inputId ? `${inputId}-error` : undefined} className="text-xs font-semibold text-danger-600 flex items-center gap-1">
+          <p id={inputId ? `${inputId}-error` : undefined} className="text-sm font-semibold text-danger-600 flex items-center gap-1">
             <span>{error}</span>
           </p>
         ) : helperText ? (
-          <p className="text-xs text-ink-muted">{helperText}</p>
+          <p className="text-sm text-ink-soft">{helperText}</p>
         ) : null}
       </div>
     );

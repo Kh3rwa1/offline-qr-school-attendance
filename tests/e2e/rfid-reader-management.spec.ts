@@ -19,7 +19,7 @@ test.describe('RFID Reader Management E2E Suite', () => {
     await expect(page.locator('#reader-operations-view')).toBeVisible();
 
     // 3. Open Provision Reader Modal
-    const provisionBtn = page.getByRole('button', { name: /Add Gate Box|গেট ডিভাইস যোগ করুন/i }).first();
+    const provisionBtn = page.getByRole('button', { name: /Add Gate Device|Gate Device Add করুন|Add Gate Box|Gate Device/i }).first();
     await expect(provisionBtn).toBeVisible();
     await provisionBtn.click();
 
@@ -30,7 +30,7 @@ test.describe('RFID Reader Management E2E Suite', () => {
     await deviceIdInput.fill(uniqueDeviceId);
 
     // 5. Submit registration
-    const submitBtn = page.getByRole('button', { name: /Save|সংরক্ষণ করুন/i }).first();
+    const submitBtn = page.getByRole('button', { name: /Save Gate Box|Gate Box Save করুন|Save|সংরক্ষণ করুন/i }).first();
     await expect(submitBtn).toBeVisible();
     await submitBtn.click();
 

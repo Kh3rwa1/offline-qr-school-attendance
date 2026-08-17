@@ -255,6 +255,7 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 
   // Log in as teacher
   await page.goto(`${baseUrl}/login`);
+  await page.evaluate(() => navigator.serviceWorker?.ready);
   await page.locator('#login-phone').fill('9100000002');
   await page.locator('#login-password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: /Sign In|Log In/i }).click();
@@ -275,9 +276,8 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
   const startBtn = page.getByRole('button', { name: 'Start offline session' });
   if (!(await sessionOpenBtn.isVisible())) {
-    if (await startBtn.isVisible()) {
-      await startBtn.click();
-    }
+    await expect(startBtn).toBeVisible();
+    await startBtn.click();
     await expect(sessionOpenBtn).toBeVisible({ timeout: 10000 });
   }
 
@@ -285,10 +285,9 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   await expect(phoneBackupDenied).toBeVisible();
   await phoneBackupDenied.locator('summary').click();
 
-  const startCamBtn = page.getByRole('button', { name: /Start Camera/i });
-  if (await startCamBtn.isVisible()) {
-    await startCamBtn.click();
-  }
+  const startCamBtn = page.getByRole('button', { name: /Start Camera|ক্যামেরা শুরু করুন/i });
+  await expect(startCamBtn).toBeVisible();
+  await startCamBtn.click();
 
   // 1. Assert HUD is NOT LIVE
   await expect(page.getByText(/CAMERA:\s*LIVE/i)).toHaveCount(0);

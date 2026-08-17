@@ -221,10 +221,12 @@ export const DailyReports: React.FC = () => {
           <div className="app-card p-4 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-ink-soft font-display">
+                <label htmlFor="daily-class-select" className="text-sm font-bold text-ink-soft font-display cursor-pointer">
                   {t('classLabel')}
-                </span>
+                </label>
                 <select
+                  id="daily-class-select"
+                  aria-label={t('classLabel')}
                   value={activeClassId}
                   onChange={(e) => setSelectedClassId(e.target.value)}
                   className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"

@@ -365,6 +365,8 @@ export const StudentRoster: React.FC = () => {
 
             <div className="flex items-center gap-3 flex-wrap">
               <select
+                id="student-class-filter"
+                aria-label={t('allClasses')}
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
                 className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
@@ -378,6 +380,8 @@ export const StudentRoster: React.FC = () => {
               </select>
 
               <select
+                id="student-status-filter"
+                aria-label={t('allStatuses')}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 font-display cursor-pointer min-h-[44px]"
@@ -554,10 +558,12 @@ export const StudentRoster: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-ink mb-1 font-display">
+                    <label htmlFor="student-class-select" className="block text-sm font-bold text-ink mb-1 font-display">
                       {t('navClassesAndSections')} *
                     </label>
                     <select
+                      id="student-class-select"
+                      aria-label={t('navClassesAndSections')}
                       required
                       value={formData.classSectionId}
                       onChange={(e) => setFormData({ ...formData, classSectionId: e.target.value })}

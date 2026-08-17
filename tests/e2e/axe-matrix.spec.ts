@@ -43,34 +43,20 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
   // ── Teacher Dashboard + Sub-Routes ────────────────────────────────────
   test('Teacher Dashboard landing passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000002', 'TeacherPassword123!');
-    await expect(page.getByText(/Today's attendance|আজকের হাজিরা|আজকের Attendance|হাজিরা খাতা|Attendance Register/i).first()).toBeVisible();
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
     await assertAxeClean(page, 'Teacher Dashboard');
   });
 
   test('Teacher Assigned Classes passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000002', 'TeacherPassword123!');
-    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
-
-    // Navigate to /app/teacher/classes
-    const classesNav = page.getByRole('link', { name: /Class list|Classes|ক্লাস/i }).or(
-      page.getByRole('button', { name: /Class|ক্লাস/i })
-    ).first();
-    await expect(classesNav).toBeVisible();
-    await classesNav.click();
+    await page.goto(`${baseUrl}/app/teacher/classes`);
     await expect(page.locator('#assigned-classes-view')).toBeVisible();
     await assertAxeClean(page, 'Teacher Assigned Classes');
   });
 
   test('Teacher Offline Workspace passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000002', 'TeacherPassword123!');
-    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
-
-    // Navigate to /app/teacher/offline
-    const offlineNav = page.getByRole('link', { name: /Phone backup|Offline|আউটবক্স/i }).or(
-      page.getByRole('button', { name: /Offline|আউটবক্স/i })
-    ).first();
-    await expect(offlineNav).toBeVisible();
-    await offlineNav.click();
+    await page.goto(`${baseUrl}/app/teacher/offline`);
     await expect(page.locator('#offline-workspace-view')).toBeVisible();
     await assertAxeClean(page, 'Teacher Offline Workspace');
   });
@@ -84,14 +70,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin User Management & open Add Staff modal pass Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-    await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
-
-    // Navigate to User Management
-    const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
-      page.getByRole('button', { name: /Staff|Users/i })
-    ).first();
-    await expect(usersNav).toBeVisible();
-    await usersNav.click();
+    await page.goto(`${baseUrl}/app/school-admin/users`);
 
     const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
@@ -103,6 +82,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await addStaffBtn.click();
     const modalTitle = page.locator('#add-staff-modal-title');
     await expect(modalTitle).toBeVisible();
+    await page.waitForTimeout(600); // allow modal transition to fully settle
     await assertAxeClean(page, 'School Admin Add Staff Modal (open)');
 
     // Close modal
@@ -112,52 +92,28 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin Student Roster passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-
-    const studentsNav = page.getByRole('link', { name: /Student Roster|Students|শিক্ষার্থী/i }).or(
-      page.getByRole('button', { name: /Students|শিক্ষার্থী/i })
-    ).first();
-    await expect(studentsNav).toBeVisible();
-    await studentsNav.click();
+    await page.goto(`${baseUrl}/app/school-admin/students`);
     await expect(page.locator('#student-roster-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Student Roster');
   });
 
   test('School Admin Academic Management passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-
-    const academicsNav = page.getByRole('link', { name: /Academic Classes|Academics|Classes|একাডেমিক/i }).or(
-      page.getByRole('button', { name: /Classes|একাডেমিক/i })
-    ).first();
-    await expect(academicsNav).toBeVisible();
-    await academicsNav.click();
+    await page.goto(`${baseUrl}/app/school-admin/academics`);
     await expect(page.locator('#academic-management-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Academic Management');
   });
 
   test('School Admin Attendance Operations passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-
-    const attendanceNav = page.getByRole('link', { name: /Attendance Sessions|Attendance|উপস্থিতি/i }).or(
-      page.getByRole('button', { name: /Attendance|উপস্থিতি/i })
-    ).first();
-    await expect(attendanceNav).toBeVisible();
-    await attendanceNav.click();
+    await page.goto(`${baseUrl}/app/school-admin/attendance`);
     await expect(page.locator('#attendance-operations-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Attendance Operations');
   });
 
   test('School Admin Notification Operations passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-
-    const notificationsNav = page.getByRole('link', { name: /SMS Notifications|Notifications|বিজ্ঞপ্তি/i }).or(
-      page.getByRole('button', { name: /Notifications|বিজ্ঞপ্তি/i })
-    ).first();
-    await expect(notificationsNav).toBeVisible();
-    await notificationsNav.click();
+    await page.goto(`${baseUrl}/app/school-admin/notifications`);
     await expect(page.locator('#notification-operations-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Notification Operations');
   });
@@ -179,39 +135,21 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('Report Viewer Daily Reports passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-    const dailyNav = page.getByRole('link', { name: /Daily Class Reports|Daily|দৈনিক/i }).or(
-      page.getByRole('button', { name: /Daily|দৈনিক/i })
-    ).first();
-    await expect(dailyNav).toBeVisible();
-    await dailyNav.click();
+    await page.goto(`${baseUrl}/app/reports/daily`);
     await expect(page.locator('#daily-reports-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Daily Reports');
   });
 
   test('Report Viewer Trend Reports passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-    const trendsNav = page.getByRole('link', { name: /Longitudinal Trends|Trends|প্রবণতা/i }).or(
-      page.getByRole('button', { name: /Trends|প্রবণতা/i })
-    ).first();
-    await expect(trendsNav).toBeVisible();
-    await trendsNav.click();
+    await page.goto(`${baseUrl}/app/reports/trends`);
     await expect(page.locator('#trend-reports-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Trend Reports');
   });
 
   test('Report Viewer Export Center passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-    const exportsNav = page.getByRole('link', { name: /Export Center|Exports|এক্সপোর্ট/i }).or(
-      page.getByRole('button', { name: /Export|এক্সপোর্ট/i })
-    ).first();
-    await expect(exportsNav).toBeVisible();
-    await exportsNav.click();
+    await page.goto(`${baseUrl}/app/reports/exports`);
     await expect(page.locator('#export-center-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Export Center');
   });

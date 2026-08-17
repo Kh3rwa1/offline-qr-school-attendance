@@ -614,10 +614,12 @@ export const AcademicManagement: React.FC = () => {
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-sm font-bold text-ink mb-1 font-display">
+                  <label htmlFor="assign-teacher-select" className="block text-sm font-bold text-ink mb-1 font-display">
                     {t('classTeacher')} *
                   </label>
                   <select
+                    id="assign-teacher-select"
+                    aria-label={t('classTeacher')}
                     required
                     value={selectedTeacherId}
                     onChange={(e) => setSelectedTeacherId(e.target.value)}

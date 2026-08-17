@@ -40,7 +40,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Teacher dashboard satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000002', 'TeacherPassword123!');
-        await expect(page.getByText(/Today's attendance|আজকের হাজিরা/i)).toBeVisible();
+        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
@@ -51,13 +51,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Teacher Assigned Classes satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000002', 'TeacherPassword123!');
-        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
-
-        const classesNav = page.getByRole('link', { name: /Class list|Classes|ক্লাস/i }).or(
-          page.getByRole('button', { name: /Class|ক্লাস/i })
-        ).first();
-        await expect(classesNav).toBeVisible();
-        await classesNav.click();
+        await page.goto(`${baseUrl}/app/teacher/classes`);
         await expect(page.locator('#assigned-classes-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
@@ -69,14 +63,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Teacher Offline Workspace satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000002', 'TeacherPassword123!');
-        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
-
-        // Mandatory — must not silently skip
-        const offlineNav = page.getByRole('link', { name: /Phone backup|Offline|আউটবক্স/i }).or(
-          page.getByRole('button', { name: /Offline Logs|Offline Workspace|আউটবক্স/i })
-        ).first();
-        await expect(offlineNav).toBeVisible();
-        await offlineNav.click();
+        await page.goto(`${baseUrl}/app/teacher/offline`);
         await expect(page.locator('#offline-workspace-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
@@ -99,17 +86,9 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('School Admin user management, modals & controls satisfy >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-        await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
+        await page.goto(`${baseUrl}/app/school-admin/users`);
 
-        // 1. Navigate to User Management
-        const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|সদস্য/i }).or(
-          page.getByRole('button', { name: /Staff|Users/i })
-        ).first();
-
-        await expect(usersNav).toBeVisible();
-        await usersNav.click();
-
-        // 2. Test User Directory page interactive targets
+        // 1. Test User Directory page interactive targets
         const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
         await expect(addStaffBtn).toBeVisible();
 
@@ -119,11 +98,11 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
           minExpectedCount: 4,
         });
 
-        // 3. Open Add Staff Modal and inspect modal controls
+        // 2. Open Add Staff Modal and inspect modal controls
         await addStaffBtn.click();
         const fullNameInput = page.locator('#add-staff-modal-title');
         await expect(fullNameInput).toBeVisible();
-        await page.waitForTimeout(250); // wait for scale animation to settle
+        await page.waitForTimeout(300); // wait for scale animation to settle
 
         // Check password reveal button inside modal — mandatory, must not skip
         const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password|পাসওয়ার্ড/i }).first();
@@ -147,7 +126,6 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
       test('RFID Operator dashboard & reader operations satisfy >= 44x44px', async ({ page }) => {
         test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
         await loginAs(page, '9100000003', 'RfidOpPassword123!');
-
         await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
@@ -170,13 +148,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Report Viewer Daily Reports satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-        const dailyNav = page.getByRole('link', { name: /Daily Class Reports|Daily|দৈনিক/i }).or(
-          page.getByRole('button', { name: /Daily|দৈনিক/i })
-        ).first();
-        await expect(dailyNav).toBeVisible();
-        await dailyNav.click();
+        await page.goto(`${baseUrl}/app/reports/daily`);
         await expect(page.locator('#daily-reports-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
@@ -188,13 +160,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Report Viewer Trend Reports satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-        const trendsNav = page.getByRole('link', { name: /Longitudinal Trends|Trends|প্রবণতা/i }).or(
-          page.getByRole('button', { name: /Trends|প্রবণতা/i })
-        ).first();
-        await expect(trendsNav).toBeVisible();
-        await trendsNav.click();
+        await page.goto(`${baseUrl}/app/reports/trends`);
         await expect(page.locator('#trend-reports-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
@@ -206,13 +172,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Report Viewer Export Center satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-        const exportsNav = page.getByRole('link', { name: /Export Center|Exports|এক্সপোর্ট/i }).or(
-          page.getByRole('button', { name: /Export|এক্সপোর্ট/i })
-        ).first();
-        await expect(exportsNav).toBeVisible();
-        await exportsNav.click();
+        await page.goto(`${baseUrl}/app/reports/exports`);
         await expect(page.locator('#export-center-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {

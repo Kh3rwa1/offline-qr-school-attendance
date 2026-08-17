@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLUSTER_NAME="${CLUSTER_NAME:-attendance-kind-cluster}"
 IMAGE_TAG="${IMAGE_TAG:-offline-qr-school-attendance:kind-v1}"
 IMAGE_TAG_UPDATE="${IMAGE_TAG_UPDATE:-offline-qr-school-attendance:kind-v2}"

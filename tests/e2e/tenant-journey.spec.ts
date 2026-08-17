@@ -3,6 +3,14 @@ import { test, expect } from '@playwright/test';
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
 test.describe('School Workspace Path Tenancy & Public Journeys', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('app_language', 'en');
+      } catch {}
+    });
+  });
+
   test('1. Root URL renders public LandingPage with honest copy and navigates to /login on School Sign In', async ({ page }) => {
     await page.goto(baseUrl);
 

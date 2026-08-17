@@ -33,6 +33,12 @@ const CAPABILITIES: { icon: React.ComponentType<{ className?: string }>; label: 
   { icon: FileSpreadsheet, label: COPY.capExcel },
 ];
 
+const LANG_OPTIONS: { code: 'en' | 'bn' | 'hi'; label: string }[] = [
+  { code: 'en', label: 'EN' },
+  { code: 'bn', label: 'বাংলা' },
+  { code: 'hi', label: 'हिंदी' },
+];
+
 export const LandingPage: React.FC = () => {
   const { language, setLanguage } = useLanguage();
   const c = (entry: LocalizedText): string => entry[language] || entry.en;
@@ -139,22 +145,17 @@ export const LandingPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label={c(COPY.langLabel)}>
-            <button
-              type="button"
-              onClick={() => setLanguage('en')}
-              aria-pressed={language === 'en'}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold font-display transition-colors cursor-pointer ${language === 'en' ? 'bg-[#14532d] text-white shadow-sm' : 'text-slate-600 hover:text-[#14532d]'}`}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage('bn')}
-              aria-pressed={language === 'bn'}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold font-display transition-colors cursor-pointer ${language === 'bn' ? 'bg-[#14532d] text-white shadow-sm' : 'text-slate-600 hover:text-[#14532d]'}`}
-            >
-              বাংলা
-            </button>
+            {LANG_OPTIONS.map((opt) => (
+              <button
+                key={opt.code}
+                type="button"
+                onClick={() => setLanguage(opt.code)}
+                aria-pressed={language === opt.code}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold font-display transition-colors cursor-pointer ${language === opt.code ? 'bg-[#14532d] text-white shadow-sm' : 'text-slate-600 hover:text-[#14532d]'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
           <Link to="/login" className="hidden sm:inline-block">
             <Button variant="ghost" size="sm" className="font-bold text-slate-700 hover:text-[#14532d]">

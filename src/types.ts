@@ -1,4 +1,4 @@
-export type Language = 'en' | 'bn';
+export type Language = 'en' | 'bn' | 'hi';
 
 export type NetworkStatus = 'ONLINE' | 'OFFLINE';
 

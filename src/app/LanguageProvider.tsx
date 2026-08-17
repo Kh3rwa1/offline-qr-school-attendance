@@ -13,7 +13,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [language, setLanguageState] = useState<Language>(() => {
     try {
       const saved = localStorage.getItem('attendease.language');
-      if (saved === 'bn' || saved === 'en') return saved;
+      if (saved === 'bn' || saved === 'en' || saved === 'hi') return saved;
     } catch {}
     return 'en';
   });

@@ -462,9 +462,13 @@ jobs:
           if-no-files-found: ignore
 
   playwright-e2e:
-    name: Playwright Browser E2E (Chromium & Firefox)
+    name: Playwright E2E (${{ matrix.feature_rfid == 'true' && 'RFID Enabled' || 'QR Pilot' }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        feature_rfid: ['false', 'true']
     services:
       postgres:
         image: postgres:16
@@ -519,6 +523,8 @@ jobs:
           # skipped, but migrate.ts imports env.ts which defaults COMPONENT to
           # 'web' unless overridden. Explicitly set to avoid the HMAC check.
           COMPONENT: migrate
+          FEATURE_RFID: ${{ matrix.feature_rfid }}
+          VITE_FEATURE_RFID: ${{ matrix.feature_rfid }}
         run: |
           npm run build
           npx tsx src/db/migrate.ts
@@ -543,13 +549,15 @@ jobs:
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           PORT: 3100
+          FEATURE_RFID: ${{ matrix.feature_rfid }}
+          VITE_FEATURE_RFID: ${{ matrix.feature_rfid }}
         run: npm run test:e2e
 
       - name: Upload Playwright Test Artifacts
         if: always()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.feature_rfid == 'true' && 'rfid' || 'qr-pilot' }}
           path: output/playwright/
           if-no-files-found: ignore
 

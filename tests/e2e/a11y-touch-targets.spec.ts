@@ -10,6 +10,14 @@ const viewports = [
   { name: 'Desktop 1280px', width: 1280, height: 800 },
 ];
 
+/** Helper: login with given credentials */
+async function loginAs(page: import('@playwright/test').Page, phone: string, password: string) {
+  await page.goto(`${baseUrl}/login`);
+  await page.locator('#login-phone').fill(phone);
+  await page.locator('#login-password').fill(password);
+  await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+}
+
 test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', () => {
   for (const vp of viewports) {
     test.describe(`Viewport: ${vp.name} (${vp.width}x${vp.height})`, () => {
@@ -30,44 +38,67 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         });
       });
 
-      test('Teacher dashboard, attendance station & offline workspace satisfy >= 44x44px', async ({ page }) => {
-        await page.goto(`${baseUrl}/login`);
-        await page.locator('#login-phone').fill('9100000002');
-        await page.locator('#login-password').fill('TeacherPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+      test('Teacher dashboard satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000002', 'TeacherPassword123!');
+        await expect(page.getByText(/Today's attendance|আজকের হাজিরা/i)).toBeVisible();
 
-        await expect(page.getByText(/Today’s attendance|আজকের হাজিরা/i)).toBeVisible();
-
-        // 1. Test main teacher dashboard touch targets
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
           contextName: `Teacher Dashboard [${vp.name}]`,
           minExpectedCount: 3,
         });
+      });
 
-        // 2. Open Offline Workspace if tab/link is present
-        const offlineTab = page.getByRole('button', { name: /Offline Logs|Offline Workspace|আউটবক্স/i }).or(
-          page.getByRole('link', { name: /Offline/i })
+      test('Teacher Assigned Classes satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000002', 'TeacherPassword123!');
+        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
+
+        const classesNav = page.getByRole('link', { name: /Class list|Classes|ক্লাস/i }).or(
+          page.getByRole('button', { name: /Class|ক্লাস/i })
         ).first();
+        await expect(classesNav).toBeVisible();
+        await classesNav.click();
+        await expect(page.locator('#assigned-classes-view')).toBeVisible();
 
-        if (await offlineTab.isVisible()) {
-          await offlineTab.click();
-          await expect(page.locator('#offline-workspace-view')).toBeVisible();
+        await assertAllInteractiveElementsTouchTarget(page, {
+          minSize: 44,
+          contextName: `Teacher Assigned Classes [${vp.name}]`,
+          minExpectedCount: 2,
+        });
+      });
 
-          await assertAllInteractiveElementsTouchTarget(page, {
-            minSize: 44,
-            contextName: `Teacher Offline Workspace [${vp.name}]`,
-            minExpectedCount: 2,
-          });
-        }
+      test('Teacher Offline Workspace satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000002', 'TeacherPassword123!');
+        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
+
+        // Mandatory — must not silently skip
+        const offlineNav = page.getByRole('link', { name: /Phone backup|Offline|আউটবক্স/i }).or(
+          page.getByRole('button', { name: /Offline Logs|Offline Workspace|আউটবক্স/i })
+        ).first();
+        await expect(offlineNav).toBeVisible();
+        await offlineNav.click();
+        await expect(page.locator('#offline-workspace-view')).toBeVisible();
+
+        await assertAllInteractiveElementsTouchTarget(page, {
+          minSize: 44,
+          contextName: `Teacher Offline Workspace [${vp.name}]`,
+          minExpectedCount: 2,
+        });
+      });
+
+      test('School Admin overview dashboard satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+        await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+
+        await assertAllInteractiveElementsTouchTarget(page, {
+          minSize: 44,
+          contextName: `School Admin Overview [${vp.name}]`,
+          minExpectedCount: 3,
+        });
       });
 
       test('School Admin user management, modals & controls satisfy >= 44x44px', async ({ page }) => {
-        await page.goto(`${baseUrl}/login`);
-        await page.locator('#login-phone').fill('9100000001');
-        await page.locator('#login-password').fill('SchoolAdminPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
-
+        await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
         await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
         // 1. Navigate to User Management
@@ -94,14 +125,13 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         await expect(fullNameInput).toBeVisible();
         await page.waitForTimeout(250); // wait for scale animation to settle
 
-        // Check password reveal button inside modal
+        // Check password reveal button inside modal — mandatory, must not skip
         const pwdToggle = page.getByRole('button', { name: /Show Password|Hide Password|Password|পাসওয়ার্ড/i }).first();
-        if (await pwdToggle.isVisible()) {
-          const toggleBox = await pwdToggle.boundingBox();
-          expect(toggleBox).not.toBeNull();
-          expect(toggleBox!.width).toBeGreaterThanOrEqual(44);
-          expect(toggleBox!.height).toBeGreaterThanOrEqual(44);
-        }
+        await expect(pwdToggle).toBeVisible();
+        const toggleBox = await pwdToggle.boundingBox();
+        expect(toggleBox).not.toBeNull();
+        expect(toggleBox!.width).toBeGreaterThanOrEqual(44);
+        expect(toggleBox!.height).toBeGreaterThanOrEqual(44);
 
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
@@ -116,10 +146,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('RFID Operator dashboard & reader operations satisfy >= 44x44px', async ({ page }) => {
         test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
-        await page.goto(`${baseUrl}/login`);
-        await page.locator('#login-phone').fill('9100000003');
-        await page.locator('#login-password').fill('RfidOpPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+        await loginAs(page, '9100000003', 'RfidOpPassword123!');
 
         await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
@@ -130,18 +157,68 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
         });
       });
 
-      test('Report Viewer intelligence dashboard, gauges & reports satisfy >= 44x44px', async ({ page }) => {
-        await page.goto(`${baseUrl}/login`);
-        await page.locator('#login-phone').fill('9100000004');
-        await page.locator('#login-password').fill('ReportViewerPassword123!');
-        await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
-
+      test('Report Viewer overview dashboard satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000004', 'ReportViewerPassword123!');
         await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
           contextName: `Report Viewer Dashboard [${vp.name}]`,
           minExpectedCount: 3,
+        });
+      });
+
+      test('Report Viewer Daily Reports satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+        const dailyNav = page.getByRole('link', { name: /Daily Class Reports|Daily|দৈনিক/i }).or(
+          page.getByRole('button', { name: /Daily|দৈনিক/i })
+        ).first();
+        await expect(dailyNav).toBeVisible();
+        await dailyNav.click();
+        await expect(page.locator('#daily-reports-view')).toBeVisible();
+
+        await assertAllInteractiveElementsTouchTarget(page, {
+          minSize: 44,
+          contextName: `Report Viewer Daily Reports [${vp.name}]`,
+          minExpectedCount: 2,
+        });
+      });
+
+      test('Report Viewer Trend Reports satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+        const trendsNav = page.getByRole('link', { name: /Longitudinal Trends|Trends|প্রবণতা/i }).or(
+          page.getByRole('button', { name: /Trends|প্রবণতা/i })
+        ).first();
+        await expect(trendsNav).toBeVisible();
+        await trendsNav.click();
+        await expect(page.locator('#trend-reports-view')).toBeVisible();
+
+        await assertAllInteractiveElementsTouchTarget(page, {
+          minSize: 44,
+          contextName: `Report Viewer Trend Reports [${vp.name}]`,
+          minExpectedCount: 2,
+        });
+      });
+
+      test('Report Viewer Export Center satisfies >= 44x44px', async ({ page }) => {
+        await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+        const exportsNav = page.getByRole('link', { name: /Export Center|Exports|এক্সপোর্ট/i }).or(
+          page.getByRole('button', { name: /Export|এক্সপোর্ট/i })
+        ).first();
+        await expect(exportsNav).toBeVisible();
+        await exportsNav.click();
+        await expect(page.locator('#export-center-view')).toBeVisible();
+
+        await assertAllInteractiveElementsTouchTarget(page, {
+          minSize: 44,
+          contextName: `Report Viewer Export Center [${vp.name}]`,
+          minExpectedCount: 2,
         });
       });
     });

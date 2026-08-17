@@ -3,64 +3,87 @@ import AxeBuilder from '@axe-core/playwright';
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
+/** Helper: run Axe scan and assert zero critical/serious violations */
+async function assertAxeClean(page: import('@playwright/test').Page, context: string) {
+  await page.waitForTimeout(500); // settle animations
+
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+
+  const violations = results.violations.filter((v) =>
+    ['critical', 'serious'].includes(v.impact || '')
+  );
+  expect(violations, `Axe violations on ${context}: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+}
+
+/** Helper: login with given credentials */
+async function loginAs(page: import('@playwright/test').Page, phone: string, password: string) {
+  await page.goto(`${baseUrl}/login`);
+  await page.locator('#login-phone').fill(phone);
+  await page.locator('#login-password').fill(password);
+  await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+}
+
 test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
+  // ── Login Page ────────────────────────────────────────────────────────
   test('Login Page passes Axe scan in English and Bengali', async ({ page }) => {
     // English
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
+    await assertAxeClean(page, 'English Login page');
 
-    const enResults = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
-
-    const enViolations = enResults.violations.filter((v) =>
-      ['critical', 'serious'].includes(v.impact || '')
-    );
-    expect(enViolations, `Axe violations on English Login page: ${JSON.stringify(enViolations, null, 2)}`).toEqual([]);
-
-    // Bengali
+    // Bengali — mandatory (must not silently skip)
     const langToggle = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    if (await langToggle.isVisible()) {
-      await langToggle.click();
-      await page.waitForTimeout(500);
-
-      const bnResults = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze();
-
-      const bnViolations = bnResults.violations.filter((v) =>
-        ['critical', 'serious'].includes(v.impact || '')
-      );
-      expect(bnViolations, `Axe violations on Bengali Login page: ${JSON.stringify(bnViolations, null, 2)}`).toEqual([]);
-    }
+    await expect(langToggle).toBeVisible();
+    await langToggle.click();
+    await assertAxeClean(page, 'Bengali Login page');
   });
 
-  test('Teacher Dashboard & Offline Workspace pass Axe scan', async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    await page.locator('#login-phone').fill('9100000002');
-    await page.locator('#login-password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
-
-    await expect(page.getByText(/Today’s attendance|আজকের হাজিরা|আজকের Attendance|হাজিরা খাতা|Attendance Register/i).first()).toBeVisible();
-    await page.waitForTimeout(500);
-
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
-
-    const violations = results.violations.filter((v) =>
-      ['critical', 'serious'].includes(v.impact || '')
-    );
-    expect(violations, `Axe violations on Teacher Dashboard: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+  // ── Teacher Dashboard + Sub-Routes ────────────────────────────────────
+  test('Teacher Dashboard landing passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000002', 'TeacherPassword123!');
+    await expect(page.getByText(/Today's attendance|আজকের হাজিরা|আজকের Attendance|হাজিরা খাতা|Attendance Register/i).first()).toBeVisible();
+    await assertAxeClean(page, 'Teacher Dashboard');
   });
 
-  test('School Admin User Management & Modals pass Axe scan', async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    await page.locator('#login-phone').fill('9100000001');
-    await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+  test('Teacher Assigned Classes passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000002', 'TeacherPassword123!');
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
 
+    // Navigate to /app/teacher/classes
+    const classesNav = page.getByRole('link', { name: /Class list|Classes|ক্লাস/i }).or(
+      page.getByRole('button', { name: /Class|ক্লাস/i })
+    ).first();
+    await expect(classesNav).toBeVisible();
+    await classesNav.click();
+    await expect(page.locator('#assigned-classes-view')).toBeVisible();
+    await assertAxeClean(page, 'Teacher Assigned Classes');
+  });
+
+  test('Teacher Offline Workspace passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000002', 'TeacherPassword123!');
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
+
+    // Navigate to /app/teacher/offline
+    const offlineNav = page.getByRole('link', { name: /Phone backup|Offline|আউটবক্স/i }).or(
+      page.getByRole('button', { name: /Offline|আউটবক্স/i })
+    ).first();
+    await expect(offlineNav).toBeVisible();
+    await offlineNav.click();
+    await expect(page.locator('#offline-workspace-view')).toBeVisible();
+    await assertAxeClean(page, 'Teacher Offline Workspace');
+  });
+
+  // ── School Admin Dashboard + Sub-Routes + Modals ──────────────────────
+  test('School Admin Overview passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+    await assertAxeClean(page, 'School Admin Overview');
+  });
+
+  test('School Admin User Management & open Add Staff modal pass Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
     await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
 
     // Navigate to User Management
@@ -70,55 +93,126 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await expect(usersNav).toBeVisible();
     await usersNav.click();
 
-    await expect(page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first()).toBeVisible();
-    await page.waitForTimeout(500);
+    const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
+    await expect(addStaffBtn).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
+    // Scan the User Management page
+    await assertAxeClean(page, 'School Admin User Management');
 
-    const violations = results.violations.filter((v) =>
-      ['critical', 'serious'].includes(v.impact || '')
-    );
-    expect(violations, `Axe violations on School Admin User Management: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+    // Open the Add Staff modal and scan it
+    await addStaffBtn.click();
+    const modalTitle = page.locator('#add-staff-modal-title');
+    await expect(modalTitle).toBeVisible();
+    await assertAxeClean(page, 'School Admin Add Staff Modal (open)');
+
+    // Close modal
+    const closeBtn = page.getByRole('button', { name: /Close|বন্ধ/i }).first();
+    await closeBtn.click();
   });
 
+  test('School Admin Student Roster passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+
+    const studentsNav = page.getByRole('link', { name: /Student Roster|Students|শিক্ষার্থী/i }).or(
+      page.getByRole('button', { name: /Students|শিক্ষার্থী/i })
+    ).first();
+    await expect(studentsNav).toBeVisible();
+    await studentsNav.click();
+    await expect(page.locator('#student-roster-view')).toBeVisible();
+    await assertAxeClean(page, 'School Admin Student Roster');
+  });
+
+  test('School Admin Academic Management passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+
+    const academicsNav = page.getByRole('link', { name: /Academic Classes|Academics|Classes|একাডেমিক/i }).or(
+      page.getByRole('button', { name: /Classes|একাডেমিক/i })
+    ).first();
+    await expect(academicsNav).toBeVisible();
+    await academicsNav.click();
+    await expect(page.locator('#academic-management-view')).toBeVisible();
+    await assertAxeClean(page, 'School Admin Academic Management');
+  });
+
+  test('School Admin Attendance Operations passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+
+    const attendanceNav = page.getByRole('link', { name: /Attendance Sessions|Attendance|উপস্থিতি/i }).or(
+      page.getByRole('button', { name: /Attendance|উপস্থিতি/i })
+    ).first();
+    await expect(attendanceNav).toBeVisible();
+    await attendanceNav.click();
+    await expect(page.locator('#attendance-operations-view')).toBeVisible();
+    await assertAxeClean(page, 'School Admin Attendance Operations');
+  });
+
+  test('School Admin Notification Operations passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+
+    const notificationsNav = page.getByRole('link', { name: /SMS Notifications|Notifications|বিজ্ঞপ্তি/i }).or(
+      page.getByRole('button', { name: /Notifications|বিজ্ঞপ্তি/i })
+    ).first();
+    await expect(notificationsNav).toBeVisible();
+    await notificationsNav.click();
+    await expect(page.locator('#notification-operations-view')).toBeVisible();
+    await assertAxeClean(page, 'School Admin Notification Operations');
+  });
+
+  // ── RFID Operator (Feature-gated) ────────────────────────────────────
   test('RFID Operator Station passes Axe scan', async ({ page }) => {
     test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
-    await page.goto(`${baseUrl}/login`);
-    await page.locator('#login-phone').fill('9100000003');
-    await page.locator('#login-password').fill('RfidOpPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
-
+    await loginAs(page, '9100000003', 'RfidOpPassword123!');
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
-    await page.waitForTimeout(500);
-
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
-
-    const violations = results.violations.filter((v) =>
-      ['critical', 'serious'].includes(v.impact || '')
-    );
-    expect(violations, `Axe violations on RFID Operator Station: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+    await assertAxeClean(page, 'RFID Operator Station');
   });
 
-  test('Report Viewer Dashboard passes Axe scan', async ({ page }) => {
-    await page.goto(`${baseUrl}/login`);
-    await page.locator('#login-phone').fill('9100000004');
-    await page.locator('#login-password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
-
+  // ── Report Viewer Dashboard + Sub-Routes ──────────────────────────────
+  test('Report Viewer Dashboard Overview passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-    await page.waitForTimeout(500);
+    await assertAxeClean(page, 'Report Viewer Dashboard Overview');
+  });
 
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
+  test('Report Viewer Daily Reports passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 
-    const violations = results.violations.filter((v) =>
-      ['critical', 'serious'].includes(v.impact || '')
-    );
-    expect(violations, `Axe violations on Report Viewer Dashboard: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+    const dailyNav = page.getByRole('link', { name: /Daily Class Reports|Daily|দৈনিক/i }).or(
+      page.getByRole('button', { name: /Daily|দৈনিক/i })
+    ).first();
+    await expect(dailyNav).toBeVisible();
+    await dailyNav.click();
+    await expect(page.locator('#daily-reports-view')).toBeVisible();
+    await assertAxeClean(page, 'Report Viewer Daily Reports');
+  });
+
+  test('Report Viewer Trend Reports passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+    const trendsNav = page.getByRole('link', { name: /Longitudinal Trends|Trends|প্রবণতা/i }).or(
+      page.getByRole('button', { name: /Trends|প্রবণতা/i })
+    ).first();
+    await expect(trendsNav).toBeVisible();
+    await trendsNav.click();
+    await expect(page.locator('#trend-reports-view')).toBeVisible();
+    await assertAxeClean(page, 'Report Viewer Trend Reports');
+  });
+
+  test('Report Viewer Export Center passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+    const exportsNav = page.getByRole('link', { name: /Export Center|Exports|এক্সপোর্ট/i }).or(
+      page.getByRole('button', { name: /Export|এক্সপোর্ট/i })
+    ).first();
+    await expect(exportsNav).toBeVisible();
+    await exportsNav.click();
+    await expect(page.locator('#export-center-view')).toBeVisible();
+    await assertAxeClean(page, 'Report Viewer Export Center');
   });
 });

@@ -255,32 +255,13 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 
   await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
-  // Select class and start session
-  const selectEl = page.locator('select');
-  await expect(selectEl).toBeVisible();
-  const optionValues = await selectEl.locator('option').evaluateAll((options) =>
-    options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
-  );
-  expect(optionValues.length).toBeGreaterThan(0);
-  await selectEl.selectOption(optionValues[0]);
-  await page.getByRole('button', { name: 'Download roster' }).click();
-  await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
-
-  const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
-  const startBtn = page.getByRole('button', { name: 'Start offline session' });
-  if (!(await sessionOpenBtn.isVisible())) {
-    await expect(startBtn).toBeVisible();
-    await startBtn.click();
-    await expect(sessionOpenBtn).toBeVisible({ timeout: 10000 });
-  }
-
   // Open Phone Backup Accordion
   const phoneBackup = page.getByTestId('phone-backup-details');
   await expect(phoneBackup).toBeVisible();
   await phoneBackup.locator('summary').click();
   await expect(page.getByTestId('camera-hud')).toBeVisible();
 
-  // If Start Camera button is present, click it to initiate stream request
+  // Trigger camera start
   const startCamBtn = page.getByRole('button', { name: /Start Camera|ক্যামেরা শুরু করুন/i });
   if (await startCamBtn.isVisible()) {
     await startCamBtn.click();

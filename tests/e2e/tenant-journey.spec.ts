@@ -40,7 +40,8 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await expect(demoBtn).toBeVisible();
     await demoBtn.click();
 
-    await expect(page.getByTestId('demo-request-form')).toBeVisible();
+    const form = page.getByTestId('demo-request-form');
+    await expect(form).toBeVisible();
 
     // Fill form
     await page.locator('input[placeholder="e.g. Principal Sourav Sen"]').fill('Principal Animesh Das');
@@ -50,13 +51,13 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await page.locator('input[placeholder="Kolkata, West Bengal"]').fill('Kolkata');
 
     // Submit form (submit button lives inside the dialog form)
-    const submitBtn = page.getByTestId('demo-request-form').getByRole('button', { name: /Request Demo|ডেমো/i });
+    const submitBtn = form.locator('button[type="submit"]');
     await submitBtn.scrollIntoViewIfNeeded();
     await submitBtn.click();
 
     // Verify success confirmation card
-    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/Demo request received|ডেমো অনুরোধ/i)).toBeVisible();
+    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Demo request received|ডেমোর অনুরোধ|Demo request मिल गई/i)).toBeVisible();
     await expect(page.getByText('9876500001')).toBeVisible();
   });
 

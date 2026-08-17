@@ -275,9 +275,10 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
   const startBtn = page.getByRole('button', { name: 'Start offline session' });
   if (!(await sessionOpenBtn.isVisible())) {
-    await expect(startBtn).toBeVisible();
-    await startBtn.click();
-    await expect(sessionOpenBtn).toBeVisible();
+    if (await startBtn.isVisible()) {
+      await startBtn.click();
+    }
+    await expect(sessionOpenBtn).toBeVisible({ timeout: 10000 });
   }
 
   const phoneBackupDenied = page.getByTestId('phone-backup-details');

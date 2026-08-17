@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
+import { api } from '../../services/api';
 import RfidDashboard from '../../components/rfid/RfidDashboard';
 import CardEnrollmentWizard from '../../components/rfid/CardEnrollmentWizard';
 import ReaderManagement from '../../components/rfid/ReaderManagement';
@@ -16,6 +17,24 @@ export const RfidOperatorDashboard: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();
   const { t } = useLanguage();
   const [subView, setSubView] = useState<'dashboard' | 'readers' | 'cards' | 'enroll' | 'bulk' | 'reports'>('dashboard');
+  const [stats, setStats] = useState<{ activeReadersCount: number; totalCardsEnrolled: number; recentScanRejections: number } | null>(null);
+
+  // Load real gate / badge / rejection numbers from the operator summary endpoint
+  useEffect(() => {
+    if (!activeSchoolId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api<{ success: boolean; data: any }>('/api/v1/dashboard/rfid-operator/summary');
+        if (!cancelled && res?.data) setStats(res.data);
+      } catch {
+        if (!cancelled) setStats(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSchoolId]);
 
   return (
     <div className="space-y-6 sm:space-y-8 text-left max-w-6xl mx-auto" id="rfid-operator-dashboard-view">
@@ -56,33 +75,29 @@ export const RfidOperatorDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 4 Stat Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 3 Real Stat Cards Row — wired to the live operator summary endpoint */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           title={t('gatesOnline')}
-          value={t('statusOnline')}
+          value={stats ? stats.activeReadersCount : '—'}
           trend={{ value: t('doorwayAttendanceActive'), isPositive: true }}
           variant="hero-forest"
           onClick={() => setSubView('readers')}
         />
         <StatCard
           title={t('studentBadges')}
-          value={t('badgeStatusActive')}
-          trend={{ value: t('protectedRecords'), isPositive: true }}
+          value={stats ? stats.totalCardsEnrolled : '—'}
+          trend={{ value: t('badgeStatusActive'), isPositive: true }}
           variant="default"
           onClick={() => setSubView('cards')}
         />
         <StatCard
-          title={t('whoWalkedInToday')}
-          value={t('navOverview')}
-          trend={{ value: t('gateArrivalsActive'), isPositive: true }}
-          variant="default"
-          onClick={() => setSubView('reports')}
-        />
-        <StatCard
-          title={t('status')}
-          value={t('statusActive')}
-          trend={{ value: t('attendanceReady'), isPositive: true }}
+          title={t('navGateProblems')}
+          value={stats ? stats.recentScanRejections : '—'}
+          trend={{
+            value: stats && stats.recentScanRejections === 0 ? t('allGateScansWorking') : t('recentGateIssues'),
+            isPositive: stats ? stats.recentScanRejections === 0 : true,
+          }}
           variant="default"
           onClick={() => setSubView('dashboard')}
         />

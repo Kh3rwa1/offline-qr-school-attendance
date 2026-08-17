@@ -61,7 +61,7 @@ export const SchoolAdminDashboard: React.FC = () => {
             {t('navOverview')}
           </h1>
           <p className="t-body text-sm text-ink-soft mt-1">
-            {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {activeSchoolName} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 

@@ -187,7 +187,11 @@ export async function createApp() {
     // Rate-limited in-memory SPA fallback (zero per-request filesystem I/O)
     app.get('*', rateLimitPolicies.spaFallback, (req, res, next) => {
       if (!req.path.startsWith('/api')) {
-        return res.type('html').send(indexHtmlContent);
+        const injectedHtml = indexHtmlContent.replace(
+          '</head>',
+          `<script>window.__FEATURE_RFID__ = ${process.env.FEATURE_RFID === 'true'};</script></head>`
+        );
+        return res.type('html').send(injectedHtml);
       }
       next();
     });

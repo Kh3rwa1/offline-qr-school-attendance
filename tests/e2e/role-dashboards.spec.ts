@@ -18,7 +18,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByRole('heading', { name: /School Administration|Overview/i }).or(page.getByText(/School Administration|Overview/i))).toBeVisible();
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
   });
 
   test('TEACHER logs in and lands directly on Offline QR Attendance station', async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText(/RFID|Operator Console/i)).toBeVisible();
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
   });
 
   test('Teacher navigating to super-admin dashboard receives 403 Forbidden page', async ({ page }) => {

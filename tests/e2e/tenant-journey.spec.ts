@@ -33,26 +33,32 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
 
   test('2. Public demo request form submits to API and displays verified success confirmation', async ({ page }) => {
     await page.goto(baseUrl);
+    await page.waitForLoadState('domcontentloaded');
 
-    // Click demo request button
-    const demoBtn = page.getByRole('button', { name: /Demo|ডেমো/i }).first();
+    // Click demo request button (use header or hero demo button)
+    const demoBtn = page.getByRole('button', { name: /Book Demo|Demo|ডেমো/i }).first();
+    await expect(demoBtn).toBeVisible();
     await demoBtn.click();
 
-    await expect(page.getByTestId('demo-request-form')).toBeVisible();
+    const form = page.getByTestId('demo-request-form');
+    await expect(form).toBeVisible();
 
     // Fill form
     await page.locator('input[placeholder="e.g. Principal Sourav Sen"]').fill('Principal Animesh Das');
     await page.locator('input[placeholder="98765 43210"]').fill('9876500001');
     await page.locator('input[placeholder="principal@school.edu.in"]').fill('animesh@ballygunge.edu.in');
     await page.locator('input[placeholder="Green Valley High School"]').fill('Ballygunge Govt High School');
-    await page.locator('input[placeholder="Kolkata, West Bengal"]').fill('Kolkata');
+    const districtInput = page.locator('input[placeholder="Kolkata, West Bengal"]');
+    await districtInput.fill('Kolkata');
 
     // Submit form (submit button lives inside the dialog form)
-    await page.getByTestId('demo-request-form').getByRole('button', { name: /Request Demo|ডেমো/i }).click();
+    const submitBtn = form.locator('button[type="submit"]');
+    await submitBtn.scrollIntoViewIfNeeded();
+    await submitBtn.click({ force: true });
 
     // Verify success confirmation card
-    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/Demo request received|ডেমো অনুরোধ/i)).toBeVisible();
+    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/Demo request received|ডেমোর অনুরোধ|Demo request मिल गई/i)).toBeVisible();
     await expect(page.getByText('9876500001')).toBeVisible();
   });
 

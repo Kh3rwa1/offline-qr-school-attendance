@@ -172,6 +172,8 @@ export const AttendanceOperations: React.FC = () => {
 
         <div className="flex items-center gap-3 flex-wrap">
           <input
+            id="attendance-date-filter"
+            aria-label={t('dateLabel')}
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}

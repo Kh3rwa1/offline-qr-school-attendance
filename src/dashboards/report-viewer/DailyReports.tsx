@@ -240,10 +240,12 @@ export const DailyReports: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-ink-soft font-display">
+                <label htmlFor="daily-date-input" className="text-sm font-bold text-ink-soft font-display cursor-pointer">
                   {t('dateLabel')}
-                </span>
+                </label>
                 <input
+                  id="daily-date-input"
+                  aria-label={t('dateLabel')}
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}

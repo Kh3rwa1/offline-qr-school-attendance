@@ -307,6 +307,7 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 });
 
 test('RFID off by default: API returns 404 and RFID operator has no navigation or dashboard access', async ({ page }) => {
+  test.skip(process.env.FEATURE_RFID === 'true', 'RFID is enabled in this test run');
   // 1. Assert API returns 404 when FEATURE_RFID is unset/false
   const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
   try {

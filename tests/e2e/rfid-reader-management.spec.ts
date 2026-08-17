@@ -11,7 +11,7 @@ test.describe('RFID Reader Management E2E Suite', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('MIFARE DESFire EV2 Operator Console')).toBeVisible();
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
     // 2. Navigate to Readers Console
     await page.goto(`${baseUrl}/app/rfid-operator/readers`);

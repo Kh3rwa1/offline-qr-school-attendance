@@ -49,7 +49,7 @@ test.describe('Role-Aware Dashboards E2E Matrix', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText(/RFID|Operator Console/i)).toBeVisible();
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
   });
 
   test('Teacher navigating to super-admin dashboard receives 403 Forbidden page', async ({ page }) => {

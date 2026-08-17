@@ -11,7 +11,7 @@ test.describe('RFID Card Enrollment E2E Suite', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText('MIFARE DESFire EV2 Operator Console')).toBeVisible();
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
     // 2. Navigate to Card Personalization & Enrollment
     await page.goto(`${baseUrl}/app/rfid-operator/enrollment`);

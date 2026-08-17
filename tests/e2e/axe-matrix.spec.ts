@@ -17,12 +17,13 @@ async function assertAxeClean(page: import('@playwright/test').Page, context: st
   expect(violations, `Axe violations on ${context}: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
 }
 
-/** Helper: login with given credentials */
+/** Helper: login with given credentials and await landing */
 async function loginAs(page: import('@playwright/test').Page, phone: string, password: string) {
   await page.goto(`${baseUrl}/login`);
   await page.locator('#login-phone').fill(phone);
   await page.locator('#login-password').fill(password);
   await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+  await page.waitForLoadState('domcontentloaded');
 }
 
 test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
@@ -49,6 +50,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('Teacher Assigned Classes passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000002', 'TeacherPassword123!');
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/teacher/classes`);
     await expect(page.locator('#assigned-classes-view')).toBeVisible();
     await assertAxeClean(page, 'Teacher Assigned Classes');
@@ -56,6 +58,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('Teacher Offline Workspace passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000002', 'TeacherPassword123!');
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/teacher/offline`);
     await expect(page.locator('#offline-workspace-view')).toBeVisible();
     await assertAxeClean(page, 'Teacher Offline Workspace');
@@ -70,7 +73,9 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin User Management & open Add Staff modal pass Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/school-admin/users`);
+    await expect(page.locator('#user-management-view')).toBeVisible();
 
     const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
@@ -92,6 +97,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin Student Roster passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/school-admin/students`);
     await expect(page.locator('#student-roster-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Student Roster');
@@ -99,6 +105,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin Academic Management passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/school-admin/academics`);
     await expect(page.locator('#academic-management-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Academic Management');
@@ -106,6 +113,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin Attendance Operations passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/school-admin/attendance`);
     await expect(page.locator('#attendance-operations-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Attendance Operations');
@@ -113,6 +121,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('School Admin Notification Operations passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/school-admin/notifications`);
     await expect(page.locator('#notification-operations-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Notification Operations');
@@ -135,6 +144,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('Report Viewer Daily Reports passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/reports/daily`);
     await expect(page.locator('#daily-reports-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Daily Reports');
@@ -142,6 +152,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('Report Viewer Trend Reports passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/reports/trends`);
     await expect(page.locator('#trend-reports-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Trend Reports');
@@ -149,6 +160,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
 
   test('Report Viewer Export Center passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
     await page.goto(`${baseUrl}/app/reports/exports`);
     await expect(page.locator('#export-center-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Export Center');

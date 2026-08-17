@@ -37,19 +37,19 @@ test.describe('End-to-End Product Journeys Matrix', () => {
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
     await page.getByRole('button', { name: /Sign In/i }).click();
 
-    await expect(page.getByText(/School Administration|Overview/i)).toBeVisible();
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
 
     // 2. Navigate to Student Roster
     await page.goto(`${baseUrl}/app/school-admin/students`);
-    await expect(page.getByRole('heading', { name: /Students/i })).toBeVisible();
+    await expect(page.locator('#student-roster-view')).toBeVisible();
 
     // 3. Navigate to Academic Sections
     await page.goto(`${baseUrl}/app/school-admin/academics`);
-    await expect(page.getByRole('heading', { name: /Classes and Sections/i })).toBeVisible();
+    await expect(page.locator('#academic-management-view')).toBeVisible();
 
     // 4. Navigate to User Management
     await page.goto(`${baseUrl}/app/school-admin/users`);
-    await expect(page.getByRole('heading', { name: /School Staff/i })).toBeVisible();
+    await expect(page.locator('#user-management-view')).toBeVisible();
   });
 
   test('Teacher executes offline roll review and server finalization check', async ({ page }) => {

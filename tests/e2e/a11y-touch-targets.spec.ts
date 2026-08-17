@@ -10,12 +10,13 @@ const viewports = [
   { name: 'Desktop 1280px', width: 1280, height: 800 },
 ];
 
-/** Helper: login with given credentials */
+/** Helper: login with given credentials and await landing */
 async function loginAs(page: import('@playwright/test').Page, phone: string, password: string) {
   await page.goto(`${baseUrl}/login`);
   await page.locator('#login-phone').fill(phone);
   await page.locator('#login-password').fill(password);
   await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+  await page.waitForLoadState('domcontentloaded');
 }
 
 test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', () => {
@@ -51,6 +52,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Teacher Assigned Classes satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000002', 'TeacherPassword123!');
+        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/teacher/classes`);
         await expect(page.locator('#assigned-classes-view')).toBeVisible();
 
@@ -63,6 +65,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Teacher Offline Workspace satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000002', 'TeacherPassword123!');
+        await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/teacher/offline`);
         await expect(page.locator('#offline-workspace-view')).toBeVisible();
 
@@ -86,7 +89,9 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('School Admin user management, modals & controls satisfy >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+        await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/school-admin/users`);
+        await expect(page.locator('#user-management-view')).toBeVisible();
 
         // 1. Test User Directory page interactive targets
         const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
@@ -148,6 +153,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Report Viewer Daily Reports satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/reports/daily`);
         await expect(page.locator('#daily-reports-view')).toBeVisible();
 
@@ -160,6 +166,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Report Viewer Trend Reports satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/reports/trends`);
         await expect(page.locator('#trend-reports-view')).toBeVisible();
 
@@ -172,6 +179,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix', ()
 
       test('Report Viewer Export Center satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000004', 'ReportViewerPassword123!');
+        await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/reports/exports`);
         await expect(page.locator('#export-center-view')).toBeVisible();
 

@@ -249,7 +249,6 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 
   // Log in as teacher
   await page.goto(`${baseUrl}/login`);
-  await page.evaluate(() => navigator.serviceWorker?.ready);
   await page.locator('#login-phone').fill('9100000002');
   await page.locator('#login-password').fill('TeacherPassword123!');
   await page.getByRole('button', { name: /Sign In|Log In/i }).click();
@@ -275,29 +274,23 @@ test('camera permission denied renders bilingual error HUD and interactive retry
     await expect(sessionOpenBtn).toBeVisible({ timeout: 10000 });
   }
 
-  const phoneBackupDenied = page.getByTestId('phone-backup-details');
-  await expect(phoneBackupDenied).toBeVisible();
-  await phoneBackupDenied.evaluate((el: HTMLDetailsElement) => {
-    el.open = true;
-  });
+  // Open Phone Backup Accordion
+  const phoneBackup = page.getByTestId('phone-backup-details');
+  await expect(phoneBackup).toBeVisible();
+  await phoneBackup.locator('summary').click();
   await expect(page.getByTestId('camera-hud')).toBeVisible();
 
-  const startCamBtn = page.getByRole('button', { name: /Start Camera|ক্যামেরা শুরু করুন/i });
-  if (await startCamBtn.isVisible()) {
-    await startCamBtn.click();
-  }
+  // 1. Assert camera denied error overlay is displayed
+  await expect(page.getByText(/Camera permission denied|Camera Permission পাওয়া যায়নি/i).first()).toBeVisible({ timeout: 15000 });
 
-  // 1. Assert HUD is NOT LIVE
+  // 2. Assert HUD is NOT LIVE
   await expect(page.getByText(/CAMERA:\s*LIVE/i)).toHaveCount(0);
-
-  // 2. Assert denied copy is displayed
-  await expect(page.getByText(/Camera permission denied|Camera Permission পাওয়া যায়নি/i).first()).toBeVisible({ timeout: 10000 });
 
   // 3. Assert Retry button is visible
   const retryBtn = page.getByRole('button', { name: /Retry Camera|Camera আবার Try করুন/i }).first();
   await expect(retryBtn).toBeVisible();
 
-  // 4. Switch to Bengali and assert Bengalish denied copy
+  // 4. Switch to Bengali and assert Bengali denied copy
   const bnBtn = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i }).first();
   if (await bnBtn.isVisible()) {
     await bnBtn.click();

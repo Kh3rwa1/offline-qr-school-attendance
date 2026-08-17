@@ -263,19 +263,21 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 
   // Select class and start session
   const selectEl = page.locator('select');
-  if (await selectEl.isVisible()) {
-    const optionValues = await selectEl.locator('option').evaluateAll((options) =>
-      options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
-    );
-    if (optionValues.length > 0) {
-      await selectEl.selectOption(optionValues[0]);
-    }
-  }
+  await expect(selectEl).toBeVisible();
+  const optionValues = await selectEl.locator('option').evaluateAll((options) =>
+    options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
+  );
+  expect(optionValues.length).toBeGreaterThan(0);
+  await selectEl.selectOption(optionValues[0]);
+  await page.getByRole('button', { name: 'Download roster' }).click();
+  await expect(page.getByText(/Roster and active QR digests/)).toBeVisible();
 
   const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
   const startBtn = page.getByRole('button', { name: 'Start offline session' });
-  if (await startBtn.isVisible()) {
+  if (!(await sessionOpenBtn.isVisible())) {
+    await expect(startBtn).toBeVisible();
     await startBtn.click();
+    await expect(sessionOpenBtn).toBeVisible();
   }
 
   const phoneBackupDenied = page.getByTestId('phone-backup-details');

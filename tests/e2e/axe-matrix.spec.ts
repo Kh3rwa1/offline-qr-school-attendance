@@ -106,7 +106,7 @@ test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', (
   test('School Admin Academic Management passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
     await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-    await page.goto(`${baseUrl}/app/school-admin/academic`);
+    await page.goto(`${baseUrl}/app/school-admin/academics`);
     await expect(page.locator('#academic-management-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Academic Management');
   });

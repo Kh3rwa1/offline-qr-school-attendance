@@ -147,7 +147,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
       test('School Admin Academic Management satisfies >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
         await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-        await page.goto(`${baseUrl}/app/school-admin/academic`);
+        await page.goto(`${baseUrl}/app/school-admin/academics`);
         await expect(page.locator('#academic-management-view')).toBeVisible();
 
         await assertAllInteractiveElementsTouchTarget(page, {

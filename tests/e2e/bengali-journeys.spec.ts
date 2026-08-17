@@ -116,7 +116,7 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
     await expect(page.locator('#student-roster-view')).toBeVisible();
 
     // 3. Academic Management
-    await page.goto(`${baseUrl}/app/school-admin/academic`);
+    await page.goto(`${baseUrl}/app/school-admin/academics`);
     await expect(page.locator('#academic-management-view')).toBeVisible();
 
     // 4. Attendance Operations

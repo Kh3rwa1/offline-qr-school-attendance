@@ -180,6 +180,14 @@ export const AppRouter: React.FC = () => {
             }
           />
           <Route
+            path="school-admin/academic"
+            element={
+              <RequireRole allowedRoles={['SCHOOL_ADMIN', 'SUPER_ADMIN']}>
+                <AcademicManagement />
+              </RequireRole>
+            }
+          />
+          <Route
             path="school-admin/attendance"
             element={
               <RequireRole allowedRoles={['SCHOOL_ADMIN', 'SUPER_ADMIN']}>

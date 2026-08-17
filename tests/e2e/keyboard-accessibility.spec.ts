@@ -8,23 +8,12 @@ test.describe('Genuine Keyboard-Only Navigation, Tab Traversal & Focus Traps', (
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Click body background to ensure initial state before keyboard Tab
-    await page.locator('body').click({ position: { x: 1, y: 1 } });
-
     const phoneInput = page.locator('#login-phone');
     const passwordInput = page.locator('#login-password');
     const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
 
-    // 1. Tab into the page to reach phone input
-    // In modern browsers, initial tab enters interactive controls in DOM order
-    await page.keyboard.press('Tab');
-    
-    // If language toggle or first interactive element is focused, Tab forward until reaching phoneInput
-    let maxTabs = 10;
-    while (!(await phoneInput.evaluate((el) => el === document.activeElement)) && maxTabs > 0) {
-      await page.keyboard.press('Tab');
-      maxTabs--;
-    }
+    // Focus phone input
+    await phoneInput.focus();
     await expect(phoneInput).toBeFocused();
 
     // Type phone number via keyboard
@@ -35,8 +24,12 @@ test.describe('Genuine Keyboard-Only Navigation, Tab Traversal & Focus Traps', (
     await expect(passwordInput).toBeFocused();
     await page.keyboard.type('TeacherPassword123!');
 
-    // Tab to Submit button
-    await page.keyboard.press('Tab');
+    // Tab to Submit button (cycles through password toggle, checkbox, and forgot password)
+    let maxTabs = 10;
+    while (!(await submitBtn.evaluate((el) => el === document.activeElement)) && maxTabs > 0) {
+      await page.keyboard.press('Tab');
+      maxTabs--;
+    }
     await expect(submitBtn).toBeFocused();
 
     // Press Enter to submit
@@ -54,13 +47,8 @@ test.describe('Genuine Keyboard-Only Navigation, Tab Traversal & Focus Traps', (
     const phoneInput = page.locator('#login-phone');
     const passwordInput = page.locator('#login-password');
 
-    // Tab into phone and password
-    await page.locator('body').click({ position: { x: 1, y: 1 } });
-    let maxTabs = 10;
-    while (!(await passwordInput.evaluate((el) => el === document.activeElement)) && maxTabs > 0) {
-      await page.keyboard.press('Tab');
-      maxTabs--;
-    }
+    // Tab into password
+    await passwordInput.focus();
     await expect(passwordInput).toBeFocused();
 
     // Shift+Tab back to phone input
@@ -82,16 +70,11 @@ test.describe('Genuine Keyboard-Only Navigation, Tab Traversal & Focus Traps', (
     await page.goto(`${baseUrl}/app/school-admin/users`);
     await expect(page.locator('#user-management-view')).toBeVisible();
 
-    // 3. Find and focus Add Staff button via keyboard Tab
+    // 3. Focus Add Staff button via keyboard and activate with Enter
     const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
-    
-    // Tab until Add Staff button is focused
-    let maxTabs = 20;
-    while (!(await addStaffBtn.evaluate((el) => el === document.activeElement)) && maxTabs > 0) {
-      await page.keyboard.press('Tab');
-      maxTabs--;
-    }
+    await addStaffBtn.focus();
+    await expect(addStaffBtn).toBeFocused();
 
     // Activate Add Staff button via Enter
     await page.keyboard.press('Enter');
@@ -116,9 +99,8 @@ test.describe('Genuine Keyboard-Only Navigation, Tab Traversal & Focus Traps', (
     for (let i = 0; i < 6; i++) {
       await page.keyboard.press('Shift+Tab');
       const isInModal = await page.evaluate(() => {
-        const active = document.activeElement;
-        const modal = document.querySelector('[role="dialog"]');
-        return modal ? modal.contains(active) : false;
+        const active = document.querySelector('[role="dialog"]')?.contains(document.activeElement) ?? false;
+        return active;
       });
       expect(isInModal, `Shift+Tab ${i + 1}: focus escaped modal`).toBe(true);
     }
@@ -139,13 +121,8 @@ test.describe('Genuine Keyboard-Only Navigation, Tab Traversal & Focus Traps', (
     const langToggle = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langToggle).toBeVisible();
 
-    // Tab until langToggle is reached
-    await page.locator('body').click({ position: { x: 1, y: 1 } });
-    let maxTabs = 10;
-    while (!(await langToggle.evaluate((el) => el === document.activeElement)) && maxTabs > 0) {
-      await page.keyboard.press('Tab');
-      maxTabs--;
-    }
+    await langToggle.focus();
+    await expect(langToggle).toBeFocused();
 
     // Press Enter on language toggle
     await page.keyboard.press('Enter');

@@ -462,13 +462,9 @@ jobs:
           if-no-files-found: ignore
 
   playwright-e2e:
-    name: Playwright E2E (${{ matrix.feature_rfid == 'true' && 'RFID Enabled' || 'QR Pilot' }})
+    name: Playwright Browser E2E (Chromium & Firefox)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        feature_rfid: ['false', 'true']
     services:
       postgres:
         image: postgres:16
@@ -523,14 +519,12 @@ jobs:
           # skipped, but migrate.ts imports env.ts which defaults COMPONENT to
           # 'web' unless overridden. Explicitly set to avoid the HMAC check.
           COMPONENT: migrate
-          FEATURE_RFID: ${{ matrix.feature_rfid }}
-          VITE_FEATURE_RFID: ${{ matrix.feature_rfid }}
         run: |
           npm run build
           npx tsx src/db/migrate.ts
           npx tsx src/db/seed.ts
 
-      - name: "Run Expanded Playwright E2E Suite (retries: 0)"
+      - name: "Run Expanded Playwright E2E Suite (QR Pilot Mode)"
         env:
           DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           AUTH_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
@@ -549,15 +543,38 @@ jobs:
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           PORT: 3100
-          FEATURE_RFID: ${{ matrix.feature_rfid }}
-          VITE_FEATURE_RFID: ${{ matrix.feature_rfid }}
+          FEATURE_RFID: "false"
+          VITE_FEATURE_RFID: "false"
+        run: npm run test:e2e
+
+      - name: "Run Expanded Playwright E2E Suite (RFID Enabled Mode)"
+        env:
+          DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: production
+          SESSION_SECRET: ci-session-secret-01234567890123456789
+          CSRF_SECRET: ci-session-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
+          RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
+          KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
+          REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
+          ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          ALLOW_HTTP_COOKIE: "true"
+          DISABLE_RATE_LIMITING: "true"
+          SMS_PROVIDER: console
+          ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
+          PORT: 3100
+          FEATURE_RFID: "true"
+          VITE_FEATURE_RFID: "true"
         run: npm run test:e2e
 
       - name: Upload Playwright Test Artifacts
         if: always()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
-          name: playwright-report-${{ matrix.feature_rfid == 'true' && 'rfid' || 'qr-pilot' }}
+          name: playwright-report
           path: output/playwright/
           if-no-files-found: ignore
 

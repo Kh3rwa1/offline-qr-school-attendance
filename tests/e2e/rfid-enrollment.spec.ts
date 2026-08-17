@@ -15,7 +15,7 @@ test.describe('RFID Card Enrollment E2E Suite', () => {
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
     // 2. Navigate to Card Personalization & Enrollment
-    await page.goto(`${baseUrl}/app/rfid-operator/enrollment`);
+    await page.goto(`${baseUrl}/app/rfid/enrollment`);
     await expect(page.locator('#enrollment-operations-view')).toBeVisible();
 
     // 3. Search for student in registry

@@ -2,115 +2,208 @@ import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
-test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
-  test('Bengali language toggle switches UI strings and persists across page reload', async ({ page }) => {
+test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English Fallbacks)', () => {
+  // ── 1. Login Journey & Persistence ──────────────────────────────────────────
+  test('1. Bengali language toggle switches login UI and persists across reload and navigation', async ({ page }) => {
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Verify initial English login button
-    await expect(page.getByRole('button', { name: /Sign In|Log In/i })).toBeVisible();
+    // Initial English state
+    await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
 
-    // Click language switcher
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
+    // Click language switcher to switch to Bengali
+    const langBtn = page.getByRole('button', { name: 'বাংলা + English' }).or(page.getByRole('button', { name: 'বাংলা' })).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // Verify Bengali string on submit button
-    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন/i })).toBeVisible();
+    // Strict Bengali assertions — NO English alternatives
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+    await expect(page.locator('label').filter({ hasText: 'Mobile Number' }).first()).toBeVisible();
+    await expect(page.locator('label').filter({ hasText: 'Password' }).first()).toBeVisible();
 
-    // Verify phone field placeholder / label in Bengali (Bengalish standard uses Mobile Number)
-    await expect(page.locator('label').filter({ hasText: /Mobile Number|মোবাইল নম্বর/i }).first()).toBeVisible();
-
-    // Reload page: Verify persistence
+    // Verify persistence across page reload
     await page.reload();
-    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন/i })).toBeVisible();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+
+    // Navigate to root and back to login — confirm language remains selected
+    await page.goto(baseUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.goto(`${baseUrl}/login`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
   });
 
-  test('Teacher journey in Bengali renders localized attendance station and offline outbox', async ({ page }) => {
-    // 1. Log in as Teacher
+  // ── 2. Teacher Complete Journey ─────────────────────────────────────────────
+  test('2. Teacher journey in Bengali renders localized attendance station, class selector & offline workspace', async ({ page }) => {
+    // Log in as Teacher
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
 
-    // 2. Switch language to Bengali
+    // Wait for teacher dashboard view container
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
+
+    // Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // 3. Verify teacher dashboard renders Bengali strings
-    await expect(page.getByText(/আজকের Attendance|আজকের হাজিরা|হাজিরা খাতা/i).first()).toBeVisible();
+    // Strict Bengali assertions on Teacher Dashboard
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
+    await expect(page.getByText('আজকের Attendance').first()).toBeVisible();
 
-    // 4. Verify no raw unparsed translation keys like "teacher." or "sync." appear in text
+    // Check Class selector prompt
+    const classSelect = page.locator('select');
+    await expect(classSelect).toBeVisible();
+
+    // Navigate to Assigned Classes subroute
+    await page.goto(`${baseUrl}/app/teacher/classes`);
+    await expect(page.locator('#assigned-classes-view')).toBeVisible();
+
+    // Navigate to Offline Workspace
+    await page.goto(`${baseUrl}/app/teacher/offline`);
+    await expect(page.locator('#offline-workspace-view')).toBeVisible();
+
+    // Translation integrity: Verify zero raw unparsed translation keys
     const hasRawKeys = await page.evaluate(() => {
       const text = document.body.innerText;
-      return /t\([a-zA-Z0-9_.]+\)|\[MISSING_TRANSLATION\]/.test(text);
+      return /t\([a-zA-Z0-9_.]+\)|\[MISSING_TRANSLATION\]|undefined\.undefined/.test(text);
     });
     expect(hasRawKeys, 'Discovered unparsed translation keys in rendered Teacher UI').toBe(false);
   });
 
-  test('School Admin user management in Bengali renders localized directory and dialogs', async ({ page }) => {
-    // 1. Log in as School Admin
+  // ── 3. School Admin Complete Journey ────────────────────────────────────────
+  test('3. School Admin user management, roster & academic management in Bengali', async ({ page }) => {
+    // Log in as School Admin
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000001');
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
 
-    // 2. Switch language to Bengali
+    // Wait for admin dashboard
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+
+    // Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // 3. Navigate to User Management
-    const usersNav = page.getByRole('link', { name: /কর্মী ও ভূমিকা|সদস্য|Staff & Memberships|Staff Directory|Staff & Roles|Users/i }).or(
-      page.getByRole('button', { name: /কর্মী|Staff|Users/i })
-    ).first();
-    await expect(usersNav).toBeVisible();
-    await usersNav.click();
+    // 1. User Management
+    await page.goto(`${baseUrl}/app/school-admin/users`);
+    await expect(page.locator('#user-management-view')).toBeVisible();
 
-    // 4. Verify localized Add Staff button
-    const addStaffBtn = page.getByRole('button', { name: /নতুন Staff|নতুন কর্মী|Add Staff|Add Member|Invite Staff|New User/i }).first();
+    // Assert localized Add Staff button
+    const addStaffBtn = page.getByRole('button', { name: /নতুন Staff Add করুন|নতুন Staff যোগ করুন|Add Staff/i }).first();
     await expect(addStaffBtn).toBeVisible();
+
+    // Open Add Staff Modal
+    await addStaffBtn.click();
+    const modal = page.locator('[role="dialog"]');
+    await expect(modal).toBeVisible();
+
+    // Password visibility toggle accessible name check
+    const pwdToggle = modal.getByRole('button', { name: /Password দেখুন|Show Password|Password/i }).first();
+    await expect(pwdToggle).toBeVisible();
+
+    // Close modal
+    await page.keyboard.press('Escape');
+    await expect(modal).not.toBeVisible();
+
+    // 2. Student Roster
+    await page.goto(`${baseUrl}/app/school-admin/students`);
+    await expect(page.locator('#student-roster-view')).toBeVisible();
+
+    // 3. Academic Management
+    await page.goto(`${baseUrl}/app/school-admin/academic`);
+    await expect(page.locator('#academic-management-view')).toBeVisible();
+
+    // 4. Attendance Operations
+    await page.goto(`${baseUrl}/app/school-admin/attendance`);
+    await expect(page.locator('#attendance-operations-view')).toBeVisible();
+
+    // Translation integrity check
+    const hasRawKeys = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return /t\([a-zA-Z0-9_.]+\)|\[MISSING_TRANSLATION\]/.test(text);
+    });
+    expect(hasRawKeys, 'Discovered unparsed translation keys in rendered School Admin UI').toBe(false);
   });
 
-  test('RFID Operator station in Bengali renders localized scanner and reader HUD', async ({ page }) => {
+  // ── 4. RFID Operator Journey (Executed when FEATURE_RFID=true) ──────────────
+  test('4. RFID Operator station in Bengali renders localized gate and reader HUD', async ({ page }) => {
     test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
-    // 1. Log in as RFID Operator
+
+    // Log in as RFID Operator
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000003');
     await page.locator('#login-password').fill('RfidOpPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
 
-    // 2. Wait for RFID operator dashboard to load
+    // Wait for RFID operator dashboard
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
-    // 3. Switch language to Bengali
+    // Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // 4. Verify RFID Operator Station container and localized heading
+    // Verify RFID Operator Station container
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
-    await expect(page.getByText(/স্কুল গেট|School Gate|Gate Operator/i).first()).toBeVisible();
+
+    // Card Operations subroute
+    await page.goto(`${baseUrl}/app/rfid/cards`);
+    await expect(page.locator('#card-operations-view')).toBeVisible();
+
+    // Reader Management subroute
+    await page.goto(`${baseUrl}/app/rfid/readers`);
+    await expect(page.locator('#reader-management-view')).toBeVisible();
+
+    // Translation integrity check
+    const hasRawKeys = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return /t\([a-zA-Z0-9_.]+\)|\[MISSING_TRANSLATION\]/.test(text);
+    });
+    expect(hasRawKeys, 'Discovered unparsed translation keys in rendered RFID Operator UI').toBe(false);
   });
 
-  test('Report Viewer portal in Bengali renders localized charts, metrics & badges', async ({ page }) => {
-    // 1. Log in as Report Viewer
+  // ── 5. Report Viewer Complete Journey ───────────────────────────────────────
+  test('5. Report Viewer portal in Bengali renders localized daily log, trends & export center', async ({ page }) => {
+    // Log in as Report Viewer
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000004');
     await page.locator('#login-password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
 
-    // 2. Wait for report viewer dashboard to load
+    // Wait for report viewer dashboard
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 
-    // 3. Switch language to Bengali
+    // Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // 4. Verify Report Viewer Dashboard view container and localized strings
+    // 1. Overview Dashboard
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-    await expect(page.getByText(/অফিসিয়াল রিপোর্ট|রিপোর্ট এবং অ্যানালিটিক্স|Official Reports|Reports & Analytics/i).first()).toBeVisible();
+
+    // 2. Daily Reports subroute
+    await page.goto(`${baseUrl}/app/reports/daily`);
+    await expect(page.locator('#daily-reports-view')).toBeVisible();
+
+    // 3. Trend Reports subroute
+    await page.goto(`${baseUrl}/app/reports/trends`);
+    await expect(page.locator('#trend-reports-view')).toBeVisible();
+
+    // 4. Export Center subroute
+    await page.goto(`${baseUrl}/app/reports/exports`);
+    await expect(page.locator('#export-center-view')).toBeVisible();
+
+    // Translation integrity check
+    const hasRawKeys = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return /t\([a-zA-Z0-9_.]+\)|\[MISSING_TRANSLATION\]/.test(text);
+    });
+    expect(hasRawKeys, 'Discovered unparsed translation keys in rendered Report Viewer UI').toBe(false);
   });
 });

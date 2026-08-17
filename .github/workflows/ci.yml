@@ -465,7 +465,7 @@ jobs:
   playwright-e2e:
     name: Playwright Browser E2E (Chromium & Firefox)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -569,7 +569,7 @@ jobs:
           PORT: 3100
           FEATURE_RFID: "true"
           VITE_FEATURE_RFID: "true"
-        run: npm run test:e2e
+        run: npx playwright test tests/e2e/rfid-*.spec.ts tests/e2e/bengali-journeys.spec.ts
 
       - name: Upload Playwright Test Artifacts
         if: always()

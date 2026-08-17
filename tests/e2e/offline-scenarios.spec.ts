@@ -3,6 +3,14 @@ import { test, expect, request as playwrightRequest } from '@playwright/test';
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
 test.describe('Expanded E2E Offline & Adversarial QR Attendance Suite', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('app_language', 'en');
+      } catch {}
+    });
+  });
+
   test('1. Camera permission grant & deny browser context testing', async ({ page, context }) => {
     if (context.browser()?.browserType().name() === 'chromium') {
       await context.grantPermissions(['camera']);

@@ -28,7 +28,7 @@ export function validateKubernetesManifests(k8sDir = path.join(process.cwd(), 'k
     const schemasDir = path.join(k8sDir, 'schemas');
     const kubeconformCmd = `kubeconform -summary -strict -schema-location default -schema-location '${schemasDir}/{{.ResourceKind}}_{{.Group}}_{{.ResourceAPIVersion}}.json' -kubernetes-version 1.28.0 ${k8sDir}/`;
     console.log(`Running kubeconform: ${kubeconformCmd}`);
-    const kubeOutput = execSync(kubeconformCmd, { encoding: 'utf-8' });
+    const kubeOutput = execSync(kubeconformCmd, { encoding: 'utf-8', timeout: 15000 });
     console.log(kubeOutput);
     if (kubeOutput.includes('Skipped: 0') === false && kubeOutput.includes('Summary:') && !kubeOutput.includes('Skipped: 0')) {
       issues.push({

@@ -192,7 +192,7 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Language Toggle with Accessible Name & Select element for Playwright / screen readers */}
+          {/* Language Toggle with Accessible Buttons & Select */}
           <div className="flex items-center bg-surface p-1 rounded-2xl border border-line shadow-2xs relative">
             <select
               aria-label="Select Language"
@@ -200,14 +200,13 @@ export const LoginPage: React.FC = () => {
               onChange={(e) => setLanguage(e.target.value as any)}
               className="sr-only"
             >
-              <option value="en">en</option>
-              <option value="bn">bn</option>
-              <option value="hi">hi</option>
+              <option value="en">English</option>
+              <option value="bn">বাংলা</option>
             </select>
             <button
               type="button"
               onClick={() => setLanguage('bn')}
-              aria-label={t('bengaliLabel')}
+              aria-label="বাংলা"
               className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'bn'
                   ? 'bg-forest-700 text-white shadow-2xs'
@@ -218,20 +217,8 @@ export const LoginPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setLanguage('hi')}
-              aria-label="Hinglish में बदलें"
-              className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
-                language === 'hi'
-                  ? 'bg-forest-700 text-white shadow-2xs'
-                  : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              हिन्दी
-            </button>
-            <button
-              type="button"
               onClick={() => setLanguage('en')}
-              aria-label={t('englishLabel')}
+              aria-label="English"
               className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'en'
                   ? 'bg-forest-700 text-white shadow-2xs'

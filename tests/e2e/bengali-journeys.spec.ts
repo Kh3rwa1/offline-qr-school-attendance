@@ -158,7 +158,7 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
 
     // Reader Management subroute
     await page.goto(`${baseUrl}/app/rfid/readers`);
-    await expect(page.locator('#reader-management-view')).toBeVisible();
+    await expect(page.locator('#reader-operations-view')).toBeVisible();
 
     // Translation integrity check
     const hasRawKeys = await page.evaluate(() => {

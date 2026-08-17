@@ -133,7 +133,7 @@ test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', (
 
     // Readers subroute
     await page.goto(`${baseUrl}/app/rfid/readers`);
-    await expect(page.locator('#reader-management-view')).toBeVisible();
+    await expect(page.locator('#reader-operations-view')).toBeVisible();
     await assertAxeClean(page, 'RFID Reader Management');
   });
 

@@ -193,7 +193,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
 
         // Reader Management
         await page.goto(`${baseUrl}/app/rfid/readers`);
-        await expect(page.locator('#reader-management-view')).toBeVisible();
+        await expect(page.locator('#reader-operations-view')).toBeVisible();
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
           contextName: `RFID Reader Management [${vp.name}]`,

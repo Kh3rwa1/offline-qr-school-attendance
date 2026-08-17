@@ -16,7 +16,7 @@ test.describe('RFID Reader Management E2E Suite', () => {
 
     // 2. Navigate to Readers Console
     await page.goto(`${baseUrl}/app/rfid/readers`);
-    await expect(page.locator('#reader-management-view')).toBeVisible();
+    await expect(page.locator('#reader-operations-view')).toBeVisible();
 
     // 3. Open Provision Reader Modal
     const provisionBtn = page.getByRole('button', { name: /Add Gate Device|Gate Device Add করুন|Add Gate Box|Gate Device/i }).first();

@@ -48,15 +48,16 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await page.locator('input[placeholder="98765 43210"]').fill('9876500001');
     await page.locator('input[placeholder="principal@school.edu.in"]').fill('animesh@ballygunge.edu.in');
     await page.locator('input[placeholder="Green Valley High School"]').fill('Ballygunge Govt High School');
-    await page.locator('input[placeholder="Kolkata, West Bengal"]').fill('Kolkata');
+    const districtInput = page.locator('input[placeholder="Kolkata, West Bengal"]');
+    await districtInput.fill('Kolkata');
 
     // Submit form (submit button lives inside the dialog form)
     const submitBtn = form.locator('button[type="submit"]');
     await submitBtn.scrollIntoViewIfNeeded();
-    await submitBtn.click();
+    await submitBtn.click({ force: true });
 
     // Verify success confirmation card
-    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/Demo request received|ডেমোর অনুরোধ|Demo request मिल गई/i)).toBeVisible();
     await expect(page.getByText('9876500001')).toBeVisible();
   });

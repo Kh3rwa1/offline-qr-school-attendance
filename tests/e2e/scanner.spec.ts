@@ -280,6 +280,12 @@ test('camera permission denied renders bilingual error HUD and interactive retry
   await phoneBackup.locator('summary').click();
   await expect(page.getByTestId('camera-hud')).toBeVisible();
 
+  // If Start Camera button is present, click it to initiate stream request
+  const startCamBtn = page.getByRole('button', { name: /Start Camera|ক্যামেরা শুরু করুন/i });
+  if (await startCamBtn.isVisible()) {
+    await startCamBtn.click();
+  }
+
   // 1. Assert camera denied error overlay is displayed
   await expect(page.getByText(/Camera permission denied|Camera Permission পাওয়া যায়নি/i).first()).toBeVisible({ timeout: 15000 });
 

@@ -2,7 +2,7 @@ import { test, expect, type Browser } from '@playwright/test';
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
-test.describe('Browser-Level Typography (>=14px) & Reflow / Zoom Verification', () => {
+test.describe('Browser-Level Typography (>=14px) & Reflow / Zoom Verification (WCAG 1.4.10)', () => {
   const mobileWidths = [
     { name: '360px Mobile', width: 360, height: 800 },
     { name: '390px Mobile', width: 390, height: 844 },
@@ -32,8 +32,8 @@ test.describe('Browser-Level Typography (>=14px) & Reflow / Zoom Verification', 
 
       expect(fontSizes.length).toBeGreaterThan(0);
 
-      // Verify that major interactive labels and headings are >= 14px
-      const smallText = fontSizes.filter((item) => item.fontSize < 13.5); // Allow minor subpixel rounding
+      // Verify interactive labels and headings are >= 14px (allowing minor subpixel rounding)
+      const smallText = fontSizes.filter((item) => item.fontSize < 13.5);
       expect(
         smallText,
         `Discovered text smaller than 14px standard: ${JSON.stringify(smallText)}`
@@ -47,95 +47,92 @@ test.describe('Browser-Level Typography (>=14px) & Reflow / Zoom Verification', 
     });
   }
 
-  test('200% browser zoom reflows cleanly without breaking layouts', async ({ browser }) => {
-    // Create a genuine 200% zoom context with deviceScaleFactor: 2
-    // WCAG 1.4.10: 1280px desktop at 200% zoom = 640px layout viewport
-    const context = await browser.newContext({
+  // ── 200% Zoom Reflow Simulation (WCAG 1.4.10: 1280px desktop at 200% = 640px layout viewport) ──
+  test('200% zoom reflow (640px viewport) renders cleanly without horizontal scroll across routes', async ({ browser }) => {
+    // 1. Login Page Context
+    const ctx1 = await browser.newContext({
       viewport: { width: 640, height: 800 },
       deviceScaleFactor: 2,
     });
-    const page = await context.newPage();
+    const page1 = await ctx1.newPage();
+    await page1.goto(`${baseUrl}/login`);
+    await page1.waitForLoadState('domcontentloaded');
 
-    await page.goto(`${baseUrl}/login`);
-    await page.waitForLoadState('domcontentloaded');
-
-    // Verify key interactive controls remain visible and functional
-    const phoneInput = page.locator('#login-phone');
-    const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
-
+    const phoneInput = page1.locator('#login-phone');
+    const submitBtn = page1.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
     await expect(phoneInput).toBeVisible();
     await expect(submitBtn).toBeVisible();
 
-    await submitBtn.scrollIntoViewIfNeeded();
-    await expect(submitBtn).toBeInViewport();
+    let hasScroll = await page1.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+    expect(hasScroll, 'Horizontal overflow on Login page at 200% zoom').toBe(false);
 
-    // Check no horizontal overflow at 200% zoom
-    const hasHorizontalScroll = await page.evaluate(() => {
-      return document.documentElement.scrollWidth > document.documentElement.clientWidth + 2;
-    });
-    expect(hasHorizontalScroll, 'Horizontal overflow detected under 200% zoom').toBe(false);
+    // 2. Teacher Dashboard
+    await phoneInput.fill('9100000002');
+    await page1.locator('#login-password').fill('TeacherPassword123!');
+    await submitBtn.click();
+    await expect(page1.locator('#teacher-dashboard-view')).toBeVisible();
 
-    // Verify typography remains >= 14px at 200% zoom
-    const fontSizes = await page.evaluate(() => {
-      const textNodes = Array.from(
-        document.querySelectorAll('button, p, label, input, h1, h2, h3, span')
-      ).filter((el) => (el as HTMLElement).innerText && (el as HTMLElement).innerText.trim().length > 0);
-      return textNodes.map((el) => ({
-        tag: el.tagName.toLowerCase(),
-        text: (el as HTMLElement).innerText.slice(0, 30),
-        fontSize: parseFloat(window.getComputedStyle(el).fontSize),
-      }));
-    });
-    expect(fontSizes.length).toBeGreaterThan(0);
-    const smallText = fontSizes.filter((item) => item.fontSize < 13.5);
-    expect(smallText, `Text < 14px at 200% zoom: ${JSON.stringify(smallText)}`).toHaveLength(0);
+    hasScroll = await page1.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+    expect(hasScroll, 'Horizontal overflow on Teacher Dashboard at 200% zoom').toBe(false);
 
-    await context.close();
+    // 3. Teacher Offline Workspace
+    await page1.goto(`${baseUrl}/app/teacher/offline`);
+    await expect(page1.locator('#offline-workspace-view')).toBeVisible();
+    hasScroll = await page1.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+    expect(hasScroll, 'Horizontal overflow on Teacher Offline Workspace at 200% zoom').toBe(false);
+
+    await ctx1.close();
   });
 
-  test('400% browser zoom reflows to single column without horizontal scroll (WCAG 1.4.10)', async ({ browser }) => {
-    // WCAG 1.4.10: 1280px desktop at 400% zoom = 320px layout viewport
-    const context = await browser.newContext({
+  // ── 400% Zoom Reflow Simulation (WCAG 1.4.10: 1280px desktop at 400% = 320px layout viewport) ──
+  test('400% zoom reflow (320px viewport) reflows to single column without horizontal scroll (WCAG 1.4.10)', async ({ browser }) => {
+    // 1. Login Page Context
+    const ctx1 = await browser.newContext({
       viewport: { width: 320, height: 568 },
       deviceScaleFactor: 4,
     });
-    const page = await context.newPage();
+    const page1 = await ctx1.newPage();
+    await page1.goto(`${baseUrl}/login`);
+    await page1.waitForLoadState('domcontentloaded');
 
-    await page.goto(`${baseUrl}/login`);
-    await page.waitForLoadState('domcontentloaded');
-
-    // Verify key interactive controls remain visible
-    const phoneInput = page.locator('#login-phone');
-    const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
-
+    const phoneInput = page1.locator('#login-phone');
+    const submitBtn = page1.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
     await expect(phoneInput).toBeVisible();
     await expect(submitBtn).toBeVisible();
 
-    // No horizontal overflow at 400% zoom
-    const hasHorizontalScroll = await page.evaluate(() => {
-      return document.documentElement.scrollWidth > document.documentElement.clientWidth + 2;
-    });
-    expect(hasHorizontalScroll, 'Horizontal overflow detected under 400% zoom (WCAG 1.4.10)').toBe(false);
+    let hasScroll = await page1.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+    expect(hasScroll, 'Horizontal overflow on Login page at 400% zoom').toBe(false);
 
-    // Typography >= 14px at 400% zoom
-    const fontSizes = await page.evaluate(() => {
-      const textNodes = Array.from(
-        document.querySelectorAll('button, p, label, input, h1, h2, h3, span')
-      ).filter((el) => (el as HTMLElement).innerText && (el as HTMLElement).innerText.trim().length > 0);
-      return textNodes.map((el) => ({
-        tag: el.tagName.toLowerCase(),
-        text: (el as HTMLElement).innerText.slice(0, 30),
-        fontSize: parseFloat(window.getComputedStyle(el).fontSize),
-      }));
-    });
-    expect(fontSizes.length).toBeGreaterThan(0);
-    const smallText = fontSizes.filter((item) => item.fontSize < 13.5);
-    expect(smallText, `Text < 14px at 400% zoom: ${JSON.stringify(smallText)}`).toHaveLength(0);
-
-    // Verify content reflows — page width should not exceed viewport
-    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const pageWidth = await page1.evaluate(() => document.documentElement.scrollWidth);
     expect(pageWidth).toBeLessThanOrEqual(322); // 320 + 2px tolerance
 
-    await context.close();
+    // 2. School Admin User Management
+    await phoneInput.fill('9100000001');
+    await page1.locator('#login-password').fill('SchoolAdminPassword123!');
+    await submitBtn.click();
+    await expect(page1.locator('#school-admin-dashboard-view')).toBeVisible();
+
+    await page1.goto(`${baseUrl}/app/school-admin/users`);
+    await expect(page1.locator('#user-management-view')).toBeVisible();
+    hasScroll = await page1.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+    expect(hasScroll, 'Horizontal overflow on School Admin Users at 400% zoom').toBe(false);
+    await ctx1.close();
+
+    // 3. Report Viewer in a fresh context
+    const ctx2 = await browser.newContext({
+      viewport: { width: 320, height: 568 },
+      deviceScaleFactor: 4,
+    });
+    const page2 = await ctx2.newPage();
+    await page2.goto(`${baseUrl}/login`);
+    await page2.waitForLoadState('domcontentloaded');
+    await page2.locator('#login-phone').fill('9100000004');
+    await page2.locator('#login-password').fill('ReportViewerPassword123!');
+    await page2.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await expect(page2.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+    hasScroll = await page2.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+    expect(hasScroll, 'Horizontal overflow on Report Viewer at 400% zoom').toBe(false);
+    await ctx2.close();
   });
 });

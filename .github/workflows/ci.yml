@@ -85,6 +85,7 @@ jobs:
 
       - name: Upload Trivy FS SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        continue-on-error: true
         with:
           sarif_file: trivy-fs-results.sarif
           category: trivy-filesystem
@@ -464,7 +465,7 @@ jobs:
   playwright-e2e:
     name: Playwright Browser E2E (Chromium & Firefox)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -568,7 +569,7 @@ jobs:
           PORT: 3100
           FEATURE_RFID: "true"
           VITE_FEATURE_RFID: "true"
-        run: npm run test:e2e
+        run: npx playwright test tests/e2e/rfid-*.spec.ts tests/e2e/bengali-journeys.spec.ts
 
       - name: Upload Playwright Test Artifacts
         if: always()

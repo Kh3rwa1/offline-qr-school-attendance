@@ -15,7 +15,7 @@ test.describe('RFID Reader Management E2E Suite', () => {
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
     // 2. Navigate to Readers Console
-    await page.goto(`${baseUrl}/app/rfid-operator/readers`);
+    await page.goto(`${baseUrl}/app/rfid/readers`);
     await expect(page.locator('#reader-operations-view')).toBeVisible();
 
     // 3. Open Provision Reader Modal

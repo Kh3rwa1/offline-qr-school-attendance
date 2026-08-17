@@ -242,12 +242,20 @@ test('camera permission denied renders bilingual error HUD and interactive retry
       const err = new DOMException('Camera permission denied', 'NotAllowedError');
       throw err;
     };
-    if (!navigator.mediaDevices) {
-      (navigator as any).mediaDevices = {};
-    }
-    navigator.mediaDevices.getUserMedia = rejectCamera;
-    if (typeof window !== 'undefined' && (window as any).MediaDevices?.prototype) {
-      (window as any).MediaDevices.prototype.getUserMedia = rejectCamera;
+    try {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        get: () => ({
+          getUserMedia: rejectCamera,
+          enumerateDevices: async () => [],
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }),
+        configurable: true,
+      });
+    } catch {
+      if (navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia = rejectCamera;
+      }
     }
   });
 

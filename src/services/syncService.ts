@@ -284,6 +284,15 @@ export async function syncAttendanceEvents(params: {
     serverSessionIds.set(clientSessionId, serverSession.id);
   }
 
+  // Device clocks are not trusted for record times: a phone clock running ahead
+  // would otherwise write future-dated attendance times into reports and
+  // last-seen ordering. Events within a 10-minute grace window pass as-is;
+  // beyond it the record time is clamped to the server clock and the correction
+  // is counted in the batch audit trail. Offline-delayed PAST timestamps are
+  // legitimate (morning attendance synced at noon) and are never modified.
+  const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
+  let clockSkewCorrectedCount = 0;
+
   for (const event of events) {
     let resolvedSessionId: string | undefined;
     try {
@@ -292,6 +301,15 @@ export async function syncAttendanceEvents(params: {
         ? serverSessionIds.get(clientSessionId)
         : event.sessionId;
       if (!resolvedSessionId || !isUuid(resolvedSessionId)) throw new Error('SESSION_NOT_FOUND');
+
+      // Client-clock skew guard (future direction only)
+      let clientTimestamp = event.clientTimestamp;
+      const clientTimeMs = Date.parse(clientTimestamp);
+      const serverNowMs = Date.now();
+      if (Number.isFinite(clientTimeMs) && clientTimeMs - serverNowMs > MAX_FUTURE_SKEW_MS) {
+        clientTimestamp = new Date(serverNowMs).toISOString();
+        clockSkewCorrectedCount++;
+      }
 
       // 5. Process event (processQRCode handles teacher assignment authorization & session-scoped idempotency)
       const processRes = await processQRCode({
@@ -303,7 +321,7 @@ export async function syncAttendanceEvents(params: {
         rawToken: event.rawToken,
         studentId: event.studentId,
         statusValue: event.statusValue || 'PRESENT',
-        clientTimestamp: event.clientTimestamp,
+        clientTimestamp,
         deviceId,
         source: event.source || 'CAMERA',
         metadata: event.metadata,
@@ -366,6 +384,7 @@ export async function syncAttendanceEvents(params: {
       acceptedCount: results.filter((r) => r.status === 'ACCEPTED').length,
       duplicateCount: results.filter((r) => r.status === 'ALREADY_PROCESSED').length,
       rejectedCount: results.filter((r) => r.status === 'REJECTED').length,
+      clockSkewCorrectedCount,
     },
   });
 

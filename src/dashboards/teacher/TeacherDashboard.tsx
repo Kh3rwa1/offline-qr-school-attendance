@@ -164,7 +164,7 @@ export const TeacherDashboard: React.FC = () => {
     void refreshOutbox();
   }, [loadClasses, refreshOutbox]);
 
-  // Fetch Live Today Gate Attendance & Poll every 3 seconds
+  // Fetch Live Today Gate Attendance (adaptive polling)
   const fetchTodayGateData = useCallback(async () => {
     if (!activeSchoolId || !selectedClassId) return;
 
@@ -271,13 +271,33 @@ export const TeacherDashboard: React.FC = () => {
     }
   }, [activeSchoolId, selectedClassId, user]);
 
+  // Adaptive polling: 4s while the session is live, 30s once finalized, and
+  // paused entirely while the browser tab is hidden (refreshing on return).
+  // This keeps the register live during the morning rush without generating
+  // avoidable server load for the rest of the day.
   useEffect(() => {
     void fetchTodayGateData();
+
+    const isFinalized = session?.status === 'FINALIZED';
+    const intervalMs = isFinalized ? 30000 : 4000;
+
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       void fetchTodayGateData();
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [fetchTodayGateData]);
+    }, intervalMs);
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void fetchTodayGateData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchTodayGateData, session?.status]);
 
   // Handle Download Class Roster
   const handleDownloadRoster = async () => {
@@ -689,7 +709,7 @@ export const TeacherDashboard: React.FC = () => {
             {t('navAttendanceRegister')}
           </h1>
           <p className="text-sm text-ink-soft mt-1">
-            {t('gateAttendanceRecords')} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
+            {t('gateAttendanceRecords')} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
           </p>
         </div>
 
@@ -896,7 +916,7 @@ export const TeacherDashboard: React.FC = () => {
                         {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                       </h4>
                       <span className="text-sm text-ink-muted font-mono">
-                        {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', {
+                        {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN', {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
@@ -933,8 +953,8 @@ export const TeacherDashboard: React.FC = () => {
             {missingStudents.length === 0 ? (
               <div className="h-full flex items-center justify-center text-center p-6">
                 <CheckCircle2 className="w-12 h-12 text-forest-700 dark:text-forest-600 mx-auto mb-2" />
-                <h4 className="text-base font-extrabold text-ink font-display">{t('statusPresent')}</h4>
-                <p className="text-sm text-ink-soft mt-1">{t('statusPresent')}</p>
+                <h4 className="text-base font-extrabold text-ink font-display">{t('noMissingStudents')}</h4>
+                <p className="text-sm text-ink-soft mt-1">{t('attendanceReady')}</p>
               </div>
             ) : (
               missingStudents.map((st) => (

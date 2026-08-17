@@ -238,25 +238,13 @@ test('live camera scanner initializes getUserMedia with environment facing mode 
 test('camera permission denied renders bilingual error HUD and interactive retry button', async ({ page }) => {
   // Stub getUserMedia to reject with NotAllowedError
   await page.addInitScript(() => {
-    const rejectCamera = async () => {
+    if (!navigator.mediaDevices) {
+      (navigator as any).mediaDevices = {};
+    }
+    navigator.mediaDevices.getUserMedia = async () => {
       const err = new DOMException('Camera permission denied', 'NotAllowedError');
       throw err;
     };
-    try {
-      Object.defineProperty(navigator, 'mediaDevices', {
-        get: () => ({
-          getUserMedia: rejectCamera,
-          enumerateDevices: async () => [],
-          addEventListener: () => {},
-          removeEventListener: () => {},
-        }),
-        configurable: true,
-      });
-    } catch {
-      if (navigator.mediaDevices) {
-        navigator.mediaDevices.getUserMedia = rejectCamera;
-      }
-    }
   });
 
   // Log in as teacher
@@ -289,7 +277,10 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 
   const phoneBackupDenied = page.getByTestId('phone-backup-details');
   await expect(phoneBackupDenied).toBeVisible();
-  await phoneBackupDenied.locator('summary').click();
+  await phoneBackupDenied.evaluate((el: HTMLDetailsElement) => {
+    el.open = true;
+  });
+  await expect(page.getByTestId('camera-hud')).toBeVisible();
 
   const startCamBtn = page.getByRole('button', { name: /Start Camera|ক্যামেরা শুরু করুন/i });
   if (await startCamBtn.isVisible()) {

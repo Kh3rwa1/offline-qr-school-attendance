@@ -33,9 +33,11 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
 
   test('2. Public demo request form submits to API and displays verified success confirmation', async ({ page }) => {
     await page.goto(baseUrl);
+    await page.waitForLoadState('domcontentloaded');
 
-    // Click demo request button
-    const demoBtn = page.getByRole('button', { name: /Demo|ডেমো/i }).first();
+    // Click demo request button (use header or hero demo button)
+    const demoBtn = page.getByRole('button', { name: /Book Demo|Demo|ডেমো/i }).first();
+    await expect(demoBtn).toBeVisible();
     await demoBtn.click();
 
     await expect(page.getByTestId('demo-request-form')).toBeVisible();
@@ -48,7 +50,9 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await page.locator('input[placeholder="Kolkata, West Bengal"]').fill('Kolkata');
 
     // Submit form (submit button lives inside the dialog form)
-    await page.getByTestId('demo-request-form').getByRole('button', { name: /Request Demo|ডেমো/i }).click();
+    const submitBtn = page.getByTestId('demo-request-form').getByRole('button', { name: /Request Demo|ডেমো/i });
+    await submitBtn.scrollIntoViewIfNeeded();
+    await submitBtn.click();
 
     // Verify success confirmation card
     await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 10000 });

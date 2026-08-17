@@ -163,6 +163,7 @@ export function hasAnyPermission(role: UserRole | string | undefined, permission
 export function getDefaultRouteForRole(role: UserRole | string | undefined): string {
   const isRfidEnabled =
     (typeof process !== 'undefined' && process.env?.FEATURE_RFID === 'true') ||
+    (typeof window !== 'undefined' && (window as any).__FEATURE_RFID__ === true) ||
     (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_RFID === 'true');
 
   switch (role) {
@@ -353,6 +354,7 @@ export function getNavigationForRole(role: UserRole | string | undefined): Navig
 
   const isRfidEnabled =
     (typeof process !== 'undefined' && process.env?.FEATURE_RFID === 'true') ||
+    (typeof window !== 'undefined' && (window as any).__FEATURE_RFID__ === true) ||
     (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FEATURE_RFID === 'true');
 
   return allNavItems

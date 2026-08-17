@@ -81,12 +81,15 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
-    // 2. Switch language to Bengali
+    // 2. Wait for RFID operator dashboard to load
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
+
+    // 3. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // 3. Verify RFID Operator Station container and heading
+    // 4. Verify RFID Operator Station container and localized heading
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
     await expect(page.getByText(/স্কুল গেট|School Gate|Gate Operator/i).first()).toBeVisible();
   });
@@ -98,12 +101,15 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.locator('#login-password').fill('ReportViewerPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
-    // 2. Switch language to Bengali
+    // 2. Wait for report viewer dashboard to load
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+
+    // 3. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langBtn).toBeVisible();
     await langBtn.click();
 
-    // 3. Verify Report Viewer Dashboard view container and localized strings
+    // 4. Verify Report Viewer Dashboard view container and localized strings
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
     await expect(page.getByText(/অফিসিয়াল রিপোর্ট|রিপোর্ট এবং অ্যানালিটিক্স|Official Reports|Reports & Analytics/i).first()).toBeVisible();
   });

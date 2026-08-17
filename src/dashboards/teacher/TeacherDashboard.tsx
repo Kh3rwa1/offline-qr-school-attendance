@@ -164,7 +164,7 @@ export const TeacherDashboard: React.FC = () => {
     void refreshOutbox();
   }, [loadClasses, refreshOutbox]);
 
-  // Fetch Live Today Gate Attendance & Poll every 3 seconds
+  // Fetch Live Today Gate Attendance (adaptive polling)
   const fetchTodayGateData = useCallback(async () => {
     if (!activeSchoolId || !selectedClassId) return;
 
@@ -271,13 +271,33 @@ export const TeacherDashboard: React.FC = () => {
     }
   }, [activeSchoolId, selectedClassId, user]);
 
+  // Adaptive polling: 4s while the session is live, 30s once finalized, and
+  // paused entirely while the browser tab is hidden (refreshing on return).
+  // This keeps the register live during the morning rush without generating
+  // avoidable server load for the rest of the day.
   useEffect(() => {
     void fetchTodayGateData();
+
+    const isFinalized = session?.status === 'FINALIZED';
+    const intervalMs = isFinalized ? 30000 : 4000;
+
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       void fetchTodayGateData();
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [fetchTodayGateData]);
+    }, intervalMs);
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void fetchTodayGateData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchTodayGateData, session?.status]);
 
   // Handle Download Class Roster
   const handleDownloadRoster = async () => {

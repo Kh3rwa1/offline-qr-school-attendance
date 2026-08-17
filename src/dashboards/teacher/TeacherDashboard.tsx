@@ -689,7 +689,7 @@ export const TeacherDashboard: React.FC = () => {
             {t('navAttendanceRegister')}
           </h1>
           <p className="text-sm text-ink-soft mt-1">
-            {t('gateAttendanceRecords')} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : 'en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
+            {t('gateAttendanceRecords')} • {new Date().toLocaleDateString(language === 'bn' ? 'bn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
           </p>
         </div>
 
@@ -896,7 +896,7 @@ export const TeacherDashboard: React.FC = () => {
                         {language === 'bn' && st.nameBn ? st.nameBn : st.name}
                       </h4>
                       <span className="text-sm text-ink-muted font-mono">
-                        {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : 'en-IN', {
+                        {new Date(st.time).toLocaleTimeString(language === 'bn' ? 'bn-IN' : language === 'hi' ? 'hi-IN' : 'en-IN', {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
@@ -933,8 +933,8 @@ export const TeacherDashboard: React.FC = () => {
             {missingStudents.length === 0 ? (
               <div className="h-full flex items-center justify-center text-center p-6">
                 <CheckCircle2 className="w-12 h-12 text-forest-700 dark:text-forest-600 mx-auto mb-2" />
-                <h4 className="text-base font-extrabold text-ink font-display">{t('statusPresent')}</h4>
-                <p className="text-sm text-ink-soft mt-1">{t('statusPresent')}</p>
+                <h4 className="text-base font-extrabold text-ink font-display">{t('noMissingStudents')}</h4>
+                <p className="text-sm text-ink-soft mt-1">{t('attendanceReady')}</p>
               </div>
             ) : (
               missingStudents.map((st) => (

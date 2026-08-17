@@ -172,6 +172,8 @@ export const AttendanceOperations: React.FC = () => {
 
         <div className="flex items-center gap-3 flex-wrap">
           <input
+            id="attendance-date-filter"
+            aria-label={t('dateLabel')}
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
@@ -404,10 +406,12 @@ export const AttendanceOperations: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-bold text-ink mb-1 font-display">
+                      <label htmlFor="correction-new-status" className="block text-sm font-bold text-ink mb-1 font-display">
                         {t('newStatus')} *
                       </label>
                       <select
+                        id="correction-new-status"
+                        aria-label={t('newStatus')}
                         value={correctionNewStatus}
                         onChange={(e) => setCorrectionNewStatus(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-surface border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 min-h-[44px]"

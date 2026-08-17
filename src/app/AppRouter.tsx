@@ -257,7 +257,7 @@ export const AppRouter: React.FC = () => {
           />
 
           {/* RFID Operator Routes - Feature Flag Gated */}
-          {((import.meta as any).env?.VITE_FEATURE_RFID === 'true') && (
+          {(((import.meta as any).env?.VITE_FEATURE_RFID === 'true') || (typeof window !== 'undefined' && (window as any).__FEATURE_RFID__ === true)) && (
             <>
               <Route
                 path="rfid"

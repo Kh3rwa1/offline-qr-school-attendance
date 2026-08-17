@@ -381,7 +381,7 @@ export const UserManagement: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="app-card shadow-2xl max-w-md w-full p-6 text-left max-h-[90vh] overflow-y-auto"
+              className="app-card bg-surface bg-white dark:bg-surface shadow-2xl max-w-md w-full p-6 text-left max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
                 <h3 id="add-staff-modal-title" className="text-xl font-extrabold text-ink font-display">

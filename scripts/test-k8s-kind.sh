@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLUSTER_NAME="${CLUSTER_NAME:-attendance-kind-cluster}"
 IMAGE_TAG="${IMAGE_TAG:-offline-qr-school-attendance:kind-v1}"
 IMAGE_TAG_UPDATE="${IMAGE_TAG_UPDATE:-offline-qr-school-attendance:kind-v2}"
@@ -46,10 +47,9 @@ trap cleanup EXIT
 echo "1. Creating disposable kind cluster ${CLUSTER_NAME}..."
 kind create cluster --name "${CLUSTER_NAME}" --wait 60s
 
-# 2. Install CustomResourceDefinitions (ServiceMonitor & ExternalSecret)
-echo "2. Applying CustomResourceDefinitions (ServiceMonitor & ExternalSecret)..."
-kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.70.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
-kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-secrets/v0.9.11/deploy/crds/bundle.yaml
+# 2. Install CustomResourceDefinitions (ServiceMonitor, PrometheusRule, ExternalSecret)
+echo "2. Applying CustomResourceDefinitions (ServiceMonitor, PrometheusRule & ExternalSecret)..."
+kubectl apply -f "${SCRIPT_DIR}/../k8s/crds/crds.yaml"
 
 # 3. Build & Load application docker images into kind cluster
 echo "3. Building Docker images and loading into kind cluster..."

@@ -175,6 +175,8 @@ export const CardOperations: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <select
+              id="card-status-filter"
+              aria-label={t('allBadges')}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none cursor-pointer font-display min-h-[44px]"

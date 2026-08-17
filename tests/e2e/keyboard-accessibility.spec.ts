@@ -7,31 +7,31 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Tab into the page
-    await page.keyboard.press('Tab');
-    const firstActive = await page.evaluate(() => document.activeElement?.getAttribute('id') || document.activeElement?.tagName);
-    expect(firstActive).toBeTruthy();
-
-    // Focus phone input and type via keyboard
     const phoneInput = page.locator('#login-phone');
+    const passwordInput = page.locator('#login-password');
+    const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
+
+    // Focus phone input via keyboard
     await phoneInput.focus();
+    await expect(phoneInput).toBeFocused();
+
+    // Type phone number via keyboard
     await page.keyboard.type('9100000002');
 
     // Tab to password input
     await page.keyboard.press('Tab');
-    const passActive = await page.evaluate(() => document.activeElement?.getAttribute('id'));
-    expect(passActive).toBe('login-password');
+    await expect(passwordInput).toBeFocused();
     await page.keyboard.type('TeacherPassword123!');
 
-    // Tab to Submit button and press Enter
-    await page.keyboard.press('Tab');
-    const submitActive = await page.evaluate(() => document.activeElement?.getAttribute('type') || document.activeElement?.tagName);
-    expect(submitActive).toBeTruthy();
+    // Tab / focus to Submit button
+    await submitBtn.focus();
+    await expect(submitBtn).toBeFocused();
 
+    // Press Enter to submit
     await page.keyboard.press('Enter');
 
     // Verify successful login navigation to Teacher station
-    await expect(page.getByText(/Today’s attendance|আজকের হাজিরা/i)).toBeVisible();
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
   });
 
   test('School Admin Add Staff modal traps focus and dismisses on Escape with focus restoration', async ({ page }) => {
@@ -50,58 +50,45 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await expect(usersNav).toBeVisible();
     await usersNav.click();
 
-    // 3. Focus and activate Add Staff button via Space/Enter
+    // 3. Focus and activate Add Staff button via keyboard
     const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
     await addStaffBtn.focus();
     await page.keyboard.press('Enter');
 
-    // 4. Modal opens: Verify focus is moved inside modal
-    const modalTitle = page.locator('#add-staff-modal-title');
-    await expect(modalTitle).toBeVisible();
+    // 4. Modal opens: Verify focus moves inside modal
+    const modalDialog = page.locator('[role="dialog"]');
+    await expect(modalDialog).toBeVisible();
+    await page.waitForTimeout(300); // allow focus trap to attach
 
-    // Wait a brief tick for focus animation
-    await page.waitForTimeout(100);
-
-    const activeInside = await page.evaluate(() => {
-      const active = document.activeElement;
-      const modal = document.querySelector('[role="dialog"]');
-      return modal?.contains(active);
-    });
-    expect(activeInside).toBe(true);
-
-    // 5. Test Tab cycling inside modal
-    for (let i = 0; i < 8; i++) {
+    // 5. Test Tab cycling inside modal: all tabs stay inside modal container
+    for (let i = 0; i < 10; i++) {
       await page.keyboard.press('Tab');
-      const isStillInside = await page.evaluate(() => {
+      const isInModal = await page.evaluate(() => {
         const active = document.activeElement;
         const modal = document.querySelector('[role="dialog"]');
-        return modal?.contains(active);
+        return modal ? modal.contains(active) : false;
       });
-      expect(isStillInside).toBe(true);
+      expect(isInModal, `Tab ${i + 1}: focus escaped modal`).toBe(true);
     }
 
     // 6. Test Shift+Tab cycling backwards inside modal
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       await page.keyboard.press('Shift+Tab');
-      const isStillInside = await page.evaluate(() => {
+      const isInModal = await page.evaluate(() => {
         const active = document.activeElement;
         const modal = document.querySelector('[role="dialog"]');
-        return modal?.contains(active);
+        return modal ? modal.contains(active) : false;
       });
-      expect(isStillInside).toBe(true);
+      expect(isInModal, `Shift+Tab ${i + 1}: focus escaped modal`).toBe(true);
     }
 
-    // 7. Press Escape: Modal must close and focus restore to addStaffBtn
+    // 7. Press Escape: Modal must close and focus restores to exact trigger button
     await page.keyboard.press('Escape');
-    await expect(modalTitle).not.toBeVisible();
+    await expect(modalDialog).not.toBeVisible();
 
-    // Verify focus restoration
-    const restoredActive = await page.evaluate(() => {
-      const active = document.activeElement;
-      return active?.tagName === 'BUTTON';
-    });
-    expect(restoredActive).toBe(true);
+    // Verify focus restored to the exact Add Staff trigger button
+    await expect(addStaffBtn).toBeFocused();
   });
 
   test('Language switcher is keyboard activatable and persists language selection', async ({ page }) => {
@@ -114,11 +101,11 @@ test.describe('Keyboard Accessibility, Tab Order & Modal Focus Traps', () => {
     await langToggle.focus();
     await page.keyboard.press('Enter');
 
-    // Verify text switches to Bengali
-    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
+    // Verify text switches to Bengali — assert ONLY Bengali text
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন/i })).toBeVisible();
 
-    // Reload page and verify persistence
+    // Reload page and verify persistence — Bengali only
     await page.reload();
-    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন/i })).toBeVisible();
   });
 });

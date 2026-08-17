@@ -16,14 +16,14 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await langBtn.click();
 
     // Verify Bengali string on submit button
-    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন/i })).toBeVisible();
 
-    // Verify phone field placeholder / label in Bengali
-    await expect(page.locator('label').filter({ hasText: /Mobile Number|মোবাইল নম্বর|ফোন|Phone/i }).first()).toBeVisible();
+    // Verify phone field placeholder / label in Bengali (Bengalish standard uses Mobile Number)
+    await expect(page.locator('label').filter({ hasText: /Mobile Number|মোবাইল নম্বর/i }).first()).toBeVisible();
 
     // Reload page: Verify persistence
     await page.reload();
-    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন|Sign In/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Login করুন|লগইন করুন/i })).toBeVisible();
   });
 
   test('Teacher journey in Bengali renders localized attendance station and offline outbox', async ({ page }) => {
@@ -33,14 +33,13 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.locator('#login-password').fill('TeacherPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
-    // 2. Switch language to Bengali if not already
+    // 2. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    if (await langBtn.isVisible()) {
-      await langBtn.click();
-    }
+    await expect(langBtn).toBeVisible();
+    await langBtn.click();
 
     // 3. Verify teacher dashboard renders Bengali strings
-    await expect(page.getByText(/আজকের Attendance|আজকের হাজিরা|Today’s attendance|হাজিরা খাতা|Attendance Register/i).first()).toBeVisible();
+    await expect(page.getByText(/আজকের Attendance|আজকের হাজিরা|হাজিরা খাতা/i).first()).toBeVisible();
 
     // 4. Verify no raw unparsed translation keys like "teacher." or "sync." appear in text
     const hasRawKeys = await page.evaluate(() => {
@@ -59,19 +58,18 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
 
     // 2. Switch language to Bengali
     const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    if (await langBtn.isVisible()) {
-      await langBtn.click();
-    }
+    await expect(langBtn).toBeVisible();
+    await langBtn.click();
 
     // 3. Navigate to User Management
-    const usersNav = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|কর্মী ও ভূমিকা|সদস্য/i }).or(
-      page.getByRole('button', { name: /Staff|Users|কর্মী/i })
+    const usersNav = page.getByRole('link', { name: /কর্মী ও ভূমিকা|সদস্য|Staff & Memberships|Staff Directory|Staff & Roles|Users/i }).or(
+      page.getByRole('button', { name: /কর্মী|Staff|Users/i })
     ).first();
     await expect(usersNav).toBeVisible();
     await usersNav.click();
 
     // 4. Verify localized Add Staff button
-    const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
+    const addStaffBtn = page.getByRole('button', { name: /নতুন Staff|নতুন কর্মী|Add Staff|Add Member|Invite Staff|New User/i }).first();
     await expect(addStaffBtn).toBeVisible();
   });
 
@@ -83,15 +81,17 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.locator('#login-password').fill('RfidOpPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
-    // 2. Switch language to Bengali
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    if (await langBtn.isVisible()) {
-      await langBtn.click();
-    }
-
-    // 3. Verify RFID Operator Station container and heading
+    // 2. Wait for RFID operator dashboard to load
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
-    await expect(page.getByText(/School Gate|Gate Operator|স্কুল গেট/i).first()).toBeVisible();
+
+    // 3. Switch language to Bengali
+    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
+    await expect(langBtn).toBeVisible();
+    await langBtn.click();
+
+    // 4. Verify RFID Operator Station container and localized heading
+    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
+    await expect(page.getByText(/স্কুল গেট|School Gate|Gate Operator/i).first()).toBeVisible();
   });
 
   test('Report Viewer portal in Bengali renders localized charts, metrics & badges', async ({ page }) => {
@@ -101,14 +101,16 @@ test.describe('Bengali / Bengalish Complete End-to-End User Journeys', () => {
     await page.locator('#login-password').fill('ReportViewerPassword123!');
     await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
 
-    // 2. Switch language to Bengali
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    if (await langBtn.isVisible()) {
-      await langBtn.click();
-    }
-
-    // 3. Verify Report Viewer Dashboard view container and localized strings
+    // 2. Wait for report viewer dashboard to load
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-    await expect(page.getByText(/Official Reports|অফিসিয়াল রিপোর্ট|Reports & Analytics|রিপোর্ট এবং অ্যানালিটিক্স/i).first()).toBeVisible();
+
+    // 3. Switch language to Bengali
+    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
+    await expect(langBtn).toBeVisible();
+    await langBtn.click();
+
+    // 4. Verify Report Viewer Dashboard view container and localized strings
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+    await expect(page.getByText(/অফিসিয়াল রিপোর্ট|রিপোর্ট এবং অ্যানালিটিক্স|Official Reports|Reports & Analytics/i).first()).toBeVisible();
   });
 });

@@ -236,21 +236,15 @@ test('live camera scanner initializes getUserMedia with environment facing mode 
 });
 
 test('camera permission denied renders bilingual error HUD and interactive retry button', async ({ page }) => {
-  // Stub getUserMedia to reject with NotAllowedError across all browser prototypes
+  // Stub getUserMedia to reject with NotAllowedError
   await page.addInitScript(() => {
-    const rejectCamera = async () => {
+    if (!navigator.mediaDevices) {
+      (navigator as any).mediaDevices = {};
+    }
+    navigator.mediaDevices.getUserMedia = async () => {
       const err = new DOMException('Camera permission denied', 'NotAllowedError');
       throw err;
     };
-    if (typeof window !== 'undefined') {
-      if ((window as any).MediaDevices?.prototype) {
-        (window as any).MediaDevices.prototype.getUserMedia = rejectCamera;
-      }
-      if (!navigator.mediaDevices) {
-        (navigator as any).mediaDevices = {};
-      }
-      navigator.mediaDevices.getUserMedia = rejectCamera;
-    }
   });
 
   // Log in as teacher
@@ -261,52 +255,39 @@ test('camera permission denied renders bilingual error HUD and interactive retry
 
   await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
 
-  // Select class and start session
-  const selectEl = page.locator('select');
-  if (await selectEl.isVisible()) {
-    const optionValues = await selectEl.locator('option').evaluateAll((options) =>
-      options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
-    );
-    if (optionValues.length > 0) {
-      await selectEl.selectOption(optionValues[0]);
-    }
-  }
+  // Open Phone Backup Accordion
+  const phoneBackup = page.getByTestId('phone-backup-details');
+  await expect(phoneBackup).toBeVisible();
+  await phoneBackup.locator('summary').click();
+  await expect(page.getByTestId('camera-hud')).toBeVisible();
 
-  const sessionOpenBtn = page.getByRole('button', { name: 'Session open' });
-  const startBtn = page.getByRole('button', { name: 'Start offline session' });
-  if (await startBtn.isVisible()) {
-    await startBtn.click();
-  }
-
-  const phoneBackupDenied = page.getByTestId('phone-backup-details');
-  await expect(phoneBackupDenied).toBeVisible();
-  await phoneBackupDenied.locator('summary').click();
-
-  const startCamBtn = page.getByRole('button', { name: /Start Camera/i });
+  // Trigger camera start
+  const startCamBtn = page.getByRole('button', { name: /Start Camera|ক্যামেরা শুরু করুন/i });
   if (await startCamBtn.isVisible()) {
     await startCamBtn.click();
   }
 
-  // 1. Assert HUD is NOT LIVE
+  // 1. Assert camera denied error overlay is displayed
+  await expect(page.getByText(/Camera permission denied|Camera Permission পাওয়া যায়নি/i).first()).toBeVisible({ timeout: 15000 });
+
+  // 2. Assert HUD is NOT LIVE
   await expect(page.getByText(/CAMERA:\s*LIVE/i)).toHaveCount(0);
 
-  // 2. Assert English denied copy is displayed
-  await expect(page.getByText(/Camera permission denied/i)).toBeVisible();
-
   // 3. Assert Retry button is visible
-  const retryBtn = page.getByRole('button', { name: /Retry Camera|Retry/i });
+  const retryBtn = page.getByRole('button', { name: /Retry Camera|Camera আবার Try করুন/i }).first();
   await expect(retryBtn).toBeVisible();
 
-  // 4. Switch to Bengali and assert Bengalish denied copy
+  // 4. Switch to Bengali and assert Bengali denied copy
   const bnBtn = page.getByRole('button', { name: /বাং \+ EN|বাংলা \+ English|বাংলা/i }).first();
   if (await bnBtn.isVisible()) {
     await bnBtn.click();
-    await expect(page.getByText(/Camera Permission পাওয়া যায়নি|Camera Permission/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Camera আবার Try করুন|Try Again|Camera/i }).first()).toBeVisible();
+    await expect(page.getByText(/Camera Permission পাওয়া যায়নি/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Camera আবার Try করুন/i }).first()).toBeVisible();
   }
 });
 
 test('RFID off by default: API returns 404 and RFID operator has no navigation or dashboard access', async ({ page }) => {
+  test.skip(process.env.FEATURE_RFID === 'true', 'RFID is enabled in this test run');
   // 1. Assert API returns 404 when FEATURE_RFID is unset/false
   const adminApi = await playwrightRequest.newContext({ baseURL: baseUrl });
   try {

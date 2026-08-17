@@ -148,8 +148,10 @@ export const ExportCenter: React.FC = () => {
       {/* Parameter Controls Bar */}
       <div className="app-card p-4 sm:p-5 flex flex-wrap items-center gap-4 text-sm font-bold text-ink">
         <div className="flex items-center gap-2">
-          <span className="text-ink-soft font-display">{t('classLabel')}</span>
+          <label htmlFor="export-class-select" className="text-ink-soft font-display cursor-pointer">{t('classLabel')}</label>
           <select
+            id="export-class-select"
+            aria-label={t('classLabel')}
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
             className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
@@ -163,8 +165,10 @@ export const ExportCenter: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-ink-soft font-display">{t('dateLabel')}</span>
+          <label htmlFor="export-date-input" className="text-ink-soft font-display cursor-pointer">{t('dateLabel')}</label>
           <input
+            id="export-date-input"
+            aria-label={t('dateLabel')}
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
@@ -173,8 +177,10 @@ export const ExportCenter: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-ink-soft font-display">{t('monthYearLabel')}</span>
+          <label htmlFor="export-month-select" className="text-ink-soft font-display cursor-pointer">{t('monthYearLabel')}</label>
           <select
+            id="export-month-select"
+            aria-label={t('monthYearLabel')}
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
             className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-display min-h-[44px]"
@@ -184,6 +190,8 @@ export const ExportCenter: React.FC = () => {
             ))}
           </select>
           <select
+            id="export-year-select"
+            aria-label="Year"
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
             className="px-4 py-2.5 rounded-2xl bg-surface-soft border border-line text-sm font-bold text-ink outline-none focus:border-forest-700 cursor-pointer font-mono min-h-[44px]"

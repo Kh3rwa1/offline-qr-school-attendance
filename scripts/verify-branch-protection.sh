@@ -22,25 +22,33 @@ fi
 
 PROTECTION_JSON=""
 
-# 1. Attempt using curl with provided token
-if [ -n "${AUTH_TOKEN}" ]; then
-  HTTP_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
-    -H "Authorization: token ${AUTH_TOKEN}" \
-    -H "Accept: application/vnd.github.v3+json" \
-    "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/branches/${BRANCH}/protection" || true)
-  
-  HTTP_BODY=$(echo "${HTTP_RESPONSE}" | sed '$d')
-  HTTP_STATUS=$(echo "${HTTP_RESPONSE}" | tail -n1 | sed 's/HTTP_STATUS://')
+# 1. Attempt using curl or gh CLI with retry loop for transient network/API hiccups
+for attempt in 1 2 3 4 5; do
+  if [ -n "${AUTH_TOKEN}" ]; then
+    HTTP_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+      -H "Authorization: token ${AUTH_TOKEN}" \
+      -H "Accept: application/vnd.github.v3+json" \
+      "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/branches/${BRANCH}/protection" || true)
+    
+    HTTP_BODY=$(echo "${HTTP_RESPONSE}" | sed '$d')
+    HTTP_STATUS=$(echo "${HTTP_RESPONSE}" | tail -n1 | sed 's/HTTP_STATUS://')
 
-  if [ "${HTTP_STATUS}" = "200" ]; then
-    PROTECTION_JSON="${HTTP_BODY}"
+    if [ "${HTTP_STATUS}" = "200" ]; then
+      PROTECTION_JSON="${HTTP_BODY}"
+      break
+    fi
   fi
-fi
 
-# 2. Attempt using gh CLI if token didn't return 200
-if [ -z "${PROTECTION_JSON}" ] && command -v gh &> /dev/null; then
-  PROTECTION_JSON=$(gh api "repos/${REPO_OWNER}/${REPO_NAME}/branches/${BRANCH}/protection" 2>&1 || true)
-fi
+  if command -v gh &> /dev/null; then
+    PROTECTION_JSON=$(gh api "repos/${REPO_OWNER}/${REPO_NAME}/branches/${BRANCH}/protection" 2>/dev/null || true)
+    if [ -n "${PROTECTION_JSON}" ] && echo "${PROTECTION_JSON}" | jq -e '.required_status_checks' > /dev/null 2>&1; then
+      break
+    fi
+  fi
+
+  echo "Retry attempt ${attempt}/5 fetching branch protection rules..."
+  sleep 3
+done
 
 # 3. Validate that valid JSON with admin-level protection policy was obtained
 if [ -z "${PROTECTION_JSON}" ] || ! echo "${PROTECTION_JSON}" | jq -e '.required_status_checks' > /dev/null 2>&1; then

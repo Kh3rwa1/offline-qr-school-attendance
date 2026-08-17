@@ -167,8 +167,8 @@ export const LoginPage: React.FC = () => {
       <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full bg-forest-700/5 blur-3xl pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full bg-forest-700/5 blur-3xl pointer-events-none" />
 
-      {/* Top Bar: Brand, Workspace Badge & Language Switcher */}
-      <header className="w-full max-w-6xl flex items-center justify-between gap-4 z-10">
+      {/* Top Bar: Brand, Workspace Badge & Language Switcher — wraps on narrow phones instead of overflowing */}
+      <header className="w-full max-w-6xl flex flex-wrap items-center justify-between gap-x-4 gap-y-3 z-10">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-forest-700 text-white flex items-center justify-center shadow-md font-extrabold text-xl font-display shrink-0">
             A
@@ -208,7 +208,7 @@ export const LoginPage: React.FC = () => {
               type="button"
               onClick={() => setLanguage('bn')}
               aria-label="বাংলা"
-              className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
+              className={`px-2.5 sm:px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'bn'
                   ? 'bg-forest-700 text-white shadow-2xs'
                   : 'text-ink-soft hover:text-ink'
@@ -220,7 +220,7 @@ export const LoginPage: React.FC = () => {
               type="button"
               onClick={() => setLanguage('hi')}
               aria-label="हिन्दी"
-              className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
+              className={`px-2.5 sm:px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'hi'
                   ? 'bg-forest-700 text-white shadow-2xs'
                   : 'text-ink-soft hover:text-ink'
@@ -232,7 +232,7 @@ export const LoginPage: React.FC = () => {
               type="button"
               onClick={() => setLanguage('en')}
               aria-label="English"
-              className={`px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
+              className={`px-2.5 sm:px-3.5 py-1.5 text-sm font-bold rounded-xl transition-all cursor-pointer font-display min-h-[44px] min-w-[44px] ${
                 language === 'en'
                   ? 'bg-forest-700 text-white shadow-2xs'
                   : 'text-ink-soft hover:text-ink'

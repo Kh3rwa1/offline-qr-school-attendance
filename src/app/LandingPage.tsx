@@ -57,6 +57,20 @@ const DEFAULTS = {
   demo_video_url:      '',
 };
 
+function getSafeHttpUrl(url: string | undefined): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export const LandingPage: React.FC = () => {
   const { language, setLanguage } = useLanguage();
   const c = (entry: LocalizedText): string => entry[language] || entry.en;
@@ -243,9 +257,9 @@ export const LandingPage: React.FC = () => {
                   {c(COPY.signIn)}
                 </Button>
               </Link>
-              {get('demo_video_url') && (
+              {getSafeHttpUrl(get('demo_video_url')) && (
                 <a
-                  href={get('demo_video_url')}
+                  href={getSafeHttpUrl(get('demo_video_url'))!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm font-semibold text-[#15803d] hover:underline"

@@ -2,19 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { getDbPoolMetrics } from '../db';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-
-interface MetricCounters {
-  httpRequestsTotal: Map<string, number>;
-  httpDurationSum: Map<string, number>;
-  httpDurationCount: Map<string, number>;
-}
+import { getRedisClient } from '../services/redisService';
 
 const MAX_CARDINALITY_KEYS = 1000;
-const metrics: MetricCounters = {
-  httpRequestsTotal: new Map(),
-  httpDurationSum: new Map(),
-  httpDurationCount: new Map(),
-};
 
 let postgresUpGauge = 1;
 let redisUpGauge = 1;
@@ -31,23 +21,6 @@ const HTTP_DURATION_BUCKETS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
 const httpDurationBucketCounts: number[] = HTTP_DURATION_BUCKETS.map(() => 0);
 let httpDurationSumTotal = 0;
 let httpDurationCountTotal = 0;
-
-// RFID Metrics Store
-export const rfidMetrics = {
-  scansTotal: new Map<string, number>(), // key: decision:security_mode
-  scanDurationSum: 0,
-  scanDurationCount: 0,
-  readersStatus: new Map<string, number>(), // key: status
-  readerClockDrift: 0,
-  offlineQueueDepth: 0,
-  offlineEventAge: 0,
-  syncDurationSum: 0,
-  syncDurationCount: 0,
-  credentialsTotal: new Map<string, number>(), // key: status
-  replayAttemptsTotal: 0,
-  unknownCardAttemptsTotal: 0,
-  attendanceByMethodTotal: new Map<string, number>(), // key: method
-};
 
 export function setDependencyHealthMetrics(postgres: boolean, redis: boolean) {
   postgresUpGauge = postgres ? 1 : 0;
@@ -217,25 +190,107 @@ export function resetBackupSnapshotCache() {
 /**
  * Normalizes request paths to prevent high-cardinality metric map growth and memory exhaustion.
  */
-function normalizePath(rawPath: any): string {
+function normalizePath(rawPath: unknown): string {
   const str = typeof rawPath === 'string' ? rawPath : (Array.isArray(rawPath) ? rawPath.join('_') : String(rawPath || ''));
   return str
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ':id')
     .replace(/\/\d+/g, '/:id');
 }
 
+/**
+ * Redis key prefix for Prometheus counters/gauges.
+ * Each metric key is stored as a Redis string (INCRBYFLOAT / INCR).
+ */
+const METRICS_KEY_PREFIX = 'metrics:';
+
+async function redisIncr(key: string, by: number = 1): Promise<void> {
+  try {
+    const client = getRedisClient();
+    if (client && client.status === 'ready') {
+      if (Number.isInteger(by)) {
+        await client.incrby(`${METRICS_KEY_PREFIX}${key}`, by);
+      } else {
+        await client.incrbyfloat(`${METRICS_KEY_PREFIX}${key}`, by);
+      }
+    } else {
+      // No Redis available (dev / test) — fall back to in-process map
+      inProcessFallback.set(key, (inProcessFallback.get(key) || 0) + by);
+    }
+  } catch {
+    // Metric recording is non-fatal; always fall through
+    inProcessFallback.set(key, (inProcessFallback.get(key) || 0) + by);
+  }
+}
+
+/** In-process fallback used when Redis is unavailable (dev/test). */
+const inProcessFallback = new Map<string, number>();
+
+async function redisGet(key: string): Promise<number> {
+  try {
+    const client = getRedisClient();
+    if (client && client.status === 'ready') {
+      const val = await client.get(`${METRICS_KEY_PREFIX}${key}`);
+      return val ? parseFloat(val) : 0;
+    }
+  } catch {
+    // fall through to in-process
+  }
+  return inProcessFallback.get(key) || 0;
+}
+
+/**
+ * Retrieves all metric keys matching a prefix pattern from Redis (or in-process map).
+ * Uses SCAN cursor loop instead of KEYS to avoid blocking the Redis server.
+ */
+async function redisGetByPattern(prefix: string): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  try {
+    const client = getRedisClient();
+    if (client && client.status === 'ready') {
+      const pattern = `${METRICS_KEY_PREFIX}${prefix}*`;
+      const allKeys: string[] = [];
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = nextCursor;
+        allKeys.push(...keys);
+      } while (cursor !== '0');
+
+      if (allKeys.length > 0) {
+        const values = await client.mget(...allKeys);
+        for (let i = 0; i < allKeys.length; i++) {
+          const shortKey = allKeys[i].replace(`${METRICS_KEY_PREFIX}`, '');
+          result.set(shortKey, values[i] ? parseFloat(values[i]!) : 0);
+        }
+        return result;
+      }
+    }
+  } catch {
+    // fall through to in-process
+  }
+  // In-process fallback
+  for (const [k, v] of inProcessFallback.entries()) {
+    if (k.startsWith(prefix)) result.set(k, v);
+  }
+  return result;
+}
+
+/** Per-request cardinality guard: prevent unbounded Redis key growth. */
+const seenKeys = new Set<string>();
+
 export function metricsMiddleware(req: Request, res: Response, next: NextFunction) {
   const start = Date.now();
 
   res.on('finish', () => {
     const durationSec = (Date.now() - start) / 1000;
-    const path = normalizePath(req.route?.path || req.path);
-    const key = `${req.method}:${path}:${res.statusCode}`;
+    const routePath: unknown = (req.route as { path?: unknown } | undefined)?.path;
+    const path = normalizePath(routePath || req.path);
+    const key = `http:${req.method}:${path}:${res.statusCode}`;
 
-    if (metrics.httpRequestsTotal.size < MAX_CARDINALITY_KEYS || metrics.httpRequestsTotal.has(key)) {
-      metrics.httpRequestsTotal.set(key, (metrics.httpRequestsTotal.get(key) || 0) + 1);
-      metrics.httpDurationSum.set(key, (metrics.httpDurationSum.get(key) || 0) + durationSec);
-      metrics.httpDurationCount.set(key, (metrics.httpDurationCount.get(key) || 0) + 1);
+    if (seenKeys.size < MAX_CARDINALITY_KEYS || seenKeys.has(key)) {
+      seenKeys.add(key);
+      void redisIncr(`${key}:count`);
+      void redisIncr(`${key}:duration`, durationSec);
     }
 
     // Unbounded by path, so latency stays observable even past the cardinality cap.
@@ -251,11 +306,65 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
   next();
 }
 
+// --- RFID Metrics (async helpers) ---
+
+export const rfidMetrics = {
+  recordScan(decision: string, securityMode: string, durationSec: number) {
+    void redisIncr(`rfid:scans:${decision}:${securityMode}`);
+    void redisIncr('rfid:scan_duration_sum', durationSec);
+    void redisIncr('rfid:scan_duration_count');
+  },
+  recordReplayAttempt() {
+    void redisIncr('rfid:replay_attempts');
+  },
+  recordUnknownCard() {
+    void redisIncr('rfid:unknown_card_attempts');
+  },
+  recordAttendanceByMethod(method: string) {
+    void redisIncr(`rfid:attendance_method:${method}`);
+  },
+  setOfflineQueueDepth(depth: number) {
+    const client = getRedisClient();
+    if (client && client.status === 'ready') {
+      void client.set(`${METRICS_KEY_PREFIX}rfid:offline_queue_depth`, depth);
+    } else {
+      inProcessFallback.set('rfid:offline_queue_depth', depth);
+    }
+  },
+  setOfflineEventAge(ageSeconds: number) {
+    const client = getRedisClient();
+    if (client && client.status === 'ready') {
+      void client.set(`${METRICS_KEY_PREFIX}rfid:offline_event_age`, ageSeconds);
+    } else {
+      inProcessFallback.set('rfid:offline_event_age', ageSeconds);
+    }
+  },
+  setReaderClockDrift(driftSeconds: number) {
+    const client = getRedisClient();
+    if (client && client.status === 'ready') {
+      void client.set(`${METRICS_KEY_PREFIX}rfid:reader_clock_drift`, driftSeconds);
+    } else {
+      inProcessFallback.set('rfid:reader_clock_drift', driftSeconds);
+    }
+  },
+  recordSync(durationSec: number) {
+    void redisIncr('rfid:sync_duration_sum', durationSec);
+    void redisIncr('rfid:sync_duration_count');
+  },
+  recordReaderStatus(status: string) {
+    void redisIncr(`rfid:readers:${status}`);
+  },
+  recordCredential(status: string) {
+    void redisIncr(`rfid:credentials:${status}`);
+  },
+};
+
 /**
  * Authenticated Prometheus metrics endpoint renderer.
- * Strictly requires Authorization: Bearer <METRICS_AUTH_TOKEN> header in production mode.
+ * Aggregates counters from Redis so values are accurate across replicas.
+ * Strictly requires Authorization: Bearer <METRICS_AUTH_TOKEN> header in production.
  */
-export function renderPrometheusMetrics(req?: Request): { authorized: boolean; content: string } {
+export async function renderPrometheusMetrics(req?: Request): Promise<{ authorized: boolean; content: string }> {
   const requiredToken = process.env.METRICS_AUTH_TOKEN;
 
   if (process.env.NODE_ENV === 'production') {
@@ -303,11 +412,19 @@ export function renderPrometheusMetrics(req?: Request): { authorized: boolean; c
   lines.push('# TYPE app_db_pool_max_connections gauge');
   lines.push(`app_db_pool_max_connections ${pool.maxAllowed}`);
 
-  lines.push('# HELP http_requests_total Total HTTP requests');
+  // HTTP request counters (aggregated across replicas via Redis)
+  lines.push('# HELP http_requests_total Total HTTP requests (aggregated across replicas via Redis)');
   lines.push('# TYPE http_requests_total counter');
-  for (const [key, count] of metrics.httpRequestsTotal.entries()) {
-    const [method, path, status] = key.split(':');
-    lines.push(`http_requests_total{method="${method}",path="${path}",status="${status}"} ${count}`);
+  const httpKeys = await redisGetByPattern('http:');
+  for (const [key, count] of httpKeys.entries()) {
+    if (!key.endsWith(':count')) continue;
+    const parts = key.replace(/^http:/, '').replace(/:count$/, '').split(':');
+    if (parts.length >= 3) {
+      const [method, ...rest] = parts;
+      const status = rest[rest.length - 1];
+      const path = rest.slice(0, -1).join(':');
+      lines.push(`http_requests_total{method="${method}",path="${path}",status="${status}"} ${count}`);
+    }
   }
 
   lines.push('# HELP http_request_duration_seconds HTTP request latency in seconds');
@@ -363,59 +480,69 @@ export function renderPrometheusMetrics(req?: Request): { authorized: boolean; c
     lines.push(`app_backup_offsite_latest_timestamp_seconds ${backup.offsiteTimestampSeconds}`);
   }
 
-  // --- RFID Metrics ---
-  lines.push('# HELP rfid_scans_total Total RFID scans');
+  // --- RFID Metrics (aggregated across replicas via Redis) ---
+  lines.push('# HELP rfid_scans_total Total RFID scans (aggregated across replicas via Redis)');
   lines.push('# TYPE rfid_scans_total counter');
-  for (const [key, count] of rfidMetrics.scansTotal.entries()) {
-    const [decision, securityMode] = key.split(':');
-    lines.push(`rfid_scans_total{decision="${decision}",security_mode="${securityMode}"} ${count}`);
+  const rfidScanKeys = await redisGetByPattern('rfid:scans:');
+  for (const [key, count] of rfidScanKeys.entries()) {
+    const parts = key.replace(/^rfid:scans:/, '').split(':');
+    if (parts.length >= 2) {
+      lines.push(`rfid_scans_total{decision="${parts[0]}",security_mode="${parts[1]}"} ${count}`);
+    }
   }
 
+  const scanDurSum = await redisGet('rfid:scan_duration_sum');
+  const scanDurCount = await redisGet('rfid:scan_duration_count');
   lines.push('# HELP rfid_scan_duration_seconds RFID scan processing duration');
   lines.push('# TYPE rfid_scan_duration_seconds histogram');
-  lines.push(`rfid_scan_duration_seconds_sum ${rfidMetrics.scanDurationSum}`);
-  lines.push(`rfid_scan_duration_seconds_count ${rfidMetrics.scanDurationCount}`);
+  lines.push(`rfid_scan_duration_seconds_sum ${scanDurSum}`);
+  lines.push(`rfid_scan_duration_seconds_count ${scanDurCount}`);
 
-  lines.push('# HELP rfid_readers_status Number of readers by status');
-  lines.push('# TYPE rfid_readers_status gauge');
-  for (const [status, count] of rfidMetrics.readersStatus.entries()) {
-    lines.push(`rfid_readers_status{status="${status}"} ${count}`);
-  }
-
+  const readerClockDrift = await redisGet('rfid:reader_clock_drift');
   lines.push('# HELP rfid_reader_clock_drift_seconds Reader clock drift in seconds');
   lines.push('# TYPE rfid_reader_clock_drift_seconds gauge');
-  lines.push(`rfid_reader_clock_drift_seconds ${rfidMetrics.readerClockDrift}`);
+  lines.push(`rfid_reader_clock_drift_seconds ${readerClockDrift}`);
 
+  const offlineQueueDepth = await redisGet('rfid:offline_queue_depth');
   lines.push('# HELP rfid_offline_queue_depth Number of events in offline queues');
   lines.push('# TYPE rfid_offline_queue_depth gauge');
-  lines.push(`rfid_offline_queue_depth ${rfidMetrics.offlineQueueDepth}`);
+  lines.push(`rfid_offline_queue_depth ${offlineQueueDepth}`);
 
+  const offlineEventAge = await redisGet('rfid:offline_event_age');
   lines.push('# HELP rfid_offline_event_age_seconds Age of oldest offline event');
   lines.push('# TYPE rfid_offline_event_age_seconds gauge');
-  lines.push(`rfid_offline_event_age_seconds ${rfidMetrics.offlineEventAge}`);
+  lines.push(`rfid_offline_event_age_seconds ${offlineEventAge}`);
 
+  const syncDurSum = await redisGet('rfid:sync_duration_sum');
+  const syncDurCount = await redisGet('rfid:sync_duration_count');
   lines.push('# HELP rfid_sync_duration_seconds Duration of offline sync operations');
   lines.push('# TYPE rfid_sync_duration_seconds histogram');
-  lines.push(`rfid_sync_duration_seconds_sum ${rfidMetrics.syncDurationSum}`);
-  lines.push(`rfid_sync_duration_seconds_count ${rfidMetrics.syncDurationCount}`);
+  lines.push(`rfid_sync_duration_seconds_sum ${syncDurSum}`);
+  lines.push(`rfid_sync_duration_seconds_count ${syncDurCount}`);
 
+  const rfidCredKeys = await redisGetByPattern('rfid:credentials:');
   lines.push('# HELP rfid_credentials_total Total credentials by status');
   lines.push('# TYPE rfid_credentials_total gauge');
-  for (const [status, count] of rfidMetrics.credentialsTotal.entries()) {
+  for (const [key, count] of rfidCredKeys.entries()) {
+    const status = key.replace(/^rfid:credentials:/, '');
     lines.push(`rfid_credentials_total{status="${status}"} ${count}`);
   }
 
+  const replayAttempts = await redisGet('rfid:replay_attempts');
   lines.push('# HELP rfid_replay_attempts_total Total replay attempts detected');
   lines.push('# TYPE rfid_replay_attempts_total counter');
-  lines.push(`rfid_replay_attempts_total ${rfidMetrics.replayAttemptsTotal}`);
+  lines.push(`rfid_replay_attempts_total ${replayAttempts}`);
 
+  const unknownCardAttempts = await redisGet('rfid:unknown_card_attempts');
   lines.push('# HELP rfid_unknown_card_attempts_total Total unknown card attempts');
   lines.push('# TYPE rfid_unknown_card_attempts_total counter');
-  lines.push(`rfid_unknown_card_attempts_total ${rfidMetrics.unknownCardAttemptsTotal}`);
+  lines.push(`rfid_unknown_card_attempts_total ${unknownCardAttempts}`);
 
+  const methodKeys = await redisGetByPattern('rfid:attendance_method:');
   lines.push('# HELP attendance_by_capture_method_total Attendance events by method');
   lines.push('# TYPE attendance_by_capture_method_total counter');
-  for (const [method, count] of rfidMetrics.attendanceByMethodTotal.entries()) {
+  for (const [key, count] of methodKeys.entries()) {
+    const method = key.replace(/^rfid:attendance_method:/, '');
     lines.push(`attendance_by_capture_method_total{method="${method}"} ${count}`);
   }
 

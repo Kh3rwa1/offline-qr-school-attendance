@@ -28,7 +28,10 @@ export interface SessionContext {
   };
 }
 
+/** Absolute maximum session lifetime regardless of activity. */
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+/** Session expires if idle for longer than this window. */
+const SESSION_IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -40,7 +43,8 @@ export async function createSession(
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = crypto.randomBytes(32).toString('hex');
   const hashedToken = hashToken(token);
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
 
   await withSystemContext(async (tx) => {
     await tx.insert(authSessions).values({
@@ -48,6 +52,7 @@ export async function createSession(
       schoolId: schoolId || null,
       sessionToken: hashedToken,
       expiresAt,
+      lastAccessedAt: now,
     });
   });
 
@@ -60,17 +65,26 @@ export async function getSession(token: string): Promise<SessionContext | null> 
   return withSystemContext(async (tx) => {
     const now = new Date();
     const hashedToken = hashToken(token);
+    const idleDeadline = new Date(now.getTime() - SESSION_IDLE_TIMEOUT_MS);
 
-    // Find active non-expired session by SHA-256 token hash
+    // Find active non-expired, non-idle session by SHA-256 token hash
     const [sessionRecord] = await tx
       .select()
       .from(authSessions)
       .where(and(
         eq(authSessions.sessionToken, hashedToken),
-        gt(authSessions.expiresAt, now)
+        gt(authSessions.expiresAt, now),
+        gt(authSessions.lastAccessedAt, idleDeadline),
       ));
 
     if (!sessionRecord) return null;
+
+    // Bump lastAccessedAt to slide the idle window (fire-and-forget; non-fatal if it races)
+    tx.update(authSessions)
+      .set({ lastAccessedAt: now })
+      .where(eq(authSessions.sessionToken, hashedToken))
+      .execute()
+      .catch(() => {});
 
     // Find user details
     const [userRecord] = await tx

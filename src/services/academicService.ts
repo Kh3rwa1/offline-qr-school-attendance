@@ -53,7 +53,11 @@ export async function setCurrentAcademicYear(schoolId: string, academicYearId: s
 }
 
 export async function listClassSections(schoolId: string, academicYearId?: string) {
-  const query = db
+  const conditions = academicYearId
+    ? and(eq(classSections.schoolId, schoolId), eq(classSections.academicYearId, academicYearId))
+    : eq(classSections.schoolId, schoolId);
+
+  return db
     .select({
       id: classSections.id,
       schoolId: classSections.schoolId,
@@ -65,13 +69,7 @@ export async function listClassSections(schoolId: string, academicYearId?: strin
     })
     .from(classSections)
     .innerJoin(academicYears, eq(classSections.academicYearId, academicYears.id))
-    .where(eq(classSections.schoolId, schoolId));
-
-  if (academicYearId) {
-    return query.where(and(eq(classSections.schoolId, schoolId), eq(classSections.academicYearId, academicYearId)));
-  }
-
-  return query;
+    .where(conditions);
 }
 
 export async function createClassSection(params: {

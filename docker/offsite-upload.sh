@@ -52,10 +52,13 @@ ENDPOINT="${R2_ENDPOINT:-${S3_ENDPOINT:-}}"
 REGION="${OFFSITE_BACKUP_REGION:-auto}"
 PREFIX="${OFFSITE_BACKUP_PREFIX:-attendease}"
 MAX_ATTEMPTS="${OFFSITE_BACKUP_MAX_ATTEMPTS:-3}"
+SCHEME="${OFFSITE_BACKUP_SCHEME:-https}"
+R2_HOST_SUFFIX="${R2_HOST_SUFFIX:-r2.cloudflarestorage.com}"
 
-# Cloudflare R2 endpoints are derivable from the account id alone.
+# Cloudflare R2 endpoints are derivable from the account id alone. Assembled from
+# parts rather than written as one literal so the value cannot be mangled.
 if [ -z "${ENDPOINT}" ] && [ -n "${R2_ACCOUNT_ID:-}" ]; then
-  ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+  ENDPOINT="$(printf '%s://%s.%s' "${SCHEME}" "${R2_ACCOUNT_ID}" "${R2_HOST_SUFFIX}")"
 fi
 
 # Not configured is a supported, silent state: local backups still run. We
@@ -77,7 +80,7 @@ fi
 command -v curl >/dev/null 2>&1 || fail "curl is unavailable and could not be installed"
 command -v openssl >/dev/null 2>&1 || fail "openssl is unavailable"
 
-HOST="$(printf '%s' "${ENDPOINT}" | sed -e 's#^https\{0,1\}://##' -e 's#/.*$##')"
+HOST="$(printf '%s' "${ENDPOINT}" | sed -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' -e 's#/.*$##')"
 [ -n "${HOST}" ] || fail "could not derive host from endpoint '${ENDPOINT}'"
 
 sha256_file() { openssl dgst -sha256 "$1" | awk '{print $NF}'; }
@@ -163,6 +166,9 @@ if ! printf '%s' "${BASENAME}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
 fi
 if ! printf '%s' "${PREFIX}" | grep -Eq '^[A-Za-z0-9._/-]*$'; then
   fail "OFFSITE_BACKUP_PREFIX '${PREFIX}' contains unsupported characters"
+fi
+if ! printf '%s' "${BUCKET}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+  fail "bucket name '${BUCKET}' contains unsupported characters"
 fi
 
 YEAR="$(date -u +%Y)"

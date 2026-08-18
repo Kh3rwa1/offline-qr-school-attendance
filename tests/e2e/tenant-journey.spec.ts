@@ -41,33 +41,34 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
 
   test('2. Public demo request form submits to API and displays verified success confirmation', async ({ page }) => {
     await page.goto(baseUrl);
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
 
-    // Click demo request button (use header or hero demo button)
-    const demoBtn = page.getByRole('button', { name: /Book Demo|Demo|ডেমো/i }).first();
+    // Click demo request button via data-testid
+    const demoBtn = page.getByTestId('header-book-demo-btn');
     await expect(demoBtn).toBeVisible();
     await demoBtn.click();
 
     const form = page.getByTestId('demo-request-form');
-    await expect(form).toBeVisible();
+    await expect(form).toBeVisible({ timeout: 10000 });
 
-    // Fill form
-    await page.locator('input[placeholder="e.g. Principal Sourav Sen"]').fill('Principal Animesh Das');
-    await page.locator('input[placeholder="98765 43210"]').fill('9876500001');
-    await page.locator('input[placeholder="principal@school.edu.in"]').fill('animesh@ballygunge.edu.in');
-    await page.locator('input[placeholder="Green Valley High School"]').fill('Ballygunge Govt High School');
-    const districtInput = page.locator('input[placeholder="Kolkata, West Bengal"]');
-    await districtInput.fill('Kolkata');
+    const testPhone = `98765${Math.floor(10000 + Math.random() * 90000)}`;
+
+    // Fill form using deterministic ID selectors
+    await form.locator('#demo-form-name').fill('Principal Animesh Das');
+    await form.locator('#demo-form-phone').fill(testPhone);
+    await form.locator('#demo-form-email').fill(`animesh_${Date.now()}@ballygunge.edu.in`);
+    await form.locator('#demo-form-school').fill('Ballygunge Govt High School');
+    await form.locator('#demo-form-district').fill('Kolkata');
 
     // Submit form (submit button lives inside the dialog form)
-    const submitBtn = form.locator('button[type="submit"]');
+    const submitBtn = form.locator('#demo-form-submit');
     await submitBtn.scrollIntoViewIfNeeded();
-    await submitBtn.click({ force: true });
+    await submitBtn.click();
 
     // Verify success confirmation card
     await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/Demo request received|ডেমোর অনুরোধ|Demo request मिल गई/i)).toBeVisible();
-    await expect(page.getByText('9876500001')).toBeVisible();
+    await expect(page.getByText(testPhone)).toBeVisible();
   });
 
   test('3. Unknown school slug shows dedicated 404 empty state without inventing names', async ({ page }) => {

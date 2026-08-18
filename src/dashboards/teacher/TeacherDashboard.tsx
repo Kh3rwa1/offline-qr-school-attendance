@@ -703,14 +703,10 @@ export const TeacherDashboard: React.FC = () => {
           </div>
           <div className="flex-1 space-y-1">
             <h3 className="font-extrabold text-[#0f172a] font-display text-base">
-              {language === 'bn' ? 'এখনো কোনো শ্রেণি বরাদ্দ হয়নি' : language === 'hi' ? 'अभी कोई class assign नहीं हुई' : 'No classes assigned yet'}
+              {t('noClassesAssignedTitle')}
             </h3>
             <p className="text-sm text-slate-600">
-              {language === 'bn'
-                ? 'বিদ্যালয়ের অ্যাডমিন আপনাকে একটি শ্রেণি বরাদ্দ করলে হাজিরা নেওয়া শুরু করা যাবে।'
-                : language === 'hi'
-                ? 'School admin आपको class assign करेंगे तो attendance लेना शुरू कर सकते हैं।'
-                : 'Ask your school admin to assign you a class — then attendance will appear here automatically.'}
+              {t('noClassesAssignedDesc')}
             </p>
           </div>
         </div>

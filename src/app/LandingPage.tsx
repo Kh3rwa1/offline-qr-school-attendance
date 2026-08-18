@@ -224,6 +224,8 @@ export const LandingPage: React.FC = () => {
             </Button>
           </Link>
           <Button
+            id="header-book-demo-btn"
+            data-testid="header-book-demo-btn"
             variant="primary"
             size="md"
             onClick={() => setDemoModalOpen(true)}
@@ -253,6 +255,8 @@ export const LandingPage: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <Button
+                id="hero-book-demo-btn"
+                data-testid="hero-book-demo-btn"
                 variant="primary"
                 size="lg"
                 onClick={() => setDemoModalOpen(true)}
@@ -887,6 +891,8 @@ export const LandingPage: React.FC = () => {
             )}
 
             <TextField
+              id="demo-form-name"
+              data-testid="demo-form-name"
               label={c(COPY.demoName)}
               required
               value={demoForm.name}
@@ -896,6 +902,8 @@ export const LandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <TextField
+                id="demo-form-phone"
+                data-testid="demo-form-phone"
                 label={c(COPY.demoPhone)}
                 type="tel"
                 prefixText="+91"
@@ -905,6 +913,8 @@ export const LandingPage: React.FC = () => {
                 placeholder="98765 43210"
               />
               <TextField
+                id="demo-form-email"
+                data-testid="demo-form-email"
                 label={c(COPY.demoEmail)}
                 type="email"
                 value={demoForm.email}
@@ -915,6 +925,8 @@ export const LandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <TextField
+                id="demo-form-school"
+                data-testid="demo-form-school"
                 label={c(COPY.demoSchool)}
                 required
                 value={demoForm.schoolName}
@@ -922,6 +934,8 @@ export const LandingPage: React.FC = () => {
                 placeholder="Green Valley High School"
               />
               <TextField
+                id="demo-form-district"
+                data-testid="demo-form-district"
                 label={c(COPY.demoDistrict)}
                 required
                 value={demoForm.district}
@@ -936,6 +950,7 @@ export const LandingPage: React.FC = () => {
               </label>
               <select
                 id="demo-student-count"
+                data-testid="demo-student-count"
                 value={demoForm.studentCount}
                 onChange={(e) => setDemoForm({ ...demoForm, studentCount: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 outline-none focus:border-[#14532d] cursor-pointer"
@@ -960,6 +975,8 @@ export const LandingPage: React.FC = () => {
                 {c(COPY.demoCancel)}
               </Button>
               <Button
+                id="demo-form-submit"
+                data-testid="demo-form-submit"
                 variant="primary"
                 size="md"
                 type="submit"

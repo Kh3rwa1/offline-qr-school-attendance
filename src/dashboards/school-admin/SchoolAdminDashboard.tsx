@@ -144,14 +144,10 @@ export const SchoolAdminDashboard: React.FC = () => {
           </div>
           <div className="flex-1 space-y-1">
             <h3 className="font-extrabold text-[#0f172a] font-display text-base">
-              {language === 'bn' ? 'প্রথমে ছাত্রতালিকা যুক্ত করুন' : language === 'hi' ? 'पहले students import करें' : 'Import your students to get started'}
+              {t('firstRunImportTitle')}
             </h3>
             <p className="text-sm text-slate-600">
-              {language === 'bn'
-                ? 'Excel ফাইল থেকে ছাত্রতালিকা আপলোড করুন — তারপর শিক্ষকরা সঙ্গে সঙ্গে হাজিরা নিতে পারবেন।'
-                : language === 'hi'
-                ? 'Excel file से student list upload करें — फिर teachers तुरंत attendance ले सकते हैं।'
-                : 'Upload your student list from Excel — teachers can start taking attendance right away.'}
+              {t('firstRunImportDesc')}
             </p>
           </div>
           <Button
@@ -161,7 +157,7 @@ export const SchoolAdminDashboard: React.FC = () => {
             leftIcon={<ArrowRight className="w-4 h-4" />}
             className="min-h-[44px] rounded-2xl font-display text-sm font-bold shrink-0"
           >
-            {language === 'bn' ? 'ছাত্র যুক্ত করুন' : language === 'hi' ? 'Students Add करें' : 'Add Students'}
+            {t('firstRunAddStudents')}
           </Button>
         </div>
       )}

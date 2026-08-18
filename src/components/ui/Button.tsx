@@ -1,15 +1,10 @@
 import React from 'react';
-import { motion, type HTMLMotionProps } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
-export interface ButtonProps
-  extends Omit<
-    React.ButtonHTMLAttributes<HTMLButtonElement>,
-    'onAnimationStart' | 'onDragStart' | 'onDragEnd' | 'onDrag' | 'ref'
-  > {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
@@ -57,16 +52,13 @@ export const Button: React.FC<ButtonProps> = ({
   const isDisabled = disabled || isLoading;
 
   return (
-    <motion.button
-      whileHover={isDisabled ? undefined : { scale: 1.015, translateY: -1 }}
-      whileTap={isDisabled ? undefined : { scale: 0.98 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+    <button
       type={type}
       disabled={isDisabled}
-      className={`inline-flex items-center justify-center rounded-full font-display transition-all cursor-pointer disabled:cursor-not-allowed disabled:transform-none select-none text-center ${
+      className={`inline-flex items-center justify-center rounded-full font-display transition-all duration-150 cursor-pointer hover:scale-[1.015] active:scale-[0.98] disabled:cursor-not-allowed disabled:transform-none select-none text-center ${
         fullWidth ? 'w-full' : ''
       } ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
-      {...(rest as any)}
+      {...rest}
     >
       {isLoading ? (
         <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -75,7 +67,7 @@ export const Button: React.FC<ButtonProps> = ({
       )}
       {children && <span className="truncate">{children}</span>}
       {!isLoading && rightIcon && <span className="shrink-0 flex items-center">{rightIcon}</span>}
-    </motion.button>
+    </button>
   );
 };
 

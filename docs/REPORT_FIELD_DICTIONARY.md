@@ -1,58 +1,81 @@
-# Report Field Dictionary
+# Internal Attendance Report Field Dictionary
 
-This dictionary defines every field, metric, status code, and column used in the Government-Ready Reporting system.
+This dictionary describes the implemented internal school-management exports. It is not a government data dictionary and does not establish portal compatibility.
 
----
+## Attendance status codes
 
-## 1. Status Codes
+| Code | Source status | Counts as attended | Meaning |
+|---|---|---:|---|
+| `P` | `PRESENT` | Yes | Student recorded as present in a finalized session. |
+| `L` | `LATE` | Yes | Student recorded as late in a finalized session. |
+| `A` | `ABSENT` | No | Student recorded as absent on an applicable working day. |
+| `E` | `EXCUSED` | No | Student has an excused/leave status. It remains visible and is not silently treated as present. |
+| `U` | no finalized mark | No | Session or student entry is pending/missing. |
+| `H` | approved non-working date | Excluded | Reviewed holiday or closure. |
+| `W` | approved weekend date | Excluded | Reviewed weekly non-working date. |
 
-| Code | Status Name | Classification | Counted in Attendance % | Description |
-| :--- | :--- | :--- | :---: | :--- |
-| **P** | Present | Regular Attendance | **Yes** (Numerator) | Student scanned at gate or marked present during roll call. |
-| **L** | Late Arrival | Late Attendance | **Yes** (Numerator) | Student arrived after the standard cutoff time. |
-| **A** | Absent | Non-Attendance | **No** (Denominator only) | Student did not attend on an applicable working day. |
-| **E** | Excused / Leave | Approved Leave | **No** (Excluded or Denominator) | Student was absent due to approved medical or authorized leave. |
-| **H** | Holiday | Non-Working Day | **Excluded** | Gazetted government or school holiday. |
-| **W** | Weekend / Sunday | Non-Working Day | **Excluded** | Standard weekly non-working day. |
-| **U** | Unmarked | Pending Session | **Excluded** | Attendance session not yet submitted or marked for this day. |
+A non-working date is determined by the approved calendar snapshot, not merely by its display code.
 
----
+## Student identification fields
 
-## 2. Calculated Summary Metrics
+| Export heading | Source | Notes |
+|---|---|---|
+| `Roll` | active enrollment | Class/section roll number; may be blank if the school has not assigned one. |
+| `Student ID` | student code | Internal school identifier, not a government identifier. |
+| `Banglar Shiksha ID` | student profile | Optional school-entered reference; blank when unavailable. Its presence is not independently verified by the application. |
+| `Student Name` | student profile | English/default name. |
+| `Student Name (বাংলা)` | student profile | Optional Bengali-script name. |
+| `Class` | class section | School-defined class name. |
+| `Section` | class section | School-defined section name. |
 
-- **Total Students Enrolled**: Count of active student enrollments in the specified class section for the academic year.
-- **Applicable Working Days**: Count of calendar days within the period where `isWorkingDay = true` and `sessionStatus != 'CANCELLED'`.
-- **Total Present (P)**: Total count of days marked `PRESENT` for the student.
-- **Total Late (L)**: Total count of days marked `LATE` for the student.
-- **Total Absent (A)**: Total count of days marked `ABSENT` on applicable working days.
-- **Total Leave (E)**: Total count of days with approved leave.
-- **Attendance Rate (%)**:
-  $$\text{Attendance Rate} = \frac{\text{Present} + \text{Late}}{\text{Applicable Working Days}} \times 100\%$$
-- **Consecutive Absent Days**: Current unbroken streak of consecutive applicable working days marked `ABSENT`.
+Guardian contact data and credentials are excluded from the built-in profile.
 
----
+## Period and calendar fields
 
-## 3. Student Identification Fields
+| Field | Meaning |
+|---|---|
+| `Period Start` / `Period End` | Inclusive ISO calendar dates requested by the user. |
+| `Applicable Working Days` | Approved calendar dates in the range whose stored `isWorkingDay` value is true. |
+| `Finalized Sessions` | Attendance sessions in the selected scope and period with a finalized state. |
+| `Unmarked Entries` | Expected student/date entries without a finalized attendance mark. |
+| `Calendar Version` | Approved version selected for the relevant academic year, snapshotted at generation. |
+| `Calendar Source` | Recorded provenance label and reference; not independent source verification. |
 
-| Field Name | Type | Description |
-| :--- | :--- | :--- |
-| `Roll Number` | Integer | Class-specific roll number assigned for the academic year. |
-| `Student ID` | String | Internal unique identifier (`STU-...`). |
-| `Banglar Shiksha ID` | String | 14-digit West Bengal state education portal identifier. |
-| `Student Name (EN)` | String | Student full name in English. |
-| `Student Name (BN)` | String | Student full name in Bengali script (বাংলা). |
-| `Gender` | String | Student gender (`Male`, `Female`, `Other`). |
+## Summary calculations
 
----
+For an individual row:
 
-## 4. Institutional Header & Certification Fields
+```text
+Attended = Present + Late
+Recorded denominator = Present + Late + Absent + Excused
+Attendance rate = Attended / Recorded denominator × 100
+```
 
-- `School Name`: Full registered institutional name.
-- `School Code / UDISE Code`: Unified District Information System for Education 11-digit code.
-- `Circle / Sub-Division`: Administrative educational circle.
-- `Block / Municipality`: Administrative block.
-- `District`: Administrative district (e.g. Paschim Medinipur, Kolkata, Howrah).
-- `State`: State of West Bengal.
-- `Headmaster / Teacher-in-Charge Name`: Authorized institutional head.
-- `Report Version`: Incremental integer (`v1`, `v2`, ...) indicating report revision.
-- `SHA-256 Checksum`: Cryptographic 64-character hash of the generated report file for integrity verification.
+If the denominator is zero, the rate is rendered as zero rather than `NaN` or infinity. Unmarked entries are reported separately and are not silently converted to absence.
+
+School-wide totals aggregate the same row counts within the validated scope. Reports should be reviewed when validation warns about unmarked sessions or missing approved calendar dates.
+
+## Report lifecycle fields
+
+| Field | Meaning |
+|---|---|
+| `VALIDATED` | Request passed blocking validation but has no stored artifact yet. |
+| `READY_FOR_REVIEW` | Immutable artifact exists and can be reviewed. |
+| `APPROVED_INTERNALLY` | Authorized school reviewer approved that exact artifact. |
+| `SUPERSEDED` | A newer internal version replaced it; historical bytes remain stored. |
+| `Report ID` | UUID of the internal report record. |
+| `Artifact ID` | UUID of the immutable stored payload. |
+| `Profile Version` | Profile label snapshotted at generation. |
+| `SHA-256` | Digest of the exact downloadable bytes. |
+| `Byte Size` | Stored payload length. |
+
+`APPROVED_INTERNALLY` is not government certification.
+
+## File-level rules
+
+- `.xlsx` artifacts use the OpenXML workbook binary signature and Excel MIME type.
+- `.csv` artifacts are UTF-8 with BOM and text/csv MIME type.
+- `.html` artifacts are standalone escaped HTML documents and text/html MIME type.
+- Filename, extension, MIME type, and content signature must agree.
+- Spreadsheet-formula-like text is prefixed with a single quote.
+- Repeated downloads return the same stored bytes and digest.

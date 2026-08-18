@@ -1,46 +1,91 @@
-# Reporting Security, Privacy & Integrity Standard
+# Reporting Security, Privacy, and Integrity
 
-## 1. Spreadsheet Formula Injection (CSV / Excel Injection) Defenses
+## Trust boundary
 
-When spreadsheet software (Microsoft Excel, LibreOffice Calc, Google Sheets, Apple Numbers) opens a CSV or XLSX file, cells beginning with certain characters are executed as active formulas. Malicious input in student names, remarks, or notes could potentially trigger command execution or exfiltrate data via `DDE()` or `HYPERLINK()`.
+Attendance exports contain student data. Treat every generated artifact as confidential school data. The reporting feature is for internal administration; internal approval is not government certification or proof of portal submission.
 
-### Sanitization Standard
+## Tenant and scope enforcement
 
-The system implements the RFC and OWASP spreadsheet protection standard:
+- Every reporting endpoint requires an authenticated, active membership in the requested school.
+- Requested classes and students are queried under the active PostgreSQL tenant context.
+- Empty selected scopes and identifiers belonging to another school are rejected.
+- Teacher access is limited by active class assignments; school administrators, head teachers, and report viewers retain school-wide reporting access.
+- Reporting, calendar, profile, approval, and artifact tables use PostgreSQL row-level security with `FORCE ROW LEVEL SECURITY`.
 
-- Every string cell value is inspected prior to writing.
-- If a string begins with `=`, `+`, `-`, `@`, `\t`, or `\r`, or contains these characters following leading whitespace, it is prepended with a single quote character (`'`).
-- The single quote instructs spreadsheet applications to treat the entire cell content strictly as text, neutralizing execution.
+Application checks improve error messages, but database RLS is the final isolation boundary.
 
----
+## Immutable artifact model
 
-## 2. Privacy by Design & PII Protection
+Generation persists the exact binary payload before it returns a download URL. Each artifact records:
 
-Institutional attendance registers are often printed and pinned in staff rooms or submitted for administrative review. To protect student privacy:
+- school and report identifiers;
+- requested format and matching MIME type;
+- safe server-generated filename;
+- exact byte length;
+- SHA-256 of the exact payload;
+- storage backend and opaque storage key;
+- profile, calendar, and request snapshots;
+- creation actor and timestamp.
 
-- **Guardian Phone Numbers**: Excluded from default attendance register sheets.
-- **National / Aadhaar Identifiers**: Excluded from export registers unless specifically authorized in an administrative profile.
-- **Banglar Shiksha Student IDs**: Rendered in dedicated ID columns as official state educational reference numbers.
+The artifact table exposes tenant-scoped `SELECT` and `INSERT` policies only. No API route updates or deletes artifact rows. Repeated downloads read the stored bytes instead of regenerating from mutable attendance rows.
 
----
+An internal report cannot be approved unless its artifact exists. Downloading an approved report does not reset or weaken its lifecycle state.
 
-## 3. Cryptographic Integrity & Tamper Evident Exports
+## Storage backends
 
-To prevent post-generation tampering or alteration of attendance records:
+### Database (default)
 
-1. **SHA-256 Checksum Calculation**:
-   - The exact binary payload of every exported XLSX/CSV file is hashed using SHA-256.
-   - The digest is saved in the database `report_approvals` table and stamped on the Cover Sheet and Metadata Sheet of the workbook.
-2. **Immutable Audit Trail**:
-   - Every report draft generation, internal approval, and download is recorded in the centralized audit log (`audit_logs` table) with the actor ID, timestamp, and metadata.
-3. **Version Numbering**:
-   - Every generated report receives an explicit version (`v1`, `v2`, ...).
-   - If an approved report is re-generated or superseded due to retro-active attendance corrections, the prior version is transitioned to `SUPERSEDED` status, preserving full historical lineage.
+The payload is stored in PostgreSQL `BYTEA`. Include the database in encrypted backups and exercise restore drills. Database access control and RLS protect the metadata and bytes together.
 
----
+### Local filesystem (optional)
 
-## 4. Multi-Tenant Row-Level Security (RLS)
+The service writes to a configured artifact root with an opaque generated key, atomic rename, directory mode `0700`, and file mode `0600`. The resolved path must remain inside the configured root. The database stores metadata and the storage key, not a user-controlled path.
 
-All database queries for reporting and calendar management enforce strict tenant isolation:
-- PostgreSQL Row-Level Security policies ensure school administrators and teachers can only query data belonging to their active `school_id`.
-- The API layer explicitly checks that all requested class section IDs belong to the authorized school before generating report payloads.
+Use filesystem mode only when:
+
+- the directory is on durable encrypted storage;
+- every serving replica can reach the same bytes;
+- the directory is included in tested off-appliance backups;
+- operating-system access is restricted to the application account.
+
+The application does not claim live S3/R2 support in this contract.
+
+## Spreadsheet and HTML defenses
+
+CSV and workbook text values beginning with `=`, `+`, `-`, `@`, tab, or carriage return after leading whitespace are prefixed with a single quote before export. This prevents values from being interpreted as spreadsheet formulas.
+
+HTML values are escaped before insertion into the standalone document. The exporter does not place untrusted text into executable script, style, or event-handler contexts.
+
+## Privacy defaults
+
+The built-in profile includes attendance identifiers and names needed for internal registers. Guardian phone numbers, credentials, and national identity numbers are not included by default. If a school adds a custom profile, the school is responsible for data-minimization review and destination authorization.
+
+## Integrity verification
+
+To verify a download independently:
+
+```bash
+sha256sum downloaded-report.xlsx
+```
+
+Compare the 64-character lowercase digest with the API response or artifact audit record. A match proves byte identity with the stored artifact; it does not prove that the source attendance data was complete or accepted by an external authority.
+
+## Output and abuse bounds
+
+Generation validates date-span, student-count, and estimated-cell limits before expensive export work. A bounded queue caps simultaneous work and pending requests. Artifact byte size is checked before storage. These controls reduce accidental memory exhaustion; production deployments should also retain reverse-proxy request limits, process limits, monitoring, and rate limiting.
+
+## Audit and retention
+
+Generation, download, approval, and supersession actions are written to the audit log. Artifact rows are intentionally immutable. Define a documented retention period and a privileged maintenance process for legally required deletion; do not add a normal application delete endpoint that bypasses review.
+
+## Remaining external validation
+
+The repository's automated tests cannot establish:
+
+- acceptance by a government portal;
+- compliance with a future authority-issued template;
+- legal sufficiency in a particular jurisdiction;
+- successful backup-key custody outside the appliance;
+- operation of external object storage not configured in the test environment.
+
+Record those as deployment or organizational evidence, not software claims.

@@ -1,58 +1,81 @@
-# Government-Ready Attendance Reporting & Excel Export System
+# Internal School Attendance Reporting
 
-## Overview
+> **Scope statement:** These exports are for a school's internal administration and record keeping. The application does **not** certify government compliance, submit data to a government portal, guarantee acceptance by any authority, or replace an authority-issued template. A school's authorized reviewer remains responsible for checking every report before use outside the school.
 
-The Government-Ready Attendance Reporting & Excel Export System provides school administrators, headmasters, teachers, and reporting officials with precision-engineered, tamper-evident attendance registers and summary packages formatted for institutional management reporting and state compliance (e.g., West Bengal UDISE+ and Banglar Shiksha identifier alignment).
+The historical filename is retained to avoid breaking documentation links. The feature itself is described as **internal school-management reporting** throughout the application.
 
----
+## What is implemented
 
-## Key Features
+- A six-step accessible report wizard plus a one-click current-month Excel action.
+- Report types with distinct row sets and layouts:
+  - monthly register;
+  - daily class register;
+  - whole-school daily summary;
+  - academic-year register;
+  - custom date-range register;
+  - absentee report;
+  - consecutive-absence report;
+  - corrections report;
+  - missing-data report;
+  - complete internal package.
+- Scopes for the whole school, all classes, selected classes, one section, selected students, or one student.
+- Real `.xlsx`, UTF-8 `.csv`, and standalone printable `.html` artifacts.
+- English, Bengali, and Hindi labels and disclaimers through a versioned reporting profile.
+- Pre-generation validation for tenant ownership, selected scope, date bounds, estimated output size, calendar approval, session finalization, and unmarked data.
+- Bounded in-process generation with configurable concurrency and queue capacity.
+- Immutable stored artifacts with filename, content type, byte length, SHA-256 digest, profile snapshot, calendar-version snapshot, and report-input snapshot.
+- Byte-identical repeated downloads from stored bytes; downloads do not regenerate reports from live attendance data.
+- Internal lifecycle states: `VALIDATED`, `READY_FOR_REVIEW`, `APPROVED_INTERNALLY`, and `SUPERSEDED`.
 
-1. **One-Click Instant Monthly Register**:
-   - Downloads a complete, multi-sheet formatted Excel `.xlsx` workbook containing all classes and sections with day-by-day attendance matrices for the current month.
-2. **Unified 6-Step Guided Wizard**:
-   - **Step 1: Report Type**: Monthly Register, Daily Class Register, Whole-School Turnout Summary, Academic-Year Register, Absentee Report, Consecutive Absence (3+ days) Alert, Late Arrivals, Corrections Audit Log, Missing/Unmarked Data, and Complete Management Package.
-   - **Step 2: Scope**: Whole School, All Classes & Sections, Selected Classes (with search & multi-select), or Specific Section.
-   - **Step 3: Period**: Today, Yesterday, Current Month, Previous Month, Specific Month/Year, Current Academic Year, or Custom Date Range.
-   - **Step 4: Format**: Styled Multi-Sheet Excel Workbook (`.xlsx`), RFC 4180 UTF-8 CSV (`.csv`), or Print View HTML.
-   - **Step 5: Pre-Flight Validation & Reconciliation**: Real-time evaluation of blocking data integrity errors vs. non-blocking warnings with direct navigation links.
-   - **Step 6: Download & Integrity Record**: Automatic browser download with SHA-256 hash tracking and immutable audit logging.
-3. **Institutional Certification & Disclaimer Standards**:
-   - Clear distinction between *internal management approval* and government portal submissions.
-   - Automatic inclusion of standard legal disclaimer:
-     > *"Institutional attendance report generated for school administration and management records. This export formats school data for institutional reporting and does not constitute official certification or proof of direct government portal submission."*
-4. **Academic Calendar & Working-Day Precision**:
-   - Strict working-day accounting ensuring gazetted holidays, vacations, emergency closures, and Sundays are **never treated as student absences**.
-   - Attendance rate is strictly $(\text{Present} + \text{Late}) / \text{Working Days} \times 100\%$.
+## Workflow
 
----
+1. **Choose report type.** The choice changes the exported columns and rows; the labels are not aliases for one generic output.
+2. **Choose scope.** Every selected class and student ID is checked against the active school. Empty selected scopes and cross-school identifiers are rejected.
+3. **Choose period.** The API enforces a bounded inclusive date range. Dates are interpreted as school calendar dates rather than browser-local timestamps.
+4. **Choose format and profile.** The chosen profile version and effective configuration are snapshotted for reproducibility.
+5. **Review validation.** Blocking errors prevent generation. Warnings remain visible but do not falsely imply official approval.
+6. **Generate and download.** The exact bytes are stored first, then returned through an authenticated artifact endpoint. The response includes the digest and byte size.
 
-## Excel Workbook Structure
+## File contracts
 
-Every generated `.xlsx` workbook includes:
+| Format | Extension | Content type | Implementation |
+|---|---|---|---|
+| Excel | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | OpenXML workbook readable by Excel and LibreOffice |
+| CSV | `.csv` | `text/csv; charset=utf-8` | UTF-8 with BOM, quoted fields, localized headings, spreadsheet-formula protection |
+| HTML | `.html` | `text/html; charset=utf-8` | Escaped standalone document with printable tables and disclaimer |
 
-- **Cover & Certification Sheet**: School name, UDISE code, Circle, Block, District, Reporting Period, Internal Approval Status, SHA-256 Checksum, Headmaster signature box, and official School Seal box.
-- **School Summary Sheet**: Aggregated turnout across all classes, gender metrics, working days, present/late/absent counts, and percentage turnout.
-- **Monthly Register Sheets (1 sheet per Class Section)**:
-  - Frozen panes (Roll, IDs, Student Names locked on horizontal scroll).
-  - Daily status columns (Day 1 through Day 31) with color-coded status codes:
-    - `P`: Present (Green)
-    - `L`: Late Arrival (Amber)
-    - `A`: Absent (Red)
-    - `E`: Excused / Approved Leave (Blue)
-    - `H`: Government / School Holiday (Gray)
-    - `W`: Sunday / Weekend (Gray)
-    - `U`: Unmarked / Session Pending (Light Gray)
-  - Calculated Totals & Attendance Percentage (`0.0%`).
-- **Consecutive Absences (3+ Days) Sheet**: Highlights students at academic or welfare risk.
-- **Attendance Corrections Sheet**: Detailed audit trail of all manual status overrides with timestamps, reasons, and approving user identities.
-- **Academic Calendar Sheet**: Complete breakdown of gazetted holidays and working day classifications for the period.
-- **Export Metadata Sheet**: Generation timestamp, system version, export profile, user ID, and cryptographic SHA-256 digest.
+An artifact is rejected if its requested format, extension, MIME type, or binary signature do not agree.
 
----
+## Integrity model
 
-## Security & Anti-Tampering Protections
+The SHA-256 value is calculated over the exact stored bytes after export generation. It is returned by the API and stored beside the artifact. The digest is intentionally **not inserted back into the same file after hashing**, because doing that would change the bytes and invalidate the digest.
 
-- **Formula Injection Prevention (OWASP & RFC)**: All string cells starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are sanitized with a leading `'` to guarantee spreadsheet software interprets them as text.
-- **Privacy & PII Protection**: Guardian contact numbers and private credentials are excluded from attendance registers by default.
-- **PostgreSQL Row-Level Security (RLS)**: Strict tenant isolation prevents cross-school data access or report generation.
+The download endpoint reads the stored artifact; it never rebuilds from current rows. If attendance changes later, create a new report version. Previously generated bytes and their digest remain unchanged.
+
+## Calendar dependency
+
+Only an `APPROVED` calendar version is authoritative for working/non-working-day classification. Imported or templated dates that are approximate remain `DRAFT` and cannot become active until a reviewer confirms each approximate entry and approves the version. Missing approval produces a visible validation warning; the export never silently describes an unverified calendar as official.
+
+## Roles and review
+
+Authenticated school members with `SCHOOL_ADMIN`, `HEAD_TEACHER`, `TEACHER`, or `REPORT_VIEWER` membership can validate and generate within the active school, subject to teacher-assignment scope. Only `SCHOOL_ADMIN` or `HEAD_TEACHER` can internally approve or supersede a report.
+
+`APPROVED_INTERNALLY` means that an authorized school member reviewed the stored artifact. It does not mean government approval.
+
+## Operational limits
+
+Defaults can be changed with reporting environment variables:
+
+- maximum artifact bytes;
+- maximum period days;
+- maximum students;
+- maximum estimated cells;
+- generation concurrency;
+- pending queue length;
+- database or local-filesystem artifact storage.
+
+Local filesystem storage is suitable only when the artifact directory is on durable, backed-up storage and is available to every application replica that may serve a download. Database storage is the default.
+
+## Evidence boundary
+
+Automated tests provide evidence for format signatures, Unicode round trips, formula protection, HTML escaping, tenant isolation, lifecycle enforcement, calendar review, output bounds, exact persisted bytes, repeated-byte identity, and SHA-256 correctness. They do not provide evidence of acceptance by a real government portal, legal certification, or external object-storage operation.

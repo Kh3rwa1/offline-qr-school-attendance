@@ -87,20 +87,77 @@ CREATE INDEX IF NOT EXISTS "report_approvals_school_type_period_idx"
 DO $$
 DECLARE
   table_name text;
+  tenant_policy text := $policy$
+    AS RESTRICTIVE
+    FOR ALL
+    USING (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+      OR school_id = CASE
+        WHEN current_setting('app.current_school_id', true)
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        THEN current_setting('app.current_school_id', true)::uuid
+        ELSE NULL
+      END
+    )
+    WITH CHECK (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+      OR school_id = CASE
+        WHEN current_setting('app.current_school_id', true)
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        THEN current_setting('app.current_school_id', true)::uuid
+        ELSE NULL
+      END
+    )
+  $policy$;
+  reporting_profiles_policy text := $policy$
+    AS RESTRICTIVE
+    FOR ALL
+    USING (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+      OR school_id IS NULL
+      OR school_id = CASE
+        WHEN current_setting('app.current_school_id', true)
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        THEN current_setting('app.current_school_id', true)::uuid
+        ELSE NULL
+      END
+    )
+    WITH CHECK (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+      OR school_id = CASE
+        WHEN current_setting('app.current_school_id', true)
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        THEN current_setting('app.current_school_id', true)::uuid
+        ELSE NULL
+      END
+    )
+  $policy$;
 BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'academic_calendar_days', 'report_approvals'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', table_name);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_policy ON %I', table_name);
-    EXECUTE format(
-      'CREATE POLICY tenant_isolation_policy ON %I USING (school_id = NULLIF(current_setting(''app.current_school_id'', true), '''')::uuid) WITH CHECK (school_id = NULLIF(current_setting(''app.current_school_id'', true), '''')::uuid)',
-      table_name
-    );
+    EXECUTE format('CREATE POLICY tenant_isolation_policy ON %I %s', table_name, tenant_policy);
   END LOOP;
 
   -- Reporting profiles allows built-in system profiles (school_id IS NULL) or tenant profiles
   EXECUTE 'ALTER TABLE reporting_profiles ENABLE ROW LEVEL SECURITY';
+  EXECUTE 'ALTER TABLE reporting_profiles FORCE ROW LEVEL SECURITY';
   EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_policy ON reporting_profiles';
-  EXECUTE 'CREATE POLICY tenant_isolation_policy ON reporting_profiles USING (school_id IS NULL OR school_id = NULLIF(current_setting(''app.current_school_id'', true), '''')::uuid) WITH CHECK (school_id = NULLIF(current_setting(''app.current_school_id'', true), '''')::uuid)';
+  EXECUTE format('CREATE POLICY tenant_isolation_policy ON reporting_profiles %s', reporting_profiles_policy);
 END $$;
+

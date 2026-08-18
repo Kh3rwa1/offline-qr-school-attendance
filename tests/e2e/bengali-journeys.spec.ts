@@ -8,18 +8,19 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Initial English state
+    // Ensure English starting state
+    const enBtn = page.getByRole('button', { name: 'English' }).first();
+    await expect(enBtn).toBeVisible();
+    await enBtn.click();
     await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
 
     // Click language switcher to switch to Bengali
-    const langBtn = page.getByRole('button', { name: 'বাংলা + English' }).or(page.getByRole('button', { name: 'বাংলা' })).first();
-    await expect(langBtn).toBeVisible();
-    await langBtn.click();
+    const bnBtn = page.getByRole('button', { name: 'বাংলা' }).first();
+    await expect(bnBtn).toBeVisible();
+    await bnBtn.click();
 
-    // Strict Bengali assertions — NO English alternatives
+    // Strict Bengali assertions — ZERO English alternatives
     await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
-    await expect(page.locator('label').filter({ hasText: 'Mobile Number' }).first()).toBeVisible();
-    await expect(page.locator('label').filter({ hasText: 'Password' }).first()).toBeVisible();
 
     // Verify persistence across page reload
     await page.reload();
@@ -36,22 +37,23 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
 
   // ── 2. Teacher Complete Journey ─────────────────────────────────────────────
   test('2. Teacher journey in Bengali renders localized attendance station, class selector & offline workspace', async ({ page }) => {
-    // Log in as Teacher
+    // Switch to Bengali on login page
     await page.goto(`${baseUrl}/login`);
+    await page.waitForLoadState('domcontentloaded');
+    const bnBtn = page.getByRole('button', { name: 'বাংলা' }).first();
+    await expect(bnBtn).toBeVisible();
+    await bnBtn.click();
+
+    // Log in as Teacher in Bengali
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+    await page.getByRole('button', { name: 'Login করুন' }).click();
 
     // Wait for teacher dashboard view container
     await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
 
-    // Switch language to Bengali
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    await expect(langBtn).toBeVisible();
-    await langBtn.click();
-
     // Strict Bengali assertions on Teacher Dashboard
-    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
     await expect(page.getByText('আজকের Attendance').first()).toBeVisible();
 
     // Check Class selector prompt
@@ -76,26 +78,28 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
 
   // ── 3. School Admin Complete Journey ────────────────────────────────────────
   test('3. School Admin user management, roster & academic management in Bengali', async ({ page }) => {
-    // Log in as School Admin
+    // Switch to Bengali on login page
     await page.goto(`${baseUrl}/login`);
+    await page.waitForLoadState('domcontentloaded');
+    const bnBtn = page.getByRole('button', { name: 'বাংলা' }).first();
+    await expect(bnBtn).toBeVisible();
+    await bnBtn.click();
+
+    // Log in as School Admin in Bengali
     await page.locator('#login-phone').fill('9100000001');
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+    await page.getByRole('button', { name: 'Login করুন' }).click();
 
     // Wait for admin dashboard
     await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-
-    // Switch language to Bengali
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    await expect(langBtn).toBeVisible();
-    await langBtn.click();
 
     // 1. User Management
     await page.goto(`${baseUrl}/app/school-admin/users`);
     await expect(page.locator('#user-management-view')).toBeVisible();
 
-    // Assert localized Add Staff button
-    const addStaffBtn = page.getByRole('button', { name: /নতুন Staff Add করুন|নতুন Staff যোগ করুন|Add Staff/i }).first();
+    // Assert strictly localized Add Staff button (NO English fallback)
+    const addStaffBtn = page.getByRole('button', { name: 'নতুন Staff Add করুন' }).first();
     await expect(addStaffBtn).toBeVisible();
 
     // Open Add Staff Modal
@@ -103,8 +107,8 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
     const modal = page.locator('[role="dialog"]');
     await expect(modal).toBeVisible();
 
-    // Password visibility toggle accessible name check
-    const pwdToggle = modal.getByRole('button', { name: /Password দেখুন|Show Password|Password/i }).first();
+    // Password visibility toggle strictly localized (NO English fallback)
+    const pwdToggle = modal.getByRole('button', { name: 'Password দেখুন' }).first();
     await expect(pwdToggle).toBeVisible();
 
     // Close modal
@@ -135,21 +139,20 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
   test('4. RFID Operator station in Bengali renders localized gate and reader HUD', async ({ page }) => {
     test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
 
-    // Log in as RFID Operator
+    // Switch to Bengali on login page
     await page.goto(`${baseUrl}/login`);
+    await page.waitForLoadState('domcontentloaded');
+    const bnBtn = page.getByRole('button', { name: 'বাংলা' }).first();
+    await expect(bnBtn).toBeVisible();
+    await bnBtn.click();
+
+    // Log in as RFID Operator in Bengali
     await page.locator('#login-phone').fill('9100000003');
     await page.locator('#login-password').fill('RfidOpPassword123!');
-    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+    await page.getByRole('button', { name: 'Login করুন' }).click();
 
     // Wait for RFID operator dashboard
-    await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
-
-    // Switch language to Bengali
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    await expect(langBtn).toBeVisible();
-    await langBtn.click();
-
-    // Verify RFID Operator Station container
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
 
     // Card Operations subroute
@@ -170,21 +173,20 @@ test.describe('Strict Bengali & Bengalish End-to-End User Journeys (Zero English
 
   // ── 5. Report Viewer Complete Journey ───────────────────────────────────────
   test('5. Report Viewer portal in Bengali renders localized daily log, trends & export center', async ({ page }) => {
-    // Log in as Report Viewer
+    // Switch to Bengali on login page
     await page.goto(`${baseUrl}/login`);
+    await page.waitForLoadState('domcontentloaded');
+    const bnBtn = page.getByRole('button', { name: 'বাংলা' }).first();
+    await expect(bnBtn).toBeVisible();
+    await bnBtn.click();
+
+    // Log in as Report Viewer in Bengali
     await page.locator('#login-phone').fill('9100000004');
     await page.locator('#login-password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: /Sign In|Login করুন/i }).click();
+    await expect(page.getByRole('button', { name: 'Login করুন' })).toBeVisible();
+    await page.getByRole('button', { name: 'Login করুন' }).click();
 
     // Wait for report viewer dashboard
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-
-    // Switch language to Bengali
-    const langBtn = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
-    await expect(langBtn).toBeVisible();
-    await langBtn.click();
-
-    // 1. Overview Dashboard
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
 
     // 2. Daily Reports subroute

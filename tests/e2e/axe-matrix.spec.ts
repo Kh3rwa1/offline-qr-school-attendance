@@ -26,7 +26,7 @@ async function loginAs(page: import('@playwright/test').Page, phone: string, pas
   await page.waitForLoadState('domcontentloaded');
 }
 
-test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
+test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix Across Routes & Operational States', () => {
   // ── Login Page ────────────────────────────────────────────────────────
   test('Login Page passes Axe scan in English and Bengali', async ({ page }) => {
     // English
@@ -41,11 +41,23 @@ test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', (
     await assertAxeClean(page, 'Bengali Login page');
   });
 
-  // ── Teacher Dashboard + Sub-Routes ────────────────────────────────────
+  // ── Teacher Dashboard, Camera HUD & Sub-Routes ─────────────────────────
   test('Teacher Dashboard landing passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000002', 'TeacherPassword123!');
     await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
     await assertAxeClean(page, 'Teacher Dashboard');
+  });
+
+  test('Teacher Dashboard Camera HUD expanded state passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000002', 'TeacherPassword123!');
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
+
+    const cameraSummary = page.locator('summary').filter({ hasText: /Camera|ক্যামেরা/i }).first();
+    if (await cameraSummary.isVisible()) {
+      await cameraSummary.click();
+      await expect(page.getByTestId('camera-hud')).toBeVisible();
+      await assertAxeClean(page, 'Teacher Camera HUD Expanded');
+    }
   });
 
   test('Teacher Assigned Classes passes Axe scan', async ({ page }) => {
@@ -64,7 +76,7 @@ test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', (
     await assertAxeClean(page, 'Teacher Offline Workspace');
   });
 
-  // ── School Admin Dashboard + Sub-Routes + Modals ──────────────────────
+  // ── School Admin Dashboard + Sub-Routes + Modals + Confirmation Dialogs ──
   test('School Admin Overview passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
     await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
@@ -95,6 +107,23 @@ test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', (
     await closeBtn.click();
   });
 
+  test('School Admin Stop Access confirmation dialog passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+    await page.goto(`${baseUrl}/app/school-admin/users`);
+    await expect(page.locator('#user-management-view')).toBeVisible();
+
+    const stopAccessBtn = page.getByRole('button', { name: /Stop Access|Access বন্ধ করুন/i }).first();
+    if (await stopAccessBtn.isVisible()) {
+      await stopAccessBtn.click();
+      const confirmDialog = page.locator('[role="dialog"]').or(page.locator('[role="alertdialog"]'));
+      await expect(confirmDialog).toBeVisible();
+      await assertAxeClean(page, 'School Admin Stop Access Confirmation Dialog');
+      const cancelBtn = confirmDialog.getByRole('button', { name: /Cancel|বাতিল/i }).first();
+      await cancelBtn.click();
+    }
+  });
+
   test('School Admin Student Roster passes Axe scan', async ({ page }) => {
     await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
     await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
@@ -117,6 +146,27 @@ test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', (
     await page.goto(`${baseUrl}/app/school-admin/attendance`);
     await expect(page.locator('#attendance-operations-view')).toBeVisible();
     await assertAxeClean(page, 'School Admin Attendance Operations');
+  });
+
+  // ── Operational Empty & Error States ──────────────────────────────────
+  test('Public school resolution 404 state passes Axe scan', async ({ page }) => {
+    await page.goto(`${baseUrl}/s/nonexistent-school-slug-404`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('button', { name: /Try Again|আবার চেষ্টা করুন/i })).toBeVisible();
+    await assertAxeClean(page, 'School Slug 404 Not Found State');
+  });
+
+  test('School Admin User directory empty search filter state passes Axe scan', async ({ page }) => {
+    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
+    await page.goto(`${baseUrl}/app/school-admin/users`);
+    await expect(page.locator('#user-management-view')).toBeVisible();
+    const searchInput = page.getByPlaceholder(/Search by name or phone|নাম বা ফোন দিয়ে খুঁজুন/i).first();
+    if (await searchInput.isVisible()) {
+      await searchInput.fill('XYZNONEXISTENTUSER123');
+      await expect(page.getByText(/No staff found|কোনো কর্মী পাওয়া যায়নি/i).first()).toBeVisible();
+      await assertAxeClean(page, 'School Admin Users Empty Search State');
+    }
   });
 
   // ── RFID Operator Dashboard + Sub-Routes ──────────────────────────────

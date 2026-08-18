@@ -20,6 +20,7 @@
     { "idx": 15, "version": "7", "when": 1786620000000, "tag": "0015_cursor_pagination_and_query_optimization", "breakpoints": true },
     { "idx": 16, "version": "7", "when": 1786630000000, "tag": "0016_uhf_fx9600_production_hardening", "breakpoints": true },
     { "idx": 17, "version": "7", "when": 1786640000000, "tag": "0017_government_ready_reporting", "breakpoints": true },
-    { "idx": 18, "version": "7", "when": 1786641000000, "tag": "0018_reporting_contract_integrity", "breakpoints": true }
+    { "idx": 18, "version": "7", "when": 1786641000000, "tag": "0018_reporting_contract_integrity", "breakpoints": true },
+    { "idx": 19, "version": "7", "when": 1786650000000, "tag": "0019_platform_settings", "breakpoints": true }
   ]
 }

@@ -782,3 +782,11 @@ export const reportApprovals = pgTable(
     ),
   })
 );
+
+// Platform Settings — super-admin editable key/value store for landing page content
+export const platformSettings = pgTable('platform_settings', {
+  key: varchar('key', { length: 100 }).primaryKey(),
+  value: text('value').notNull().default(''),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});

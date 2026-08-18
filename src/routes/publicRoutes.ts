@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db, withSystemContext } from '../db';
-import { schools, demoRequests } from '../db/schema';
+import { schools, demoRequests, platformSettings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { isValidSlug } from '../services/schoolSlug';
 import { createAuditLog } from '../services/auditLogService';
@@ -153,6 +153,23 @@ publicRouter.post(
         error: 'SUBMISSION_FAILED',
         message: 'Failed to record demo request',
       });
+    }
+  }
+);
+
+// GET /api/v1/public/settings — landing page dynamic content (safe, no auth)
+publicRouter.get(
+  '/settings',
+  rateLimitPolicies.generalApi,
+  async (_req: Request, res: Response) => {
+    try {
+      const rows = await withSystemContext(async (tx) => tx.select().from(platformSettings));
+      const s: Record<string, string> = {};
+      for (const r of rows) s[r.key] = r.value;
+      return res.status(200).json({ success: true, settings: s });
+    } catch {
+      // Non-fatal — landing page falls back to hardcoded defaults
+      return res.status(200).json({ success: true, settings: {} });
     }
   }
 );

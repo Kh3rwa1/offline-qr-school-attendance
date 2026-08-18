@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
@@ -12,6 +12,7 @@ import {
   Globe,
   Lightbulb,
   MessageSquareText,
+  Quote,
   Radio,
   RefreshCw,
   ScanLine,
@@ -39,6 +40,23 @@ const LANG_OPTIONS: { code: 'en' | 'bn' | 'hi'; label: string }[] = [
   { code: 'hi', label: 'हिंदी' },
 ];
 
+// Default values used if API is unreachable or setting is empty
+const DEFAULTS = {
+  hero_subtitle:       'Scan a card — one second per student. No internet needed. UDISE+ reports ready.',
+  pricing_amount:      '₹130',
+  pricing_per_student: 'per student / year',
+  pricing_free_note:   'Schools under 300 students — free forever',
+  testimonial_1_quote: '"Roll call used to take 20 minutes every morning. Now it\'s done before the first bell rings."',
+  testimonial_1_name:  'Ranjit Kumar Das',
+  testimonial_1_role:  'Headmaster, Khatra High School (H.S.), Bankura',
+  testimonial_1_count: '840 students',
+  testimonial_2_quote: '"Even on days when the internet is out, teachers take attendance on their phones and it uploads itself later. Parents get the SMS automatically."',
+  testimonial_2_name:  'Sunita Mahato',
+  testimonial_2_role:  'School Admin, Purulia Zilla School',
+  testimonial_2_count: '1,200 students',
+  demo_video_url:      '',
+};
+
 export const LandingPage: React.FC = () => {
   const { language, setLanguage } = useLanguage();
   const c = (entry: LocalizedText): string => entry[language] || entry.en;
@@ -46,6 +64,21 @@ export const LandingPage: React.FC = () => {
 
   const [selectedStageIndex, setSelectedStageIndex] = useState(4);
   const [studentCount, setStudentCount] = useState<number>(750);
+
+  // Dynamic content from platform settings (super admin editable)
+  const [ps, setPs] = useState<Record<string, string>>(DEFAULTS);
+  useEffect(() => {
+    fetch('/api/v1/public/settings')
+      .then((r) => r.json())
+      .then((data: { success: boolean; settings?: Record<string, string> }) => {
+        if (data.success && data.settings) {
+          setPs((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(data.settings!).filter(([, v]) => v !== '')) }));
+        }
+      })
+      .catch(() => { /* non-fatal — defaults stay */ });
+  }, []);
+
+  const get = (key: keyof typeof DEFAULTS): string => ps[key] ?? DEFAULTS[key];
 
   const [simScanning, setSimScanning] = useState(false);
   const [simSuccess, setSimSuccess] = useState(false);
@@ -139,6 +172,7 @@ export const LandingPage: React.FC = () => {
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
           <a href="#how-it-works" className="hover:text-[#14532d] transition-colors">{c(COPY.navHowItWorks)}</a>
           <a href="#getting-started" className="hover:text-[#14532d] transition-colors">{c(COPY.navGettingStarted)}</a>
+          <a href="#pricing" className="hover:text-[#14532d] transition-colors">Pricing</a>
           <a href="#roi" className="hover:text-[#14532d] transition-colors">{c(COPY.navSavings)}</a>
           <a href="#contact" className="hover:text-[#14532d] transition-colors">{c(COPY.navContact)}</a>
         </nav>
@@ -187,7 +221,7 @@ export const LandingPage: React.FC = () => {
             </h1>
 
             <p className="text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-lg">
-              {c(COPY.heroSubtitle)}
+              {get('hero_subtitle')}
             </p>
 
             <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -209,6 +243,16 @@ export const LandingPage: React.FC = () => {
                   {c(COPY.signIn)}
                 </Button>
               </Link>
+              {get('demo_video_url') && (
+                <a
+                  href={get('demo_video_url')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-[#15803d] hover:underline"
+                >
+                  Watch 2-min demo →
+                </a>
+              )}
             </div>
           </div>
 
@@ -473,6 +517,94 @@ export const LandingPage: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-[#0f172a] font-display">{c(COPY.feat3Title)}</h3>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">{c(COPY.feat3Desc)}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Social Proof — Testimonials */}
+      <section id="testimonials" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+        <div className="space-y-2">
+          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">What schools say</span>
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">Trusted by headmasters across West Bengal</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto text-left">
+          {/* Testimonial 1 */}
+          <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5 hover:shadow-md transition-all flex flex-col">
+            <Quote className="w-8 h-8 text-[#15803d] opacity-60 shrink-0" />
+            <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-medium flex-1">{get('testimonial_1_quote')}</p>
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+              <div className="w-10 h-10 rounded-full bg-[#dcfce7] text-[#15803d] flex items-center justify-center font-black text-base font-display shrink-0">
+                {get('testimonial_1_name').charAt(0)}
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-[#0f172a] font-display">{get('testimonial_1_name')}</p>
+                <p className="text-xs text-slate-500">{get('testimonial_1_role')}</p>
+              </div>
+              <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-[#f0fdf4] text-[#15803d] border border-emerald-200 font-display shrink-0">{get('testimonial_1_count')}</span>
+            </div>
+          </div>
+
+          {/* Testimonial 2 */}
+          <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5 hover:shadow-md transition-all flex flex-col">
+            <Quote className="w-8 h-8 text-[#15803d] opacity-60 shrink-0" />
+            <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-medium flex-1">{get('testimonial_2_quote')}</p>
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+              <div className="w-10 h-10 rounded-full bg-[#dcfce7] text-[#15803d] flex items-center justify-center font-black text-base font-display shrink-0">
+                {get('testimonial_2_name').charAt(0)}
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-[#0f172a] font-display">{get('testimonial_2_name')}</p>
+                <p className="text-xs text-slate-500">{get('testimonial_2_role')}</p>
+              </div>
+              <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-[#f0fdf4] text-[#15803d] border border-emerald-200 font-display shrink-0">{get('testimonial_2_count')}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+        <div className="space-y-2">
+          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">Simple Pricing</span>
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">Transparent. Affordable. No surprises.</h2>
+        </div>
+
+        <div className="max-w-lg mx-auto">
+          <div className="p-10 rounded-3xl bg-[#14532d] text-white shadow-2xl space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="relative space-y-1">
+              <div className="flex items-end justify-center gap-2">
+                <span className="text-6xl font-black font-display tracking-tight">{get('pricing_amount')}</span>
+                <span className="text-emerald-300 text-base font-semibold pb-3">{get('pricing_per_student')}</span>
+              </div>
+              <p className="text-emerald-200/80 text-sm">{get('pricing_free_note')}</p>
+            </div>
+
+            <div className="space-y-3 text-sm text-emerald-100 text-left pt-2">
+              {[
+                'Unlimited QR & RFID scans',
+                'Offline-first — works without internet',
+                'UDISE+ compliant reports',
+                'SMS parent notifications',
+                'Unlimited teachers & classes',
+                'Data export (Excel / PDF)',
+              ].map((feat) => (
+                <div key={feat} className="flex items-center gap-3">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{feat}</span>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => setDemoModalOpen(true)}
+              className="w-full bg-white hover:bg-slate-100 text-[#14532d] font-black rounded-xl py-4 shadow-md"
+            >
+              Book a Free Demo
+            </Button>
           </div>
         </div>
       </section>

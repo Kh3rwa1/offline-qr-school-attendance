@@ -22,6 +22,7 @@ import { systemHealthRouter } from './src/routes/systemHealthRoutes';
 import { publicRouter } from './src/routes/publicRoutes';
 import { setupRouter } from './src/routes/setupRoutes';
 import { calendarRouter } from './src/routes/calendarRoutes';
+import { platformSettingsRouter } from './src/routes/platformSettingsRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -115,6 +116,7 @@ export async function createApp() {
   app.use('/api/v1/setup', setupRouter);
   app.use('/api/v1/public', publicRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/admin/platform-settings', platformSettingsRouter);
   app.use('/api/v1', dashboardRouter);
   app.use('/api/v1/schools', schoolRouter);
   app.use('/api/v1/schools', academicRouter);

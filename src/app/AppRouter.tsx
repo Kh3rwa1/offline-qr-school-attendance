@@ -9,11 +9,11 @@ import UnauthorizedPage from '../auth/UnauthorizedPage';
 import { useSession } from './SessionProvider';
 import { getDefaultRouteForRole } from '../auth/permissions';
 
-import SuperAdminDashboard from '../dashboards/super-admin/SuperAdminDashboard';
-import SchoolAdminDashboard from '../dashboards/school-admin/SchoolAdminDashboard';
-import TeacherDashboard from '../dashboards/teacher/TeacherDashboard';
-import ReportViewerDashboard from '../dashboards/report-viewer/ReportViewerDashboard';
-import RfidOperatorDashboard from '../dashboards/rfid-operator/RfidOperatorDashboard';
+const SuperAdminDashboard = lazy(() => import('../dashboards/super-admin/SuperAdminDashboard'));
+const SchoolAdminDashboard = lazy(() => import('../dashboards/school-admin/SchoolAdminDashboard'));
+const TeacherDashboard = lazy(() => import('../dashboards/teacher/TeacherDashboard'));
+const ReportViewerDashboard = lazy(() => import('../dashboards/report-viewer/ReportViewerDashboard'));
+const RfidOperatorDashboard = lazy(() => import('../dashboards/rfid-operator/RfidOperatorDashboard'));
 
 const SchoolsOverview = lazy(() => import('../dashboards/super-admin/SchoolsOverview'));
 const SecurityOverview = lazy(() => import('../dashboards/super-admin/SecurityOverview'));

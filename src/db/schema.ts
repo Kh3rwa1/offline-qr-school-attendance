@@ -135,6 +135,7 @@ export const authSessions = pgTable('auth_sessions', {
   schoolId: uuid('school_id').references(() => schools.id, { onDelete: 'cascade' }),
   sessionToken: varchar('session_token', { length: 255 }).notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  lastAccessedAt: timestamp('last_accessed_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

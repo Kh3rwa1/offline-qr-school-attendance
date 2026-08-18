@@ -14,5 +14,29 @@ export default defineConfig({
     hookTimeout: 120_000,
     testTimeout: 120_000,
     exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
+
+    // Coverage thresholds — run with `vitest run --coverage`
+    // These are minimum acceptable percentages; a CI run fails if coverage drops below them.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'html'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      exclude: [
+        'src/db/seed*.ts',
+        'src/db/migrate.ts',
+        'src/**/*.d.ts',
+        'src/main.tsx',
+        'src/serviceWorkerRegistration.ts',
+      ],
+      thresholds: {
+        // Baselines derived from actual coverage as of initial threshold setup.
+        // Rounded down to nearest 5 % so CI fails only on regression, not on
+        // today's existing gaps. Raise these incrementally as test coverage grows.
+        lines: 40,
+        functions: 30,
+        branches: 30,
+        statements: 40,
+      },
+    },
   },
 });

@@ -81,8 +81,8 @@ export async function createApp() {
 
   app.use(metricsMiddleware);
 
-  app.get('/metrics', (req, res) => {
-    const result = renderPrometheusMetrics(req);
+  app.get('/metrics', async (req, res) => {
+    const result = await renderPrometheusMetrics(req);
     if (!result.authorized) {
       return res.status(401).json({ error: 'UNAUTHORIZED' });
     }

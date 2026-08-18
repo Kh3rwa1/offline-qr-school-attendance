@@ -199,6 +199,7 @@ export const LoginPage: React.FC = () => {
               value={language}
               onChange={(e) => setLanguage(e.target.value as any)}
               className="sr-only"
+              tabIndex={-1}
             >
               <option value="en">English</option>
               <option value="bn">বাংলা</option>

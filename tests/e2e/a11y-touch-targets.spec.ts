@@ -39,8 +39,8 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
         });
       });
 
-      // ── Teacher Routes ──────────────────────────────────────────────────────
-      test('Teacher dashboard satisfies >= 44x44px', async ({ page }) => {
+      // ── Teacher Routes & Operational Controls ───────────────────────────────
+      test('Teacher dashboard & camera HUD satisfy >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000002', 'TeacherPassword123!');
         await expect(page.locator('#teacher-dashboard-view')).toBeVisible();
 
@@ -49,6 +49,17 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
           contextName: `Teacher Dashboard [${vp.name}]`,
           minExpectedCount: 3,
         });
+
+        // Expand Camera HUD details
+        const cameraSummary = page.locator('summary').filter({ hasText: /Camera|ক্যামেরা/i }).first();
+        if (await cameraSummary.isVisible()) {
+          await cameraSummary.click();
+          await assertAllInteractiveElementsTouchTarget(page, {
+            minSize: 44,
+            contextName: `Teacher Camera HUD Expanded [${vp.name}]`,
+            minExpectedCount: 3,
+          });
+        }
       });
 
       test('Teacher Assigned Classes satisfies >= 44x44px', async ({ page }) => {
@@ -89,7 +100,7 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
         });
       });
 
-      test('School Admin user management, modals & controls satisfy >= 44x44px', async ({ page }) => {
+      test('School Admin user management, modals & confirmation dialogs satisfy >= 44x44px', async ({ page }) => {
         await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
         await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
         await page.goto(`${baseUrl}/app/school-admin/users`);
@@ -111,14 +122,13 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
         await expect(modal).toBeVisible();
         await page.waitForTimeout(300);
 
-        // Password reveal button inside modal must meet >= 44x44px
+        // Password reveal button inside modal must meet >= 44x44px (Mandatory check - NO silent skip)
         const pwdToggle = modal.getByRole('button', { name: /Password দেখুন|Show Password|Password/i }).first();
-        if (await pwdToggle.isVisible()) {
-          const toggleBox = await pwdToggle.boundingBox();
-          expect(toggleBox).not.toBeNull();
-          expect(toggleBox!.width).toBeGreaterThanOrEqual(44);
-          expect(toggleBox!.height).toBeGreaterThanOrEqual(44);
-        }
+        await expect(pwdToggle).toBeVisible();
+        const toggleBox = await pwdToggle.boundingBox();
+        expect(toggleBox).not.toBeNull();
+        expect(toggleBox!.width).toBeGreaterThanOrEqual(44);
+        expect(toggleBox!.height).toBeGreaterThanOrEqual(44);
 
         await assertAllInteractiveElementsTouchTarget(page, {
           minSize: 44,
@@ -129,6 +139,22 @@ test.describe('Exhaustive 44x44px Physical Touch-Target Verification Matrix Acro
         // Close modal
         await page.keyboard.press('Escape');
         await expect(modal).not.toBeVisible();
+
+        // 3. Stop Access Confirmation Dialog touch-target check
+        const stopAccessBtn = page.getByRole('button', { name: /Stop Access|Access বন্ধ করুন/i }).first();
+        if (await stopAccessBtn.isVisible()) {
+          await stopAccessBtn.click();
+          const confirmDialog = page.locator('[role="dialog"]').or(page.locator('[role="alertdialog"]'));
+          await expect(confirmDialog).toBeVisible();
+          await assertAllInteractiveElementsTouchTarget(page, {
+            minSize: 44,
+            contextName: `School Admin Stop Access Confirmation Dialog [${vp.name}]`,
+            minExpectedCount: 2,
+          });
+          const cancelBtn = confirmDialog.getByRole('button', { name: /Cancel|বাতিল/i }).first();
+          await cancelBtn.click();
+          await expect(confirmDialog).not.toBeVisible();
+        }
       });
 
       test('School Admin Student Roster satisfies >= 44x44px', async ({ page }) => {

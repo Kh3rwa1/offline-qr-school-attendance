@@ -162,6 +162,13 @@ export const ExportCenter: React.FC = () => {
         </div>
       </section>
 
+      {/* Divider — visually separates the one-click fast path from the custom wizard */}
+      <div className="flex items-center gap-3 text-xs text-ink-muted font-semibold uppercase tracking-wider">
+        <div className="flex-1 border-t border-line" />
+        <span className="px-2">{language === 'bn' ? 'বা কাস্টম রিপোর্ট তৈরি করুন' : language === 'hi' ? 'या custom report बनाएँ' : 'Or build a custom report'}</span>
+        <div className="flex-1 border-t border-line" />
+      </div>
+
       <section className="app-card border border-line rounded-3xl bg-surface overflow-hidden">
         <nav className="grid grid-cols-2 md:grid-cols-6 border-b border-line" aria-label="Report creation steps">
           {[c.stepType, c.stepScope, c.stepPeriod, c.stepFormat, c.stepValidate, c.stepDownload].map((label, index) => (

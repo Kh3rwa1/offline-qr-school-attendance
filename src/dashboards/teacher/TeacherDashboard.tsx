@@ -695,6 +695,27 @@ export const TeacherDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* First-run guidance — shown only when no classes are assigned to this teacher */}
+      {classes.length === 0 && (
+        <div className="p-6 rounded-3xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+          <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs shrink-0">
+            <UserCheck className="w-6 h-6 text-[#15803d]" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <h3 className="font-extrabold text-[#0f172a] font-display text-base">
+              {language === 'bn' ? 'এখনো কোনো শ্রেণি বরাদ্দ হয়নি' : language === 'hi' ? 'अभी कोई class assign नहीं हुई' : 'No classes assigned yet'}
+            </h3>
+            <p className="text-sm text-slate-600">
+              {language === 'bn'
+                ? 'বিদ্যালয়ের অ্যাডমিন আপনাকে একটি শ্রেণি বরাদ্দ করলে হাজিরা নেওয়া শুরু করা যাবে।'
+                : language === 'hi'
+                ? 'School admin आपको class assign करेंगे तो attendance लेना शुरू कर सकते हैं।'
+                : 'Ask your school admin to assign you a class — then attendance will appear here automatically.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Header Card */}
       <div className="bg-surface p-6 sm:p-7 rounded-3xl border border-line shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>

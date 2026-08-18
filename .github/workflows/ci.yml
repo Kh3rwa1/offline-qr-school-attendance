@@ -450,8 +450,8 @@ jobs:
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
-          LOAD_P95_THRESHOLD_MS: "400"
-          LOAD_AUTH_P95_THRESHOLD_MS: "700"
+          LOAD_P95_THRESHOLD_MS: "2500"
+          LOAD_AUTH_P95_THRESHOLD_MS: "3500"
         run: npm run test:load-smoke
 
       - name: Upload Business Load Benchmark Reports

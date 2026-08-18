@@ -103,7 +103,10 @@ describe('Reporting contract integrity', () => {
     it('keeps imported movable dates inactive until confirmed and approved', async () => {
       const imported = await populateDefaultWestBengalHolidays(seeded.schoolA.id, 2026, seeded.schoolAdminUser.id);
       expect(imported.approximateCount).toBeGreaterThan(0);
-      expect(imported.calendarVersion?.status).toBe('DRAFT');
+      const importedVersion = imported.calendarVersion;
+      expect(importedVersion).not.toBeNull();
+      if (!importedVersion) throw new Error('CALENDAR_VERSION_NOT_CREATED');
+      expect(importedVersion.status).toBe('DRAFT');
 
       const draft = await getCalendarDays(seeded.schoolA.id, '2026-01-01', '2026-12-31');
       expect(draft.days.length).toBeGreaterThanOrEqual(20);
@@ -114,7 +117,7 @@ describe('Reporting contract integrity', () => {
       await expect(
         approveCalendarVersion(
           seeded.schoolA.id,
-          imported.calendarVersion.id,
+          importedVersion.id,
           seeded.schoolAdminUser.id,
           'West Bengal School Education Department order for 2026'
         )
@@ -134,7 +137,7 @@ describe('Reporting contract integrity', () => {
       }
       const approved = await approveCalendarVersion(
         seeded.schoolA.id,
-        imported.calendarVersion.id,
+        importedVersion.id,
         seeded.schoolAdminUser.id,
         'West Bengal School Education Department order for 2026'
       );
@@ -172,11 +175,19 @@ describe('Reporting contract integrity', () => {
       });
       expect(empty.blockingErrors.some((item) => item.code === 'EMPTY_STUDENT_SCOPE')).toBe(true);
 
+      const schoolBStudent: any = await createStudent({
+        schoolId: seeded.schoolB.id,
+        studentCode: `REPORT-CROSS-${Date.now()}`,
+        name: 'Cross Tenant Student',
+        classSectionId: seeded.schoolBClass6A.id,
+        academicYearId: seeded.academicYearB.id,
+        rollNumber: 901,
+      });
       const crossTenant = await validateReportScope({
         schoolId: seeded.schoolA.id,
         reportType: 'monthly-register',
         scopeType: 'ONE_STUDENT',
-        studentIds: [seeded.schoolBStudent.id],
+        studentIds: [schoolBStudent.student.id],
         startDate: '2026-08-01',
         endDate: '2026-08-31',
       });

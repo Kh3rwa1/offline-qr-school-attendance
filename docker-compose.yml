@@ -199,15 +199,32 @@ services:
       BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY is required}
       BACKUP_CRON: ${BACKUP_CRON:-18:30}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-14}
+      # --- Off-site encrypted replication (Cloudflare R2 / S3 / B2 / MinIO) ---
+      # Leave blank to keep backups local only. When configured, every nightly
+      # snapshot is replicated off the appliance and verified remotely.
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      OFFSITE_BACKUP_REGION: ${OFFSITE_BACKUP_REGION:-auto}
+      OFFSITE_BACKUP_PREFIX: ${OFFSITE_BACKUP_PREFIX:-attendease}
+      OFFSITE_BACKUP_MAX_ATTEMPTS: ${OFFSITE_BACKUP_MAX_ATTEMPTS:-3}
+      OFFSITE_BACKUP_TIMEOUT: ${OFFSITE_BACKUP_TIMEOUT:-1800}
+      OFFSITE_MAX_AGE_HOURS: ${OFFSITE_MAX_AGE_HOURS:-48}
+      OFFSITE_BACKUP_CMD: '${OFFSITE_BACKUP_CMD:-/bin/sh /offsite-upload.sh "$$BACKUP_FILE"}'
     volumes:
       - ./backups:/backups
       - ./docker/backup-entrypoint.sh:/backup-entrypoint.sh:ro
+      - ./docker/offsite-upload.sh:/offsite-upload.sh:ro
+      - ./docker/backup-healthcheck.sh:/backup-healthcheck.sh:ro
     entrypoint: ['/bin/sh', '/backup-entrypoint.sh']
     healthcheck:
-      test: ['CMD-SHELL', 'test -f /backups/LATEST']
-      interval: 30s
-      timeout: 10s
+      test: ['CMD-SHELL', '/bin/sh /backup-healthcheck.sh']
+      interval: 60s
+      timeout: 15s
       retries: 3
+      start_period: 120s
     logging:
       driver: "json-file"
       options:
@@ -276,8 +293,86 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # ==========================================================================
+  # Monitoring & Alert Delivery (opt-in profile)
+  # ==========================================================================
+  # Start with:  docker compose --profile monitoring up -d
+  #
+  # Without these two services the alert rules in ./monitoring are never
+  # evaluated and nobody is notified when something breaks. Both bind to
+  # 127.0.0.1 only - never expose them to the school LAN or the internet.
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.53.0
+    container_name: school_attendance_prometheus
+    restart: always
+    environment:
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:?METRICS_AUTH_TOKEN is required}
+      FEATURE_RFID: ${FEATURE_RFID:-false}
+      PROMETHEUS_RETENTION: ${PROMETHEUS_RETENTION:-15d}
+      PROMETHEUS_SCRAPE_INTERVAL: ${PROMETHEUS_SCRAPE_INTERVAL:-30s}
+      DEPLOYMENT_ID: ${DEPLOYMENT_ID:-attendease-appliance}
+    volumes:
+      - ./monitoring:/etc/prometheus/rules:ro
+      - ./docker/prometheus-entrypoint.sh:/prometheus-entrypoint.sh:ro
+      - prometheus_data:/prometheus
+    entrypoint: ['/bin/sh', '/prometheus-entrypoint.sh']
+    ports:
+      - '127.0.0.1:9090:9090'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    depends_on:
+      app:
+        condition: service_healthy
+
+  alertmanager:
+    profiles: ["monitoring"]
+    image: prom/alertmanager:v0.27.0
+    container_name: school_attendance_alertmanager
+    restart: always
+    environment:
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-attendease@localhost}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      WATCHDOG_WEBHOOK_URL: ${WATCHDOG_WEBHOOK_URL:-}
+      ALERT_REPEAT_INTERVAL: ${ALERT_REPEAT_INTERVAL:-6h}
+      ALERT_CRITICAL_REPEAT_INTERVAL: ${ALERT_CRITICAL_REPEAT_INTERVAL:-1h}
+    volumes:
+      - ./docker/alertmanager-entrypoint.sh:/alertmanager-entrypoint.sh:ro
+      - alertmanager_data:/alertmanager
+    entrypoint: ['/bin/sh', '/alertmanager-entrypoint.sh']
+    ports:
+      - '127.0.0.1:9093:9093'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9093/-/healthy || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
 volumes:
   pgdata:
   redisdata:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  alertmanager_data:

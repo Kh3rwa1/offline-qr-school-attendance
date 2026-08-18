@@ -1122,3 +1122,336 @@ export function generateCSVExport(headers: string[], rows: (string | number | bo
 
   return Buffer.from(csvStr, 'utf-8');
 }
+
+// 10. Generate Government-Ready Complete Report Payload
+export async function generateGovernmentReadyReportData(params: {
+  schoolId: string;
+  reportType: string;
+  scopeType: 'WHOLE_SCHOOL' | 'ALL_CLASSES' | 'SELECTED_CLASSES' | 'SELECTED_SECTION' | 'SELECTED_STUDENTS' | 'ONE_STUDENT';
+  classSectionIds?: string[];
+  studentIds?: string[];
+  startDate: string;
+  endDate: string;
+  reportVersion?: number;
+  profileVersion?: string;
+  internalApprovalStatus?: string;
+}) {
+  const { getWorkingDaysMap } = await import('./calendarService');
+
+  const [school] = await db
+    .select()
+    .from(schools)
+    .where(eq(schools.id, params.schoolId));
+
+  if (!school) {
+    throw new Error('School not found.');
+  }
+
+  const [currentAcademicYear] = await db
+    .select()
+    .from(academicYears)
+    .where(and(eq(academicYears.schoolId, params.schoolId), eq(academicYears.isCurrent, true)));
+
+  const workingDaysMap = await getWorkingDaysMap(params.schoolId, params.startDate, params.endDate);
+
+  // Resolve target sections
+  let sections: any[] = [];
+  if (params.scopeType === 'WHOLE_SCHOOL' || params.scopeType === 'ALL_CLASSES') {
+    sections = await db
+      .select()
+      .from(classSections)
+      .where(eq(classSections.schoolId, params.schoolId))
+      .orderBy(classSections.className, classSections.sectionName);
+  } else if (params.classSectionIds && params.classSectionIds.length > 0) {
+    sections = await db
+      .select()
+      .from(classSections)
+      .where(
+        and(
+          eq(classSections.schoolId, params.schoolId),
+          inArray(classSections.id, params.classSectionIds)
+        )
+      )
+      .orderBy(classSections.className, classSections.sectionName);
+  }
+
+  const targetSectionIds = sections.map((s) => s.id);
+
+  // Fetch all sessions in date range
+  let allSessions: any[] = [];
+  if (targetSectionIds.length > 0) {
+    allSessions = await db
+      .select()
+      .from(attendanceSessions)
+      .where(
+        and(
+          eq(attendanceSessions.schoolId, params.schoolId),
+          inArray(attendanceSessions.classSectionId, targetSectionIds),
+          gte(attendanceSessions.sessionDate, params.startDate),
+          lte(attendanceSessions.sessionDate, params.endDate)
+        )
+      );
+  }
+
+  const sessionDateMap = new Map<string, { date: string; sectionId: string; status: string }>();
+  const sessionsBySectionDate = new Map<string, any>();
+  for (const s of allSessions) {
+    sessionDateMap.set(s.id, { date: s.sessionDate, sectionId: s.classSectionId, status: s.status });
+    sessionsBySectionDate.set(`${s.classSectionId}_${s.sessionDate}`, s);
+  }
+
+  // Fetch all attendance records
+  const sessionIds = allSessions.map((s) => s.id);
+  let allRecords: any[] = [];
+  if (sessionIds.length > 0) {
+    allRecords = await db
+      .select()
+      .from(attendanceRecords)
+      .where(
+        and(
+          eq(attendanceRecords.schoolId, params.schoolId),
+          inArray(attendanceRecords.attendanceSessionId, sessionIds)
+        )
+      );
+  }
+
+  const recordsByStudentDate = new Map<string, any>();
+  for (const rec of allRecords) {
+    const sessionInfo = sessionDateMap.get(rec.attendanceSessionId);
+    if (sessionInfo) {
+      recordsByStudentDate.set(`${rec.studentId}_${sessionInfo.date}`, rec);
+    }
+  }
+
+  // Generate date list
+  const daysList: string[] = [];
+  const cur = new Date(params.startDate);
+  const end = new Date(params.endDate);
+  while (cur <= end) {
+    daysList.push(cur.toISOString().split('T')[0]);
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const classRegisters: any[] = [];
+  const absenteesList: any[] = [];
+  const consecutiveAbsencesList: any[] = [];
+
+  for (const sec of sections) {
+    let enrolledStudents = await db
+      .select({
+        studentId: students.id,
+        studentCode: students.studentCode,
+        banglarShikshaId: students.banglarShikshaId,
+        name: students.name,
+        nameBn: students.nameBn,
+        rollNumber: enrollments.rollNumber,
+        gender: students.gender,
+      })
+      .from(enrollments)
+      .innerJoin(students, eq(enrollments.studentId, students.id))
+      .where(
+        and(
+          eq(enrollments.schoolId, params.schoolId),
+          eq(enrollments.classSectionId, sec.id),
+          eq(enrollments.status, 'ACTIVE')
+        )
+      )
+      .orderBy(enrollments.rollNumber);
+
+    if (params.studentIds && params.studentIds.length > 0) {
+      enrolledStudents = enrolledStudents.filter((e: any) => params.studentIds!.includes(e.studentId));
+    }
+
+    const studentRows: any[] = [];
+
+    for (const stu of enrolledStudents) {
+      const dailyStatus: Record<string, any> = {};
+      let presentCount = 0;
+      let lateCount = 0;
+      let absentCount = 0;
+      let leaveCount = 0;
+      let workingDaysCount = 0;
+
+      let consecutiveAbsentRun = 0;
+      let runStartDate: string | null = null;
+
+      for (const dStr of daysList) {
+        const dayInfo = workingDaysMap.get(dStr);
+        const isWorking = dayInfo ? dayInfo.isWorkingDay : true;
+        const classification = dayInfo ? dayInfo.classification : 'WORKING_DAY';
+
+        if (!isWorking) {
+          if (classification === 'SUNDAY_WEEKEND') {
+            dailyStatus[dStr] = 'WEEKEND';
+          } else {
+            dailyStatus[dStr] = 'HOLIDAY';
+          }
+          // Do not reset or increment consecutive run on weekend/holiday
+          continue;
+        }
+
+        // It is an applicable working day
+        workingDaysCount++;
+        const rec = recordsByStudentDate.get(`${stu.studentId}_${dStr}`);
+        const session = sessionsBySectionDate.get(`${sec.id}_${dStr}`);
+
+        let finalStatus = 'NO_SESSION';
+        if (rec) {
+          finalStatus = rec.status;
+        } else if (session) {
+          finalStatus = 'ABSENT';
+        } else {
+          finalStatus = 'NO_SESSION';
+        }
+
+        dailyStatus[dStr] = finalStatus;
+
+        if (finalStatus === 'PRESENT') {
+          presentCount++;
+          consecutiveAbsentRun = 0;
+        } else if (finalStatus === 'LATE') {
+          lateCount++;
+          consecutiveAbsentRun = 0;
+        } else if (finalStatus === 'LEAVE' || finalStatus === 'EXCUSED') {
+          leaveCount++;
+          consecutiveAbsentRun = 0;
+        } else if (finalStatus === 'ABSENT') {
+          absentCount++;
+          if (consecutiveAbsentRun === 0) {
+            runStartDate = dStr;
+          }
+          consecutiveAbsentRun++;
+          if (consecutiveAbsentRun >= 3) {
+            consecutiveAbsencesList.push({
+              className: sec.className,
+              sectionName: sec.sectionName,
+              rollNumber: stu.rollNumber,
+              studentName: stu.name,
+              studentCode: stu.studentCode,
+              consecutiveDays: consecutiveAbsentRun,
+              startDate: runStartDate || dStr,
+              endDate: dStr,
+            });
+          }
+
+          absenteesList.push({
+            date: dStr,
+            className: sec.className,
+            sectionName: sec.sectionName,
+            rollNumber: stu.rollNumber,
+            studentName: stu.name,
+            studentCode: stu.studentCode,
+            banglarShikshaId: stu.banglarShikshaId,
+            status: 'ABSENT',
+          });
+        }
+      }
+
+      const attendancePercentage = workingDaysCount > 0
+        ? Math.round(((presentCount + lateCount) / workingDaysCount) * 10000) / 100
+        : 0;
+
+      studentRows.push({
+        studentId: stu.studentId,
+        studentCode: stu.studentCode,
+        banglarShikshaId: stu.banglarShikshaId,
+        name: stu.name,
+        nameBn: stu.nameBn,
+        rollNumber: stu.rollNumber,
+        gender: stu.gender,
+        dailyStatus,
+        presentCount,
+        lateCount,
+        absentCount,
+        leaveCount,
+        workingDays: workingDaysCount,
+        attendancePercentage,
+      });
+    }
+
+    classRegisters.push({
+      classSectionId: sec.id,
+      className: sec.className,
+      sectionName: sec.sectionName,
+      students: studentRows,
+    });
+  }
+
+  // Fetch Corrections
+  let correctionsList: any[] = [];
+  if (targetSectionIds.length > 0) {
+    const rawCorrections = await db
+      .select({
+        id: attendanceCorrections.id,
+        reason: attendanceCorrections.reason,
+        previousStatus: attendanceCorrections.previousStatus,
+        newStatus: attendanceCorrections.newStatus,
+        correctedAt: attendanceCorrections.correctedAt,
+        actorName: users.fullName,
+        studentName: students.name,
+        studentCode: students.studentCode,
+        rollNumber: enrollments.rollNumber,
+        className: classSections.className,
+        sessionDate: attendanceSessions.sessionDate,
+      })
+      .from(attendanceCorrections)
+      .innerJoin(attendanceRecords, eq(attendanceCorrections.attendanceRecordId, attendanceRecords.id))
+      .innerJoin(attendanceSessions, eq(attendanceRecords.attendanceSessionId, attendanceSessions.id))
+      .innerJoin(students, eq(attendanceRecords.studentId, students.id))
+      .innerJoin(classSections, eq(attendanceSessions.classSectionId, classSections.id))
+      .innerJoin(enrollments, and(eq(enrollments.studentId, students.id), eq(enrollments.classSectionId, classSections.id)))
+      .leftJoin(users, eq(attendanceCorrections.correctedBy, users.id))
+      .where(
+        and(
+          eq(attendanceCorrections.schoolId, params.schoolId),
+          inArray(attendanceSessions.classSectionId, targetSectionIds),
+          gte(attendanceSessions.sessionDate, params.startDate),
+          lte(attendanceSessions.sessionDate, params.endDate)
+        )
+      )
+      .orderBy(desc(attendanceCorrections.correctedAt));
+
+    correctionsList = rawCorrections.map((c: any) => ({
+      date: c.sessionDate,
+      className: c.className,
+      rollNumber: c.rollNumber,
+      studentName: c.studentName,
+      previousStatus: c.previousStatus,
+      newStatus: c.newStatus,
+      reason: c.reason,
+      updatedBy: c.actorName || 'Admin',
+      timestamp: c.correctedAt.toISOString().slice(0, 19).replace('T', ' '),
+    }));
+  }
+
+  return {
+    school: {
+      id: school.id,
+      name: school.name,
+      udiseCode: school.udiseCode,
+      schoolCode: school.schoolCode,
+      district: school.district,
+      block: school.block,
+      circle: school.circle,
+      address: school.address,
+      headmasterName: school.headmasterName,
+      contactNumber: school.contactNumber,
+      reportFooterText: school.reportFooterText,
+    },
+    period: {
+      startDate: params.startDate,
+      endDate: params.endDate,
+      periodLabel: `${params.startDate} to ${params.endDate}`,
+    },
+    academicYear: currentAcademicYear?.name || '2026',
+    profileVersion: params.profileVersion || 'West Bengal Management Register v1.0.0',
+    reportVersion: params.reportVersion || 1,
+    internalApprovalStatus: params.internalApprovalStatus || 'VALIDATED',
+    workingDaysMap,
+    classRegisters,
+    absentees: absenteesList,
+    consecutiveAbsences: consecutiveAbsencesList,
+    corrections: correctionsList,
+  };
+}
+

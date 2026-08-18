@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
+import { z } from 'zod';
 import {
   getDailySchoolReport,
   getDailyClassReport,
@@ -15,8 +16,29 @@ import {
   generateCSVExport,
   sanitizeFilename,
   getFullTenantExport,
+  generateGovernmentReadyReportData,
 } from '../services/reportService';
-import { teacherAssignments, attendanceSessions, attendanceRecords, enrollments } from '../db/schema';
+import { validateReportScope } from '../services/reportValidationService';
+import {
+  createReportDraft,
+  approveReportInternally,
+  recordReportExport,
+  getReportHistory,
+} from '../services/reportApprovalService';
+import {
+  buildGovernmentReadyExcelWorkbook,
+  buildSecureCSVExport,
+  generateSafeExportFilename,
+} from '../services/excelExportService';
+import {
+  teacherAssignments,
+  attendanceSessions,
+  attendanceRecords,
+  enrollments,
+  reportingProfiles,
+  reportApprovals,
+  schools,
+} from '../db/schema';
 import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { createAuditLog } from '../services/auditLogService';
@@ -611,4 +633,370 @@ reportRouter.get(
   }
 );
 
+// ──────────────────────────────────────────────────────────────────────────
+// 11. Government-Ready Reporting Endpoints
+// ──────────────────────────────────────────────────────────────────────────
+
+const ValidateReportSchema = z.object({
+  reportType: z.string().min(1),
+  scopeType: z.enum(['WHOLE_SCHOOL', 'ALL_CLASSES', 'SELECTED_CLASSES', 'SELECTED_SECTION', 'SELECTED_STUDENTS', 'ONE_STUDENT']),
+  classSectionIds: z.array(z.string().uuid()).optional(),
+  studentIds: z.array(z.string().uuid()).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
+});
+
+const GenerateReportSchema = z.object({
+  reportType: z.string().min(1),
+  scopeType: z.enum(['WHOLE_SCHOOL', 'ALL_CLASSES', 'SELECTED_CLASSES', 'SELECTED_SECTION', 'SELECTED_STUDENTS', 'ONE_STUDENT']),
+  classSectionIds: z.array(z.string().uuid()).optional(),
+  studentIds: z.array(z.string().uuid()).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
+  periodType: z.string().default('MONTHLY'),
+  format: z.enum(['xlsx', 'csv', 'html']).default('xlsx'),
+  profileId: z.string().uuid().optional(),
+  profileVersion: z.string().optional(),
+});
+
+// A. List Available Reporting Profiles
+reportRouter.get(
+  '/profiles',
+  requireAuth,
+  requireTenant,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const profiles = await db
+        .select()
+        .from(reportingProfiles)
+        .where(sql`${reportingProfiles.schoolId} = ${schoolId} OR ${reportingProfiles.schoolId} IS NULL`)
+        .orderBy(reportingProfiles.profileName);
+
+      res.json({
+        success: true,
+        profiles: [
+          {
+            id: 'wb-gov-ready-default',
+            profileName: 'West Bengal Management Attendance Register',
+            version: '1.0.0',
+            isDefault: true,
+            description: 'Standardized management attendance register format for West Bengal school education with UDISE and Banglar Shiksha identifier support.',
+          },
+          ...profiles,
+        ],
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// B. Pre-flight Validate Report Scope & Metadata
+reportRouter.post(
+  '/validate',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER', 'TEACHER']),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const validated = ValidateReportSchema.parse(req.body);
+
+      // Teacher scope restriction
+      if (req.userRole === 'TEACHER' && validated.classSectionIds) {
+        for (const cid of validated.classSectionIds) {
+          if (!(await teacherHasClassAccess(req, schoolId, cid))) {
+            res.status(403).json({ error: 'FORBIDDEN', message: 'Teacher is not assigned to one or more requested classes.' });
+            return;
+          }
+        }
+      }
+
+      const result = await validateReportScope({
+        schoolId,
+        reportType: validated.reportType,
+        scopeType: validated.scopeType,
+        classSectionIds: validated.classSectionIds,
+        studentIds: validated.studentIds,
+        startDate: validated.startDate,
+        endDate: validated.endDate,
+      });
+
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// C. Generate Report Version & Compute Checksum
+reportRouter.post(
+  '/generate',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER', 'TEACHER']),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const validated = GenerateReportSchema.parse(req.body);
+
+      // Teacher scope verification
+      if (req.userRole === 'TEACHER') {
+        if (validated.scopeType === 'WHOLE_SCHOOL' || validated.scopeType === 'ALL_CLASSES') {
+          res.status(403).json({ error: 'FORBIDDEN', message: 'Teachers may only export assigned class sections.' });
+          return;
+        }
+        if (validated.classSectionIds) {
+          for (const cid of validated.classSectionIds) {
+            if (!(await teacherHasClassAccess(req, schoolId, cid))) {
+              res.status(403).json({ error: 'FORBIDDEN', message: 'Teacher is not assigned to one or more requested classes.' });
+              return;
+            }
+          }
+        }
+      }
+
+      // 1. Create Report Draft
+      const { report, validationResult } = await createReportDraft({
+        schoolId,
+        reportType: validated.reportType,
+        scopeType: validated.scopeType,
+        scopeParameters: {
+          classSectionIds: validated.classSectionIds,
+          studentIds: validated.studentIds,
+          format: validated.format,
+        },
+        periodType: validated.periodType,
+        periodStartDate: validated.startDate,
+        periodEndDate: validated.endDate,
+        profileId: validated.profileId,
+        profileVersion: validated.profileVersion,
+        actorId: req.user!.id,
+      });
+
+      if (!validationResult.isValid) {
+        res.status(400).json({
+          error: 'REPORT_VALIDATION_FAILED',
+          message: 'Report cannot be generated due to blocking errors.',
+          blockingErrors: validationResult.blockingErrors,
+          reportId: report.id,
+        });
+        return;
+      }
+
+      // 2. Fetch Data & Build Output
+      const reportPayload = await generateGovernmentReadyReportData({
+        schoolId,
+        reportType: validated.reportType,
+        scopeType: validated.scopeType,
+        classSectionIds: validated.classSectionIds,
+        studentIds: validated.studentIds,
+        startDate: validated.startDate,
+        endDate: validated.endDate,
+        reportVersion: report.reportVersion,
+        profileVersion: validated.profileVersion,
+        internalApprovalStatus: report.status,
+      });
+
+      let fileBuffer: Buffer;
+      if (validated.format === 'csv') {
+        // Summary CSV
+        const headers = ['Class', 'Section', 'Roll', 'Banglar Shiksha ID', 'Student Name', 'Present', 'Late', 'Absent', 'Leave', 'Working Days', 'Attendance %'];
+        const rows: any[] = [];
+        for (const cr of reportPayload.classRegisters) {
+          for (const stu of cr.students) {
+            rows.push([
+              cr.className,
+              cr.sectionName,
+              stu.rollNumber,
+              stu.banglarShikshaId || '—',
+              stu.name,
+              stu.presentCount,
+              stu.lateCount,
+              stu.absentCount,
+              stu.leaveCount,
+              stu.workingDays,
+              `${stu.attendancePercentage}%`,
+            ]);
+          }
+        }
+        fileBuffer = buildSecureCSVExport(headers, rows);
+      } else {
+        fileBuffer = await buildGovernmentReadyExcelWorkbook(reportPayload);
+      }
+
+      // 3. Record Hash & Export Status
+      const { hash } = await recordReportExport({
+        schoolId,
+        reportId: report.id,
+        fileBuffer,
+        actorId: req.user!.id,
+      });
+
+      const safeFilename = generateSafeExportFilename({
+        udiseCode: reportPayload.school.udiseCode,
+        scope: validated.scopeType.toLowerCase(),
+        period: `${validated.startDate}_${validated.endDate}`,
+        reportVersion: report.reportVersion,
+        format: validated.format,
+      });
+
+      res.json({
+        success: true,
+        reportId: report.id,
+        reportVersion: report.reportVersion,
+        status: report.status,
+        fileHashSha256: hash,
+        filename: safeFilename,
+        downloadUrl: `/api/v1/schools/${schoolId}/reports/${report.id}/download?format=${validated.format}`,
+        summary: validationResult.summary,
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// D. Download Generated Report File
+reportRouter.get(
+  '/:reportId/download',
+  requireAuth,
+  requireTenant,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const reportId = req.params.reportId;
+      const format = (req.query.format as 'xlsx' | 'csv') || 'xlsx';
+
+      const [report] = await db
+        .select()
+        .from(reportApprovals)
+        .where(
+          and(
+            eq(reportApprovals.id, reportId),
+            eq(reportApprovals.schoolId, schoolId)
+          )
+        );
+
+      if (!report) {
+        res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'The requested report was not found.' });
+        return;
+      }
+
+      const scopeParams = (report.scopeParameters as any) || {};
+
+      const reportPayload = await generateGovernmentReadyReportData({
+        schoolId,
+        reportType: report.reportType,
+        scopeType: report.scopeType as any,
+        classSectionIds: scopeParams.classSectionIds,
+        studentIds: scopeParams.studentIds,
+        startDate: report.periodStartDate,
+        endDate: report.periodEndDate,
+        reportVersion: report.reportVersion,
+        profileVersion: report.profileVersion || undefined,
+        internalApprovalStatus: report.status,
+      });
+
+      let fileBuffer: Buffer;
+      let contentType: string;
+
+      if (format === 'csv') {
+        const headers = ['Class', 'Section', 'Roll', 'Banglar Shiksha ID', 'Student Name', 'Present', 'Late', 'Absent', 'Leave', 'Working Days', 'Attendance %'];
+        const rows: any[] = [];
+        for (const cr of reportPayload.classRegisters) {
+          for (const stu of cr.students) {
+            rows.push([
+              cr.className,
+              cr.sectionName,
+              stu.rollNumber,
+              stu.banglarShikshaId || '—',
+              stu.name,
+              stu.presentCount,
+              stu.lateCount,
+              stu.absentCount,
+              stu.leaveCount,
+              stu.workingDays,
+              `${stu.attendancePercentage}%`,
+            ]);
+          }
+        }
+        fileBuffer = buildSecureCSVExport(headers, rows);
+        contentType = 'text/csv; charset=utf-8';
+      } else {
+        fileBuffer = await buildGovernmentReadyExcelWorkbook(reportPayload);
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      }
+
+      const safeFilename = generateSafeExportFilename({
+        udiseCode: reportPayload.school.udiseCode,
+        scope: report.scopeType.toLowerCase(),
+        period: `${report.periodStartDate}_${report.periodEndDate}`,
+        reportVersion: report.reportVersion,
+        format,
+      });
+
+      await recordReportExport({
+        schoolId,
+        reportId: report.id,
+        fileBuffer,
+        actorId: req.user?.id,
+      });
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+      res.send(fileBuffer);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// E. Internal Management Approval
+reportRouter.post(
+  '/:reportId/approve',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const reportId = req.params.reportId;
+
+      const approved = await approveReportInternally({
+        schoolId,
+        reportId,
+        actorId: req.user!.id,
+        userRole: req.userRole!,
+      });
+
+      res.json({ success: true, report: approved });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// F. Report History & Audit Trail
+reportRouter.get(
+  '/history',
+  requireAuth,
+  requireTenant,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'REPORT_VIEWER']),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const schoolId = req.activeSchoolId!;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const history = await getReportHistory(schoolId, limit, offset);
+      res.json({ success: true, history });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
 export default reportRouter;
+

@@ -234,7 +234,7 @@ export async function validateReportScope(params: {
     rolls.add(enrollment.rollNumber);
     rollsBySection.set(enrollment.classSectionId, rolls);
   }
-  if (duplicateRollCount > 0) warnings.push(localizedItem('DUPLICATE_ROLL_NUMBER', 'BLOCKING', locale, { details: { count: duplicateRollCount }, link: '/app/school-admin/students' }));
+  if (duplicateRollCount > 0) blockingErrors.push(localizedItem('DUPLICATE_ROLL_NUMBER', 'BLOCKING', locale, { details: { count: duplicateRollCount }, link: '/app/school-admin/students' }));
 
   const missingBanglarShikshaCount = activeEnrollments.filter((row: EnrollmentRow) => !row.banglarShikshaId?.trim()).length;
   const missingBengaliNameCount = activeEnrollments.filter((row: EnrollmentRow) => !row.studentNameBn?.trim()).length;

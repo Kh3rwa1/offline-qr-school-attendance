@@ -85,7 +85,7 @@ test.describe('End-to-End Product Journeys Matrix', () => {
 
     // 4. Export center
     await page.goto(`${baseUrl}/app/reports/exports`);
-    await expect(page.getByRole('heading', { name: /Download Official Reports|Export & Download|Attendance Export|Register Generation|হাজিরা রেজিস্টার/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Create attendance registers and exports|Download Official Reports|Export & Download|Attendance Export|Register Generation|হাজিরা রেজিস্টার|উপস্থিতি রেজিস্টার/i })).toBeVisible();
   });
 });
 

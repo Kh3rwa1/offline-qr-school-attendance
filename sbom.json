@@ -2,7 +2,7 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.4.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.4",
-  "serialNumber": "urn:uuid:c782dd2f-07a6-4c3b-a843-52d5ee81a8a9",
+  "serialNumber": "urn:uuid:84d911a7-ecdf-4443-a849-66ae2f4d196c",
   "version": 1,
   "metadata": {
     "timestamp": "2026-08-13T12:00:00.000Z",
@@ -16,17 +16,17 @@
     "component": {
       "type": "application",
       "name": "offline-qr-school-attendance",
-      "version": "1.0.0",
+      "version": "1.3.0",
       "description": "Hybrid Offline QR + Production RFID/NFC School Attendance Platform"
     },
     "properties": [
       {
         "name": "git:commit:sha",
-        "value": "c5c41924bbc88e820f7478fd6f9de82639f1b040"
+        "value": "f8edde3f8d70785cd53c51fab845c44958ac0253"
       },
       {
         "name": "lockfile:sha256",
-        "value": "c782dd2f07a66c3b984352d5ee81a8a94d4c3564a11ae90c671f959c6aa3ccaf"
+        "value": "84d911a7ecdf0443e84966ae2f4d196ce6fdfb36c5aba2ab00af886d357da310"
       }
     ]
   },
@@ -80,6 +80,19 @@
         {
           "alg": "SHA-512",
           "content": "4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@axe-core/playwright",
+      "version": "4.13.0",
+      "purl": "pkg:npm/@axe-core%2Fplaywright@4.13.0",
+      "bomRef": "pkg:npm/@axe-core%2Fplaywright@4.13.0",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "6YLx+kxXu5GJceG4ozFg+33a2EMTdjYwWGloJ3sb9Kta5pp+ZNS53uxGVog5JetIY8s++P5UrtX+cri+u0VAVg=="
         }
       ]
     },
@@ -2576,6 +2589,19 @@
         {
           "alg": "SHA-512",
           "content": "MaU0U/za7N3r6brxD4YB/l4NSrFzLPlANv6wEuQVaIPlD3L4W9rFcQPbL/EilY9BHhHvhfcz3gInDLrEtWT4EA=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "axe-core",
+      "version": "4.13.0",
+      "purl": "pkg:npm/axe-core@4.13.0",
+      "bomRef": "pkg:npm/axe-core@4.13.0",
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "UzGt8zg7Ny8djbYMhxl2zuEevVa7r2gJjYY5Lwr1xM7+XU2nd6CkIWFTVcCIbAP63vSz71NaVyyuSk9lHKcy0A=="
         }
       ]
     },

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
+  <title>Attendance Register — Rampur High School (2026-08-01 to 2026-08-31)</title>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --border: #d1d5db;
+      --bg-gray: #f9fafb;
+      --text-main: #111827;
+      --text-muted: #4b5563;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "SolaimanLipi", "Noto Sans Bengali", sans-serif;
+      color: var(--text-main);
+      background: #f3f4f6;
+      line-height: 1.4;
+      font-size: 13px;
+      padding: 20px;
+    }
+    .bengali-text {
+      font-family: "SolaimanLipi", "Noto Sans Bengali", "Bangla", sans-serif;
+    }
+    .page-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 30px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .cover-sheet {
+      text-align: center;
+      border: 2px solid var(--primary);
+      padding: 24px;
+      margin-bottom: 30px;
+      background: #eff6ff;
+    }
+    .school-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+    .gov-heading {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e40af;
+      margin-bottom: 12px;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      text-align: left;
+      background: #ffffff;
+      padding: 14px;
+      border: 1px solid #bfdbfe;
+      margin-top: 14px;
+      font-size: 12px;
+    }
+    .disclaimer-banner {
+      margin-top: 14px;
+      padding: 8px 12px;
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      font-size: 11px;
+      text-align: left;
+    }
+    .register-section {
+      margin-top: 30px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .class-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+    .attendance-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      text-align: left;
+    }
+    .attendance-table th, .attendance-table td {
+      border: 1px solid var(--border);
+      padding: 5px 6px;
+      white-space: nowrap;
+    }
+    .attendance-table th {
+      background: var(--bg-gray);
+      font-weight: 700;
+      color: #374151;
+      text-align: center;
+    }
+    .attendance-table th.non-working {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .text-center { text-align: center; }
+    .font-bold { font-weight: 700; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .text-xs { font-size: 10px; }
+    .text-red { color: #dc2626; }
+    
+    /* Attendance status badges */
+    .status-p { background: #dcfce7; color: #166534; font-weight: bold; text-align: center; }
+    .status-l { background: #fef9c3; color: #854d0e; font-weight: bold; text-align: center; }
+    .status-a { background: #fee2e2; color: #991b1b; font-weight: bold; text-align: center; }
+    .status-e { background: #e0e7ff; color: #3730a3; text-align: center; }
+    .status-h { background: #f3f4f6; color: #6b7280; text-align: center; }
+    .status-w { background: #f3f4f6; color: #9ca3af; text-align: center; }
+    .status-u { background: #ffedd5; color: #9a3412; text-align: center; }
+
+    .sign-off-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 30px;
+      padding-top: 10px;
+    }
+    .sign-box {
+      text-align: center;
+    }
+    .sign-line {
+      border-top: 1px solid #4b5563;
+      margin-bottom: 6px;
+      width: 80%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .date-line {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+        font-size: 10px;
+      }
+      .page-container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .page-break {
+        page-break-after: always;
+        break-after: page;
+      }
+      .attendance-table {
+        font-size: 9px;
+      }
+      .attendance-table th, .attendance-table td {
+        padding: 3px 4px;
+      }
+      @page {
+        size: A4 landscape;
+        margin: 8mm;
+      }
+      thead {
+        display: table-header-group;
+      }
+      tr {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <!-- Cover & School Header -->
+    <div class="cover-sheet">
+      <h1 class="school-title">Rampur High School</h1>
+      <p class="gov-heading">MANAGEMENT ATTENDANCE REGISTER & STATISTICAL RETURN</p>
+      <p>Department of School Education | Government of West Bengal Scope</p>
+      
+      <div class="meta-grid">
+        <div><strong>UDISE Code:</strong> 19100100101</div>
+        <div><strong>School Code:</strong> N/A</div>
+        <div><strong>District:</strong> Murshidabad</div>
+        <div><strong>Block/Circle:</strong> Raninagar-I</div>
+        <div><strong>Headmaster:</strong> N/A</div>
+        <div><strong>Reporting Period:</strong> 2026-08-01 to 2026-08-31</div>
+        <div><strong>Report Version:</strong> v7</div>
+        <div><strong>Internal Approval:</strong> VALIDATED</div>
+      </div>
+
+      <div class="disclaimer-banner">
+        <strong>DISCLAIMER:</strong> This document is generated as an internal school management attendance record. It does not represent direct online integration with Banglar Shiksha or UDISE+ portals, nor official government certification.
+      </div>
+    </div>
+
+    <!-- Class Section Registers -->
+    
+      <section class="register-section page-break">
+        <div class="section-header">
+          <div>
+            <h2 class="class-title">Class: Class 5 | Section: A</h2>
+            <p class="subtitle">Enrolled Students: 2 | Period: 2026-08-01 to 2026-08-31</p>
+          </div>
+          <div class="school-mini-meta">
+            <span>UDISE: 19100100101</span>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+      <th>Roll</th>
+      <th>Student ID</th>
+      <th>Banglar Shiksha ID</th>
+      <th>Student Name (EN)</th>
+      <th>Student Name (BN)</th>
+    <th  title="WORKING_DAY">1</th><th class="non-working" title="SUNDAY_WEEKEND">2</th><th  title="WORKING_DAY">3</th><th  title="WORKING_DAY">4</th><th  title="WORKING_DAY">5</th><th  title="WORKING_DAY">6</th><th  title="WORKING_DAY">7</th><th  title="WORKING_DAY">8</th><th class="non-working" title="SUNDAY_WEEKEND">9</th><th  title="WORKING_DAY">10</th><th  title="WORKING_DAY">11</th><th  title="WORKING_DAY">12</th><th  title="WORKING_DAY">13</th><th  title="WORKING_DAY">14</th><th  title="WORKING_DAY">15</th><th class="non-working" title="SUNDAY_WEEKEND">16</th><th  title="WORKING_DAY">17</th><th  title="WORKING_DAY">18</th><th  title="WORKING_DAY">19</th><th  title="WORKING_DAY">20</th><th  title="WORKING_DAY">21</th><th  title="WORKING_DAY">22</th><th class="non-working" title="SUNDAY_WEEKEND">23</th><th  title="WORKING_DAY">24</th><th  title="WORKING_DAY">25</th><th  title="WORKING_DAY">26</th><th  title="WORKING_DAY">27</th><th  title="WORKING_DAY">28</th><th  title="WORKING_DAY">29</th><th class="non-working" title="SUNDAY_WEEKEND">30</th><th  title="WORKING_DAY">31</th>
+      <th>P</th>
+      <th>L</th>
+      <th>A</th>
+      <th>E</th>
+      <th>Rate %</th>
+    </tr>
+            </thead>
+            <tbody>
+              
+        <tr>
+          <td class="text-center font-bold">1</td>
+          <td class="font-mono text-xs">E2E-1</td>
+          <td class="font-mono text-xs">—</td>
+          <td>E2E Student One</td>
+          <td class="bengali-text">—</td>
+          <td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td>
+          <td class="text-center">0</td>
+          <td class="text-center">0</td>
+          <td class="text-center font-bold ">0</td>
+          <td class="text-center">0</td>
+          <td class="text-center font-bold">0%</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center font-bold">2</td>
+          <td class="font-mono text-xs">E2E-2</td>
+          <td class="font-mono text-xs">—</td>
+          <td>E2E Student Two</td>
+          <td class="bengali-text">—</td>
+          <td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="">-</td><td class="status-w">W</td><td class="">-</td>
+          <td class="text-center">0</td>
+          <td class="text-center">0</td>
+          <td class="text-center font-bold ">0</td>
+          <td class="text-center">0</td>
+          <td class="text-center font-bold">0%</td>
+        </tr>
+      
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sign-off-grid">
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <p>Class Teacher's Signature</p>
+            <p class="date-line">Date: _______________</p>
+          </div>
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <p>Headmaster / Principal's Seal & Signature</p>
+            <p class="date-line">Date: _______________</p>
+          </div>
+        </div>
+      </section>
+    
+      <section class="register-section page-break">
+        <div class="section-header">
+          <div>
+            <h2 class="class-title">Class: Class 6 | Section: A</h2>
+            <p class="subtitle">Enrolled Students: 0 | Period: 2026-08-01 to 2026-08-31</p>
+          </div>
+          <div class="school-mini-meta">
+            <span>UDISE: 19100100101</span>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+      <th>Roll</th>
+      <th>Student ID</th>
+      <th>Banglar Shiksha ID</th>
+      <th>Student Name (EN)</th>
+      <th>Student Name (BN)</th>
+    <th  title="WORKING_DAY">1</th><th class="non-working" title="SUNDAY_WEEKEND">2</th><th  title="WORKING_DAY">3</th><th  title="WORKING_DAY">4</th><th  title="WORKING_DAY">5</th><th  title="WORKING_DAY">6</th><th  title="WORKING_DAY">7</th><th  title="WORKING_DAY">8</th><th class="non-working" title="SUNDAY_WEEKEND">9</th><th  title="WORKING_DAY">10</th><th  title="WORKING_DAY">11</th><th  title="WORKING_DAY">12</th><th  title="WORKING_DAY">13</th><th  title="WORKING_DAY">14</th><th  title="WORKING_DAY">15</th><th class="non-working" title="SUNDAY_WEEKEND">16</th><th  title="WORKING_DAY">17</th><th  title="WORKING_DAY">18</th><th  title="WORKING_DAY">19</th><th  title="WORKING_DAY">20</th><th  title="WORKING_DAY">21</th><th  title="WORKING_DAY">22</th><th class="non-working" title="SUNDAY_WEEKEND">23</th><th  title="WORKING_DAY">24</th><th  title="WORKING_DAY">25</th><th  title="WORKING_DAY">26</th><th  title="WORKING_DAY">27</th><th  title="WORKING_DAY">28</th><th  title="WORKING_DAY">29</th><th class="non-working" title="SUNDAY_WEEKEND">30</th><th  title="WORKING_DAY">31</th>
+      <th>P</th>
+      <th>L</th>
+      <th>A</th>
+      <th>E</th>
+      <th>Rate %</th>
+    </tr>
+            </thead>
+            <tbody>
+              
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sign-off-grid">
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <p>Class Teacher's Signature</p>
+            <p class="date-line">Date: _______________</p>
+          </div>
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <p>Headmaster / Principal's Seal & Signature</p>
+            <p class="date-line">Date: _______________</p>
+          </div>
+        </div>
+      </section>
+    
+
+    <!-- Consecutive Absences -->
+    
+
+    <!-- Corrections Log -->
+    
+  </div>
+</body>
+</html>

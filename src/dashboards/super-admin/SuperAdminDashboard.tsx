@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StatCard } from '../../components/shared/StatCard';
 import { LoadingState } from '../../components/shared/LoadingState';
 import { ErrorState } from '../../components/shared/ErrorState';
@@ -7,13 +7,137 @@ import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { PLAIN_TERMS } from '../../utils/superAdminPlainTermsMapper';
-import { 
-  Plus, 
+import {
+  Plus,
   Download,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Settings2,
+  Save,
 } from 'lucide-react';
 
+// ─── Platform Settings Panel ───────────────────────────────────────────────
+const SETTING_LABELS: Record<string, string> = {
+  hero_subtitle:       'Hero Subtitle',
+  pricing_amount:      'Pricing Amount (e.g. ₹130)',
+  pricing_per_student: 'Pricing Label (e.g. per student / year)',
+  pricing_free_note:   'Free Tier Note',
+  testimonial_1_quote: 'Testimonial 1 — Quote',
+  testimonial_1_name:  'Testimonial 1 — Name',
+  testimonial_1_role:  'Testimonial 1 — Role',
+  testimonial_1_count: 'Testimonial 1 — Student Count',
+  testimonial_2_quote: 'Testimonial 2 — Quote',
+  testimonial_2_name:  'Testimonial 2 — Name',
+  testimonial_2_role:  'Testimonial 2 — Role',
+  testimonial_2_count: 'Testimonial 2 — Student Count',
+  demo_video_url:      'Demo Video URL (leave blank to hide)',
+};
+
+const PlatformSettingsPanel: React.FC = () => {
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    api<{ success: boolean; settings: Record<string, string> }>('/api/v1/admin/platform-settings')
+      .then((res) => { if (res.success) setSettings(res.settings); })
+      .catch(() => {})
+      .finally(() => setLoadingSettings(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      const res = await api<{ success: boolean; message?: string }>('/api/v1/admin/platform-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      });
+      if (res.success) {
+        setSaveSuccess(true);
+        if (successTimer.current) clearTimeout(successTimer.current);
+        successTimer.current = setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        setSaveError(res.message || 'Save failed');
+      }
+    } catch (err: any) {
+      setSaveError(err.message || 'Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="app-card p-6 sm:p-7 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Settings2 className="w-5 h-5 text-forest-700 dark:text-forest-600" />
+          <div>
+            <h3 className="text-base font-extrabold text-ink font-display">Platform Settings</h3>
+            <p className="t-body text-xs text-ink-soft mt-0.5">Edit landing page content — changes go live immediately</p>
+          </div>
+        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleSave}
+          disabled={saving || loadingSettings}
+          leftIcon={<Save className="w-4 h-4" />}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
+
+      {saveSuccess && (
+        <div className="text-xs font-bold text-success-800 bg-success-50 border border-success-100 dark:border-success-600/30 rounded-2xl px-4 py-2.5 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Settings saved successfully.
+        </div>
+      )}
+      {saveError && (
+        <div className="text-xs font-bold text-warning-800 bg-warning-50 border border-warning-100 dark:border-warning-600/30 rounded-2xl px-4 py-2.5">
+          {saveError}
+        </div>
+      )}
+
+      {loadingSettings ? (
+        <p className="text-xs text-ink-soft py-4 text-center">Loading settings…</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.entries(SETTING_LABELS).map(([key, label]) => (
+            <div key={key} className="space-y-1">
+              <label htmlFor={`ps-${key}`} className="block text-xs font-bold text-ink-soft">{label}</label>
+              {key.includes('quote') ? (
+                <textarea
+                  id={`ps-${key}`}
+                  rows={3}
+                  value={settings[key] ?? ''}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.value }))}
+                  className="w-full rounded-xl border border-line bg-surface text-sm text-ink px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-700/30 resize-none font-sans"
+                />
+              ) : (
+                <input
+                  id={`ps-${key}`}
+                  type="text"
+                  value={settings[key] ?? ''}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.value }))}
+                  className="w-full rounded-xl border border-line bg-surface text-sm text-ink px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-700/30"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Main Dashboard ─────────────────────────────────────────────────────────
 export const SuperAdminDashboard: React.FC = () => {
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -275,6 +399,9 @@ export const SuperAdminDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Platform Settings */}
+      <PlatformSettingsPanel />
 
       {/* Bottom Row (2 Column Grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">

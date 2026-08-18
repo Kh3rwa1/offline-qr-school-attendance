@@ -1,71 +1,74 @@
-# Academic Calendar & Working-Day Management
+# Academic Calendar and Working-Day Governance
 
-## Importance in Government-Ready Reporting
+## Purpose
 
-Accurate attendance percentage calculations require strict separation of actual instructional/session days from holidays, vacations, and emergency closures.
+Attendance denominators depend on whether each school date is a working day. Calendar data must therefore be reviewed rather than silently assumed. The system does not describe a template, imported list, or approximate movable holiday as an official government calendar.
 
-Under statutory school attendance rules:
-- **Holidays must NEVER be counted as absences.**
-- **Emergency school closures must NEVER penalize student attendance records.**
-- **Working days are dynamically calculated based on the official school calendar.**
+## Version lifecycle
 
----
+Each school and academic year can have versioned calendars:
 
-## 1. Calendar Day Classifications
+- `DRAFT` — editable and not authoritative;
+- `APPROVED` — active for reporting after review;
+- `SUPERSEDED` — retained as history after a newer version is approved.
 
-The system supports the following day classifications:
+Approving a draft supersedes the prior approved version for that school and academic year. Reports snapshot the selected calendar version so later calendar edits do not rewrite the history of an existing artifact.
 
-1. **`WORKING_DAY`**: Standard instructional school day (`isWorkingDay = true`).
-2. **`SUNDAY_WEEKEND`**: Weekly scheduled non-working day (`isWorkingDay = false`).
-3. **`GOVERNMENT_HOLIDAY`**: State gazetted or central public holiday (`isWorkingDay = false`).
-4. **`SCHOOL_HOLIDAY`**: Institutional holiday declared by the Managing Committee (`isWorkingDay = false`).
-5. **`VACATION`**: Scheduled long break (Summer, Puja, Winter) (`isWorkingDay = false`).
-6. **`EXAMINATION_DAY`**: Designated exam day (`isWorkingDay = true`).
-7. **`EMERGENCY_CLOSURE`**: Unscheduled closure due to weather, natural disaster, or local administrative order (`isWorkingDay = false`).
-8. **`OPTIONAL_WORKING_DAY`**: Special working Saturday or compensation day (`isWorkingDay = true`).
+## Source provenance
 
----
+Calendar versions and days record a source type:
 
-## 2. Default West Bengal Gazetted Holidays
+- `SCHOOL_CONFIRMED` — reviewed against the school's authorized source;
+- `DEPARTMENT_ORDER` — entered from a referenced departmental order;
+- `LEGACY_UNVERIFIED` — migrated data whose provenance was not established;
+- `SYSTEM_TEMPLATE` — generated starting point that requires school review.
 
-The system includes pre-configured West Bengal gazetted holidays:
+Use `sourceReference` for an order number, circular, meeting resolution, or other traceable citation. A source label records provenance; it does not cause the software to independently verify the source.
 
-- **January 23**: Netaji Subhas Chandra Bose Jayanti
-- **January 26**: Republic Day
-- **February (Variable)**: Saraswati Puja / Vasant Panchami
-- **March (Variable)**: Doljatra / Holi
-- **April 14**: Dr. B.R. Ambedkar Jayanti / Poila Baisakh (Bengali New Year)
-- **April (Variable)**: Good Friday
-- **April / May (Variable)**: Eid-ul-Fitr
-- **May 01**: May Day (Labour Day)
-- **May 09**: Rabindra Jayanti
-- **June / July (Variable)**: Eid-uz-Zoha (Bakrid)
-- **July / August (Variable)**: Muharram
-- **August 15**: Independence Day
-- **September / October (Variable)**: Janmashtami / Fateha-Dwaz-Daham
-- **October 02**: Mahatma Gandhi Jayanti
-- **October / November (Variable)**: Mahalaya, Durga Puja (Maha Saptami through Vijaya Dashami), Lakshmi Puja, Kali Puja, Diwali, Bhatridwitiya (Bhai Dooj), Chhath Puja
-- **November 15**: Birsa Munda Jayanti
-- **November (Variable)**: Guru Nanak Jayanti
-- **December 25**: Christmas Day
+## Approximate dates
 
----
+Movable holidays and imported estimates must set `isApproximate=true`. A calendar version containing any approximate day cannot be approved. A reviewer must confirm or correct each date and update the entry to `isApproximate=false` before approval.
 
-## 3. Bulk Vacation Setup
+This protects reports from treating guessed dates as authoritative.
 
-School Administrators can apply bulk date ranges for seasonal vacations:
+## Day classifications
 
-```http
-POST /api/v1/schools/{schoolId}/calendar/range
-Content-Type: application/json
+| Classification | Default meaning |
+|---|---|
+| `WORKING_DAY` | Standard instructional day |
+| `SUNDAY_WEEKEND` | Weekly non-working day |
+| `GOVERNMENT_HOLIDAY` | Holiday entered from a referenced authority source |
+| `SCHOOL_HOLIDAY` | School-declared holiday |
+| `VACATION` | Scheduled vacation |
+| `EXAMINATION_DAY` | Examination day; set `isWorkingDay` to the school's reviewed policy |
+| `EMERGENCY_CLOSURE` | Unscheduled closure |
+| `OPTIONAL_WORKING_DAY` | Reviewed special working day |
 
-{
-  "startDate": "2026-10-18",
-  "endDate": "2026-10-25",
-  "classification": "VACATION",
-  "reason": "Durga Puja Vacation",
-  "isWorkingDay": false
-}
-```
+`isWorkingDay` is stored explicitly. Reports use the reviewed flag rather than inferring it only from the label.
 
-All dates in the specified range will be classified accordingly and excluded from student absence calculations.
+## Review procedure
+
+1. Create or import a `DRAFT` version for one academic year.
+2. Enter `sourceType` and a meaningful `sourceReference`.
+3. Review every day classification and working-day flag.
+4. Resolve every approximate date.
+5. Check that emergency closures, vacations, weekends, examinations, and special working days reflect the school's records.
+6. Approve the version as a `SCHOOL_ADMIN` or `HEAD_TEACHER`.
+7. Generate a validation preview and review any remaining missing-calendar warning before producing a report.
+
+## Reporting behavior
+
+- Approved working days contribute to the working-day count.
+- Approved non-working days do not create absence rows.
+- Attendance sessions cancelled by the school are not counted as finalized attendance.
+- Unmarked working days remain visible as warnings or missing-data rows.
+- If a period crosses academic years, the service resolves each year's approved calendar independently.
+- If no approved version exists, validation reports the gap instead of calling an unreviewed template official.
+
+## Legacy data
+
+Migration preserves prior calendar rows by associating them with a `LEGACY_UNVERIFIED` version. This preserves records without overstating their authority. Review and replace legacy versions before relying on them for new operational reporting.
+
+## Claim boundary
+
+The calendar workflow provides versioning, provenance, review, and technical enforcement. It does not supply legal advice or automatically establish that a date list is the current official calendar for a state or education authority.

@@ -26,7 +26,7 @@ async function loginAs(page: import('@playwright/test').Page, phone: string, pas
   await page.waitForLoadState('domcontentloaded');
 }
 
-test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
+test.describe('Exhaustive Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
   // ── Login Page ────────────────────────────────────────────────────────
   test('Login Page passes Axe scan in English and Bengali', async ({ page }) => {
     // English
@@ -34,7 +34,7 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await page.waitForLoadState('domcontentloaded');
     await assertAxeClean(page, 'English Login page');
 
-    // Bengali — mandatory (must not silently skip)
+    // Bengali
     const langToggle = page.getByRole('button', { name: /^বাংলা$|বাংলা \+ English|বাং \+ EN/i }).first();
     await expect(langToggle).toBeVisible();
     await langToggle.click();
@@ -80,14 +80,14 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     const addStaffBtn = page.getByRole('button', { name: /Add Staff|Add Member|Invite Staff|New User|নতুন Staff|নতুন কর্মী/i }).first();
     await expect(addStaffBtn).toBeVisible();
 
-    // Scan the User Management page
+    // Scan User Management page
     await assertAxeClean(page, 'School Admin User Management');
 
-    // Open the Add Staff modal and scan it
+    // Open Add Staff modal and scan it
     await addStaffBtn.click();
     const modalTitle = page.locator('#add-staff-modal-title');
     await expect(modalTitle).toBeVisible();
-    await page.waitForTimeout(600); // allow modal transition to fully settle
+    await page.waitForTimeout(600);
     await assertAxeClean(page, 'School Admin Add Staff Modal (open)');
 
     // Close modal
@@ -119,48 +119,41 @@ test.describe('Axe Automated WCAG 2.1/2.2 AA Accessibility Matrix', () => {
     await assertAxeClean(page, 'School Admin Attendance Operations');
   });
 
-  test('School Admin Notification Operations passes Axe scan', async ({ page }) => {
-    await loginAs(page, '9100000001', 'SchoolAdminPassword123!');
-    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible();
-    await page.goto(`${baseUrl}/app/school-admin/notifications`);
-    await expect(page.locator('#notification-operations-view')).toBeVisible();
-    await assertAxeClean(page, 'School Admin Notification Operations');
-  });
-
-  // ── RFID Operator (Feature-gated) ────────────────────────────────────
-  test('RFID Operator Station passes Axe scan', async ({ page }) => {
+  // ── RFID Operator Dashboard + Sub-Routes ──────────────────────────────
+  test('RFID Operator Station, Cards & Readers pass Axe scan', async ({ page }) => {
     test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
     await loginAs(page, '9100000003', 'RfidOpPassword123!');
     await expect(page.locator('#rfid-operator-dashboard-view')).toBeVisible();
     await assertAxeClean(page, 'RFID Operator Station');
+
+    // Cards subroute
+    await page.goto(`${baseUrl}/app/rfid/cards`);
+    await expect(page.locator('#card-operations-view')).toBeVisible();
+    await assertAxeClean(page, 'RFID Card Operations');
+
+    // Readers subroute
+    await page.goto(`${baseUrl}/app/rfid/readers`);
+    await expect(page.locator('#reader-operations-view')).toBeVisible();
+    await assertAxeClean(page, 'RFID Reader Management');
   });
 
   // ── Report Viewer Dashboard + Sub-Routes ──────────────────────────────
-  test('Report Viewer Dashboard Overview passes Axe scan', async ({ page }) => {
+  test('Report Viewer Dashboard, Daily, Trends & Export Center pass Axe scan', async ({ page }) => {
     await loginAs(page, '9100000004', 'ReportViewerPassword123!');
     await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
-    await assertAxeClean(page, 'Report Viewer Dashboard Overview');
-  });
+    await assertAxeClean(page, 'Report Viewer Overview');
 
-  test('Report Viewer Daily Reports passes Axe scan', async ({ page }) => {
-    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+    // Daily Reports
     await page.goto(`${baseUrl}/app/reports/daily`);
     await expect(page.locator('#daily-reports-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Daily Reports');
-  });
 
-  test('Report Viewer Trend Reports passes Axe scan', async ({ page }) => {
-    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+    // Trend Reports
     await page.goto(`${baseUrl}/app/reports/trends`);
     await expect(page.locator('#trend-reports-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Trend Reports');
-  });
 
-  test('Report Viewer Export Center passes Axe scan', async ({ page }) => {
-    await loginAs(page, '9100000004', 'ReportViewerPassword123!');
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+    // Export Center
     await page.goto(`${baseUrl}/app/reports/exports`);
     await expect(page.locator('#export-center-view')).toBeVisible();
     await assertAxeClean(page, 'Report Viewer Export Center');

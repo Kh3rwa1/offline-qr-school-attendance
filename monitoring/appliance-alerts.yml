@@ -1,0 +1,50 @@
+# ============================================================================
+# AttendEase OS - Appliance Reachability & Alert Pipeline Health
+# ============================================================================
+# The existing rule files (alerts.yaml, rfid-alerts.yml) assume metrics are
+# arriving. These rules cover the case that matters most to a school with no IT
+# staff: the appliance itself, or the alerting pipeline, has stopped entirely.
+# ============================================================================
+groups:
+  - name: appliance_reachability
+    rules:
+      - alert: ApplianceAppDown
+        expr: up{job="attendease-app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Attendance appliance is not responding"
+          description: "The application container has been unreachable for over 2 minutes. Teachers cannot sync attendance until it recovers."
+
+      - alert: ApplianceRfidGatewayDown
+        expr: up{job="attendease-rfid-gateway"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RFID gate gateway is not responding"
+          description: "The RFID gateway has been unreachable for over 5 minutes. Gate scans are not being persisted."
+
+      - alert: MetricsScrapeFailing
+        expr: up{job="attendease-app"} == 0 or absent(up{job="attendease-app"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Metrics collection from the appliance is failing"
+          description: "Prometheus cannot scrape /metrics. Check that METRICS_AUTH_TOKEN matches between the app and Prometheus."
+
+  - name: alert_pipeline_health
+    rules:
+      # Dead-man's switch. This alert fires continuously by design and is routed
+      # to a separate heartbeat receiver. If you stop receiving it, the alerting
+      # pipeline itself is broken - which is otherwise completely invisible.
+      # Point WATCHDOG_WEBHOOK_URL at a service such as healthchecks.io.
+      - alert: AlertingPipelineWatchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline heartbeat"
+          description: "Confirms Prometheus and Alertmanager are both alive and able to deliver notifications."

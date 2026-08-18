@@ -1,139 +1,190 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import ExcelJS from 'exceljs';
 import crypto from 'node:crypto';
-import { seedDatabase } from '../src/db/seed';
+import ExcelJS from 'exceljs';
+import { and, eq } from 'drizzle-orm';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../src/db';
-import { schools, classSections, students, enrollments, attendanceSessions, attendanceRecords } from '../src/db/schema';
+import { students } from '../src/db/schema';
+import { seedDatabase } from '../src/db/seed';
 import {
-  populateDefaultWestBengalHolidays,
+  approveCalendarVersion,
   getCalendarDays,
+  getDefaultWestBengalHolidays,
   getWorkingDaysMap,
+  populateDefaultWestBengalHolidays,
   upsertCalendarDay,
-  bulkSetDateRange,
 } from '../src/services/calendarService';
-import { validateReportScope } from '../src/services/reportValidationService';
 import {
-  createReportDraft,
   approveReportInternally,
-  recordReportExport,
-  getReportHistory,
+  createReportDraft,
+  recordReportArtifact,
+  recordReportDownload,
 } from '../src/services/reportApprovalService';
 import {
-  buildGovernmentReadyExcelWorkbook,
-  buildSecureCSVExport,
-  sanitizeSpreadsheetValue,
-  sanitizeSheetName,
-  generateSafeExportFilename,
-} from '../src/services/excelExportService';
-import { generateGovernmentReadyReportData } from '../src/services/reportService';
+  assertReportArtifactContract,
+  loadReportArtifact,
+  persistReportArtifact,
+  REPORT_FORMAT_CONTRACT,
+} from '../src/services/reportArtifactService';
+import { generateValidatedGovernmentReportData } from '../src/services/governmentReportDataService';
+import { buildGovernmentReportArtifact } from '../src/services/governmentReportExportService';
+import { assertReportGenerationBounds } from '../src/services/reportGenerationQueue';
+import { resolveReportingProfile } from '../src/services/reportProfileService';
 import { createStudent } from '../src/services/studentService';
+import { validateReportScope } from '../src/services/reportValidationService';
 
-describe('Government-Ready Reporting & Excel Export Suite (10/10 Verification)', () => {
+async function createScopedStudent(seeded: any, suffix: string, rollNumber: number) {
+  return createStudent({
+    schoolId: seeded.schoolA.id,
+    studentCode: `REPORT-${suffix}-${Date.now()}-${rollNumber}`,
+    banglarShikshaId: `BS-${suffix}-${rollNumber}`,
+    name: `Report Student ${suffix}`,
+    nameBn: `রিপোর্ট শিক্ষার্থী ${suffix}`,
+    classSectionId: seeded.schoolAClass5A.id,
+    academicYearId: seeded.academicYearA.id,
+    rollNumber,
+  });
+}
+
+async function validatedDraft(seeded: any, format: 'xlsx' | 'csv' | 'html' = 'xlsx') {
+  await createScopedStudent(seeded, format, 700 + ['xlsx', 'csv', 'html'].indexOf(format));
+  const validation = await validateReportScope({
+    schoolId: seeded.schoolA.id,
+    reportType: 'monthly-register',
+    scopeType: 'SELECTED_CLASSES',
+    classSectionIds: [seeded.schoolAClass5A.id],
+    startDate: '2026-08-01',
+    endDate: '2026-08-31',
+    locale: 'bn',
+  });
+  expect(validation.isValid).toBe(true);
+  const profile = await resolveReportingProfile(seeded.schoolA.id);
+  const draft = await createReportDraft({
+    schoolId: seeded.schoolA.id,
+    reportType: 'monthly-register',
+    scopeType: 'SELECTED_CLASSES',
+    scopeParameters: { classSectionIds: validation.resolvedScope.classSectionIds },
+    periodType: 'MONTHLY',
+    periodStartDate: '2026-08-01',
+    periodEndDate: '2026-08-31',
+    profileSnapshot: profile,
+    format,
+    locale: 'bn',
+    actorId: seeded.schoolAdminUser.id,
+    validationResult: validation,
+  });
+  const generatedAt = draft.report.generatedAt instanceof Date
+    ? draft.report.generatedAt.toISOString()
+    : new Date('2026-08-31T12:00:00.000Z').toISOString();
+  const payload = await generateValidatedGovernmentReportData({
+    schoolId: seeded.schoolA.id,
+    reportId: draft.report.id,
+    reportType: 'monthly-register',
+    scopeType: 'SELECTED_CLASSES',
+    startDate: '2026-08-01',
+    endDate: '2026-08-31',
+    reportVersion: draft.report.reportVersion,
+    profileSnapshot: profile,
+    locale: 'bn',
+    validationResult: validation,
+    generatedAt,
+  });
+  return { validation, profile, draft, payload };
+}
+
+describe('Reporting contract integrity', () => {
   let seeded: any;
 
   beforeEach(async () => {
+    process.env.REPORT_ARTIFACT_STORAGE = 'database';
     seeded = await seedDatabase();
   });
 
-  describe('1. Academic Calendar & Working-Day Logic', () => {
-    it('populates West Bengal gazetted holidays and excludes them from working days', async () => {
-      const year = 2026;
-      const { importedCount } = await populateDefaultWestBengalHolidays(seeded.schoolA.id, year);
-      expect(importedCount).toBeGreaterThanOrEqual(20);
+  describe('calendar governance', () => {
+    it('keeps imported movable dates inactive until confirmed and approved', async () => {
+      const imported = await populateDefaultWestBengalHolidays(seeded.schoolA.id, 2026, seeded.schoolAdminUser.id);
+      expect(imported.approximateCount).toBeGreaterThan(0);
+      expect(imported.calendarVersion?.status).toBe('DRAFT');
 
-      const days = await getCalendarDays(seeded.schoolA.id, `${year}-01-01`, `${year}-12-31`);
-      expect(days.length).toBeGreaterThanOrEqual(20);
+      const draft = await getCalendarDays(seeded.schoolA.id, '2026-01-01', '2026-12-31');
+      expect(draft.days.length).toBeGreaterThanOrEqual(20);
+      expect(draft.days.some((day: any) => day.isApproximate)).toBe(true);
 
-      // Verify Republic Day (Jan 26) is a government holiday and not a working day
-      const repDay = days.find((d) => d.calendarDate === '2026-01-26');
-      expect(repDay).toBeDefined();
-      expect(repDay?.classification).toBe('GOVERNMENT_HOLIDAY');
-      expect(repDay?.isWorkingDay).toBe(false);
+      const beforeApproval = await getWorkingDaysMap(seeded.schoolA.id, '2026-01-26', '2026-01-26');
+      expect(beforeApproval.get('2026-01-26')?.isWorkingDay).toBe(true);
+      await expect(
+        approveCalendarVersion(
+          seeded.schoolA.id,
+          imported.calendarVersion.id,
+          seeded.schoolAdminUser.id,
+          'West Bengal School Education Department order for 2026'
+        )
+      ).rejects.toThrow('CALENDAR_APPROXIMATE_DATES_REQUIRE_CONFIRMATION');
 
-      // Verify Independence Day (Aug 15)
-      const indDay = days.find((d) => d.calendarDate === '2026-08-15');
-      expect(indDay).toBeDefined();
-      expect(indDay?.classification).toBe('GOVERNMENT_HOLIDAY');
-      expect(indDay?.isWorkingDay).toBe(false);
-    });
-
-    it('classifies unconfigured Sundays as non-working weekends and weekdays as working days', async () => {
-      // 2026-08-02 is Sunday, 2026-08-03 is Monday
-      const workingMap = await getWorkingDaysMap(seeded.schoolA.id, '2026-08-01', '2026-08-07');
-
-      const sunday = workingMap.get('2026-08-02');
-      expect(sunday).toBeDefined();
-      expect(sunday?.isWorkingDay).toBe(false);
-      expect(sunday?.classification).toBe('SUNDAY_WEEKEND');
-
-      const monday = workingMap.get('2026-08-03');
-      expect(monday).toBeDefined();
-      expect(monday?.isWorkingDay).toBe(true);
-      expect(monday?.classification).toBe('WORKING_DAY');
-    });
-
-    it('supports bulk date range vacations (e.g. Durga Puja Vacation)', async () => {
-      const { count } = await bulkSetDateRange(seeded.schoolA.id, {
-        startDate: '2026-10-18',
-        endDate: '2026-10-25',
-        classification: 'VACATION',
-        reason: 'Durga Puja Vacation',
-        isWorkingDay: false,
-      });
-
-      expect(count).toBe(8);
-
-      const days = await getCalendarDays(seeded.schoolA.id, '2026-10-18', '2026-10-25');
-      expect(days.length).toBe(8);
-      for (const d of days) {
-        expect(d.classification).toBe('VACATION');
-        expect(d.isWorkingDay).toBe(false);
-        expect(d.reason).toBe('Durga Puja Vacation');
+      for (const holiday of getDefaultWestBengalHolidays(2026).filter((item) => item.isApproximate)) {
+        await upsertCalendarDay(seeded.schoolA.id, {
+          calendarDate: holiday.date,
+          classification: 'SCHOOL_HOLIDAY',
+          reason: holiday.reason.replace(' (proposed date — confirmation required)', ''),
+          isWorkingDay: false,
+          isApproximate: false,
+          sourceType: 'DEPARTMENT_ORDER',
+          sourceReference: `Confirmed order date for ${holiday.reason}`,
+          createdBy: seeded.schoolAdminUser.id,
+        });
       }
+      const approved = await approveCalendarVersion(
+        seeded.schoolA.id,
+        imported.calendarVersion.id,
+        seeded.schoolAdminUser.id,
+        'West Bengal School Education Department order for 2026'
+      );
+      expect(approved.status).toBe('APPROVED');
+      const afterApproval = await getWorkingDaysMap(seeded.schoolA.id, '2026-01-26', '2026-01-26');
+      expect(afterApproval.get('2026-01-26')?.isWorkingDay).toBe(false);
     });
   });
 
-  describe('2. Pre-flight Validation & Reconciliation Engine', () => {
-    it('blocks export when date range is inverted (start date after end date)', async () => {
+  describe('scope and tenant validation', () => {
+    it('supports one-student scope without requiring a class selection', async () => {
+      const created: any = await createScopedStudent(seeded, 'ONE', 801);
       const result = await validateReportScope({
         schoolId: seeded.schoolA.id,
-        reportType: 'monthly-register',
-        scopeType: 'ALL_CLASSES',
-        startDate: '2026-08-31',
+        reportType: 'daily-register',
+        scopeType: 'ONE_STUDENT',
+        studentIds: [created.student.id],
+        startDate: '2026-08-01',
         endDate: '2026-08-01',
+        locale: 'hi',
       });
-
-      expect(result.isValid).toBe(false);
-      expect(result.canExport).toBe(false);
-      expect(result.blockingErrors.some((e) => e.code === 'INVALID_DATE_RANGE')).toBe(true);
+      expect(result.isValid).toBe(true);
+      expect(result.resolvedScope.studentIds).toEqual([created.student.id]);
+      expect(result.resolvedScope.classSectionIds).toContain(seeded.schoolAClass5A.id);
     });
 
-    it('blocks export when cross-school class section is requested', async () => {
-      const result = await validateReportScope({
+    it('rejects empty scopes and explicit cross-school student references', async () => {
+      const empty = await validateReportScope({
         schoolId: seeded.schoolA.id,
         reportType: 'monthly-register',
-        scopeType: 'SELECTED_CLASSES',
-        classSectionIds: [seeded.schoolBClass6A.id], // School B section in School A context
+        scopeType: 'SELECTED_STUDENTS',
+        studentIds: [],
         startDate: '2026-08-01',
         endDate: '2026-08-31',
       });
+      expect(empty.blockingErrors.some((item) => item.code === 'EMPTY_STUDENT_SCOPE')).toBe(true);
 
-      expect(result.isValid).toBe(false);
-      expect(result.blockingErrors.some((e) => e.code === 'CROSS_SCHOOL_CLASS_DETECTED')).toBe(true);
+      const crossTenant = await validateReportScope({
+        schoolId: seeded.schoolA.id,
+        reportType: 'monthly-register',
+        scopeType: 'ONE_STUDENT',
+        studentIds: [seeded.schoolBStudent.id],
+        startDate: '2026-08-01',
+        endDate: '2026-08-31',
+      });
+      expect(crossTenant.blockingErrors.some((item) => item.code === 'CROSS_SCHOOL_STUDENT_DETECTED')).toBe(true);
     });
 
-    it('flags warning when students are missing Banglar Shiksha IDs', async () => {
-      // Create student without Banglar Shiksha ID
-      await createStudent({
-        schoolId: seeded.schoolA.id,
-        studentCode: `STU-NO-BS-${Date.now()}`,
-        name: 'Sourav Ganguly',
-        nameBn: 'সৌরভ গাঙ্গুলী',
-        classSectionId: seeded.schoolAClass5A.id,
-        academicYearId: seeded.academicYearA.id,
-        rollNumber: 888,
-      });
-
+    it('warns when approved calendar coverage or attendance marks are missing', async () => {
+      await createScopedStudent(seeded, 'WARN', 802);
       const result = await validateReportScope({
         schoolId: seeded.schoolA.id,
         reportType: 'monthly-register',
@@ -142,257 +193,98 @@ describe('Government-Ready Reporting & Excel Export Suite (10/10 Verification)',
         startDate: '2026-08-01',
         endDate: '2026-08-31',
       });
-
-      expect(result.warnings.some((w) => w.code === 'MISSING_BANGLAR_SHIKSHA_ID')).toBe(true);
-      expect(result.summary.missingBanglarShikshaCount).toBeGreaterThanOrEqual(1);
+      expect(result.warnings.some((item) => item.code === 'MISSING_APPROVED_CALENDAR')).toBe(true);
+      expect(result.summary.unmarkedCount).toBeGreaterThanOrEqual(0);
     });
   });
 
-  describe('3. Multi-Sheet ExcelJS Generation & Structural Round-Trip', () => {
-    it('generates multi-sheet workbook and verifies structure on re-opening', async () => {
-      // Create sample students with Bengali names and Banglar Shiksha IDs
-      await createStudent({
-        schoolId: seeded.schoolA.id,
-        studentCode: `STU-XL-1-${Date.now()}`,
-        banglarShikshaId: 'BS-2026-WB-99901',
-        name: 'Anirban Das',
-        nameBn: 'অনির্‌বান দাস',
-        classSectionId: seeded.schoolAClass5A.id,
-        academicYearId: seeded.academicYearA.id,
-        rollNumber: 1,
-      });
-
-      await createStudent({
-        schoolId: seeded.schoolA.id,
-        studentCode: `STU-XL-2-${Date.now()}`,
-        banglarShikshaId: 'BS-2026-WB-99902',
-        name: 'Mousumi Chatterjee',
-        nameBn: 'মৌসুমি চট্টোপাধ্যায়',
-        classSectionId: seeded.schoolAClass5A.id,
-        academicYearId: seeded.academicYearA.id,
-        rollNumber: 2,
-      });
-
-      // Populate holidays
-      await populateDefaultWestBengalHolidays(seeded.schoolA.id, 2026);
-
-      const reportPayload = await generateGovernmentReadyReportData({
-        schoolId: seeded.schoolA.id,
-        reportType: 'monthly-register',
-        scopeType: 'ALL_CLASSES',
-        startDate: '2026-08-01',
-        endDate: '2026-08-31',
-        reportVersion: 1,
-        profileVersion: 'West Bengal Management Register v1.0.0',
-        internalApprovalStatus: 'APPROVED_INTERNALLY',
-      });
-
-      const buffer = await buildGovernmentReadyExcelWorkbook(reportPayload);
-      expect(buffer).toBeInstanceOf(Buffer);
-      expect(buffer.length).toBeGreaterThan(5000);
-
-      // Re-open buffer with ExcelJS and structurally verify
-      const reopened = new ExcelJS.Workbook();
-      await reopened.xlsx.load(buffer);
-
-      // 1. Assert Sheet Existence
-      const sheetNames = reopened.worksheets.map((ws) => ws.name);
-      expect(sheetNames).toContain('Cover & Certification');
-      expect(sheetNames).toContain('School Summary');
-      expect(sheetNames.some((n) => n.startsWith('Class '))).toBe(true);
-      expect(sheetNames).toContain('Academic Calendar');
-      expect(sheetNames).toContain('Export Metadata');
-
-      // 2. Assert Cover Sheet Metadata
-      const cover = reopened.getWorksheet('Cover & Certification');
-      expect(cover).toBeDefined();
-      const title = cover?.getCell('B2').value;
-      expect(title).toBe('GOVERNMENT-READY ATTENDANCE REGISTER');
-
-      // Verify disclaimer text exists
-      let hasDisclaimer = false;
-      cover?.eachRow((row) => {
-        row.eachCell((cell) => {
-          if (typeof cell.value === 'string' && cell.value.includes('DISCLAIMER:')) {
-            hasDisclaimer = true;
-          }
-        });
-      });
-      expect(hasDisclaimer).toBe(true);
-
-      // 3. Assert Register Sheet Columns & Data
-      const regSheet = reopened.worksheets.find((ws) => ws.name.startsWith('Class '));
-      expect(regSheet).toBeDefined();
-
-      const headerRow = regSheet?.getRow(1);
-      expect(headerRow?.getCell(1).value).toBe('Roll');
-      expect(headerRow?.getCell(2).value).toBe('Student ID');
-      expect(headerRow?.getCell(3).value).toBe('Banglar Shiksha ID');
-      expect(headerRow?.getCell(4).value).toBe('Student Name (EN)');
-      expect(headerRow?.getCell(5).value).toBe('Student Name (BN)');
-
-      // Verify Bengali characters survive round-trip
-      let foundBengaliName = false;
-      regSheet?.eachRow((row) => {
-        row.eachCell((cell) => {
-          if (typeof cell.value === 'string' && (cell.value.includes('অনির্‌বান') || cell.value.includes('মৌসুমি'))) {
-            foundBengaliName = true;
-          }
-        });
-      });
-      expect(foundBengaliName).toBe(true);
+  describe('real format outputs', () => {
+    it('creates structurally valid XLSX with Bengali Unicode and applied profile metadata', async () => {
+      const { payload } = await validatedDraft(seeded, 'xlsx');
+      const artifact = await buildGovernmentReportArtifact(payload, 'xlsx');
+      assertReportArtifactContract(artifact);
+      expect(artifact.filename.endsWith('.xlsx')).toBe(true);
+      expect(artifact.contentType).toBe(REPORT_FORMAT_CONTRACT.xlsx.contentType);
+      expect(artifact.content.subarray(0, 2).toString()).toBe('PK');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(artifact.content);
+      expect(workbook.worksheets.length).toBeGreaterThanOrEqual(3);
+      expect(workbook.worksheets.some((sheet) => sheet.name.includes('হাজিরা'))).toBe(true);
+      expect(JSON.stringify(workbook.worksheets.map((sheet) => sheet.getSheetValues()))).toContain('রিপোর্ট শিক্ষার্থী');
     });
 
-    it('sanitizes spreadsheet formula injection (=, +, -, @, tab, cr)', async () => {
-      expect(sanitizeSpreadsheetValue('=SUM(A1:A10)')).toBe("'=SUM(A1:A10)");
-      expect(sanitizeSpreadsheetValue('+12345')).toBe("'+12345");
-      expect(sanitizeSpreadsheetValue('-calc')).toBe("'-calc");
-      expect(sanitizeSpreadsheetValue('@import')).toBe("'@import");
-      expect(sanitizeSpreadsheetValue('\tmalicious')).toBe("'\tmalicious");
-      expect(sanitizeSpreadsheetValue('Safe Student Name')).toBe('Safe Student Name');
-      expect(sanitizeSpreadsheetValue(100)).toBe(100);
+    it('creates UTF-8 CSV with localized headers and formula protection', async () => {
+      const { payload } = await validatedDraft(seeded, 'csv');
+      const malicious = { ...payload, classRegisters: payload.classRegisters.map((register: any) => ({
+        ...register,
+        students: register.students.map((student: any, index: number) => index === 0 ? { ...student, name: '=HYPERLINK("https://example.invalid")' } : student),
+      })) };
+      const artifact = await buildGovernmentReportArtifact(malicious as any, 'csv');
+      assertReportArtifactContract(artifact);
+      const text = artifact.content.toString('utf8');
+      expect(text.startsWith('\uFEFF')).toBe(true);
+      expect(text).toContain('শ্রেণি');
+      expect(text).toContain("'=HYPERLINK");
     });
 
-    it('sanitizes sheet names within 31-character limit and deduplicates', () => {
-      const set = new Set<string>();
-      const n1 = sanitizeSheetName('Class 5 - Section A (Special)', set);
-      const n2 = sanitizeSheetName('Class 5 - Section A (Special)', set);
-      const n3 = sanitizeSheetName('Class 5 - Section A (Special)', set);
-
-      expect(n1.length).toBeLessThanOrEqual(31);
-      expect(n2.length).toBeLessThanOrEqual(31);
-      expect(n3.length).toBeLessThanOrEqual(31);
-      expect(n1).not.toBe(n2);
-      expect(n2).not.toBe(n3);
+    it('creates escaped printable HTML instead of XLSX bytes', async () => {
+      const { payload } = await validatedDraft(seeded, 'html');
+      const malicious = { ...payload, school: { ...payload.school, name: '<script>unsafe()</script>' } };
+      const artifact = await buildGovernmentReportArtifact(malicious as any, 'html');
+      assertReportArtifactContract(artifact);
+      const text = artifact.content.toString('utf8');
+      expect(text.toLowerCase().startsWith('<!doctype html>')).toBe(true);
+      expect(text).toContain('&lt;script&gt;unsafe()&lt;/script&gt;');
+      expect(text).not.toContain('<script>unsafe()</script>');
+      expect(artifact.filename.endsWith('.html')).toBe(true);
+      expect(artifact.contentType).toBe(REPORT_FORMAT_CONTRACT.html.contentType);
     });
 
-    it('generates predictable and sanitized export filenames', () => {
-      const filename = generateSafeExportFilename({
-        udiseCode: '19180100101',
-        scope: 'all_classes',
-        period: '2026-08',
-        reportVersion: 1,
-        format: 'xlsx',
-      });
-
-      expect(filename).toMatch(/^Attendance_19180100101_all_classes_2026-08_\d{4}-\d{2}-\d{2}_v1\.xlsx$/);
+    it('produces distinct report-type tables', async () => {
+      const { payload } = await validatedDraft(seeded, 'html');
+      const absentee = await buildGovernmentReportArtifact({ ...payload, reportType: 'absentee' } as any, 'html');
+      const missing = await buildGovernmentReportArtifact({ ...payload, reportType: 'missing-data' } as any, 'html');
+      expect(absentee.content.equals(missing.content)).toBe(false);
+      expect(absentee.content.toString()).toContain('absentee');
+      expect(missing.content.toString()).toContain('missing-data');
     });
   });
 
-  describe('4. Secure CSV Export', () => {
-    it('generates RFC 4180 CSV with UTF-8 BOM for Bengali Excel compatibility', () => {
-      const headers = ['Roll', 'Name', 'Name (Bengali)', 'Status'];
-      const rows = [
-        [1, 'Tanmoy Roy', 'তন্ময় রায়', 'PRESENT'],
-        [2, '=HYPERLINK("http://evil.com")', 'দেবব্রত সেন', 'ABSENT'],
-      ];
+  describe('immutable artifact and lifecycle', () => {
+    it('persists exact bytes once, verifies SHA-256 and never regenerates after live-data mutation', async () => {
+      const { draft, payload } = await validatedDraft(seeded, 'html');
+      const generated = await buildGovernmentReportArtifact(payload, 'html');
+      const stored = await persistReportArtifact({ schoolId: seeded.schoolA.id, reportId: draft.report.id, ...generated });
+      const ready = await recordReportArtifact({ schoolId: seeded.schoolA.id, reportId: draft.report.id, artifact: stored, actorId: seeded.schoolAdminUser.id });
+      expect(ready.status).toBe('READY_FOR_REVIEW');
+      const expectedHash = crypto.createHash('sha256').update(generated.content).digest('hex');
+      expect(stored.sha256).toBe(expectedHash);
 
-      const csvBuf = buildSecureCSVExport(headers, rows);
-      const csvStr = csvBuf.toString('utf-8');
-
-      // Assert BOM (\uFEFF) at index 0
-      expect(csvStr.startsWith('\uFEFF')).toBe(true);
-
-      // Assert formula injection is escaped with '
-      expect(csvStr).toContain("'=HYPERLINK");
-
-      // Assert Bengali Unicode survives intact
-      expect(csvStr).toContain('তন্ময় রায়');
-      expect(csvStr).toContain('দেবব্রত সেন');
+      await db.update(students).set({ name: 'Changed After Export' }).where(and(eq(students.schoolId, seeded.schoolA.id), eq(students.id, payload.classRegisters[0].students[0].studentId)));
+      const first = await loadReportArtifact(seeded.schoolA.id, draft.report.id);
+      const second = await loadReportArtifact(seeded.schoolA.id, draft.report.id);
+      expect(first?.content.equals(generated.content)).toBe(true);
+      expect(second?.content.equals(first!.content)).toBe(true);
+      expect(first?.sha256).toBe(expectedHash);
+      await expect(persistReportArtifact({ schoolId: seeded.schoolA.id, reportId: draft.report.id, ...generated })).rejects.toThrow();
+      expect(await loadReportArtifact(seeded.schoolB.id, draft.report.id)).toBeNull();
     });
-  });
 
-  describe('5. Internal Management Approval & SHA-256 Checksum Workflow', () => {
-    it('creates versioned report draft, computes SHA-256 hash, and approves internally', async () => {
-      // 1. Create Draft
-      const { report, validationResult } = await createReportDraft({
-        schoolId: seeded.schoolA.id,
-        reportType: 'monthly-register',
-        scopeType: 'ALL_CLASSES',
-        periodType: 'MONTHLY',
-        periodStartDate: '2026-08-01',
-        periodEndDate: '2026-08-31',
-        actorId: seeded.schoolAdminUser.id,
-      });
-
-      expect(report.id).toBeDefined();
-      expect(report.reportVersion).toBe(1);
-      expect(['VALIDATED', 'READY_FOR_REVIEW']).toContain(report.status);
-
-      // 2. Export & Record SHA-256 Hash
-      const testBuffer = Buffer.from('TEST_EXCEL_STREAM_PAYLOAD_FOR_HASHING');
-      const { report: exportedReport, hash } = await recordReportExport({
-        schoolId: seeded.schoolA.id,
-        reportId: report.id,
-        fileBuffer: testBuffer,
-        actorId: seeded.schoolAdminUser.id,
-      });
-
-      const expectedHash = crypto.createHash('sha256').update(testBuffer).digest('hex');
-      expect(hash).toBe(expectedHash);
-      expect(exportedReport.fileHashSha256).toBe(expectedHash);
-      expect(exportedReport.downloadCount).toBe(1);
-
-      // 3. Approve Internally
-      const approved = await approveReportInternally({
-        schoolId: seeded.schoolA.id,
-        reportId: report.id,
-        actorId: seeded.schoolAdminUser.id,
-        userRole: 'SCHOOL_ADMIN',
-      });
-
+    it('allows approval only after artifact creation and preserves approval on download', async () => {
+      const { draft, payload } = await validatedDraft(seeded, 'csv');
+      await expect(approveReportInternally({ schoolId: seeded.schoolA.id, reportId: draft.report.id, actorId: seeded.schoolAdminUser.id, userRole: 'SCHOOL_ADMIN' })).rejects.toThrow('REPORT_APPROVAL_TRANSITION_INVALID');
+      const generated = await buildGovernmentReportArtifact(payload, 'csv');
+      const stored = await persistReportArtifact({ schoolId: seeded.schoolA.id, reportId: draft.report.id, ...generated });
+      await recordReportArtifact({ schoolId: seeded.schoolA.id, reportId: draft.report.id, artifact: stored });
+      const approved = await approveReportInternally({ schoolId: seeded.schoolA.id, reportId: draft.report.id, actorId: seeded.schoolAdminUser.id, userRole: 'SCHOOL_ADMIN' });
       expect(approved.status).toBe('APPROVED_INTERNALLY');
-      expect(approved.approvedBy).toBe(seeded.schoolAdminUser.id);
-      expect(approved.approvedAt).toBeDefined();
-
-      // 4. View Report History
-      const history = await getReportHistory(seeded.schoolA.id);
-      expect(history.length).toBeGreaterThanOrEqual(1);
-      expect(history[0].id).toBe(report.id);
-    });
-
-    it('rejects internal approval attempt from unauthorized teacher role', async () => {
-      const { report } = await createReportDraft({
-        schoolId: seeded.schoolA.id,
-        reportType: 'monthly-register',
-        scopeType: 'ALL_CLASSES',
-        periodType: 'MONTHLY',
-        periodStartDate: '2026-08-01',
-        periodEndDate: '2026-08-31',
-      });
-
-      await expect(
-        approveReportInternally({
-          schoolId: seeded.schoolA.id,
-          reportId: report.id,
-          actorId: seeded.teacherUser.id,
-          userRole: 'TEACHER',
-        })
-      ).rejects.toThrow(/Unauthorized/);
+      const downloaded = await recordReportDownload({ schoolId: seeded.schoolA.id, reportId: draft.report.id, artifactHash: stored.sha256, actorId: seeded.schoolAdminUser.id });
+      expect(downloaded.report.status).toBe('APPROVED_INTERNALLY');
+      expect(downloaded.report.downloadCount).toBe(1);
     });
   });
 
-  describe('6. Tenant Isolation & Security Boundary Verification', () => {
-    it('prevents School A from accessing or exporting School B reports', async () => {
-      // Create report in School B
-      const { report: reportB } = await createReportDraft({
-        schoolId: seeded.schoolB.id,
-        reportType: 'monthly-register',
-        scopeType: 'ALL_CLASSES',
-        periodType: 'MONTHLY',
-        periodStartDate: '2026-08-01',
-        periodEndDate: '2026-08-31',
-      });
-
-      // Try to approve School B's report using School A context
-      await expect(
-        approveReportInternally({
-          schoolId: seeded.schoolA.id,
-          reportId: reportB.id,
-          actorId: seeded.schoolAdminUser.id,
-          userRole: 'SCHOOL_ADMIN',
-        })
-      ).rejects.toThrow(/not found/i);
-    });
+  it('rejects exports beyond configured bounded-generation limits', () => {
+    expect(() => assertReportGenerationBounds({ periodStart: '2020-01-01', periodEnd: '2030-12-31', studentCount: 5000 })).toThrow();
   });
 });

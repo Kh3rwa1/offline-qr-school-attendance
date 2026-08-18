@@ -7,6 +7,40 @@ CREATE TABLE IF NOT EXISTS "platform_settings" (
 --> statement-breakpoint
 ALTER TABLE "platform_settings" ADD CONSTRAINT "platform_settings_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
+ALTER TABLE "platform_settings" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "platform_settings" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
+-- System role (super-admin) has full access; app role may SELECT for public reads.
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS platform_settings_system_policy ON "platform_settings";
+  CREATE POLICY platform_settings_system_policy ON "platform_settings"
+    USING (
+      pg_has_role(current_user, 'attendance_system_rls', 'member')
+      AND current_setting('app.is_system', true) = 'true'
+    )
+    WITH CHECK (
+      pg_has_role(current_user, 'attendance_system_rls', 'member')
+      AND current_setting('app.is_system', true) = 'true'
+    );
+
+  DROP POLICY IF EXISTS platform_settings_app_select_policy ON "platform_settings";
+  CREATE POLICY platform_settings_app_select_policy ON "platform_settings"
+    FOR SELECT
+    USING (true);
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
+    GRANT SELECT ON TABLE "platform_settings" TO attendance_app;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "platform_settings" TO attendance_system;
+  END IF;
+END $$;
+--> statement-breakpoint
 INSERT INTO "platform_settings" ("key", "value") VALUES
   ('pricing_amount',      '₹130'),
   ('pricing_per_student', 'per student / year'),
@@ -22,3 +56,45 @@ INSERT INTO "platform_settings" ("key", "value") VALUES
   ('demo_video_url',      ''),
   ('hero_subtitle',       'Scan a card — one second per student. No internet needed. UDISE+ reports ready to download.')
 ON CONFLICT ("key") DO NOTHING;
+--> statement-breakpoint
+ALTER TABLE "platform_settings" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "platform_settings" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS platform_settings_system_policy ON "platform_settings";
+  CREATE POLICY platform_settings_system_policy ON "platform_settings"
+    FOR ALL
+    USING (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+    )
+    WITH CHECK (
+      (
+        pg_has_role(current_user, 'attendance_system_rls', 'member')
+        AND current_setting('app.is_system', true) = 'true'
+      )
+    );
+
+  DROP POLICY IF EXISTS platform_settings_public_select_policy ON "platform_settings";
+  CREATE POLICY platform_settings_public_select_policy ON "platform_settings"
+    FOR SELECT
+    USING (true);
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_app') THEN
+    GRANT SELECT ON TABLE "platform_settings" TO attendance_app;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_system') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "platform_settings" TO attendance_system;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'attendance_worker') THEN
+    GRANT SELECT ON TABLE "platform_settings" TO attendance_worker;
+  END IF;
+END $$;
+

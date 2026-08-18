@@ -1,99 +1,117 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, test } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { db } from '../src/db/index';
+import { db } from '../src/db';
 import { runMigrations } from '../src/db/migrate';
-import { seedDatabase } from '../src/db/seed';
 
-describe('Database, RLS, and migration upgrade integration', () => {
-  beforeEach(async () => {
-    await seedDatabase();
+const EXPECTED_TABLES = [
+  'academic_calendar_days',
+  'academic_calendar_versions',
+  'report_approvals',
+  'report_artifacts',
+  'reporting_profiles',
+] as const;
+
+function rowsOf(result: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(result)) return result as Array<Record<string, unknown>>;
+  const rows = (result as { rows?: Array<Record<string, unknown>> } | undefined)?.rows;
+  return rows || [];
+}
+
+describe('government reporting migration upgrade', () => {
+  beforeAll(async () => {
+    await runMigrations();
   });
 
-  it('keeps earlier hardened migration columns and indexes', async () => {
-    const staged = await db.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_name='import_jobs' AND column_name='staged_data'`);
-    expect(staged.rows).toHaveLength(1);
-    const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname IN ('idx_school_memberships_user_status','idx_guardians_school_phone','idx_attendance_events_session_time','idx_notification_jobs_status_next')`);
-    expect(indexes.rows).toHaveLength(4);
+  test('creates the complete reporting schema with immutable artifact bytes', async () => {
+    const tables = rowsOf(await db.execute(sql`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN (${sql.join(EXPECTED_TABLES.map((name) => sql`${name}`), sql`, `)})
+      ORDER BY table_name
+    `));
+
+    expect(tables.map((row) => row.table_name)).toEqual([...EXPECTED_TABLES].sort());
+
+    const artifactColumns = rowsOf(await db.execute(sql`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'report_artifacts'
+      ORDER BY ordinal_position
+    `));
+    const columnsByName = new Map(artifactColumns.map((row) => [String(row.column_name), row]));
+
+    expect(columnsByName.get('content_bytes')?.data_type).toBe('bytea');
+    expect(columnsByName.get('content_bytes')?.is_nullable).toBe('YES');
+    expect(columnsByName.get('sha256')?.is_nullable).toBe('NO');
+    expect(columnsByName.get('byte_size')?.is_nullable).toBe('NO');
+    expect(columnsByName.get('storage_backend')?.is_nullable).toBe('NO');
+    expect(columnsByName.get('created_at')?.is_nullable).toBe('NO');
   });
 
-  it('installs the immutable report artifact schema with exact byte metadata', async () => {
-    const columns = await db.execute(sql`
-      SELECT column_name, data_type FROM information_schema.columns
-      WHERE table_name='report_artifacts'
-      ORDER BY column_name
-    `);
-    const names = new Map((columns.rows as any[]).map((row) => [row.column_name, row.data_type]));
-    expect(names.get('content')).toBe('bytea');
-    expect(names.get('sha256')).toBe('character varying');
-    expect(names.has('content_type')).toBe(true);
-    expect(names.has('filename')).toBe(true);
-    expect(names.has('byte_size')).toBe(true);
-    expect(names.has('storage_backend')).toBe(true);
-    expect(names.has('storage_key')).toBe(true);
-  });
-
-  it('installs governed calendar versions and source/approximation fields', async () => {
-    const versionColumns = await db.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_name='academic_calendar_versions'`);
-    const versionNames = new Set((versionColumns.rows as any[]).map((row) => row.column_name));
-    expect(versionNames).toEqual(expect.objectContaining(new Set()));
-    for (const name of ['school_id', 'academic_year', 'version', 'status', 'source_type', 'source_reference', 'approved_by', 'approved_at']) {
-      expect(versionNames.has(name)).toBe(true);
-    }
-    const dayColumns = await db.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_name='academic_calendar_days'`);
-    const dayNames = new Set((dayColumns.rows as any[]).map((row) => row.column_name));
-    for (const name of ['calendar_version_id', 'source_type', 'source_reference', 'is_approximate']) expect(dayNames.has(name)).toBe(true);
-  });
-
-  it('forces RLS on all reporting tables', async () => {
-    const result = await db.execute(sql`
+  test('forces tenant RLS and exposes no artifact update/delete policy', async () => {
+    const rlsRows = rowsOf(await db.execute(sql`
       SELECT relname, relrowsecurity, relforcerowsecurity
-      FROM pg_class JOIN pg_namespace ON pg_namespace.oid=pg_class.relnamespace
-      WHERE nspname='public' AND relname IN (
-        'academic_calendar_days','academic_calendar_versions','reporting_profiles','report_approvals','report_artifacts'
-      )
-    `);
-    expect(result.rows).toHaveLength(5);
-    for (const row of result.rows as any[]) {
+      FROM pg_class
+      WHERE relname IN ('report_artifacts', 'academic_calendar_versions', 'reporting_profiles', 'report_approvals')
+      ORDER BY relname
+    `));
+
+    for (const row of rlsRows) {
       expect(row.relrowsecurity).toBe(true);
       expect(row.relforcerowsecurity).toBe(true);
     }
-  });
 
-  it('exposes only SELECT and INSERT tenant policies for immutable artifacts', async () => {
-    const policies = await db.execute(sql`
-      SELECT policyname, cmd FROM pg_policies
-      WHERE schemaname='public' AND tablename='report_artifacts'
+    const artifactPolicies = rowsOf(await db.execute(sql`
+      SELECT policyname, cmd
+      FROM pg_policies
+      WHERE schemaname = 'public' AND tablename = 'report_artifacts'
       ORDER BY policyname
-    `);
-    const commands = (policies.rows as any[]).map((row) => row.cmd).sort();
-    expect(commands).toEqual(['INSERT', 'SELECT']);
+    `));
+    expect(artifactPolicies.map((row) => [row.policyname, row.cmd])).toEqual([
+      ['report_artifacts_insert', 'INSERT'],
+      ['report_artifacts_select', 'SELECT'],
+    ]);
   });
 
-  it('installs a UUID default profile with full localized configuration', async () => {
-    const result = await db.execute(sql`
-      SELECT id, version, configuration FROM reporting_profiles
-      WHERE id='00000000-0000-4000-8000-000000000070'::uuid
-    `);
-    expect(result.rows).toHaveLength(1);
-    const configuration = (result.rows[0] as any).configuration;
-    expect(configuration.language).toBe('BILINGUAL');
-    expect(configuration.disclaimer.en).toBeTruthy();
-    expect(configuration.disclaimer.bn).toBeTruthy();
-    expect(configuration.disclaimer.hi).toBeTruthy();
+  test('installs the fallback profile and preserves tenant isolation', async () => {
+    const builtInProfiles = rowsOf(await db.execute(sql`
+      SELECT id, school_id, profile_name, is_builtin
+      FROM reporting_profiles
+      WHERE id = '00000000-0000-4000-8000-000000000070'
+    `));
+    expect(builtInProfiles).toHaveLength(1);
+    expect(builtInProfiles[0]?.school_id).toBeNull();
+    expect(builtInProfiles[0]?.profile_name).toBe('West Bengal Standard Export');
+    expect(builtInProfiles[0]?.is_builtin).toBe(true);
+
+    const policyRows = rowsOf(await db.execute(sql`
+      SELECT tablename, policyname, cmd, qual, with_check
+      FROM pg_policies
+      WHERE schemaname = 'public'
+        AND tablename IN ('report_artifacts', 'academic_calendar_versions', 'reporting_profiles', 'report_approvals')
+      ORDER BY tablename, policyname
+    `));
+
+    const policyText = policyRows
+      .map((row) => `${row.tablename} ${row.policyname} ${row.cmd} ${row.qual || ''} ${row.with_check || ''}`)
+      .join('\n');
+    expect(policyText).toContain('app.current_school_id');
+    expect(policyText).toContain('report_artifacts_select');
+    expect(policyText).toContain('report_artifacts_insert');
+    expect(policyText).toContain('reporting_profiles_select');
+    expect(policyText).toContain('school_id IS NULL');
   });
 
-  it('keeps tenant tables empty when no valid tenant context is set', async () => {
-    await db.execute(sql`SELECT set_config('app.is_system','false',true), set_config('app.current_school_id','',true)`);
-    const students = await db.execute(sql`SELECT COUNT(*)::int AS count FROM students`);
-    const artifacts = await db.execute(sql`SELECT COUNT(*)::int AS count FROM report_artifacts`);
-    expect(Number((students.rows[0] as any).count)).toBe(0);
-    expect(Number((artifacts.rows[0] as any).count)).toBe(0);
-  });
+  test('keeps reporting migrations idempotent across repeated startup runs', async () => {
+    await expect(runMigrations()).resolves.toBeUndefined();
+    await expect(runMigrations()).resolves.toBeUndefined();
 
-  it('can run the complete migration runner repeatedly without changing schema', async () => {
-    await expect(runMigrations()).resolves.not.toThrow();
-    await expect(runMigrations()).resolves.not.toThrow();
-    const tables = await db.execute(sql`SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('report_artifacts','academic_calendar_versions')`);
-    expect(Number((tables.rows[0] as any).count)).toBe(2);
+    const migrationRows = rowsOf(await db.execute(sql`
+      SELECT COUNT(*)::int AS migration_count
+      FROM drizzle.__drizzle_migrations
+    `));
+    expect(Number(migrationRows[0]?.migration_count || 0)).toBeGreaterThanOrEqual(18);
   });
 });

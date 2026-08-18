@@ -22,9 +22,10 @@ function scanFile(filePath: string): Array<{ line: number; label: string; text: 
   const violations: Array<{ line: number; label: string; text: string }> = [];
 
   lines.forEach((line, idx) => {
-    // Ignore comments
+    // Ignore comments and claim definitions
     const trimmed = line.trim();
     if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return;
+    if (filePath.endsWith('src/config/productClaims.ts') || trimmed.includes('prohibitedPhrases')) return;
 
     for (const item of FORBIDDEN_PATTERNS) {
       if (item.pattern.test(line)) {

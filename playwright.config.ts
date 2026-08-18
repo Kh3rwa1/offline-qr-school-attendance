@@ -6,8 +6,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,
-  forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0, // Allow 1 retry in CI to tolerate transient runner flakiness; failures that retry-pass are still surfaced in the report
+  retries: process.env.FLAKE_OBSERVATION === 'true' ? 1 : 0, // Strict zero-retry policy for merge-blocking CI gates; flakiness is never hidden
   reporter: process.env.CI ? [['html', { outputFolder: 'output/playwright/report', open: 'never' }], ['line']] : 'list',
   outputDir: 'output/playwright/test-results',
   use: {

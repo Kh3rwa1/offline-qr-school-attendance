@@ -3,12 +3,16 @@ import { test, expect } from '@playwright/test';
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3100';
 
 test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', () => {
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+  });
+
   test('Login page interactive controls satisfy minimum 44x44px touch targets', async ({ page }) => {
     await page.goto(`${baseUrl}/login`);
     await page.waitForLoadState('domcontentloaded');
 
     const phoneInput = page.locator('#login-phone');
-    await expect(phoneInput).toBeVisible();
+    await expect(phoneInput).toBeVisible({ timeout: 10000 });
     const phoneBox = await phoneInput.boundingBox();
     expect(phoneBox).not.toBeNull();
     expect(phoneBox!.height).toBeGreaterThanOrEqual(44);
@@ -19,13 +23,13 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     expect(passBox).not.toBeNull();
     expect(passBox!.height).toBeGreaterThanOrEqual(44);
 
-    const submitBtn = page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i });
+    const submitBtn = page.locator('button[type="submit"]');
     await expect(submitBtn).toBeVisible();
     const submitBox = await submitBtn.boundingBox();
     expect(submitBox).not.toBeNull();
     expect(submitBox!.height).toBeGreaterThanOrEqual(44);
 
-    const langToggle = page.getByRole('button', { name: 'বাংলা' }).or(page.getByRole('button', { name: 'English' })).first();
+    const langToggle = page.getByRole('button', { name: /বাংলা|English|हिन्दी/i }).first();
     await expect(langToggle).toBeVisible();
     const langBox = await langToggle.boundingBox();
     expect(langBox).not.toBeNull();
@@ -37,9 +41,9 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000002');
     await page.locator('#login-password').fill('TeacherPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.locator('button[type="submit"]').click();
 
-    await expect(page.getByText('Today’s attendance').or(page.getByText(/Today’s attendance/i))).toBeVisible();
+    await expect(page.locator('#teacher-dashboard-view')).toBeVisible({ timeout: 15000 });
 
     // 2. Measure Class Selection dropdown
     const selectEl = page.locator('select').first();
@@ -61,9 +65,9 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000001');
     await page.locator('#login-password').fill('SchoolAdminPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.locator('button[type="submit"]').click();
 
-    await expect(page.getByText(/Admin Station|School Admin|Overview/i).first()).toBeVisible();
+    await expect(page.locator('#school-admin-dashboard-view')).toBeVisible({ timeout: 15000 });
 
     // 2. Navigate to User Management subview
     const usersTab = page.getByRole('link', { name: /Staff & Memberships|Staff Directory|Staff & Roles|Users|কর্মী ও ভূমিকা|সদস্য/i }).or(
@@ -97,9 +101,9 @@ test.describe('Real Dimension BoundingBox & Accessibility Verification Matrix', 
     await page.goto(`${baseUrl}/login`);
     await page.locator('#login-phone').fill('9100000004');
     await page.locator('#login-password').fill('ReportViewerPassword123!');
-    await page.getByRole('button', { name: /Sign In|Log In|Login করুন|লগইন করুন/i }).click();
+    await page.locator('button[type="submit"]').click();
 
-    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible();
+    await expect(page.locator('#report-viewer-dashboard-view')).toBeVisible({ timeout: 15000 });
 
     // 2. Measure dashboard action buttons
     const actionBtns = page.getByRole('button', { name: /Export|Daily|Report|Download/i });

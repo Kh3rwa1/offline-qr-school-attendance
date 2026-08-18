@@ -6,18 +6,20 @@ import {
   Check,
   CheckCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   FileCheck,
   FileSpreadsheet,
   Globe,
+  Info,
   Lightbulb,
   MessageSquareText,
   PlayCircle,
-  Quote,
   Radio,
-  RefreshCw,
   ScanLine,
   School,
+  ShieldCheck,
   Smartphone,
   Sparkles,
   WifiOff,
@@ -25,6 +27,9 @@ import {
 import { Button, TextField, Dialog, Toast } from '../components/ui';
 import { useLanguage } from './LanguageProvider';
 import { LANDING_COPY as COPY, ONBOARDING_STAGES, type LocalizedText } from './landingCopy';
+import { APPROVED_TESTIMONIALS, getActiveVerifiedTestimonials } from '../config/approvedTestimonials';
+import { calculateAttendanceEstimates, CALCULATION_METHODOLOGY } from './landingAssumptions';
+import { buildSafeYouTubeEmbedUrl } from '../utils/videoSecurity';
 
 const CAPABILITIES: { icon: React.ComponentType<{ className?: string }>; label: LocalizedText }[] = [
   { icon: WifiOff, label: COPY.capOffline },
@@ -36,53 +41,10 @@ const CAPABILITIES: { icon: React.ComponentType<{ className?: string }>; label: 
 ];
 
 const LANG_OPTIONS: { code: 'en' | 'bn' | 'hi'; label: string }[] = [
-  { code: 'en', label: 'EN' },
+  { code: 'en', label: 'English' },
   { code: 'bn', label: 'বাংলা' },
   { code: 'hi', label: 'हिंदी' },
 ];
-
-// Default values used if API is unreachable or setting is empty
-const DEFAULTS = {
-  hero_subtitle:       'Scan a card — one second per student. No internet needed. UDISE+ reports ready.',
-  pricing_amount:      '₹130',
-  pricing_per_student: 'per student / year',
-  pricing_free_note:   'Schools under 300 students — free forever',
-  testimonial_1_quote: '"Roll call used to take 20 minutes every morning. Now it\'s done before the first bell rings."',
-  testimonial_1_name:  'Ranjit Kumar Das',
-  testimonial_1_role:  'Headmaster, Khatra High School (H.S.), Bankura',
-  testimonial_1_count: '840 students',
-  testimonial_2_quote: '"Even on days when the internet is out, teachers take attendance on their phones and it uploads itself later. Parents get the SMS automatically."',
-  testimonial_2_name:  'Sunita Mahato',
-  testimonial_2_role:  'School Admin, Purulia Zilla School',
-  testimonial_2_count: '1,200 students',
-  demo_video_url:      '',
-};
-
-// Extract a YouTube video ID from a full URL or bare ID string
-function getYouTubeId(url: string): string | null {
-  if (!url) return null;
-  // already a bare 11-char ID
-  if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url;
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes('youtu.be')) return parsed.pathname.slice(1).split('?')[0] || null;
-    return parsed.searchParams.get('v');
-  } catch { return null; }
-}
-
-function getSafeHttpUrl(url: string | undefined): string | null {
-  if (!url || typeof url !== 'string') return null;
-  const trimmed = url.trim();
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return parsed.href;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
 
 export const LandingPage: React.FC = () => {
   const { language, setLanguage } = useLanguage();
@@ -91,30 +53,48 @@ export const LandingPage: React.FC = () => {
 
   const [selectedStageIndex, setSelectedStageIndex] = useState(4);
   const [studentCount, setStudentCount] = useState<number>(750);
+  const [attendanceMode, setAttendanceMode] = useState<'QR' | 'RFID'>('QR');
+  const [showMethodology, setShowMethodology] = useState<boolean>(false);
 
   // Dynamic content from platform settings (super admin editable)
-  const [ps, setPs] = useState<Record<string, string>>(DEFAULTS);
+  const [ps, setPs] = useState<Record<string, string>>({});
   useEffect(() => {
     fetch('/api/v1/public/settings')
       .then((r) => r.json())
       .then((data: { success: boolean; settings?: Record<string, string> }) => {
         if (data.success && data.settings) {
-          setPs((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(data.settings!).filter(([, v]) => v !== '')) }));
+          setPs(data.settings);
         }
       })
-      .catch(() => { /* non-fatal — defaults stay */ });
+      .catch(() => {
+        /* non-fatal — defaults stay */
+      });
   }, []);
 
-  const get = (key: keyof typeof DEFAULTS): string => ps[key] ?? DEFAULTS[key];
+  // Locale-aware subtitle selection
+  const getHeroSubtitle = (): string => {
+    const localeKey = `hero_subtitle_${language}`;
+    if (ps[localeKey] && ps[localeKey].trim()) return ps[localeKey];
+    if (language === 'en' && ps.hero_subtitle && ps.hero_subtitle.trim()) return ps.hero_subtitle;
+    return c(COPY.heroSubtitleDefault);
+  };
 
+  const getPricingAmount = (): string => ps.pricing_amount || c(COPY.pricingAmount);
+  const getPricingPerStudent = (): string => ps.pricing_per_student || c(COPY.pricingPerStudent);
+  const getPricingFreeNote = (): string => ps.pricing_free_note || c(COPY.pricingFreeNote);
+  const safeVideoEmbedUrl = buildSafeYouTubeEmbedUrl(ps.demo_video_url);
+
+  // Interactive simulated scan state
   const [simScanning, setSimScanning] = useState(false);
   const [simSuccess, setSimSuccess] = useState(false);
   const [simStudent, setSimStudent] = useState<{ name: string; roll: string; class: string; time: string } | null>(null);
 
+  // Demo dialog state
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [demoSubmitted, setDemoSubmitted] = useState(false);
   const [isSubmittingDemo, setIsSubmittingDemo] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
+  const [demoConsent, setDemoConsent] = useState(false);
   const [demoForm, setDemoForm] = useState({
     name: '',
     phone: '',
@@ -122,7 +102,29 @@ export const LandingPage: React.FC = () => {
     schoolName: '',
     district: '',
     studentCount: '500-1000',
+    preferredLanguage: language as 'en' | 'bn' | 'hi',
   });
+
+  const lastFocusedTriggerRef = useRef<HTMLElement | null>(null);
+
+  const openDemoModal = (e?: React.MouseEvent) => {
+    if (e && e.currentTarget instanceof HTMLElement) {
+      lastFocusedTriggerRef.current = e.currentTarget;
+    }
+    setDemoModalOpen(true);
+    setDemoSubmitted(false);
+    setDemoError(null);
+    setDemoConsent(false);
+  };
+
+  const closeDemoModal = () => {
+    setDemoModalOpen(false);
+    setDemoSubmitted(false);
+    setDemoError(null);
+    if (lastFocusedTriggerRef.current) {
+      lastFocusedTriggerRef.current.focus();
+    }
+  };
 
   const float = (values: Record<string, number[]>, duration: number, delay = 0) => ({
     animate: reduceMotion ? undefined : values,
@@ -141,7 +143,12 @@ export const LandingPage: React.FC = () => {
         { name: 'Devendra Mahato', roll: 'Roll 31', class: 'Class 7-C' },
       ];
       const pick = names[Math.floor(Math.random() * names.length)];
-      const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      const timeStr = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      });
       setSimStudent({ ...pick, time: timeStr });
       setSimScanning(false);
       setSimSuccess(true);
@@ -151,6 +158,12 @@ export const LandingPage: React.FC = () => {
   const handleDemoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setDemoError(null);
+
+    if (!demoConsent) {
+      setDemoError(c(COPY.demoConsentError));
+      return;
+    }
+
     setIsSubmittingDemo(true);
     try {
       const rawPhone = demoForm.phone.trim();
@@ -165,6 +178,8 @@ export const LandingPage: React.FC = () => {
           schoolName: demoForm.schoolName.trim(),
           district: demoForm.district.trim(),
           studentCount: demoForm.studentCount || '500-1000',
+          preferredLanguage: demoForm.preferredLanguage || language,
+          consentGiven: true,
           source: 'landing',
         }),
       });
@@ -182,657 +197,751 @@ export const LandingPage: React.FC = () => {
   };
 
   const selectedStage = ONBOARDING_STAGES[selectedStageIndex];
-  const teacherHoursSavedPerYear = Math.round((studentCount * 0.08 * 220) / 60);
-  const paperSavedPages = studentCount * 12 * 4;
+  const estimates = calculateAttendanceEstimates({
+    studentCount,
+    attendanceMode,
+  });
+
+  const verifiedTestimonials = getActiveVerifiedTestimonials(APPROVED_TESTIMONIALS);
 
   return (
     <div className="min-h-screen bg-[#fafbfc] text-[#0f172a] flex flex-col selection:bg-[#15803d] selection:text-white font-sans antialiased">
+      {/* Skip to main content accessibility link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-[#14532d] focus:text-white focus:rounded-lg focus:shadow-lg text-sm font-bold"
+      >
+        {c(COPY.skipToContent)}
+      </a>
+
       {/* Header */}
-      <header className="sticky top-0 z-50 px-4 sm:px-12 py-4 flex items-center justify-between backdrop-blur-md bg-white/90 border-b border-slate-200/80 transition-all">
-        <Link to="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-[#14532d] flex items-center justify-center text-white font-black text-sm font-display shadow-md shadow-emerald-900/20 group-hover:scale-105 transition-transform">
+      <header className="sticky top-0 z-40 px-4 sm:px-12 py-4 flex items-center justify-between backdrop-blur-md bg-white/90 border-b border-slate-200/80 transition-all">
+        <Link to="/" className="flex items-center gap-2.5 group focus:outline-none focus:ring-2 focus:ring-[#14532d] rounded-lg">
+          <div className="w-10 h-10 rounded-xl bg-[#14532d] flex items-center justify-center text-white font-black text-base font-display shadow-md shadow-emerald-900/20 group-hover:scale-105 transition-transform">
             AE
           </div>
           <span className="text-xl font-black text-[#0f172a] font-display tracking-tight">AttendEase</span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
+        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600" aria-label="Main Navigation">
           <a href="#how-it-works" className="hover:text-[#14532d] transition-colors">{c(COPY.navHowItWorks)}</a>
           <a href="#getting-started" className="hover:text-[#14532d] transition-colors">{c(COPY.navGettingStarted)}</a>
-          <a href="#pricing" className="hover:text-[#14532d] transition-colors">Pricing</a>
+          <a href="#pricing" className="hover:text-[#14532d] transition-colors">{c(COPY.navPricing)}</a>
           <a href="#roi" className="hover:text-[#14532d] transition-colors">{c(COPY.navSavings)}</a>
           <a href="#contact" className="hover:text-[#14532d] transition-colors">{c(COPY.navContact)}</a>
         </nav>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label={c(COPY.langLabel)}>
+          {/* Accessible Language Switcher */}
+          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={c(COPY.langLabel)}>
             {LANG_OPTIONS.map((opt) => (
               <button
                 key={opt.code}
                 type="button"
                 onClick={() => setLanguage(opt.code)}
                 aria-pressed={language === opt.code}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold font-display transition-colors cursor-pointer ${language === opt.code ? 'bg-[#14532d] text-white shadow-sm' : 'text-slate-600 hover:text-[#14532d]'}`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold font-display transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#14532d] ${
+                  language === opt.code ? 'bg-[#14532d] text-white shadow-sm' : 'text-slate-600 hover:text-[#14532d]'
+                }`}
               >
                 {opt.label}
               </button>
             ))}
           </div>
+
           <Link to="/login" className="hidden sm:inline-block">
-            <Button variant="ghost" size="sm" className="font-bold text-slate-700 hover:text-[#14532d]">
+            <Button variant="ghost" size="sm" className="font-bold text-slate-700 hover:text-[#14532d] text-sm">
               {c(COPY.signIn)}
             </Button>
           </Link>
+
           <Button
             id="header-book-demo-btn"
             data-testid="header-book-demo-btn"
             variant="primary"
             size="md"
-            onClick={() => setDemoModalOpen(true)}
-            className="bg-[#14532d] hover:bg-[#166534] text-white font-bold rounded-xl px-5 shadow-sm"
+            onClick={openDemoModal}
+            className="bg-[#14532d] hover:bg-[#166534] text-white font-bold rounded-xl px-5 shadow-sm text-sm"
           >
             {c(COPY.bookDemo)}
           </Button>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="pt-12 sm:pt-20 pb-16 px-4 sm:px-12 max-w-7xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-6 text-left space-y-6">
-            <div className="inline-block px-3 py-1 rounded-md bg-[#dcfce7] text-[#15803d] font-mono text-xs font-black tracking-wider uppercase">
-              {c(COPY.heroBadge)}
+      {/* Main Content Area */}
+      <main id="main-content" tabIndex={-1} className="outline-none">
+        {/* Reporting Disclaimer Banner (Phase 2 Requirement) */}
+        <section className="bg-emerald-50 border-b border-emerald-200/80 px-4 sm:px-12 py-3 text-left">
+          <div className="max-w-7xl mx-auto flex items-start gap-3 text-sm text-emerald-950 font-medium leading-relaxed">
+            <Info className="w-5 h-5 text-[#15803d] shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <strong className="font-bold text-emerald-900">{c(COPY.reportingDisclaimerTitle)}: </strong>
+              <span>{c(COPY.reportingDisclaimerBody)}</span>
             </div>
+          </div>
+        </section>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-black text-[#0f172a] font-display tracking-tight leading-[1.12]">
-              {c(COPY.heroTitle1)}{' '}
-              <span className="text-[#15803d]">{c(COPY.heroTitle2)}</span>
-            </h1>
+        {/* Hero Section */}
+        <section className="pt-12 sm:pt-16 pb-16 px-4 sm:px-12 max-w-7xl mx-auto w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div className="lg:col-span-6 text-left space-y-6">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#dcfce7] text-[#15803d] font-mono text-sm font-bold tracking-wide uppercase">
+                <ShieldCheck className="w-4 h-4" />
+                <span>{c(COPY.heroBadge)}</span>
+              </div>
 
-            <p className="text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-lg">
-              {get('hero_subtitle')}
-            </p>
+              <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-black text-[#0f172a] font-display tracking-tight leading-[1.12]">
+                {c(COPY.heroTitle1)}{' '}
+                <span className="text-[#15803d]">{c(COPY.heroTitle2)}</span>
+              </h1>
 
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <Button
-                id="hero-book-demo-btn"
-                data-testid="hero-book-demo-btn"
-                variant="primary"
-                size="lg"
-                onClick={() => setDemoModalOpen(true)}
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-                className="bg-[#14532d] hover:bg-[#166534] text-white rounded-xl px-6 py-3.5 font-bold shadow-md"
-              >
-                {c(COPY.bookDemo)}
-              </Button>
-              <Link to="/login">
+              <p className="text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-lg">
+                {getHeroSubtitle()}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4 pt-2">
                 <Button
-                  variant="outline"
+                  id="hero-book-demo-btn"
+                  data-testid="hero-book-demo-btn"
+                  variant="primary"
                   size="lg"
-                  className="border-slate-300 hover:border-slate-400 bg-white text-slate-800 rounded-xl px-6 py-3.5 font-bold shadow-2xs"
+                  onClick={openDemoModal}
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                  className="bg-[#14532d] hover:bg-[#166534] text-white rounded-xl px-6 py-3.5 font-bold shadow-md text-base"
                 >
-                  {c(COPY.signIn)}
+                  {c(COPY.bookDemo)}
                 </Button>
-              </Link>
-              {getSafeHttpUrl(get('demo_video_url')) && (
+
+                <Link to="/login">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-slate-300 hover:border-slate-400 bg-white text-slate-800 rounded-xl px-6 py-3.5 font-bold shadow-xs text-base"
+                  >
+                    {c(COPY.signIn)}
+                  </Button>
+                </Link>
+
                 <a
-                  href={getSafeHttpUrl(get('demo_video_url'))!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-semibold text-[#15803d] hover:underline"
+                  href="#video"
+                  className="text-sm font-bold text-[#15803d] hover:underline flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-[#14532d] rounded-md px-2 py-1"
                 >
-                  Watch 2-min demo →
+                  {c(COPY.watchDemoLink)}
                 </a>
-              )}
+              </div>
             </div>
-          </div>
 
-          {/* Hero visual */}
-          <div className="lg:col-span-6 relative flex items-center justify-center">
-            <div className="relative w-full max-w-[480px] aspect-square flex items-center justify-center">
-              <div className="absolute inset-4 rounded-full border-2 border-emerald-400/40 bg-radial from-emerald-500/10 via-emerald-400/5 to-transparent animate-pulse" />
+            {/* Hero Visual Register Preview */}
+            <div className="lg:col-span-6 relative flex items-center justify-center">
+              <div className="relative w-full max-w-[480px] aspect-square flex items-center justify-center">
+                <div className="absolute inset-4 rounded-full border-2 border-emerald-400/40 bg-radial from-emerald-500/10 via-emerald-400/5 to-transparent animate-pulse" />
 
-              <motion.div {...float({ y: [0, -12, 0], x: [0, 6, 0] }, 4)} className="absolute top-6 right-12 w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-600 to-lime-400 shadow-lg shadow-emerald-500/40" />
-              <motion.div {...float({ y: [0, 10, 0], x: [0, -8, 0] }, 5, 0.5)} className="absolute bottom-12 left-8 w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-lime-400 shadow-lg shadow-emerald-500/40" />
-              <motion.div {...float({ y: [0, -8, 0] }, 3.5, 1)} className="absolute bottom-6 right-20 w-4 h-4 rounded-full bg-gradient-to-tr from-emerald-500 to-lime-300 shadow-md shadow-emerald-500/30" />
+                <motion.div
+                  {...float({ y: [0, -12, 0], x: [0, 6, 0] }, 4)}
+                  className="absolute top-6 right-12 w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-600 to-lime-400 shadow-lg shadow-emerald-500/40"
+                />
+                <motion.div
+                  {...float({ y: [0, 10, 0], x: [0, -8, 0] }, 5, 0.5)}
+                  className="absolute bottom-12 left-8 w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-lime-400 shadow-lg shadow-emerald-500/40"
+                />
 
-              <motion.div {...float({ y: [0, -6, 0] }, 4)} className="absolute top-10 left-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>{c(COPY.pillSetup)}</span>
-              </motion.div>
-              <motion.div {...float({ y: [0, 8, 0] }, 4.5, 0.8)} className="absolute top-8 right-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5">
-                <WifiOff className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>{c(COPY.pillOffline)}</span>
-              </motion.div>
-              <motion.div {...float({ y: [0, -7, 0] }, 5, 1.2)} className="absolute bottom-16 left-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5">
-                <MessageSquareText className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>{c(COPY.pillSms)}</span>
-              </motion.div>
-              <motion.div {...float({ y: [0, 6, 0] }, 4.2, 0.4)} className="absolute bottom-14 right-6 z-20 px-3.5 py-1.5 rounded-full bg-white/95 border border-slate-200 shadow-md text-xs font-bold font-display text-slate-800 flex items-center gap-1.5">
-                <FileCheck className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>{c(COPY.pillUdise)}</span>
-              </motion.div>
+                <motion.div
+                  {...float({ y: [0, -6, 0] }, 4)}
+                  className="absolute top-10 left-6 z-20 px-4 py-2 rounded-full bg-white/95 border border-slate-200 shadow-md text-sm font-bold font-display text-slate-800 flex items-center gap-2"
+                >
+                  <Clock className="w-4 h-4 text-[#15803d]" />
+                  <span>09:02 AM</span>
+                </motion.div>
 
-              <motion.div
-                {...float({ rotate: [-12, -10, -12], y: [0, -6, 0] }, 6)}
-                className="relative z-10 w-72 sm:w-80 rounded-2xl bg-gradient-to-br from-[#fefce8] to-[#fef08a] p-5 shadow-2xl border border-yellow-200/80 transform -rotate-12"
-              >
-                <div className="absolute inset-0 bg-[#fef9c3] rounded-2xl -rotate-3 -z-10 shadow-lg" />
-                <div className="absolute inset-0 bg-[#fef08a] rounded-2xl rotate-4 -z-20 shadow-md" />
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-yellow-300/80 pb-2">
-                    <span className="font-mono text-[11px] font-bold text-yellow-900">DAILY CLASS ATTENDANCE REGISTER</span>
-                    <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">VERIFIED</span>
+                <motion.div
+                  {...float({ y: [0, 8, 0] }, 4.5, 0.8)}
+                  className="absolute bottom-8 right-6 z-20 px-4 py-2 rounded-full bg-white/95 border border-emerald-200 shadow-md text-sm font-bold font-display text-slate-800 flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-[#15803d]" />
+                  <span>{c(COPY.pillOffline)}</span>
+                </motion.div>
+
+                {/* Central Appliance Card Mockup */}
+                <div className="relative z-10 w-full max-w-[380px] rounded-3xl bg-white border border-slate-200/90 shadow-2xl p-6 space-y-4 text-left">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#14532d] flex items-center justify-center text-white font-bold text-xs font-display">
+                        AE
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-900 font-display">{c(COPY.regTitle)}</div>
+                        <div className="text-xs text-slate-700 font-mono font-semibold">CLASS 9-A • 48 ENROLLED</div>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-[#dcfce7] text-[#15803d] text-xs font-black font-mono">
+                      {c(COPY.regPresent)}
+                    </span>
                   </div>
-                  <div className="space-y-2 font-mono text-[10px] text-yellow-950">
-                    <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
-                      <span>01. Ananya Roy (Roll 14)</span>
-                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
-                    </div>
-                    <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
-                      <span>02. Rohan Banerjee (Roll 22)</span>
-                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
-                    </div>
-                    <div className="flex items-center justify-between border-b border-yellow-200 pb-1">
-                      <span>03. Pooja Sharma (Roll 07)</span>
-                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>04. Devendra Mahato (Roll 31)</span>
-                      <span className="text-emerald-700 font-bold">PRESENT [P]</span>
-                    </div>
+
+                  <div className="space-y-2 text-sm">
+                    {[
+                      { name: 'Ananya Roy', roll: 'Roll 01', time: '09:01:14 AM' },
+                      { name: 'Rohan Banerjee', roll: 'Roll 02', time: '09:01:22 AM' },
+                      { name: 'Pooja Sharma', roll: 'Roll 03', time: '09:01:28 AM' },
+                    ].map((st) => (
+                      <div key={st.roll} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-[#15803d]" />
+                          <span className="font-semibold text-slate-800">{st.name}</span>
+                          <span className="text-xs text-slate-700 font-mono font-semibold">({st.roll})</span>
+                        </div>
+                        <span className="text-xs text-slate-700 font-mono font-semibold">{st.time}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="pt-2 flex items-center justify-between text-[10px] font-bold text-yellow-800 border-t border-yellow-300/80">
-                    <span>UDISE+ CODE: 19170100101</span>
-                    <span>100% OFFLINE</span>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-700 font-mono font-semibold">
+                    <span className="flex items-center gap-1.5 text-[#15803d] font-bold">
+                      <WifiOff className="w-3.5 h-3.5" />
+                      {c(COPY.regOfflineTag)}
+                    </span>
+                    <span>48 / 48 LOGGED</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Real capabilities strip (no third-party brand logos) */}
-      <section className="bg-[#14532d] py-6 px-4 sm:px-12 text-white">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6 opacity-90 text-sm font-semibold">
-          {CAPABILITIES.map((cap) => (
-            <div key={cap.label.en} className="flex items-center gap-2">
-              <cap.icon className="w-5 h-5 text-emerald-300" />
-              <span>{c(cap.label)}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section id="how-it-works" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">{c(COPY.howKicker)}</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.howTitle)}</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-center max-w-4xl mx-auto">
-          <div className="p-8 sm:p-10 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm flex flex-col items-center space-y-5 hover:shadow-md transition-all">
-            <div className="w-20 h-20 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
-              <ScanLine className="w-10 h-10 text-[#15803d]" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-[#0f172a] font-display">{c(COPY.howCard1Title)}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">{c(COPY.howCard1Desc)}</p>
-            </div>
-            <div className="w-full pt-2 space-y-2">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleSimulateScan}
-                isLoading={simScanning}
-                className="bg-[#15803d] hover:bg-[#166534] text-white rounded-xl font-bold px-8 py-3 w-full sm:w-auto shadow-sm"
-              >
-                {simScanning ? c(COPY.howCard1Scanning) : c(COPY.howCard1Cta)}
-              </Button>
-              <p className="text-[11px] text-slate-500">{c(COPY.simNote)}</p>
-            </div>
-
-            {simSuccess && simStudent && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-3.5 rounded-xl bg-white border border-emerald-300 text-xs text-left w-full space-y-1 shadow-2xs"
-              >
-                <div className="flex items-center justify-between font-bold text-emerald-800">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    {c(COPY.simVerified)}: {simStudent.name}
-                  </span>
-                  <span>{simStudent.time}</span>
+        {/* Capabilities Strip */}
+        <section className="border-y border-slate-200 bg-white py-6 px-4 sm:px-12">
+          <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-center">
+            {CAPABILITIES.map((cap, i) => (
+              <div key={i} className="flex items-center gap-2.5 p-2 rounded-xl text-left">
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-[#15803d] flex items-center justify-center shrink-0">
+                  <cap.icon className="w-5 h-5" />
                 </div>
-                <div className="text-slate-600 flex justify-between">
-                  <span>{simStudent.class} • {simStudent.roll}</span>
-                  <span className="text-emerald-700 font-bold">{c(COPY.simInstant)}</span>
-                </div>
-              </motion.div>
-            )}
+                <span className="text-sm font-bold text-slate-700 leading-tight">{c(cap.label)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Section 1: How It Works */}
+        <section id="how-it-works" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+          <div className="space-y-2">
+            <span className="text-sm font-mono font-bold tracking-wider text-slate-700 uppercase">{c(COPY.howKicker)}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.howTitle)}</h2>
           </div>
 
-          <div className="p-8 sm:p-10 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm flex flex-col items-center space-y-5 hover:shadow-md transition-all">
-            <div className="w-20 h-20 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
-              <RefreshCw className="w-10 h-10 text-[#15803d]" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-[#0f172a] font-display">{c(COPY.howCard2Title)}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">{c(COPY.howCard2Desc)}</p>
-            </div>
-            <div className="w-full pt-2">
-              <Link to="/login">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+            {/* Card 1: Interactive Scanner Demonstration */}
+            <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-md space-y-6 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                  <ScanLine className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 font-display">{c(COPY.howCard1Title)}</h3>
+                <p className="text-base text-slate-600 leading-relaxed">{c(COPY.howCard1Desc)}</p>
+              </div>
+
+              {/* Interactive Simulation Area */}
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
                 <Button
                   variant="outline"
                   size="md"
-                  className="bg-white hover:bg-slate-50 border-emerald-300 text-emerald-800 rounded-xl font-bold px-8 py-3 w-full sm:w-auto shadow-2xs"
+                  onClick={handleSimulateScan}
+                  disabled={simScanning}
+                  isLoading={simScanning}
+                  className="w-full bg-white hover:bg-slate-100 text-[#14532d] font-bold border-slate-300 text-sm"
                 >
-                  {c(COPY.howCard2Cta)}
+                  {simScanning ? c(COPY.howCard1Scanning) : c(COPY.howCard1Cta)}
                 </Button>
-              </Link>
+
+                {simSuccess && simStudent && (
+                  <div className="p-3.5 rounded-xl bg-[#dcfce7] border border-emerald-300 text-emerald-950 flex items-center justify-between text-sm animate-fade-in">
+                    <div>
+                      <div className="font-bold">{simStudent.name}</div>
+                      <div className="text-xs text-emerald-800 font-mono">
+                        {simStudent.class} • {simStudent.roll}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-[#15803d] font-mono">{c(COPY.simVerified)}</div>
+                      <div className="text-xs text-emerald-800 font-mono">{simStudent.time}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-xs text-slate-700 font-semibold text-center">
+                  {c(COPY.simNote)}
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Reconnection and Sync */}
+            <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-md space-y-6 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 font-display">{c(COPY.howCard2Title)}</h3>
+                <p className="text-base text-slate-600 leading-relaxed">{c(COPY.howCard2Desc)}</p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-center gap-3">
+                <div className="flex items-center gap-3 text-sm text-slate-700 font-semibold">
+                  <CheckCircle className="w-5 h-5 text-[#15803d] shrink-0" />
+                  <span>{c(COPY.capOffline)}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-slate-700 font-semibold">
+                  <CheckCircle className="w-5 h-5 text-[#15803d] shrink-0" />
+                  <span>{c(COPY.capUdise)}</span>
+                </div>
+                <div className="pt-2">
+                  <Link to="/login" className="block">
+                    <Button variant="secondary" size="md" className="w-full font-bold text-sm">
+                      {c(COPY.howCard2Cta)}
+                    </Button>
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Getting started: 8 steps */}
-      <section id="getting-started" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">{c(COPY.startKicker)}</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.startTitle)}</h2>
-        </div>
-
-        <div className="rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 max-w-5xl mx-auto">
-          <div className="lg:col-span-6 p-6 sm:p-8 bg-slate-50/70 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between space-y-5 text-left">
-            <div className="w-full h-52 sm:h-56 rounded-2xl border border-slate-200/80 overflow-hidden relative shadow-inner bg-slate-900 flex items-center justify-center">
-              <AnimatePresence mode="wait">
-                <motion.img
-                  key={selectedStage.image}
-                  src={selectedStage.image}
-                  alt={c(selectedStage.title)}
-                  loading="lazy"
-                  decoding="async"
-                  initial={{ opacity: 0, scale: 1.05 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.35, ease: 'easeOut' }}
-                  className="w-full h-full object-cover object-center"
-                />
-              </AnimatePresence>
-              <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[11px] font-extrabold text-[#14532d] bg-white/95 backdrop-blur-md px-3 py-1 rounded-full border border-emerald-200 shadow-md">
-                <School className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>{c(selectedStage.tag)}</span>
-              </div>
-              <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 text-[11px] font-extrabold text-slate-800 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200 shadow-md">
-                <Clock className="w-3.5 h-3.5 text-[#15803d]" />
-                <span>{c(selectedStage.badge)}</span>
-              </div>
-              <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent pointer-events-none flex items-end px-3 py-2">
-                <span className="text-white text-xs font-bold font-display drop-shadow-md">
-                  {c(COPY.stepWord)} 0{selectedStage.step}: {c(selectedStage.title)}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
-              {ONBOARDING_STAGES.map((st, idx) => (
-                <button
-                  key={st.key}
-                  type="button"
-                  onClick={() => setSelectedStageIndex(idx)}
-                  aria-pressed={idx === selectedStageIndex}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                    idx === selectedStageIndex
-                      ? 'bg-[#14532d] text-white border-[#14532d] shadow-sm'
-                      : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <span className="truncate">{c(st.name)}</span>
-                  {idx === selectedStageIndex && <Check className="w-3.5 h-3.5 shrink-0 ml-1" />}
-                </button>
-              ))}
-            </div>
+        {/* Section 2: Getting Started (8 Clear Stages) */}
+        <section id="getting-started" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+          <div className="space-y-2">
+            <span className="text-sm font-mono font-bold tracking-wider text-slate-700 uppercase">{c(COPY.startKicker)}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.startTitle)}</h2>
           </div>
 
-          <div className="lg:col-span-6 p-8 sm:p-10 flex flex-col justify-between space-y-6 text-left bg-white">
-            <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-medium">{c(COPY.startBoxLabel)}</div>
-              <h3 className="text-2xl sm:text-3xl font-black text-[#0f172a] font-display">{c(COPY.startPromise)}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed font-normal">{c(selectedStage.subtitle)}</p>
-              <div className="p-3.5 rounded-xl bg-[#f0fdf4] border border-emerald-200 text-xs text-emerald-900 font-medium">
-                <strong>{c(COPY.startDeliverable)}:</strong> {c(selectedStage.deliverable)}
-              </div>
-            </div>
-            <div>
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => setDemoModalOpen(true)}
-                className="w-full bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl py-3.5 shadow-sm"
+          {/* Stage selector tabs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2" role="tablist" aria-label="Onboarding Steps">
+            {ONBOARDING_STAGES.map((st, idx) => (
+              <button
+                key={st.key}
+                type="button"
+                role="tab"
+                aria-selected={selectedStageIndex === idx}
+                onClick={() => setSelectedStageIndex(idx)}
+                className={`p-3 rounded-2xl border text-center transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#14532d] ${
+                  selectedStageIndex === idx
+                    ? 'bg-[#14532d] text-white border-[#14532d] shadow-md'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                }`}
               >
-                {c(COPY.bookDemo)}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="why-us" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.featTitle)}</h2>
-          <p className="text-base text-slate-600">{c(COPY.featSubtitle)}</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-5xl mx-auto">
-          <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
-              <Smartphone className="w-6 h-6 text-[#15803d]" />
-            </div>
-            <h3 className="text-lg font-bold text-[#0f172a] font-display">{c(COPY.feat1Title)}</h3>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">{c(COPY.feat1Desc)}</p>
-          </div>
-          <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
-              <WifiOff className="w-6 h-6 text-[#15803d]" />
-            </div>
-            <h3 className="text-lg font-bold text-[#0f172a] font-display">{c(COPY.feat2Title)}</h3>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">{c(COPY.feat2Desc)}</p>
-          </div>
-          <div className="p-8 rounded-3xl bg-[#f0fdf4] border border-emerald-200/80 shadow-sm space-y-4 hover:shadow-md transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs">
-              <FileCheck className="w-6 h-6 text-[#15803d]" />
-            </div>
-            <h3 className="text-lg font-bold text-[#0f172a] font-display">{c(COPY.feat3Title)}</h3>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">{c(COPY.feat3Desc)}</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Social Proof — Testimonials */}
-      <section id="testimonials" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">What schools say</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">Trusted by headmasters across West Bengal</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto text-left">
-          {/* Testimonial 1 */}
-          <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5 hover:shadow-md transition-all flex flex-col">
-            <Quote className="w-8 h-8 text-[#15803d] opacity-60 shrink-0" />
-            <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-medium flex-1">{get('testimonial_1_quote')}</p>
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-              <div className="w-10 h-10 rounded-full bg-[#dcfce7] text-[#15803d] flex items-center justify-center font-black text-base font-display shrink-0">
-                {get('testimonial_1_name').charAt(0)}
-              </div>
-              <div>
-                <p className="text-sm font-extrabold text-[#0f172a] font-display">{get('testimonial_1_name')}</p>
-                <p className="text-xs text-slate-500">{get('testimonial_1_role')}</p>
-              </div>
-              <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-[#f0fdf4] text-[#15803d] border border-emerald-200 font-display shrink-0">{get('testimonial_1_count')}</span>
-            </div>
+                <div className="text-xs font-mono font-bold">{c(COPY.stepWord)} {st.step}</div>
+                <div className="text-sm font-bold truncate mt-0.5">{c(st.name)}</div>
+              </button>
+            ))}
           </div>
 
-          {/* Testimonial 2 */}
-          <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5 hover:shadow-md transition-all flex flex-col">
-            <Quote className="w-8 h-8 text-[#15803d] opacity-60 shrink-0" />
-            <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-medium flex-1">{get('testimonial_2_quote')}</p>
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-              <div className="w-10 h-10 rounded-full bg-[#dcfce7] text-[#15803d] flex items-center justify-center font-black text-base font-display shrink-0">
-                {get('testimonial_2_name').charAt(0)}
+          {/* Selected Stage Detail Card */}
+          <div className="p-8 sm:p-10 rounded-3xl bg-white border border-slate-200 shadow-xl max-w-4xl mx-auto text-left grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            <div className="md:col-span-7 space-y-4">
+              <div className="inline-block px-3 py-1 rounded-md bg-emerald-50 text-[#15803d] font-mono text-xs font-bold uppercase">
+                {c(selectedStage.badge)}
               </div>
-              <div>
-                <p className="text-sm font-extrabold text-[#0f172a] font-display">{get('testimonial_2_name')}</p>
-                <p className="text-xs text-slate-500">{get('testimonial_2_role')}</p>
+              <h3 className="text-2xl font-black text-[#0f172a] font-display">{c(selectedStage.title)}</h3>
+              <p className="text-base text-slate-600 leading-relaxed">{c(selectedStage.subtitle)}</p>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800">
+                <span className="font-bold text-slate-900">{c(COPY.startDeliverable)}: </span>
+                <span>{c(selectedStage.deliverable)}</span>
               </div>
-              <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-[#f0fdf4] text-[#15803d] border border-emerald-200 font-display shrink-0">{get('testimonial_2_count')}</span>
+            </div>
+            <div className="md:col-span-5 flex items-center justify-center p-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-slate-50 border border-slate-200">
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 rounded-2xl bg-[#14532d] text-white mx-auto flex items-center justify-center font-black text-2xl font-display shadow-md">
+                  {selectedStage.step}
+                </div>
+                <div className="font-bold text-slate-900 text-base">{c(selectedStage.name)}</div>
+                <div className="text-xs font-mono text-slate-700 font-semibold">{c(selectedStage.tag)}</div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Demo video — shown only when super-admin has set a URL; else a persuasive placeholder */}
-      <section id="demo-video" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-10 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">See it in action</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">2-minute morning attendance — watch how it works</h2>
-        </div>
-
-        <div className="max-w-3xl mx-auto">
-          {getYouTubeId(get('demo_video_url')) ? (
-            <div className="relative w-full rounded-3xl overflow-hidden border border-slate-200 shadow-xl bg-black" style={{ paddingBottom: '56.25%' }}>
-              <iframe
-                className="absolute inset-0 w-full h-full"
-                src={`https://www.youtube-nocookie.com/embed/${getYouTubeId(get('demo_video_url'))}?rel=0&modestbranding=1`}
-                title="AttendEase product demo"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                loading="lazy"
-              />
-            </div>
-          ) : (
-            /* Placeholder when no video URL is set */
-            <button
-              type="button"
-              onClick={() => setDemoModalOpen(true)}
-              className="relative w-full rounded-3xl overflow-hidden border border-emerald-200 shadow-xl bg-gradient-to-br from-[#f0fdf4] to-[#dcfce7] flex flex-col items-center justify-center gap-5 py-20 group hover:shadow-2xl transition-all cursor-pointer"
-              aria-label="Book a demo to see a live walkthrough"
-            >
-              <div className="w-20 h-20 rounded-full bg-white border border-emerald-300 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-                <PlayCircle className="w-10 h-10 text-[#15803d]" />
-              </div>
-              <div className="space-y-1 text-center">
-                <p className="text-lg font-black text-[#0f172a] font-display">Watch a 2-minute live walkthrough</p>
-                <p className="text-sm text-slate-600">Book a free demo — we run it on your own phone, in person or over a call</p>
-              </div>
-              <span className="px-6 py-3 rounded-xl bg-[#14532d] text-white text-sm font-bold shadow-sm group-hover:bg-[#166534] transition-colors">
-                Book a Free Demo →
-              </span>
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <section id="pricing" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">Simple Pricing</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">Transparent. Affordable. No surprises.</h2>
-        </div>
-
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="p-10 rounded-3xl bg-[#14532d] text-white shadow-2xl space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="relative space-y-1">
-              <div className="flex items-end justify-center gap-2">
-                <span className="text-6xl font-black font-display tracking-tight">{get('pricing_amount')}</span>
-                <span className="text-emerald-300 text-base font-semibold pb-3">{get('pricing_per_student')}</span>
-              </div>
-              <p className="text-emerald-200/80 text-sm">{get('pricing_free_note')}</p>
+        {/* Section 3: Built for Real Classrooms */}
+        <section className="py-20 px-4 sm:px-12 bg-slate-100/70 border-y border-slate-200">
+          <div className="max-w-7xl mx-auto space-y-12 text-center">
+            <div className="space-y-3 max-w-3xl mx-auto">
+              <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.featTitle)}</h2>
+              <p className="text-base sm:text-lg text-slate-600 leading-relaxed">{c(COPY.featSubtitle)}</p>
             </div>
 
-            <div className="space-y-3 text-sm text-emerald-100 text-left pt-2">
-              {[
-                'Unlimited QR & RFID scans',
-                'Offline-first — works without internet',
-                'UDISE+ compliant reports',
-                'SMS parent notifications',
-                'Unlimited teachers & classes',
-                'Data export (Excel / CSV / HTML)',
-              ].map((feat) => (
-                <div key={feat} className="flex items-center gap-3">
-                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{feat}</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+              <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 font-display">{c(COPY.feat1Title)}</h3>
+                <p className="text-base text-slate-600 leading-relaxed">{c(COPY.feat1Desc)}</p>
+              </div>
+
+              <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                  <WifiOff className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 font-display">{c(COPY.feat2Title)}</h3>
+                <p className="text-base text-slate-600 leading-relaxed">{c(COPY.feat2Desc)}</p>
+              </div>
+
+              <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                  <FileCheck className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 font-display">{c(COPY.feat3Title)}</h3>
+                <p className="text-base text-slate-600 leading-relaxed">{c(COPY.feat3Desc)}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Testimonials Section (Phase 3: Render ONLY if verified consent testimonials exist) */}
+        {verifiedTestimonials.length > 0 && (
+          <section className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-8 text-center">
+            <h2 className="text-3xl font-black text-[#0f172a] font-display">Verified School Feedback</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+              {verifiedTestimonials.map((t) => (
+                <div key={t.id} className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <p className="text-base italic text-slate-700 leading-relaxed">"{t.quote}"</p>
+                  <div>
+                    <div className="font-bold text-slate-900">{t.personName}</div>
+                    <div className="text-sm text-slate-700">{t.role}, {t.organization}</div>
+                  </div>
                 </div>
               ))}
             </div>
+          </section>
+        )}
 
+        {/* Demo Video Section (Phase 9 Security & Hostname Validation) */}
+        <section id="video" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+          <div className="space-y-2">
+            <span className="text-sm font-mono font-bold tracking-wider text-slate-700 uppercase">{c(COPY.videoKicker)}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.videoTitle)}</h2>
+            <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto">{c(COPY.videoSubtitle)}</p>
+          </div>
+
+          <div className="max-w-3xl mx-auto">
+            {safeVideoEmbedUrl ? (
+              <div className="relative w-full rounded-3xl overflow-hidden border border-slate-200 shadow-xl bg-black" style={{ paddingBottom: '56.25%' }}>
+                <iframe
+                  className="absolute inset-0 w-full h-full"
+                  src={safeVideoEmbedUrl}
+                  title={c(COPY.videoIframeTitle)}
+                  allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+                  sandbox="allow-scripts allow-same-origin allow-presentation"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              </div>
+            ) : (
+              /* Interactive placeholder when no video URL is configured */
+              <button
+                type="button"
+                onClick={openDemoModal}
+                className="relative w-full rounded-3xl overflow-hidden border border-emerald-200 shadow-xl bg-gradient-to-br from-[#f0fdf4] to-[#dcfce7] flex flex-col items-center justify-center gap-5 py-20 group hover:shadow-2xl transition-all cursor-pointer focus:outline-none focus:ring-4 focus:ring-[#14532d]"
+                aria-label={c(COPY.videoWatchBtn)}
+              >
+                <div className="w-20 h-20 rounded-full bg-white border border-emerald-300 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <PlayCircle className="w-10 h-10 text-[#15803d]" />
+                </div>
+                <div className="space-y-1 text-center">
+                  <p className="text-xl font-black text-[#0f172a] font-display">{c(COPY.videoCardTitle)}</p>
+                  <p className="text-sm text-slate-600">{c(COPY.videoCardDesc)}</p>
+                </div>
+                <span className="px-6 py-3 rounded-xl bg-[#14532d] text-white text-sm font-bold shadow-sm group-hover:bg-[#166534] transition-colors">
+                  {c(COPY.videoWatchBtn)}
+                </span>
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* Pricing Section */}
+        <section id="pricing" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+          <div className="space-y-2">
+            <span className="text-sm font-mono font-bold tracking-wider text-slate-700 uppercase">{c(COPY.pricingKicker)}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.pricingTitle)}</h2>
+            <p className="text-base text-slate-600 max-w-2xl mx-auto">{c(COPY.pricingSubtitle)}</p>
+          </div>
+
+          <div className="max-w-4xl mx-auto">
+            <div className="p-10 rounded-3xl bg-[#14532d] text-white shadow-2xl space-y-8 relative overflow-hidden text-left">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="relative space-y-2 text-center">
+                <div className="flex items-end justify-center gap-2">
+                  <span className="text-6xl font-black font-display tracking-tight">{getPricingAmount()}</span>
+                  <span className="text-emerald-300 text-base font-semibold pb-3">{getPricingPerStudent()}</span>
+                </div>
+                <p className="text-emerald-200/90 text-sm font-medium">{getPricingFreeNote()}</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-emerald-100 pt-4">
+                {[
+                  COPY.pricingFeat1,
+                  COPY.pricingFeat2,
+                  COPY.pricingFeat3,
+                  COPY.pricingFeat4,
+                  COPY.pricingFeat5,
+                  COPY.pricingFeat6,
+                ].map((feat, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span>{c(feat)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={openDemoModal}
+                  className="w-full bg-white hover:bg-slate-100 text-[#14532d] font-black rounded-xl py-4 shadow-md text-base"
+                >
+                  {c(COPY.bookDemo)}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Savings & Comparison Calculator (Phase 7 Requirement) */}
+        <section id="roi" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
+          <div className="space-y-2">
+            <span className="text-sm font-mono font-bold tracking-wider text-slate-700 uppercase">{c(COPY.roiKicker)}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.roiTitle)}</h2>
+            <p className="text-base text-slate-600 max-w-2xl mx-auto">{c(COPY.roiSubtitle)}</p>
+          </div>
+
+          <div className="rounded-3xl bg-white border border-slate-200 shadow-xl p-8 sm:p-12 max-w-5xl mx-auto space-y-8 text-left">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              {/* Controls */}
+              <div className="lg:col-span-6 space-y-6">
+                <div>
+                  <label htmlFor="student-slider" className="block text-base font-extrabold text-[#0f172a] font-display mb-2">
+                    {c(COPY.roiSliderLabel)}:{' '}
+                    <span className="text-[#15803d]">
+                      {studentCount.toLocaleString()} {c(COPY.roiStudents)}
+                    </span>
+                  </label>
+                  <input
+                    id="student-slider"
+                    type="range"
+                    min="50"
+                    max="3000"
+                    step="50"
+                    value={studentCount}
+                    onChange={(e) => setStudentCount(Number(e.target.value))}
+                    className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#15803d]"
+                    aria-valuemin={50}
+                    aria-valuemax={3000}
+                    aria-valuenow={studentCount}
+                  />
+                  <div className="flex justify-between text-xs text-slate-700 mt-2 font-mono font-semibold">
+                    <span>50</span>
+                    <span>1,500</span>
+                    <span>3,000</span>
+                  </div>
+                </div>
+
+                {/* Mode Selector */}
+                <div>
+                  <div className="text-sm font-bold text-slate-800 mb-2">{c(COPY.roiModeLabel)}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceMode('QR')}
+                      aria-pressed={attendanceMode === 'QR'}
+                      className={`p-3 rounded-xl border text-center font-bold text-sm transition-colors cursor-pointer ${
+                        attendanceMode === 'QR'
+                          ? 'bg-[#14532d] text-white border-[#14532d] shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {c(COPY.roiModeQr)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceMode('RFID')}
+                      aria-pressed={attendanceMode === 'RFID'}
+                      className={`p-3 rounded-xl border text-center font-bold text-sm transition-colors cursor-pointer ${
+                        attendanceMode === 'RFID'
+                          ? 'bg-[#14532d] text-white border-[#14532d] shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {c(COPY.roiModeRfid)}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 text-sm text-slate-600">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
+                    <span>{c(COPY.roiPoint1)}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
+                    <span>{c(COPY.roiPoint2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Output metric tiles */}
+              <div className="lg:col-span-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200">
+                    <div className="text-xs font-bold text-slate-700 uppercase">{c(COPY.roiHoursLabel)}</div>
+                    <div className="text-3xl font-black text-[#0f172a] font-display mt-1">
+                      ~{estimates.annualTeacherHoursSaved.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-slate-700 font-semibold mt-0.5">{c(COPY.roiPerYear)}</div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200">
+                    <div className="text-xs font-bold text-slate-700 uppercase">{c(COPY.roiPaperLabel)}</div>
+                    <div className="text-3xl font-black text-[#0f172a] font-display mt-1">
+                      ~{estimates.annualPaperSheetsSaved.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-slate-700 font-semibold mt-0.5">{c(COPY.roiPerYear)}</div>
+                  </div>
+                </div>
+
+                {/* Prominent Illustrative Disclaimer */}
+                <div className="p-4 rounded-2xl bg-[#dcfce7] border border-emerald-300 text-sm text-emerald-950 flex items-start gap-2.5 leading-relaxed font-medium">
+                  <Lightbulb className="w-5 h-5 text-[#15803d] shrink-0 mt-0.5" />
+                  <span>{c(COPY.roiDisclaimer)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Expandable Calculation Methodology */}
+            <div className="border-t border-slate-200 pt-6">
+              <button
+                type="button"
+                onClick={() => setShowMethodology(!showMethodology)}
+                className="flex items-center justify-between w-full text-left font-bold text-sm text-slate-800 hover:text-[#14532d] transition-colors focus:outline-none focus:ring-2 focus:ring-[#14532d] rounded-lg p-2"
+                aria-expanded={showMethodology}
+              >
+                <span>{c(COPY.roiMethodologyToggle)}</span>
+                {showMethodology ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+
+              {showMethodology && (
+                <div className="mt-4 p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-sm text-slate-700 animate-fade-in">
+                  <h4 className="font-bold text-slate-900 font-display">
+                    {CALCULATION_METHODOLOGY[language]?.title || CALCULATION_METHODOLOGY.en.title}
+                  </h4>
+                  <ul className="space-y-2 list-disc list-inside">
+                    {(CALCULATION_METHODOLOGY[language]?.points || CALCULATION_METHODOLOGY.en.points).map((pt, i) => (
+                      <li key={i} className="leading-relaxed">{pt}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Truthful & Evidence-Based Comparison Table */}
+            <div className="border-t border-slate-200 pt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="font-extrabold text-[#0f172a] font-display text-lg">
+                  {c(COPY.compSubTitle)}
+                </h3>
+                <span className="text-xs text-slate-700 font-mono font-semibold">
+                  {studentCount} STUDENTS • {estimates.mode} MODE
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-100 border-b border-slate-200">
+                    <tr>
+                      <th scope="col" className="px-5 py-3.5 font-bold text-slate-700 w-2/5">
+                        {c(COPY.compHeaderFeature)}
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 font-extrabold text-[#14532d] font-display text-center">
+                        {c(COPY.compHeaderAE)}
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 font-bold text-slate-600 text-center">
+                        {c(COPY.compHeaderPaper)}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[
+                      { f: COPY.compRow1Feature, ae: COPY.compRow1Ae, paper: COPY.compRow1Paper },
+                      { f: COPY.compRow2Feature, ae: COPY.compRow2Ae, paper: COPY.compRow2Paper },
+                      { f: COPY.compRow3Feature, ae: COPY.compRow3Ae, paper: COPY.compRow3Paper },
+                      { f: COPY.compRow4Feature, ae: COPY.compRow4Ae, paper: COPY.compRow4Paper },
+                      { f: COPY.compRow5Feature, ae: COPY.compRow5Ae, paper: COPY.compRow5Paper },
+                    ].map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-5 py-3.5 font-semibold text-slate-800">{c(row.f)}</td>
+                        <td className="px-4 py-3.5 text-center font-bold text-[#14532d]">{c(row.ae)}</td>
+                        <td className="px-4 py-3.5 text-center text-slate-600">{c(row.paper)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA Section */}
+        <section id="contact" className="bg-[#14532d] text-white py-24 px-4 sm:px-12 text-center space-y-8 relative overflow-hidden mt-auto scroll-mt-24">
+          <div className="max-w-3xl mx-auto space-y-4">
+            <span className="text-sm font-mono font-bold tracking-widest text-emerald-300 uppercase">{c(COPY.ctaKicker)}</span>
+            <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight leading-tight">{c(COPY.ctaTitle)}</h2>
+            <p className="text-emerald-100 text-base sm:text-lg max-w-xl mx-auto">{c(COPY.ctaSubtitle)}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
             <Button
               variant="secondary"
               size="lg"
-              onClick={() => setDemoModalOpen(true)}
-              className="w-full bg-white hover:bg-slate-100 text-[#14532d] font-black rounded-xl py-4 shadow-md"
+              onClick={openDemoModal}
+              className="bg-white hover:bg-slate-100 text-[#14532d] font-bold rounded-xl px-8 py-3.5 shadow-lg shadow-black/20 text-base"
             >
-              Book a Free Demo
+              {c(COPY.bookDemo)}
             </Button>
+            <Link to="/login">
+              <Button
+                variant="ghost"
+                size="lg"
+                className="text-white hover:bg-[#166534] border border-emerald-400/40 rounded-xl px-8 py-3.5 font-bold text-base"
+              >
+                {c(COPY.signIn)}
+              </Button>
+            </Link>
           </div>
 
-          {/* Comparison table */}
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden text-left">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-extrabold text-[#0f172a] font-display text-base">AttendEase vs. paper registers</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Based on a 750-student secondary school, 220 school days/year</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left px-6 py-3 font-bold text-slate-700 w-1/2"></th>
-                    <th className="text-center px-4 py-3 font-extrabold text-[#14532d] font-display">AttendEase</th>
-                    <th className="text-center px-4 py-3 font-bold text-slate-500">Paper registers</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {[
-                    ['Morning roll call time', 'Under 2 minutes', '15–25 minutes'],
-                    ['Works without internet', '✓ Always', '✓ (paper)'],
-                    ['UDISE+ export', '✓ One click', '✗ Manual retyping'],
-                    ['Parent SMS alerts', '✓ Automatic', '✗ Not possible'],
-                    ['Attendance history search', '✓ Instant', '✗ Manual page search'],
-                    ['Corrections audit trail', '✓ Logged', '✗ Crossed-out ink'],
-                    ['Annual cost per student', get('pricing_amount'), '₹80–120 (paper + ink)'],
-                  ].map(([feature, ae, paper]) => (
-                    <tr key={feature} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-6 py-3 font-medium text-slate-700">{feature}</td>
-                      <td className="px-4 py-3 text-center font-semibold text-[#14532d]">{ae}</td>
-                      <td className="px-4 py-3 text-center text-slate-500">{paper}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Savings calculator */}
-      <section id="roi" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
-        <div className="space-y-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">{c(COPY.roiKicker)}</span>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">{c(COPY.roiTitle)}</h2>
-        </div>
-
-        <div className="rounded-3xl bg-white border border-slate-200 shadow-xl p-8 sm:p-12 max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center text-left">
-          <div className="lg:col-span-6 space-y-6">
-            <div>
-              <label htmlFor="student-slider" className="block text-base font-extrabold text-[#0f172a] font-display mb-2">
-                {c(COPY.roiSliderLabel)}: <span className="text-[#15803d]">{studentCount.toLocaleString()} {c(COPY.roiStudents)}</span>
-              </label>
-              <input
-                id="student-slider"
-                type="range"
-                min="100"
-                max="3000"
-                step="50"
-                value={studentCount}
-                onChange={(e) => setStudentCount(Number(e.target.value))}
-                className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#15803d]"
-              />
-              <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
-                <span>100</span>
-                <span>1,500</span>
-                <span>3,000</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 text-xs sm:text-sm text-slate-600">
-              <div className="flex items-center gap-2.5">
-                <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
-                <span>{c(COPY.roiPoint1)}</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
-                <span>{c(COPY.roiPoint2)}</span>
-              </div>
-            </div>
+          <div className="text-sm text-emerald-200/90 font-medium">
+            {c(COPY.ctaContact)}:{' '}
+            <a href="mailto:hello@attendease.in" className="underline hover:text-white transition-colors">
+              hello@attendease.in
+            </a>
           </div>
 
-          <div className="lg:col-span-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200">
-                <div className="text-[11px] font-bold text-slate-500 uppercase">{c(COPY.roiHoursLabel)}</div>
-                <div className="text-3xl font-black text-[#0f172a] font-display mt-1">{teacherHoursSavedPerYear.toLocaleString()}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{c(COPY.roiPerYear)}</div>
-              </div>
-              <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200">
-                <div className="text-[11px] font-bold text-slate-500 uppercase">{c(COPY.roiPaperLabel)}</div>
-                <div className="text-3xl font-black text-[#0f172a] font-display mt-1">{paperSavedPages.toLocaleString()}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{c(COPY.roiPerYear)}</div>
-              </div>
-            </div>
-            <div className="p-4 rounded-2xl bg-[#dcfce7] border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5 leading-relaxed font-medium">
-              <Lightbulb className="w-4 h-4 text-[#15803d] shrink-0 mt-0.5" />
-              <span>{c(COPY.roiNote)}</span>
-            </div>
+          <div className="absolute right-8 bottom-8 text-emerald-600/30">
+            <Sparkles className="w-16 h-16" />
           </div>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section id="contact" className="bg-[#14532d] text-white py-24 px-4 sm:px-12 text-center space-y-8 relative overflow-hidden mt-auto scroll-mt-24">
-        <div className="max-w-3xl mx-auto space-y-4">
-          <span className="text-xs font-mono font-bold tracking-widest text-emerald-300 uppercase">{c(COPY.ctaKicker)}</span>
-          <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight leading-tight">{c(COPY.ctaTitle)}</h2>
-          <p className="text-emerald-100 text-base sm:text-lg max-w-xl mx-auto">{c(COPY.ctaSubtitle)}</p>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => setDemoModalOpen(true)}
-            className="bg-white hover:bg-slate-100 text-[#14532d] font-bold rounded-xl px-8 py-3.5 shadow-lg shadow-black/20"
-          >
-            {c(COPY.bookDemo)}
-          </Button>
-          <Link to="/login">
-            <Button
-              variant="ghost"
-              size="lg"
-              className="text-white hover:bg-[#166534] border border-emerald-400/40 rounded-xl px-8 py-3.5 font-bold"
-            >
-              {c(COPY.signIn)}
-            </Button>
-          </Link>
-        </div>
-
-        <div className="text-xs text-emerald-200/80 font-medium">
-          {c(COPY.ctaContact)}:{' '}
-          <a href="mailto:hello@attendease.in" className="underline hover:text-white transition-colors">
-            hello@attendease.in
-          </a>
-        </div>
-
-        <div className="absolute right-8 bottom-8 text-emerald-600/30">
-          <Sparkles className="w-16 h-16" />
-        </div>
-      </section>
+        </section>
+      </main>
 
       {/* Footer */}
       <footer className="bg-[#0f172a] text-white py-10 px-4 sm:px-12 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto space-y-5 text-xs text-slate-400">
+        <div className="max-w-7xl mx-auto space-y-6 text-sm text-slate-400">
           <div className="flex flex-wrap items-center justify-between gap-6">
             <div className="flex flex-wrap items-center gap-6 font-semibold">
               <a href="#how-it-works" className="hover:text-white transition-colors">{c(COPY.navHowItWorks)}</a>
               <a href="#getting-started" className="hover:text-white transition-colors">{c(COPY.navGettingStarted)}</a>
+              <a href="#pricing" className="hover:text-white transition-colors">{c(COPY.navPricing)}</a>
               <a href="#roi" className="hover:text-white transition-colors">{c(COPY.navSavings)}</a>
               <Link to="/login" className="hover:text-white transition-colors">{c(COPY.signIn)}</Link>
             </div>
-            <div className="flex items-center gap-2 font-display font-black text-sm text-white">
-              <div className="w-6 h-6 rounded-md bg-[#15803d] flex items-center justify-center text-white text-[10px]">AE</div>
+            <div className="flex items-center gap-2 font-display font-black text-base text-white">
+              <div className="w-7 h-7 rounded-lg bg-[#15803d] flex items-center justify-center text-white text-xs font-display">AE</div>
               <span>AttendEase</span>
             </div>
             <div className="flex flex-wrap items-center gap-5 font-semibold">
@@ -841,42 +950,34 @@ export const LandingPage: React.FC = () => {
               <a href="mailto:hello@attendease.in" className="hover:text-white transition-colors">{c(COPY.footerContact)}</a>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4 text-xs">
             <span>{c(COPY.footerCompliance)}</span>
-            <span>© {new Date().getFullYear()} AttendEase</span>
+            <span>{c(COPY.footerCopyright)}</span>
           </div>
         </div>
       </footer>
 
-      {/* Demo dialog */}
+      {/* Privacy-Safe Demo Request Dialog (Phase 10 Requirement) */}
       <Dialog
         isOpen={demoModalOpen}
-        onClose={() => {
-          setDemoModalOpen(false);
-          setDemoSubmitted(false);
-          setDemoError(null);
-        }}
+        onClose={closeDemoModal}
         title={c(COPY.demoTitle)}
         description={c(COPY.demoDesc)}
       >
         {demoSubmitted ? (
           <div data-testid="demo-success-state" className="text-center py-6 space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#dcfce7] text-[#15803d] border border-emerald-200 mx-auto flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-2xl bg-[#dcfce7] text-[#15803d] border border-emerald-200 mx-auto flex items-center justify-center">
+              <CheckCircle2 className="w-9 h-9" />
             </div>
-            <h4 className="text-xl font-bold text-slate-900 font-display">{c(COPY.demoSuccessTitle)}</h4>
+            <h3 className="text-xl font-bold text-slate-900 font-display">{c(COPY.demoSuccessTitle)}</h3>
             <p className="text-sm text-slate-600 max-w-sm mx-auto leading-relaxed">{c(COPY.demoSuccessBody)}</p>
             <p className="text-sm font-mono font-bold text-slate-900">{demoForm.phone}</p>
             <div className="pt-2">
               <Button
                 variant="primary"
                 size="md"
-                onClick={() => {
-                  setDemoModalOpen(false);
-                  setDemoSubmitted(false);
-                  setDemoError(null);
-                }}
-                className="bg-[#14532d] hover:bg-[#166534] text-white"
+                onClick={closeDemoModal}
+                className="bg-[#14532d] hover:bg-[#166534] text-white font-bold"
               >
                 {c(COPY.demoDone)}
               </Button>
@@ -897,7 +998,7 @@ export const LandingPage: React.FC = () => {
               required
               value={demoForm.name}
               onChange={(e) => setDemoForm({ ...demoForm, name: e.target.value })}
-              placeholder="e.g. Principal Sourav Sen"
+              placeholder={c(COPY.demoNamePlaceholder)}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -910,7 +1011,7 @@ export const LandingPage: React.FC = () => {
                 required
                 value={demoForm.phone}
                 onChange={(e) => setDemoForm({ ...demoForm, phone: e.target.value })}
-                placeholder="98765 43210"
+                placeholder={c(COPY.demoPhonePlaceholder)}
               />
               <TextField
                 id="demo-form-email"
@@ -919,7 +1020,7 @@ export const LandingPage: React.FC = () => {
                 type="email"
                 value={demoForm.email}
                 onChange={(e) => setDemoForm({ ...demoForm, email: e.target.value })}
-                placeholder="principal@school.edu.in"
+                placeholder={c(COPY.demoEmailPlaceholder)}
               />
             </div>
 
@@ -931,7 +1032,7 @@ export const LandingPage: React.FC = () => {
                 required
                 value={demoForm.schoolName}
                 onChange={(e) => setDemoForm({ ...demoForm, schoolName: e.target.value })}
-                placeholder="Green Valley High School"
+                placeholder={c(COPY.demoSchoolPlaceholder)}
               />
               <TextField
                 id="demo-form-district"
@@ -940,37 +1041,74 @@ export const LandingPage: React.FC = () => {
                 required
                 value={demoForm.district}
                 onChange={(e) => setDemoForm({ ...demoForm, district: e.target.value })}
-                placeholder="Kolkata, West Bengal"
+                placeholder={c(COPY.demoDistrictPlaceholder)}
               />
             </div>
 
-            <div>
-              <label htmlFor="demo-student-count" className="block text-xs font-bold text-slate-700 mb-1.5">
-                {c(COPY.demoStudents)}
-              </label>
-              <select
-                id="demo-student-count"
-                data-testid="demo-student-count"
-                value={demoForm.studentCount}
-                onChange={(e) => setDemoForm({ ...demoForm, studentCount: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 outline-none focus:border-[#14532d] cursor-pointer"
-              >
-                <option value="Under 500">Under 500</option>
-                <option value="500-1000">500 – 1,000</option>
-                <option value="1000-2000">1,000 – 2,000</option>
-                <option value="2000+">2,000+</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="demo-student-count" className="block text-sm font-bold text-slate-700 mb-1.5">
+                  {c(COPY.demoStudents)}
+                </label>
+                <select
+                  id="demo-student-count"
+                  data-testid="demo-student-count"
+                  value={demoForm.studentCount}
+                  onChange={(e) => setDemoForm({ ...demoForm, studentCount: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 outline-none focus:border-[#14532d] cursor-pointer"
+                >
+                  <option value="Under 300">Under 300</option>
+                  <option value="300-750">300 – 750</option>
+                  <option value="750-1500">750 – 1,500</option>
+                  <option value="1500+">1,500+</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="demo-lang-pref" className="block text-sm font-bold text-slate-700 mb-1.5">
+                  {c(COPY.demoLangPref)}
+                </label>
+                <select
+                  id="demo-lang-pref"
+                  data-testid="demo-lang-pref"
+                  value={demoForm.preferredLanguage}
+                  onChange={(e) => setDemoForm({ ...demoForm, preferredLanguage: e.target.value as any })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 outline-none focus:border-[#14532d] cursor-pointer"
+                >
+                  <option value="en">English</option>
+                  <option value="bn">বাংলা (Bengali)</option>
+                  <option value="hi">हिंदी (Hindi)</option>
+                </select>
+              </div>
             </div>
 
-            <div className="pt-2 flex justify-end gap-2.5">
+            {/* Privacy & Purpose Notice */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+              {c(COPY.demoPurposeNotice)}
+            </div>
+
+            {/* Explicit Consent Checkbox */}
+            <div className="flex items-start gap-2.5 pt-1">
+              <input
+                id="demo-consent-checkbox"
+                data-testid="demo-consent-checkbox"
+                type="checkbox"
+                checked={demoConsent}
+                onChange={(e) => setDemoConsent(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#14532d] focus:ring-[#14532d] cursor-pointer"
+                required
+              />
+              <label htmlFor="demo-consent-checkbox" className="text-xs text-slate-700 leading-snug cursor-pointer select-none">
+                {c(COPY.demoConsentLabel)}
+              </label>
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2.5">
               <Button
                 variant="secondary"
                 size="md"
                 type="button"
-                onClick={() => {
-                  setDemoModalOpen(false);
-                  setDemoError(null);
-                }}
+                onClick={closeDemoModal}
               >
                 {c(COPY.demoCancel)}
               </Button>
@@ -981,7 +1119,7 @@ export const LandingPage: React.FC = () => {
                 size="md"
                 type="submit"
                 isLoading={isSubmittingDemo}
-                className="bg-[#14532d] hover:bg-[#166534] text-white"
+                className="bg-[#14532d] hover:bg-[#166534] text-white font-bold"
               >
                 {c(COPY.demoSubmit)}
               </Button>

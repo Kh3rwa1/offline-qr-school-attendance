@@ -175,8 +175,11 @@ ON CONFLICT ("id") DO UPDATE SET
 -- application role can mutate or delete an already generated artifact.
 -- ---------------------------------------------------------------------------
 ALTER TABLE "academic_calendar_versions" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
 ALTER TABLE "academic_calendar_versions" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
 DROP POLICY IF EXISTS "tenant_isolation_policy" ON "academic_calendar_versions";
+--> statement-breakpoint
 CREATE POLICY "tenant_isolation_policy" ON "academic_calendar_versions"
   AS RESTRICTIVE FOR ALL
   USING (
@@ -192,11 +195,14 @@ CREATE POLICY "tenant_isolation_policy" ON "academic_calendar_versions"
       THEN current_setting('app.current_school_id', true)::uuid ELSE NULL END
   );
 --> statement-breakpoint
-
 ALTER TABLE "report_artifacts" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
 ALTER TABLE "report_artifacts" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
 DROP POLICY IF EXISTS "report_artifacts_select" ON "report_artifacts";
+--> statement-breakpoint
 DROP POLICY IF EXISTS "report_artifacts_insert" ON "report_artifacts";
+--> statement-breakpoint
 CREATE POLICY "report_artifacts_select" ON "report_artifacts"
   AS RESTRICTIVE FOR SELECT
   USING (
@@ -205,6 +211,7 @@ CREATE POLICY "report_artifacts_select" ON "report_artifacts"
       WHEN current_setting('app.current_school_id', true) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
       THEN current_setting('app.current_school_id', true)::uuid ELSE NULL END
   );
+--> statement-breakpoint
 CREATE POLICY "report_artifacts_insert" ON "report_artifacts"
   AS RESTRICTIVE FOR INSERT
   WITH CHECK (

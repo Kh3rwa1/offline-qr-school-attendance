@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { NextFunction, Router, Response } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db';
@@ -16,6 +16,7 @@ import { ReportLocale, ReportScopeType, validateReportScope } from '../services/
 export const governmentReportRouter = Router({ mergeParams: true });
 
 const ScopeSchema = z.enum(['WHOLE_SCHOOL', 'ALL_CLASSES', 'SELECTED_CLASSES', 'SELECTED_SECTION', 'SELECTED_STUDENTS', 'ONE_STUDENT']);
+const ReportIdSchema = z.string().uuid();
 const RequestSchema = z.object({
   reportType: z.enum(GOVERNMENT_REPORT_TYPES),
   format: z.enum(['xlsx', 'csv', 'html']).default('xlsx'),
@@ -143,7 +144,7 @@ governmentReportRouter.get('/:reportId/download', requireAuth, requireTenant, as
   const locale = localeFor(req);
   try {
     const schoolId = req.activeSchoolId!;
-    const reportId = z.string().uuid().parse(req.params.reportId);
+    const reportId = ReportIdSchema.parse(req.params.reportId);
     const requestedFormat = req.query.format ? z.enum(['xlsx', 'csv', 'html']).parse(req.query.format) : undefined;
     const report = await getReportRecord(schoolId, reportId);
     if (!report) throw new Error('REPORT_NOT_FOUND');
@@ -162,10 +163,15 @@ governmentReportRouter.get('/:reportId/download', requireAuth, requireTenant, as
   } catch (error) { fail(res, error, locale); }
 });
 
-governmentReportRouter.get('/:reportId', requireAuth, requireTenant, async (req: AuthenticatedRequest, res: Response) => {
+governmentReportRouter.get('/:reportId', requireAuth, requireTenant, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const parsedReportId = ReportIdSchema.safeParse(req.params.reportId);
+  if (!parsedReportId.success) {
+    next();
+    return;
+  }
   const locale = localeFor(req);
   try {
-    const report = await getReportRecord(req.activeSchoolId!, z.string().uuid().parse(req.params.reportId));
+    const report = await getReportRecord(req.activeSchoolId!, parsedReportId.data);
     if (!report) throw new Error('REPORT_NOT_FOUND');
     await assertRead(req, report);
     res.json({ success: true, report });
@@ -175,7 +181,7 @@ governmentReportRouter.get('/:reportId', requireAuth, requireTenant, async (req:
 governmentReportRouter.post('/:reportId/approve', requireAuth, requireTenant, requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const locale = localeFor(req);
   try {
-    const report = await approveReportInternally({ schoolId: req.activeSchoolId!, reportId: z.string().uuid().parse(req.params.reportId), actorId: req.user!.id, userRole: roleFor(req) });
+    const report = await approveReportInternally({ schoolId: req.activeSchoolId!, reportId: ReportIdSchema.parse(req.params.reportId), actorId: req.user!.id, userRole: roleFor(req) });
     res.json({ success: true, report });
   } catch (error) { fail(res, error, locale); }
 });

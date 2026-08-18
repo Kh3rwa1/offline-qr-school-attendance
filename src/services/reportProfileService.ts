@@ -3,6 +3,27 @@ import { z } from 'zod';
 import { db } from '../db';
 import { reportingProfiles } from '../db/schema';
 
+const DEFAULT_INCLUDE_SHEETS = {
+  cover: true,
+  summary: true,
+  registers: true,
+  absentees: true,
+  consecutiveAbsences: true,
+  corrections: true,
+  calendar: true,
+  metadata: true,
+};
+
+const DEFAULT_COLUMNS = {
+  studentCode: true,
+  banglarShikshaId: true,
+  nameEnglish: true,
+  nameBengali: true,
+  gender: false,
+  dailyGrid: true,
+  totals: true,
+};
+
 const IncludeSheetsSchema = z.object({
   cover: z.boolean().default(true),
   summary: z.boolean().default(true),
@@ -33,8 +54,8 @@ const LocalizedTextSchema = z.object({
 export const ReportingProfileConfigurationSchema = z.object({
   layout: z.enum(['PORTRAIT', 'LANDSCAPE'] as const).default('LANDSCAPE'),
   language: z.enum(['ENGLISH', 'BENGALI', 'HINDI', 'BILINGUAL'] as const).default('BILINGUAL'),
-  includeSheets: IncludeSheetsSchema.default({}),
-  columns: ColumnSchema.default({}),
+  includeSheets: IncludeSheetsSchema.default(DEFAULT_INCLUDE_SHEETS),
+  columns: ColumnSchema.default(DEFAULT_COLUMNS),
   signatureBlocks: z.array(z.string().min(1).max(100)).min(1).max(5).default([
     'Class Teacher',
     'Report Verification In-Charge',
@@ -65,8 +86,8 @@ export const FALLBACK_REPORTING_PROFILE: ReportingProfileSnapshot = {
   configuration: ReportingProfileConfigurationSchema.parse({
     layout: 'LANDSCAPE',
     language: 'BILINGUAL',
-    includeSheets: {},
-    columns: {},
+    includeSheets: DEFAULT_INCLUDE_SHEETS,
+    columns: DEFAULT_COLUMNS,
     signatureBlocks: [
       'Class Teacher',
       'Report Verification In-Charge',

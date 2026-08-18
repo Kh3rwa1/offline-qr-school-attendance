@@ -176,7 +176,7 @@ export const SetupWizardPage: React.FC = () => {
           </p>
           <button
             onClick={() => navigate('/login')}
-            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl transition flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
           >
             <span>Proceed to Login</span>
             <ArrowRight className="w-4 h-4" />
@@ -226,7 +226,7 @@ export const SetupWizardPage: React.FC = () => {
                     ? 'border-emerald-500 text-emerald-400'
                     : step > s.id
                     ? 'border-emerald-500/40 text-slate-400'
-                    : 'border-slate-800 text-slate-600'
+                    : 'border-slate-800 text-slate-400'
                 }`}
               >
                 <span>{s.label}</span>
@@ -293,7 +293,7 @@ export const SetupWizardPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="py-3 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl transition flex items-center gap-2"
+                className="py-3 px-6 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center gap-2"
               >
                 <span>Continue</span>
                 <ArrowRight className="w-4 h-4" />
@@ -381,7 +381,7 @@ export const SetupWizardPage: React.FC = () => {
                   setError(null);
                   setStep(3);
                 }}
-                className="py-3 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl transition flex items-center gap-2"
+                className="py-3 px-6 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center gap-2"
               >
                 <span>Continue to School Setup</span>
                 <ArrowRight className="w-4 h-4" />
@@ -471,7 +471,7 @@ export const SetupWizardPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                className="py-3 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl transition flex items-center gap-2 disabled:opacity-50"
+                className="py-3 px-6 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center gap-2 disabled:opacity-50"
               >
                 {submitting ? (
                   <>
@@ -519,7 +519,7 @@ export const SetupWizardPage: React.FC = () => {
             <div className="pt-4">
               <button
                 onClick={() => navigate('/login')}
-                className="w-full max-w-md py-3.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl transition flex items-center justify-center gap-2 mx-auto"
+                className="w-full max-w-md py-3.5 px-6 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2 mx-auto"
               >
                 <span>{t('goToLogin')}</span>
                 <ArrowRight className="w-4 h-4" />

@@ -1,104 +1,53 @@
-# Zebra FX9600 Physical Hardware Validation Runbook & Acceptance Pack
+# Zebra FX9600 Hardware Acceptance Pack & Reference Specification
 
-> [!IMPORTANT]
-> **Production Certification Policy**: Software integration is verified against documented Zebra IoT Connector JSON contracts in CI. The following physical acceptance pack documents the live on-site hardware commissioning and validation drill executed with genuine Zebra FX9600 readers.
-
----
-
-## 1. On-Site Physical Commissioning Architecture
-
-### Hardware Configuration
-1. **Zebra FX9600 Fixed Reader**: India/ETSI SKU (865.0 – 867.0 MHz), 4-port (Serial: `FX9600-IND-2026-0814`).
-2. **Antenna Array**: Dual circularly polarized Zebra AN480 patch antennas mounted at entrance doorway (Port 1: Entry direction, Port 2: Exit direction).
-3. **Power & Network**: PoE+ Gigabit Switch (802.3at); static Ethernet LAN IP `192.168.10.45` on isolated appliance subnet.
-4. **Passive UHF Tags**: EPC Class 1 Gen 2 / ISO 18000-63 inlays operating in ETSI 865–867 MHz band.
-5. **AttendEase Server**: Appliance running AttendEase v1.3.0 with per-reader HMAC-SHA256 authenticated webhook ingest.
-
-### IoT Connector Profile Settings
-- **Endpoint Type**: HTTPS Webhook
-- **URL**: `https://192.168.10.10/api/v1/schools/5b12a800-xxxx-xxxx-xxxx-xxxxxxxxxxxx/rfid/zebra/reads`
-- **Event Filter**: Tag Read Events + Keepalive Heartbeats
-- **Authentication**: Header `x-zebra-signature: <hmac-sha256(rawBody, readerSecret)>`
-- **RF Power Output**: 28.5 dBm (calibrated for 2.4m doorway aperture)
-- **Tag Data Format**: Hex EPC + Antenna Port + Peak RSSI + Timestamp (ISO-8601)
+> **Document Status**: `SOFTWARE_CONTRACT_VERIFIED_NO_PHYSICAL_HARDWARE`  
+> **Physical Deployment Status**: `EXTERNALLY_PENDING`  
+> **Reference**: See [`docs/hardware/FX9600_COMMISSIONING_TEMPLATE.md`](hardware/FX9600_COMMISSIONING_TEMPLATE.md) for the unpopulated field commissioning runbook and [`docs/hardware/FX9600_EVIDENCE_REQUIREMENTS.md`](hardware/FX9600_EVIDENCE_REQUIREMENTS.md) for physical evidence requirements.
 
 ---
 
-## 2. Hardware Acceptance Verification Checklist
+## 1. Overview & Verification Status Hierarchy
 
-| Step | Test Flow | Expected Result | Measured Telemetry | Status |
-| :--- | :--- | :--- | :--- | :---: |
-| **T1: Single Enrolled Walk** | Student with enrolled badge walks through antenna beam | HTTP 200 `ACCEPTED`, 1 PRESENT record created | Latency: 42ms; Peak RSSI: -48 dBm; Record ID created | **[x] PASS** |
-| **T2: Debounce Cooldown** | Student lingers or re-walks within 30s | HTTP 200 `DUPLICATE`, 0 extra records created | Filtered via Redis NX lock & DB `FOR UPDATE` lock | **[x] PASS** |
-| **T3: Unknown Badge** | Unenrolled EPC tag walks through gate | HTTP 200 `UNKNOWN_CARD`, 0 attendance records | 0 DB writes, rejection logged with hashed digest | **[x] PASS** |
-| **T4: Revoked Badge** | Revoked EPC tag walks through gate | HTTP 200 `REVOKED_CARD`, 0 attendance records | Status `REVOKED` checked, attendance untouched | **[x] PASS** |
-| **T5: Doorway Crowd Rush** | 20+ students walk simultaneously (>300 reads/min) | All enrolled marked PRESENT, 0 HTTP 429 throttles | Burst rate: 320 reads/min; 0 dropped packets; 0 429s | **[x] PASS** |
-| **T6: Teacher Review** | Teacher opens AttendEase dashboard | Real-time roll matches physical gate entries | Polling sync latency < 3s; Came in count = 20 | **[x] PASS** |
-| **T7: Session Finalization** | Teacher finalizes session | Remaining UNMARKED convert to ABSENT, SMS queued | Finalize sealed; 5 absence SMS jobs enqueued | **[x] PASS** |
+Software integration with the **Zebra FX9600 UHF RFID Reader** is fully implemented and automated in CI:
+- **Level 1 (Unit Tested)**: `AUTOMATION_VERIFIED` — EPC canonicalization, digest computation, HMAC-SHA256 verification, and Bearer token parsing are validated by test suites in `tests/rfid/`.
+- **Level 2 (Simulator Validated)**: `AUTOMATION_VERIFIED` — End-to-end webhook ingest, doorway burst rate simulation, and duplicate debounce filtering are validated by `scripts/hardware-runner.ts`.
+- **Level 3 (Physically Commissioned)**: `EXTERNALLY_PENDING` — On-site deployment in a physical school with real doorway RF calibration is pending real-world installation.
 
 ---
 
-## 3. Physical Evidence & Sanitized Database Audit Proof
+## 2. Technical Integration Architecture
 
-### Sanitized Database Inspection Proof
-```sql
--- 1. Verify exact 1:1 PRESENT record creation with zero duplicate records
-SELECT 
-    ar.student_id,
-    COUNT(ar.id) as attendance_record_count,
-    ar.status,
-    ar.capture_method
-FROM attendance_records ar
-WHERE ar.school_id = '5b12a800-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-  AND ar.attendance_session_id = 'c84f1a20-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-GROUP BY ar.student_id, ar.status, ar.capture_method;
+### Hardware Specifications
+- **Reader Model**: Zebra FX9600 Fixed RFID Reader (4-port or 8-port India/ETSI 865.0–867.0 MHz SKU).
+- **Antenna Type**: Dual circularly polarized patch antennas (e.g., Zebra AN480).
+- **Tag Standard**: EPC Class 1 Gen 2 / ISO 18000-63.
+- **Protocol**: HTTP/HTTPS Webhook from embedded Zebra IoT Connector client.
+- **Payload Format**: JSON tag-read arrays (`idHex`, `antenna`, `peakRssi`, `timestamp`).
 
--- Result: Exactly 1 record per student, status = 'PRESENT', capture_method = 'RFID_GATE'
-
--- 2. Verify complete absence of raw EPC/TID secrets in scan events and audit trails
-SELECT 
-    id,
-    epc_last_four,
-    epc_digest,
-    decision,
-    rejection_code,
-    peak_rssi,
-    antenna_port
-FROM rfid_scan_events
-WHERE school_id = '5b12a800-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-ORDER BY scan_timestamp DESC
-LIMIT 5;
-
--- Result: All EPCs stored strictly as 64-character SHA-256 digests; raw EPCs completely absent.
-```
+### Webhook Security Specification
+- **Endpoint**: `POST /api/v1/schools/:schoolId/rfid/zebra/reads`
+- **HMAC Signature**: Header `x-zebra-signature: <sha256_hex(rawBody, readerSecret)>` or `sha256=<hex>`.
+- **Bearer Token**: Header `Authorization: Bearer <reader_token>`.
+- **Digest Storage**: Canonical EPC strings are hashed with SHA-256 upon ingest; raw tag IDs are discarded immediately after credential lookup.
 
 ---
 
-## 4. Commissioning Engineer & Quality Certification Sign-Off
+## 3. Physical Commissioning Verification Steps
 
-```markdown
-### Zebra FX9600 On-Site Hardware Certification Sign-Off
+When deploying physical hardware on-site, technicians follow the test scenarios outlined in [`docs/hardware/FX9600_COMMISSIONING_TEMPLATE.md`](hardware/FX9600_COMMISSIONING_TEMPLATE.md):
 
-- **School Name**: Model High School, Purulia
-- **School ID (Sanitized)**: 5b12a800-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-- **Date & Time of Drill**: 2026-08-16 09:30:00 IST
-- **Software Release SHA**: 36fcaa8
-- **Zebra FX9600 Serial**: FX9600-IND-2026-0814
-- **Firmware Version**: 3.10.30.0 (ETSI Regulatory Build)
-- **IoT Connector Version**: 2.1.0 (Embedded HTTP Client)
-- **Antenna Model & Ports**: Zebra AN480 Dual Array on Ports 1 (Entry) & 2 (Exit)
-- **Regulatory Frequency**: ETSI / India 865.0 – 867.0 MHz
+1. **TC-01: Physical Mounting & Aperture**: Mounting dual antennas at 2.0–2.4m height.
+2. **TC-02: Power & Connectivity**: Establishing 802.3at PoE+ and 1000BASE-T link.
+3. **TC-03: Webhook Authentication**: Verifying HMAC signature verification against the AttendEase appliance.
+4. **TC-04: Single Student Walk-Through**: Testing read sensitivity and 1:1 attendance record creation.
+5. **TC-05: Debounce Filtering**: Validating that lingering tags are debounced for 30 seconds.
+6. **TC-06: Unregistered Tag Rejection**: Confirming unknown tags return rejection codes without DB writes.
+7. **TC-07: Rush-Hour Group Entry**: Validating group throughput (>20 students) without throttling.
+8. **TC-08: Teacher Dashboard Feed**: Confirming live gate arrivals appear in real time.
+9. **TC-09: Session Finalization**: Confirming auto-absent conversion and parent notification queueing.
 
-#### Validation Results Summary:
-1. Webhook HMAC Authenticated: [YES] — Verified with reader-specific encrypted secret
-2. Total Students Processed: [20 / 20 Enrolled Attendees]
-3. Exactly One Attendance Record per Student: [VERIFIED via DB constraint and query]
-4. Duplicate Debounce Filtered: [VERIFIED — 48 multi-read burst events debounced]
-5. Guardian Absence SMS Dispatched on Finalization: [VERIFIED — SMS queue worker processed]
+---
 
-#### Commissioning Engineer Sign-Off:
-- **Name**: Dulor Kisku
-- **Designation**: Lead Systems & Embedded Hardware Engineer
-- **Verification Status**: CERTIFIED (10/10 Live Hardware Verification Passed)
-- **Date**: 2026-08-16
-```
+## 4. Evidence Requirements for Elevation
+
+To elevate Level 3 status to `EXTERNALLY_VALIDATED`, submit the 5 required artifacts defined in [`docs/hardware/FX9600_EVIDENCE_REQUIREMENTS.md`](hardware/FX9600_EVIDENCE_REQUIREMENTS.md).

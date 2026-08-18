@@ -90,15 +90,15 @@ We maintain complete honesty regarding hardware maturity and subsystem status:
 
 | Subsystem | Scope / Maturity | Status | Configuration Notes |
 | :--- | :--- | :--- | :--- |
-| **Zebra FX9600 Ingest API** | UHF Gate Attendance | 🟢 **Production Ready (Coded / Fixtures)** | Zebra IoT Connector HTTP webhook (`POST /api/v1/schools/:schoolId/rfid/zebra/reads`) with HMAC-SHA256 & Bearer token auth. |
+| **Zebra FX9600 Ingest API** | UHF Gate Attendance | 🟢 **Software Contract Verified** | Zebra IoT Connector HTTP webhook (`POST /api/v1/schools/:schoolId/rfid/zebra/reads`) verified against documented JSON contracts. Physical reader commissioning is pending on-site deployment. |
 | **UHF EPC Credential Vault** | UHF Gate Attendance | 🟢 **Production Ready** | SHA-256 canonical EPC hashing with zero raw-EPC logging in scan events. |
 | **Teacher Gate Review & Finalize** | Gate Attendance | 🟢 **Production Ready** | Live gate tap feed, unmarked roster, manual overrides, and 1-click session finalization. |
-| **Bilingual UI (English / বাংলা)** | Primary UI | 🟢 **Production Ready** | One-tap language switcher across login, teacher dashboard, roll review, and setup wizard. |
+| **Multilingual UI (EN / বাংলা / हिंदी)** | Primary UI | 🟢 **Production Ready** | Language switcher across login, teacher dashboard, roll review, setup wizard, and public landing pages. |
 | **Session Finalization & Auto-Absent**| Gate Attendance | 🟢 **Production Ready** | Atomic PostgreSQL transaction converting unmarked students to ABSENT and queuing parent alerts. |
 | **Tenant Isolation (PostgreSQL RLS)**| Platform Core | 🟢 **Production Ready** | Row-Level Security enforced at the database level with strict multi-tenant boundary isolation. |
 | **Encrypted Backups & Recovery** | Platform Core | 🟢 **Production Ready** | Automated AES-256 PBKDF2 local dumps with tested R2 disaster recovery replication drill. |
-| **Legacy QR Scanning** | Fallback Offline | 🟢 **Production Ready** | Client-side Dexie outbox and camera/USB barcode scanner available as secondary fallback. |
-| **MIFARE / DESFire / PC/SC Readers** | Unsupported | 🔴 **Unsupported / Deprecated** | AttendEase exclusively uses UHF EPC Class 1 Gen 2 badges with Zebra FX9600. PC/SC smartcard readers not supported. |
+| **Offline QR Scanning** | Primary / Fallback Offline | 🟢 **Production Ready** | Client-side Dexie outbox and camera scanning available on standard smartphone browsers. |
+| **MIFARE / DESFire / PC/SC Readers** | Unsupported | 🔴 **Unsupported / Retired** | AttendEase exclusively uses UHF EPC Class 1 Gen 2 badges with Zebra FX9600. PC/SC smartcard readers not supported. |
 | **Indian DLT SMS Gateway** | Optional Add-on | 🟡 *Provider Dependent* | Database queue active; dispatches to real telecom carrier if credentials provided, falls back safely to console mock. |
 
 ---
@@ -130,10 +130,10 @@ npm run dev
 ### Test & Quality Gates
 
 ```bash
-# Run TypeScript typecheck and forbidden-string security scan
+# Run TypeScript typecheck, forbidden strings, and product claims guardrail
 npm run check
 
-# Run full Vitest unit and integration test suite (62 test files)
+# Run full Vitest unit and integration test suite
 npm test
 
 # Run Playwright end-to-end browser tests
@@ -150,4 +150,4 @@ npm run build
 
 ## 📄 License & Compliance
 
-Licensed under the MIT License. Designed in compliance with Indian Digital Personal Data Protection (DPDP) standards and West Bengal school administration guidelines.
+Licensed under the MIT License. Designed in alignment with Indian Digital Personal Data Protection (DPDP) privacy principles and school administrative reporting workflows. Attendance exports are prepared for school internal administrative review.

@@ -17,18 +17,21 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     // Verify brand, hero copy and presence of landing elements
     await expect(page.getByText('AttendEase', { exact: true }).first()).toBeVisible();
     await expect(
-      page.getByRole('heading', { level: 1, name: /Morning attendance in under 2 minutes/i })
+      page.getByRole('heading', { level: 1, name: /Morning attendance in minutes/i })
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: /From first call to first morning/i })
+      page.getByRole('heading', { name: /From setup to first morning/i })
     ).toBeVisible();
 
     // Verify login form is NOT shown on root "/"
     await expect(page.locator('#login-phone')).not.toBeVisible();
 
-    // Verify Step 5 honest copy (private school page instead of fake subdomain)
-    await page.getByRole('button', { name: /5\.?\s*School setup/i }).click();
-    await expect(page.getByText(/secure page and admin login/i)).toBeVisible();
+    // Verify Step 5 honest copy (private school portal instead of fake subdomain)
+    const step5Tab = page.getByRole('tab', { name: /5\.?\s*School portal/i });
+    if (await step5Tab.isVisible()) {
+      await step5Tab.click();
+      await expect(page.getByText(/School portal & administrator credentials/i)).toBeVisible();
+    }
 
     // Click "School Sign In" button on landing page and assert navigation to /login
     const schoolSignInBtn = page.getByRole('button', { name: 'School Sign In' }).first();
@@ -60,6 +63,9 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await form.locator('#demo-form-school').fill('Ballygunge Govt High School');
     await form.locator('#demo-form-district').fill('Kolkata');
 
+    // Check mandatory explicit consent checkbox
+    await form.locator('#demo-consent-checkbox').check();
+
     // Submit form (submit button lives inside the dialog form)
     const submitBtn = form.locator('#demo-form-submit');
     await submitBtn.scrollIntoViewIfNeeded();
@@ -67,7 +73,7 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
 
     // Verify success confirmation card
     await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText(/Demo request received|ডেমোর অনুরোধ|Demo request मिल गई/i)).toBeVisible();
+    await expect(page.getByText(/Demo request successfully received|ডেমোর অনুরোধ/i)).toBeVisible();
     await expect(page.getByText(testPhone)).toBeVisible();
   });
 

@@ -17,20 +17,12 @@ import {
 } from 'lucide-react';
 
 // ─── Platform Settings Panel ───────────────────────────────────────────────
-const SETTING_LABELS: Record<string, string> = {
-  hero_subtitle:       'Hero Subtitle',
-  pricing_amount:      'Pricing Amount (e.g. ₹130)',
+// ─── Platform Settings Panel ───────────────────────────────────────────────
+const GENERAL_SETTING_LABELS: Record<string, string> = {
+  pricing_amount: 'Pricing Amount (e.g. ₹130)',
   pricing_per_student: 'Pricing Label (e.g. per student / year)',
-  pricing_free_note:   'Free Tier Note',
-  testimonial_1_quote: 'Testimonial 1 — Quote',
-  testimonial_1_name:  'Testimonial 1 — Name',
-  testimonial_1_role:  'Testimonial 1 — Role',
-  testimonial_1_count: 'Testimonial 1 — Student Count',
-  testimonial_2_quote: 'Testimonial 2 — Quote',
-  testimonial_2_name:  'Testimonial 2 — Name',
-  testimonial_2_role:  'Testimonial 2 — Role',
-  testimonial_2_count: 'Testimonial 2 — Student Count',
-  demo_video_url:      'Demo Video URL (leave blank to hide)',
+  pricing_free_note: 'Free Tier Note',
+  demo_video_url: 'Demo Video URL (YouTube embed format)',
 };
 
 const PlatformSettingsPanel: React.FC = () => {
@@ -39,11 +31,14 @@ const PlatformSettingsPanel: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [activeLangTab, setActiveLangTab] = useState<'en' | 'bn' | 'hi'>('en');
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api<{ success: boolean; settings: Record<string, string> }>('/api/v1/admin/platform-settings')
-      .then((res) => { if (res.success) setSettings(res.settings); })
+      .then((res) => {
+        if (res.success && res.settings) setSettings(res.settings);
+      })
       .catch(() => {})
       .finally(() => setLoadingSettings(false));
   }, []);
@@ -78,8 +73,8 @@ const PlatformSettingsPanel: React.FC = () => {
         <div className="flex items-center gap-2">
           <Settings2 className="w-5 h-5 text-forest-700 dark:text-forest-600" />
           <div>
-            <h3 className="text-base font-extrabold text-ink font-display">Platform Settings</h3>
-            <p className="t-body text-xs text-ink-soft mt-0.5">Edit landing page content — changes go live immediately</p>
+            <h3 className="text-base font-extrabold text-ink font-display">Platform & Localization Settings</h3>
+            <p className="t-body text-xs text-ink-soft mt-0.5">Manage live marketing subtitles, language variants, and pricing copy</p>
           </div>
         </div>
         <Button
@@ -108,19 +103,59 @@ const PlatformSettingsPanel: React.FC = () => {
       {loadingSettings ? (
         <p className="text-xs text-ink-soft py-4 text-center">Loading settings…</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(SETTING_LABELS).map(([key, label]) => (
-            <div key={key} className="space-y-1">
-              <label htmlFor={`ps-${key}`} className="block text-xs font-bold text-ink-soft">{label}</label>
-              {key.includes('quote') ? (
-                <textarea
-                  id={`ps-${key}`}
-                  rows={3}
-                  value={settings[key] ?? ''}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.value }))}
-                  className="w-full rounded-xl border border-line bg-surface text-sm text-ink px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-700/30 resize-none font-sans"
-                />
-              ) : (
+        <div className="space-y-6">
+          {/* Subtitle Localization Tabs */}
+          <div className="p-4 rounded-2xl bg-surface-raised border border-line space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-extrabold text-ink font-display">Hero Subtitle by Language</label>
+              <div className="flex items-center gap-1 rounded-xl bg-surface border border-line p-0.5">
+                {(['en', 'bn', 'hi'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveLangTab(tab)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      activeLangTab === tab
+                        ? 'bg-forest-700 text-white shadow-xs'
+                        : 'text-ink-soft hover:text-ink'
+                    }`}
+                  >
+                    {tab === 'en' ? 'English (EN)' : tab === 'bn' ? 'বাংলা (BN)' : 'हिंदी (HI)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <textarea
+                id={`ps-hero_subtitle_${activeLangTab}`}
+                rows={3}
+                value={settings[`hero_subtitle_${activeLangTab}`] ?? settings.hero_subtitle ?? ''}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    [`hero_subtitle_${activeLangTab}`]: e.target.value,
+                  }))
+                }
+                placeholder={
+                  activeLangTab === 'en'
+                    ? 'English subtitle...'
+                    : activeLangTab === 'bn'
+                    ? 'বাংলা সাবটাইটেল...'
+                    : 'हिंदी सबटाइटल...'
+                }
+                className="w-full rounded-xl border border-line bg-surface text-sm text-ink px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-700/30 resize-none font-sans"
+              />
+            </div>
+          </div>
+
+          {/* General Platform Settings */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(GENERAL_SETTING_LABELS).map(([key, label]) => (
+              <div key={key} className="space-y-1">
+                <label htmlFor={`ps-${key}`} className="block text-xs font-bold text-ink-soft">
+                  {label}
+                </label>
                 <input
                   id={`ps-${key}`}
                   type="text"
@@ -128,9 +163,9 @@ const PlatformSettingsPanel: React.FC = () => {
                   onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.value }))}
                   className="w-full rounded-xl border border-line bg-surface text-sm text-ink px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-700/30"
                 />
-              )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { db, withSystemContext } from '../db';
+import { withSystemContext } from '../db';
 import { schools, demoRequests, platformSettings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { isValidSlug } from '../services/schoolSlug';
@@ -80,13 +80,46 @@ publicRouter.get(
 );
 
 // 2. Demo Requests: POST /api/v1/public/demo-requests
+const phoneRegex = /^(\+?[1-9]\d{9,14}|[6-9]\d{9})$/;
+
 const demoRequestSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(255),
-  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Phone number must be a valid E.164 phone number'),
-  email: z.string().email('Invalid email address').max(255).optional().or(z.literal('')),
-  schoolName: z.string().min(2, 'School name must be at least 2 characters').max(255),
-  district: z.string().min(2, 'District must be at least 2 characters').max(100),
-  studentCount: z.string().min(1, 'Student count range is required').max(50),
+  name: z
+    .string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(255)
+    .transform((s) => s.trim().replace(/[<>]/g, '')),
+  phone: z
+    .string()
+    .transform((s) => s.trim().replace(/[\s-]/g, ''))
+    .refine((val) => phoneRegex.test(val), {
+      message: 'Phone number must be a valid Indian or E.164 phone number',
+    }),
+  email: z
+    .string()
+    .email('Invalid email address')
+    .max(255)
+    .optional()
+    .or(z.literal(''))
+    .transform((s) => (s && s.trim() ? s.trim().toLowerCase() : undefined)),
+  schoolName: z
+    .string()
+    .min(2, 'School name must be at least 2 characters')
+    .max(255)
+    .transform((s) => s.trim().replace(/[<>]/g, '')),
+  district: z
+    .string()
+    .min(2, 'District must be at least 2 characters')
+    .max(100)
+    .transform((s) => s.trim().replace(/[<>]/g, '')),
+  studentCount: z
+    .string()
+    .min(1, 'Student count range is required')
+    .max(50)
+    .transform((s) => s.trim()),
+  preferredLanguage: z.enum(['en', 'bn', 'hi']).optional().default('bn'),
+  consentGiven: z.boolean().refine((val) => val === true, {
+    message: 'Explicit consent is required to process demonstration requests',
+  }).optional().default(true),
   source: z.string().max(50).default('landing'),
 });
 
@@ -105,19 +138,17 @@ publicRouter.post(
 
     try {
       const data = parsed.data;
-      const normalizedPhone = data.phone.trim().replace(/[\s-]/g, '');
-      const normalizedEmail = data.email && data.email.trim() ? data.email.trim().toLowerCase() : null;
 
       await withSystemContext(async (tx) => {
         const [inserted] = await tx
           .insert(demoRequests)
           .values({
-            name: data.name.trim(),
-            phone: normalizedPhone,
-            email: normalizedEmail,
-            schoolName: data.schoolName.trim(),
-            district: data.district.trim(),
-            studentCount: data.studentCount.trim(),
+            name: data.name,
+            phone: data.phone,
+            email: data.email || null,
+            schoolName: data.schoolName,
+            district: data.district,
+            studentCount: data.studentCount,
             source: data.source || 'landing',
             status: 'NEW',
           })
@@ -136,6 +167,7 @@ publicRouter.post(
               schoolName: inserted.schoolName,
               district: inserted.district,
               studentCount: inserted.studentCount,
+              preferredLanguage: data.preferredLanguage,
               source: inserted.source,
             },
           },
@@ -157,7 +189,7 @@ publicRouter.post(
   }
 );
 
-// GET /api/v1/public/settings — landing page dynamic content (safe, no auth)
+// 3. GET /api/v1/public/settings — landing page dynamic content (safe, no auth)
 publicRouter.get(
   '/settings',
   rateLimitPolicies.generalApi,

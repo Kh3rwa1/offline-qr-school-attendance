@@ -182,7 +182,29 @@ export async function createApp() {
       ? fs.readFileSync(indexHtmlPath, 'utf8')
       : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';
 
-    app.use(express.static(distPath));
+    // Static asset caching strategy:
+    // - Vite build output under /assets/ is content-hashed -> immutable 1-year cache
+    // - HTML shell, service worker, manifest, font loader -> always revalidate so deploys propagate
+    // - Images/fonts (rarely changed) -> 1 day cache + 1 week stale-while-revalidate
+    app.use(
+      express.static(distPath, {
+        setHeaders: (res, filePath) => {
+          const normalizedPath = filePath.replace(/\\/g, '/');
+          if (normalizedPath.includes('/assets/') && /\.(js|mjs|css)$/.test(normalizedPath)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else if (
+            normalizedPath.endsWith('.html') ||
+            normalizedPath.endsWith('/sw.js') ||
+            normalizedPath.endsWith('/manifest.json') ||
+            normalizedPath.endsWith('/font-loader.js')
+          ) {
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+          } else if (/\.(jpe?g|png|webp|svg|ico|woff2?)$/.test(normalizedPath)) {
+            res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+          }
+        },
+      })
+    );
 
     // Rate-limited in-memory SPA fallback (zero per-request filesystem I/O)
     app.get('*', rateLimitPolicies.spaFallback, (req, res, next) => {

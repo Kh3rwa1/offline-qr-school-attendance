@@ -17,6 +17,11 @@ PURGE=0
 RESTORE_TARGET=""
 TARGET_IMAGE="${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:latest}"
 
+# Monitoring runs by default. An appliance nobody is watching fails silently.
+MONITORING_OVERRIDE=""
+MONITORING_ACTIVE=0
+COMPOSE_PROFILE_FLAGS=()
+
 # Parse CLI arguments and subcommands
 if [[ $# -gt 0 ]]; then
   case "$1" in
@@ -57,6 +62,14 @@ while [[ $# -gt 0 ]]; do
       PURGE=1
       shift
       ;;
+    --no-monitoring)
+      MONITORING_OVERRIDE="false"
+      shift
+      ;;
+    --monitoring)
+      MONITORING_OVERRIDE="true"
+      shift
+      ;;
     --help|-h)
       echo "AttendEase OS CLI ($VERSION)"
       echo "Usage: ./scripts/install.sh [COMMAND] [OPTIONS]"
@@ -78,6 +91,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --unattended, -y Non-interactive execution"
       echo "  --dry-run        Validate pre-flight requirements without starting containers"
       echo "  --purge          Purge all database volumes on uninstall"
+      echo "  --no-monitoring  Do not start Prometheus and Alertmanager"
+      echo "  --monitoring     Start monitoring even if disabled in the config file"
       exit 0
       ;;
     *)
@@ -111,6 +126,40 @@ get_lan_ip() {
   else
     echo "127.0.0.1"
   fi
+}
+
+# Reads a single KEY=value pair from the config file. Always exits 0 so that
+# a missing key never aborts the script under 'set -e'.
+read_config_value() {
+  local key="$1"
+  local file="${2:-${CONFIG_FILE}}"
+  if [ ! -f "${file}" ]; then
+    return 0
+  fi
+  grep "^${key}=" "${file}" 2>/dev/null | tail -n 1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true
+}
+
+# Decides whether the monitoring compose profile is active for this invocation.
+# Explicit CLI flags win over the config file; the default is enabled.
+resolve_compose_profiles() {
+  COMPOSE_PROFILE_FLAGS=()
+  local enabled="${MONITORING_OVERRIDE}"
+  if [ -z "${enabled}" ]; then
+    enabled="$(read_config_value ENABLE_MONITORING)"
+  fi
+  if [ -z "${enabled}" ]; then
+    enabled="true"
+  fi
+
+  case "${enabled}" in
+    true|TRUE|True|1|yes|YES|on|ON)
+      MONITORING_ACTIVE=1
+      COMPOSE_PROFILE_FLAGS=(--profile monitoring)
+      ;;
+    *)
+      MONITORING_ACTIVE=0
+      ;;
+  esac
 }
 
 check_preflight() {
@@ -225,7 +274,31 @@ ensure_secrets() {
 }
 
 dcompose() {
-  docker compose --env-file "${CONFIG_FILE}" "$@"
+  # Bash 3.2 (shipped with macOS) treats "${arr[@]}" on an empty array as an
+  # unbound variable under 'set -u', so expand through the +alternate form.
+  docker compose --env-file "${CONFIG_FILE}" ${COMPOSE_PROFILE_FLAGS[@]+"${COMPOSE_PROFILE_FLAGS[@]}"} "$@"
+}
+
+# Prints the off-site replication state recorded by the backup container.
+report_offsite_state() {
+  local status_file="./backups/OFFSITE_STATUS"
+  local state=""
+  if [ -f "${status_file}" ]; then
+    state=$(awk 'NR==1{print $1}' "${status_file}" 2>/dev/null || true)
+  fi
+
+  case "${state}" in
+    SUCCESS)
+      echo " • Off-site Copy:       🟢 Replicated to remote storage"
+      ;;
+    FAILED)
+      echo " • Off-site Copy:       🔴 LAST UPLOAD FAILED — backups exist only on this machine"
+      echo "                        Details: docker compose exec backup cat /backups/OFFSITE_STATUS"
+      ;;
+    *)
+      echo " • Off-site Copy:       ⚪ Not configured — disk failure or theft would lose all data"
+      ;;
+  esac
 }
 
 # ==============================================================================
@@ -236,6 +309,12 @@ cmd_install() {
   log_header "AttendEase OS — QR Pilot Production Installer"
   check_preflight
   ensure_secrets
+  resolve_compose_profiles
+
+  if [ "${MONITORING_ACTIVE}" -eq 1 ] && [ "${TOTAL_RAM_MB:-0}" -gt 0 ] && [ "${TOTAL_RAM_MB}" -lt 2048 ]; then
+    echo "⚠️ Notice: Monitoring adds roughly 180 MB of RAM on a ${TOTAL_RAM_MB} MB machine."
+    echo "           Disable it with ENABLE_MONITORING=\"false\" or the --no-monitoring flag."
+  fi
 
   echo "\n⚙️ Validating Compose Configuration (QR-only scope)..."
   dcompose config --quiet
@@ -248,7 +327,11 @@ cmd_install() {
   echo "\n🚀 Building Production Container Images..."
   dcompose build
 
-  echo "\n🚀 Launching Production Container Services..."
+  if [ "${MONITORING_ACTIVE}" -eq 1 ]; then
+    echo "\n🚀 Launching Production Container Services (with monitoring)..."
+  else
+    echo "\n🚀 Launching Production Container Services..."
+  fi
   dcompose up -d
 
   echo "\n⏳ Awaiting System Readiness (/readyz)..."
@@ -287,9 +370,9 @@ EOF
   SERVER_DOMAIN=$(grep '^SERVER_DOMAIN=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || echo "")
   LAN_IP=$(get_lan_ip)
   
-  ACCESS_URL="http://${LAN_IP}"
+  ACCESS_URL="{{http://${LAN_IP}}}"
   if [ -n "${SERVER_DOMAIN}" ] && [ "${SERVER_DOMAIN}" != "localhost" ] && [ "${SERVER_DOMAIN}" != "127.0.0.1" ]; then
-    ACCESS_URL="https://${SERVER_DOMAIN}"
+    ACCESS_URL="{{https://${SERVER_DOMAIN}}}"
   fi
 
   echo "\n============================================================"
@@ -300,11 +383,33 @@ EOF
   echo " • Local Port (Direct): http://127.0.0.1:3000"
   echo " • Encrypted Backups:   ./backups (AES-256-CBC PBKDF2)"
   echo " • Management CLI:      ./bin/attendease [status|backup|update]"
+  if [ "${MONITORING_ACTIVE}" -eq 1 ]; then
+    echo " • Monitoring:          http://127.0.0.1:9090 (Prometheus)"
+    echo " • Alert Console:       http://127.0.0.1:9093 (Alertmanager)"
+  fi
   if [[ "${ACCESS_URL}" =~ ^http:// ]]; then
     echo " • Note: Automatic HTTPS is active for public DNS domain names."
     echo "         LAN IP access uses plaintext HTTP on port 80."
   fi
   echo "============================================================"
+
+  if [ "${MONITORING_ACTIVE}" -eq 1 ]; then
+    BANNER_ALERT_TO="$(read_config_value ALERT_EMAIL_TO)"
+    BANNER_ALERT_HOOK="$(read_config_value ALERT_WEBHOOK_URL)"
+    if [ -z "${BANNER_ALERT_TO}" ] && [ -z "${BANNER_ALERT_HOOK}" ]; then
+      echo ""
+      echo "⚠️ Problems are being detected but NOT delivered to anyone."
+      echo "   Set ALERT_EMAIL_TO or ALERT_WEBHOOK_URL in ${CONFIG_FILE},"
+      echo "   then run: ./bin/attendease repair"
+    fi
+  fi
+
+  if [ -z "$(read_config_value R2_BUCKET)" ]; then
+    echo ""
+    echo "⚠️ Backups are stored only on this machine. A disk failure, theft or"
+    echo "   fire would lose every attendance record. Configure off-site copies:"
+    echo "   docs/OFFSITE_BACKUP_AND_ALERTS.md"
+  fi
 }
 
 cmd_status() {
@@ -330,6 +435,32 @@ cmd_status() {
   else
     echo " • Latest Local Backup: 🟡 No backups created yet"
   fi
+
+  report_offsite_state
+
+  if [ "${MONITORING_ACTIVE}" -eq 1 ]; then
+    if curl -sf "http://127.0.0.1:9090/-/healthy" >/dev/null 2>&1; then
+      echo " • Monitoring:          🟢 Prometheus is watching this appliance"
+    else
+      echo " • Monitoring:          🔴 Prometheus is not responding"
+    fi
+
+    if curl -sf "http://127.0.0.1:9093/-/healthy" >/dev/null 2>&1; then
+      echo " • Alert Delivery:      🟢 Alertmanager is ready"
+    else
+      echo " • Alert Delivery:      🔴 Alertmanager is not responding"
+    fi
+
+    STATUS_ALERT_TO="$(read_config_value ALERT_EMAIL_TO)"
+    STATUS_ALERT_HOOK="$(read_config_value ALERT_WEBHOOK_URL)"
+    if [ -z "${STATUS_ALERT_TO}" ] && [ -z "${STATUS_ALERT_HOOK}" ]; then
+      echo " • Alert Destination:   🟡 Nobody is notified — set ALERT_EMAIL_TO or ALERT_WEBHOOK_URL"
+    else
+      echo " • Alert Destination:   🟢 Configured"
+    fi
+  else
+    echo " • Monitoring:          ⚪ Disabled — nothing is watching this appliance"
+  fi
 }
 
 cmd_diagnostics() {
@@ -339,6 +470,9 @@ cmd_diagnostics() {
   echo ""
   echo "--- Docker Containers ---"
   dcompose ps -a
+  echo ""
+  echo "--- Durability ---"
+  report_offsite_state
   echo ""
   echo "--- Recent Container Logs ---"
   dcompose logs --tail=30
@@ -512,6 +646,10 @@ cmd_uninstall() {
   fi
   echo "✅ AttendEase OS stopped and uninstalled."
 }
+
+# Resolve which compose profiles apply before dispatching any subcommand.
+# cmd_install re-resolves after ensure_secrets, once the config file exists.
+resolve_compose_profiles
 
 # Dispatch command
 case "${COMMAND}" in

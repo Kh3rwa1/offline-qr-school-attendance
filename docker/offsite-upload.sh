@@ -26,6 +26,7 @@ LOCAL_FILE="${1:-}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 STATUS_FILE="${BACKUP_DIR}/OFFSITE_STATUS"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+NOW_EPOCH="$(date -u +%s)"
 EMPTY_SHA256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 log() { echo "[offsite] $*"; }
@@ -255,8 +256,11 @@ fi
 
 # ---------------------------------------------------------------------------
 # Publish success markers consumed by docker/backup-healthcheck.sh
+#
+# Field 1 is human-readable, field 2 is epoch seconds. BusyBox date cannot parse
+# ISO-8601 strings with 'T'/'Z', so the healthcheck must never have to.
 # ---------------------------------------------------------------------------
-printf '%s\n' "${NOW_ISO}" > "${BACKUP_DIR}/LATEST_OFFSITE" 2>/dev/null || true
+printf '%s %s\n' "${NOW_ISO}" "${NOW_EPOCH}" > "${BACKUP_DIR}/LATEST_OFFSITE" 2>/dev/null || true
 write_status "SUCCESS" "${BUCKET}/${REMOTE_KEY} ${REMOTE_SIZE}bytes sha256:${LOCAL_SHA}"
 
 log "off-site replication complete"

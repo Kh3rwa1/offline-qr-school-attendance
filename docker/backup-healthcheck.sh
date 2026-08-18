@@ -10,11 +10,17 @@
 # night's upload started failing. Surfacing it as an unhealthy container makes
 # it visible in `docker ps`, in `./scripts/install.sh status`, and to any
 # monitoring that watches container health.
+#
+# Portability note: this runs under BusyBox sh/date in postgres:16-alpine, which
+# cannot parse ISO-8601 strings containing 'T' or 'Z'. Age is therefore derived
+# from an explicit epoch field, falling back to the marker file's mtime - never
+# from parsing a formatted date string.
 # ============================================================================
 set -eu
 
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 STATUS_FILE="${BACKUP_DIR}/OFFSITE_STATUS"
+MARKER_FILE="${BACKUP_DIR}/LATEST_OFFSITE"
 MAX_AGE_HOURS="${OFFSITE_MAX_AGE_HOURS:-48}"
 
 # 1. A local snapshot must exist. The daemon takes a first-boot snapshot, so
@@ -37,29 +43,45 @@ if [ -z "${STATE}" ] || [ "${STATE}" = "DISABLED" ]; then
   exit 0
 fi
 
-if [ "${STATE}" = "FAILED" ] && [ ! -f "${BACKUP_DIR}/LATEST_OFFSITE" ]; then
+if [ "${STATE}" = "FAILED" ] && [ ! -f "${MARKER_FILE}" ]; then
   echo "unhealthy: off-site replication is configured but has never succeeded"
   exit 1
 fi
 
-if [ ! -f "${BACKUP_DIR}/LATEST_OFFSITE" ]; then
+if [ ! -f "${MARKER_FILE}" ]; then
   echo "healthy: awaiting first off-site replication cycle"
   exit 0
 fi
 
-LATEST_ISO="$(tr -d ' \n' < "${BACKUP_DIR}/LATEST_OFFSITE" 2>/dev/null || true)"
-if [ -z "${LATEST_ISO}" ]; then
-  echo "healthy: off-site marker present but unparsable, not failing closed"
-  exit 0
-fi
+# Field 1 is a human-readable UTC timestamp, field 2 is epoch seconds. Only the
+# epoch field is used for arithmetic.
+MARKER_LINE="$(head -n 1 "${MARKER_FILE}" 2>/dev/null || true)"
+LATEST_EPOCH="$(printf '%s' "${MARKER_LINE}" | awk '{print $2}')"
 
-LATEST_EPOCH="$(date -d "${LATEST_ISO}" +%s 2>/dev/null || echo 0)"
-if [ "${LATEST_EPOCH}" -le 0 ]; then
-  echo "healthy: could not parse off-site timestamp '${LATEST_ISO}', not failing closed"
+# Older markers, or a truncated write, may not carry the epoch field. The file's
+# mtime is an equally good signal and is portable across BusyBox and coreutils.
+case "${LATEST_EPOCH}" in
+  '' | *[!0-9]*)
+    LATEST_EPOCH="$(date -r "${MARKER_FILE}" +%s 2>/dev/null || true)"
+    ;;
+esac
+case "${LATEST_EPOCH}" in
+  '' | *[!0-9]*)
+    LATEST_EPOCH="$(stat -c %Y "${MARKER_FILE}" 2>/dev/null || true)"
+    ;;
+esac
+
+if [ -z "${LATEST_EPOCH}" ] || [ "${LATEST_EPOCH}" -le 0 ] 2>/dev/null; then
+  echo "healthy: off-site timestamp unavailable, not failing closed"
   exit 0
 fi
 
 NOW_EPOCH="$(date +%s)"
+if [ "${NOW_EPOCH}" -le "${LATEST_EPOCH}" ]; then
+  echo "healthy: off-site backup timestamp is current"
+  exit 0
+fi
+
 AGE_HOURS=$(( (NOW_EPOCH - LATEST_EPOCH) / 3600 ))
 
 if [ "${AGE_HOURS}" -ge "${MAX_AGE_HOURS}" ]; then

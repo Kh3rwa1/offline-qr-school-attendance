@@ -41,8 +41,12 @@ export interface CalendarVersion {
 
 const NON_WORKING = new Set<CalendarClassification>(['SUNDAY_WEEKEND', 'GOVERNMENT_HOLIDAY', 'SCHOOL_HOLIDAY', 'VACATION', 'EMERGENCY_CLOSURE']);
 
-function assertDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) throw new Error('CALENDAR_DATE_INVALID');
+function assertDate(value: unknown): asserts value is string {
+  if (
+    typeof value !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    || Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  ) throw new Error('CALENDAR_DATE_INVALID');
 }
 
 function versionFromRow(row: any): CalendarVersion {
@@ -78,6 +82,8 @@ export async function listCalendarVersions(schoolId: string, year: number): Prom
 
 export async function getCalendarDays(schoolId: string, startDate: string, endDate: string, requestedVersionId?: string) {
   assertDate(startDate); assertDate(endDate);
+  const firstYear = Number(startDate.slice(0, 4));
+  const lastYear = Number(endDate.slice(0, 4));
   const result = await db.execute(sql`
     WITH ranked AS (
       SELECT v.*, ROW_NUMBER() OVER (
@@ -86,7 +92,7 @@ export async function getCalendarDays(schoolId: string, startDate: string, endDa
       ) AS rank
       FROM academic_calendar_versions v
       WHERE v.school_id=${schoolId}::uuid
-        AND v.academic_year BETWEEN ${Number(startDate.slice(0, 4))} AND ${Number(endDate.slice(0, 4))}
+        AND v.academic_year BETWEEN ${firstYear} AND ${lastYear}
         AND v.status IN ('DRAFT','APPROVED')
     ), selected AS (
       SELECT * FROM academic_calendar_versions WHERE id=${requestedVersionId || null}::uuid AND school_id=${schoolId}::uuid

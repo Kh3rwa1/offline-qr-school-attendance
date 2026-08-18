@@ -13,6 +13,7 @@ import { qrRouter } from './src/routes/qrRoutes';
 import attendanceRouter from './src/routes/attendanceRoutes';
 import syncRouter from './src/routes/syncRoutes';
 import reportRouter from './src/routes/reportRoutes';
+import { governmentReportRouter } from './src/routes/governmentReportRoutes';
 import auditRouter, { platformAuditRouter } from './src/routes/auditRoutes';
 import notificationRouter from './src/routes/notificationRoutes';
 import { rfidRouter } from './src/routes/rfidRoutes';
@@ -44,7 +45,6 @@ export async function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
-  // Body and cookie parsing middleware with rawBody preservation
   app.use(
     express.json({
       verify: (req: any, _res, buf) => {
@@ -55,7 +55,6 @@ export async function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
-  // 1. Security Headers & CSP Middleware
   app.use((req, res, next) => {
     const cspScriptSrc =
       process.env.NODE_ENV === 'production'
@@ -63,15 +62,10 @@ export async function createApp() {
         : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'self';";
 
     res.setHeader('Content-Security-Policy', cspScriptSrc);
-    // HSTS (Strict-Transport-Security) - 1 year
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    // Anti-Clickjacking
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    // MIME Sniffing Protection
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    // Referrer Policy
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // Cache-Control: no-store for all sensitive API endpoints
     if (req.path.startsWith('/api/')) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.setHeader('Pragma', 'no-cache');
@@ -79,19 +73,11 @@ export async function createApp() {
     next();
   });
 
-  // 1. API & Login Rate Limiting Middleware
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
-
-  // 2. Production-grade CSRF protection & general API rate limiting (strictly single execution under /api)
   app.use('/api', rateLimitPolicies.generalApi, csrfProtection);
 
-  // Database migrations and seed data are deployment concerns. Run
-  // `npm run migrate` and, only for an explicit development environment,
-  // `npm run seed` before starting the web process.
-
-  // Metrics middleware & endpoint
   app.use(metricsMiddleware);
 
   app.get('/metrics', (req, res) => {
@@ -103,7 +89,6 @@ export async function createApp() {
     return res.send(result.content);
   });
 
-  // Health, Liveness, and Readiness Probes
   app.get(['/api/v1/health', '/healthz', '/livez'], async (_req, res) => {
     res.status(200).json({ status: 'ok', service: 'school-attendance-backend', timestamp: new Date().toISOString() });
   });
@@ -127,7 +112,6 @@ export async function createApp() {
     }
   });
 
-  // API Router registration
   app.use('/api/v1/setup', setupRouter);
   app.use('/api/v1/public', publicRouter);
   app.use('/api/v1/auth', authRouter);
@@ -144,6 +128,7 @@ export async function createApp() {
   app.use('/api/v1/schools/:schoolId/sync', rateLimitPolicies.sync, syncRouter);
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);
   app.use('/api/v1/schools/:schoolId/calendar', calendarRouter);
+  app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, governmentReportRouter);
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
   app.use('/api/v1/audit', platformAuditRouter);
@@ -152,7 +137,6 @@ export async function createApp() {
   app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
-  // Strict 404 handler for unmatched API routes
   app.all('/api/*', (_req, res) => {
     res.status(404).json({
       success: false,
@@ -161,7 +145,6 @@ export async function createApp() {
     });
   });
 
-  // Development: Vite Middleware / Production Static Assets
   if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -184,10 +167,6 @@ export async function createApp() {
       ? fs.readFileSync(indexHtmlPath, 'utf8')
       : '<!DOCTYPE html><html><head><title>Offline Attendance</title></head><body><div id="root"></div></body></html>';
 
-    // Static asset caching strategy:
-    // - Vite build output under /assets/ is content-hashed -> immutable 1-year cache
-    // - HTML shell, service worker, manifest, font loader -> always revalidate so deploys propagate
-    // - Images/fonts (rarely changed) -> 1 day cache + 1 week stale-while-revalidate
     app.use(
       express.static(distPath, {
         setHeaders: (res, filePath) => {
@@ -208,7 +187,6 @@ export async function createApp() {
       })
     );
 
-    // Rate-limited in-memory SPA fallback (zero per-request filesystem I/O)
     app.get('*', rateLimitPolicies.spaFallback, (req, res, next) => {
       if (!req.path.startsWith('/api')) {
         const injectedHtml = indexHtmlContent.replace(
@@ -221,7 +199,6 @@ export async function createApp() {
     });
   }
 
-  // Global Production Error Handler (Sanitizes stack traces & internal database errors)
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Unhandled server error:', err);
     const status = err.status || err.statusCode || 500;
@@ -247,16 +224,13 @@ export async function startServer() {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
 
-  // 4. Graceful Shutdown
   const shutdown = () => {
     console.log('SIGTERM/SIGINT received. Starting graceful shutdown...');
     server.close(() => {
       console.log('HTTP server closed.');
-      // Keep any database cleanup or logs processing here
       process.exit(0);
     });
 
-    // Force shutdown after 10s if connections persist
     setTimeout(() => {
       console.error('Forcing shutdown as connections did not close in time.');
       process.exit(1);

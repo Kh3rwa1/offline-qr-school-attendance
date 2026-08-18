@@ -20,6 +20,7 @@ import { dashboardRouter } from './src/routes/dashboardRoutes';
 import { systemHealthRouter } from './src/routes/systemHealthRoutes';
 import { publicRouter } from './src/routes/publicRoutes';
 import { setupRouter } from './src/routes/setupRoutes';
+import { calendarRouter } from './src/routes/calendarRoutes';
 import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
@@ -142,6 +143,7 @@ export async function createApp() {
   app.use('/api/v1/schools/:schoolId/attendance', attendanceRouter);
   app.use('/api/v1/schools/:schoolId/sync', rateLimitPolicies.sync, syncRouter);
   app.use('/api/v1/schools/:schoolId/devices', deviceRouter);
+  app.use('/api/v1/schools/:schoolId/calendar', calendarRouter);
   app.use('/api/v1/schools/:schoolId/reports', rateLimitPolicies.reports, reportRouter);
   app.use('/api/v1/schools/:schoolId/audit-logs', auditRouter);
   app.use('/api/v1/audit', platformAuditRouter);

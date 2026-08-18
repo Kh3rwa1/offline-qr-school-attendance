@@ -22,8 +22,16 @@ export const schools = pgTable('schools', {
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 80 }).notNull().unique(),
   udiseCode: varchar('udise_code', { length: 50 }).unique(),
+  schoolCode: varchar('school_code', { length: 50 }),
   district: varchar('district', { length: 100 }).notNull(),
   block: varchar('block', { length: 100 }),
+  circle: varchar('circle', { length: 100 }),
+  address: text('address'),
+  headmasterName: varchar('headmaster_name', { length: 255 }),
+  contactNumber: varchar('contact_number', { length: 20 }),
+  reportFooterText: text('report_footer_text'),
+  logoUrl: text('logo_url'),
+  defaultAttendanceCutoff: varchar('default_attendance_cutoff', { length: 10 }).default('10:30'),
   preferredLanguage: varchar('preferred_language', { length: 10 }).notNull().default('bn'), // 'bn' | 'en'
   timezone: varchar('timezone', { length: 50 }).notNull().default('Asia/Kolkata'),
   status: varchar('status', { length: 20 }).notNull().default('ACTIVE'), // 'ACTIVE' | 'SUSPENDED'
@@ -697,5 +705,80 @@ export const demoRequests = pgTable(
   (table) => ({
     createdAtIdx: index('demo_requests_created_at_idx').on(table.createdAt),
     statusIdx: index('demo_requests_status_idx').on(table.status),
+  })
+);
+
+// 35. Academic Calendar Days (Working days, holidays, closures)
+export const academicCalendarDays = pgTable(
+  'academic_calendar_days',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    calendarDate: date('calendar_date').notNull(),
+    classification: varchar('classification', { length: 50 }).notNull().default('WORKING_DAY'), // 'WORKING_DAY' | 'SUNDAY_WEEKEND' | 'GOVERNMENT_HOLIDAY' | 'SCHOOL_HOLIDAY' | 'VACATION' | 'EXAMINATION_DAY' | 'EMERGENCY_CLOSURE' | 'OPTIONAL_WORKING_DAY'
+    reason: varchar('reason', { length: 255 }),
+    isWorkingDay: boolean('is_working_day').notNull().default(true),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    schoolDateUnique: uniqueIndex('academic_calendar_days_school_date_idx').on(table.schoolId, table.calendarDate),
+  })
+);
+
+// 36. Reporting Profiles (Versioned layout, columns, labels & format configurations)
+export const reportingProfiles = pgTable(
+  'reporting_profiles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').references(() => schools.id, { onDelete: 'cascade' }), // null for system defaults
+    profileName: varchar('profile_name', { length: 100 }).notNull(),
+    version: varchar('version', { length: 20 }).notNull().default('1.0.0'),
+    isDefault: boolean('is_default').notNull().default(false),
+    configuration: jsonb('configuration').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    schoolIdx: index('reporting_profiles_school_idx').on(table.schoolId),
+  })
+);
+
+// 37. Report Approvals & Generation Audit Records
+export const reportApprovals = pgTable(
+  'report_approvals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    reportType: varchar('report_type', { length: 50 }).notNull(),
+    scopeType: varchar('scope_type', { length: 50 }).notNull(),
+    scopeParameters: jsonb('scope_parameters'),
+    periodType: varchar('period_type', { length: 50 }).notNull(),
+    periodStartDate: date('period_start_date').notNull(),
+    periodEndDate: date('period_end_date').notNull(),
+    profileId: uuid('profile_id').references(() => reportingProfiles.id, { onDelete: 'set null' }),
+    profileVersion: varchar('profile_version', { length: 20 }).default('1.0.0'),
+    reportVersion: integer('report_version').notNull().default(1),
+    status: varchar('status', { length: 50 }).notNull().default('DRAFT'), // 'DRAFT' | 'VALIDATED' | 'READY_FOR_REVIEW' | 'APPROVED_INTERNALLY' | 'EXPORTED' | 'SUPERSEDED'
+    fileHashSha256: varchar('file_hash_sha256', { length: 64 }),
+    validationSummary: jsonb('validation_summary'),
+    metadata: jsonb('metadata'),
+    generatedBy: uuid('generated_by').references(() => users.id, { onDelete: 'set null' }),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow(),
+    approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    downloadCount: integer('download_count').notNull().default(0),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
+    supersededBy: uuid('superseded_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => ({
+    schoolTypePeriodIdx: index('report_approvals_school_type_period_idx').on(
+      table.schoolId,
+      table.reportType,
+      table.periodStartDate,
+      table.periodEndDate
+    ),
   })
 );

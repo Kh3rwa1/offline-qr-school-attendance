@@ -76,24 +76,29 @@ export const DailyReports: React.FC = () => {
   const totalCount = records.length;
   const attendanceRate = totalCount > 0 ? Math.round(((presentCount + lateCount) / totalCount) * 100) : 0;
 
-  const handleExportCSV = () => {
-    const csvContent = [
-      ['Roll Number', 'Student Name', 'Status', 'Recorded Time'].join(','),
-      ...records.map((r) => [
-        `"${r.rollNumber || ''}"`,
-        `"${r.fullName}"`,
-        `"${r.status}"`,
-        `"${r.firstScannedAt ? new Date(r.firstScannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}"`,
-      ].join(',')),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `daily-roll-${activeClassId}-${selectedDate}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleExportCSV = async () => {
+    if (!activeSchoolId || !activeClassId) return;
+    try {
+      const response = await fetch(
+        `/api/v1/schools/${activeSchoolId}/reports/export?type=daily-class&classSectionId=${activeClassId}&date=${selectedDate}&format=csv`,
+        {
+          headers: { Accept: 'text/csv' },
+          credentials: 'include',
+        }
+      );
+      if (!response.ok) throw new Error('CSV export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `daily-roll-${activeClassId}-${selectedDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback
+    }
   };
 
   const getStatusBadge = (status: string) => {

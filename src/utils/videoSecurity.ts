@@ -29,21 +29,10 @@ export function extractValidatedYouTubeId(urlOrId: string | null | undefined): s
     return trimmed;
   }
 
-  // Reject dangerous protocols and credential attempts immediately
-  if (
-    trimmed.startsWith('javascript:') ||
-    trimmed.startsWith('data:') ||
-    trimmed.startsWith('file:') ||
-    trimmed.startsWith('blob:') ||
-    trimmed.includes('@')
-  ) {
-    return null;
-  }
-
   try {
     const parsed = new URL(trimmed);
 
-    // Protocol must strictly be http: or https:
+    // Protocol must strictly be http: or https: (rejects javascript:, vbscript:, data:, file:, etc.)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return null;
     }

@@ -48,3 +48,38 @@ groups:
         annotations:
           summary: "Alerting pipeline heartbeat"
           description: "Confirms Prometheus and Alertmanager are both alive and able to deliver notifications."
+
+  - name: backup_integrity
+    rules:
+      # A school only discovers a broken backup on the day it needs to restore.
+      # These rules surface the failure months earlier.
+      #
+      # The two off-site rules depend on metrics the application only emits once
+      # replication has actually been configured, so an appliance deliberately
+      # kept local-only never sees them fire.
+      - alert: BackupNeverCreated
+        expr: app_backup_present == 0
+        for: 6h
+        labels:
+          severity: critical
+        annotations:
+          summary: "No database backup has ever been created"
+          description: "The appliance has been running for six hours without producing a single encrypted snapshot. Inspect the backup container with: docker compose logs backup"
+
+      - alert: OffsiteBackupFailing
+        expr: app_backup_offsite_status == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Off-site backup replication is failing"
+          description: "The most recent upload to off-site storage did not succeed. Backups currently survive only on this machine, so disk failure, theft or fire would lose all attendance history. Read the reason with: docker compose exec backup cat /backups/OFFSITE_STATUS"
+
+      - alert: OffsiteBackupStale
+        expr: (time() - app_backup_offsite_latest_timestamp_seconds) > 172800
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Off-site backup copy is more than 48 hours old"
+          description: "Off-site replication is configured but no new verified copy has landed in over 48 hours. The nightly upload is silently failing or the appliance has lost outbound internet access."

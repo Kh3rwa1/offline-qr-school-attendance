@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
@@ -12,6 +12,7 @@ import {
   Globe,
   Lightbulb,
   MessageSquareText,
+  PlayCircle,
   Quote,
   Radio,
   RefreshCw,
@@ -56,6 +57,18 @@ const DEFAULTS = {
   testimonial_2_count: '1,200 students',
   demo_video_url:      '',
 };
+
+// Extract a YouTube video ID from a full URL or bare ID string
+function getYouTubeId(url: string): string | null {
+  if (!url) return null;
+  // already a bare 11-char ID
+  if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) return parsed.pathname.slice(1).split('?')[0] || null;
+    return parsed.searchParams.get('v');
+  } catch { return null; }
+}
 
 function getSafeHttpUrl(url: string | undefined): string | null {
   if (!url || typeof url !== 'string') return null;
@@ -211,6 +224,8 @@ export const LandingPage: React.FC = () => {
             </Button>
           </Link>
           <Button
+            id="header-book-demo-btn"
+            data-testid="header-book-demo-btn"
             variant="primary"
             size="md"
             onClick={() => setDemoModalOpen(true)}
@@ -240,6 +255,8 @@ export const LandingPage: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <Button
+                id="hero-book-demo-btn"
+                data-testid="hero-book-demo-btn"
                 variant="primary"
                 size="lg"
                 onClick={() => setDemoModalOpen(true)}
@@ -577,6 +594,48 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
+      {/* Demo video — shown only when super-admin has set a URL; else a persuasive placeholder */}
+      <section id="demo-video" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-10 text-center scroll-mt-24">
+        <div className="space-y-2">
+          <span className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">See it in action</span>
+          <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">2-minute morning attendance — watch how it works</h2>
+        </div>
+
+        <div className="max-w-3xl mx-auto">
+          {getYouTubeId(get('demo_video_url')) ? (
+            <div className="relative w-full rounded-3xl overflow-hidden border border-slate-200 shadow-xl bg-black" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src={`https://www.youtube-nocookie.com/embed/${getYouTubeId(get('demo_video_url'))}?rel=0&modestbranding=1`}
+                title="AttendEase product demo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                loading="lazy"
+              />
+            </div>
+          ) : (
+            /* Placeholder when no video URL is set */
+            <button
+              type="button"
+              onClick={() => setDemoModalOpen(true)}
+              className="relative w-full rounded-3xl overflow-hidden border border-emerald-200 shadow-xl bg-gradient-to-br from-[#f0fdf4] to-[#dcfce7] flex flex-col items-center justify-center gap-5 py-20 group hover:shadow-2xl transition-all cursor-pointer"
+              aria-label="Book a demo to see a live walkthrough"
+            >
+              <div className="w-20 h-20 rounded-full bg-white border border-emerald-300 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                <PlayCircle className="w-10 h-10 text-[#15803d]" />
+              </div>
+              <div className="space-y-1 text-center">
+                <p className="text-lg font-black text-[#0f172a] font-display">Watch a 2-minute live walkthrough</p>
+                <p className="text-sm text-slate-600">Book a free demo — we run it on your own phone, in person or over a call</p>
+              </div>
+              <span className="px-6 py-3 rounded-xl bg-[#14532d] text-white text-sm font-bold shadow-sm group-hover:bg-[#166534] transition-colors">
+                Book a Free Demo →
+              </span>
+            </button>
+          )}
+        </div>
+      </section>
+
       {/* Pricing */}
       <section id="pricing" className="py-20 px-4 sm:px-12 max-w-7xl mx-auto w-full space-y-12 text-center scroll-mt-24">
         <div className="space-y-2">
@@ -584,7 +643,7 @@ export const LandingPage: React.FC = () => {
           <h2 className="text-3xl sm:text-4xl font-black text-[#0f172a] font-display tracking-tight">Transparent. Affordable. No surprises.</h2>
         </div>
 
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-4xl mx-auto space-y-8">
           <div className="p-10 rounded-3xl bg-[#14532d] text-white shadow-2xl space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="relative space-y-1">
@@ -602,7 +661,7 @@ export const LandingPage: React.FC = () => {
                 'UDISE+ compliant reports',
                 'SMS parent notifications',
                 'Unlimited teachers & classes',
-                'Data export (Excel / PDF)',
+                'Data export (Excel / CSV / HTML)',
               ].map((feat) => (
                 <div key={feat} className="flex items-center gap-3">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -619,6 +678,42 @@ export const LandingPage: React.FC = () => {
             >
               Book a Free Demo
             </Button>
+          </div>
+
+          {/* Comparison table */}
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden text-left">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <h3 className="font-extrabold text-[#0f172a] font-display text-base">AttendEase vs. paper registers</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Based on a 750-student secondary school, 220 school days/year</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-6 py-3 font-bold text-slate-700 w-1/2"></th>
+                    <th className="text-center px-4 py-3 font-extrabold text-[#14532d] font-display">AttendEase</th>
+                    <th className="text-center px-4 py-3 font-bold text-slate-500">Paper registers</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[
+                    ['Morning roll call time', 'Under 2 minutes', '15–25 minutes'],
+                    ['Works without internet', '✓ Always', '✓ (paper)'],
+                    ['UDISE+ export', '✓ One click', '✗ Manual retyping'],
+                    ['Parent SMS alerts', '✓ Automatic', '✗ Not possible'],
+                    ['Attendance history search', '✓ Instant', '✗ Manual page search'],
+                    ['Corrections audit trail', '✓ Logged', '✗ Crossed-out ink'],
+                    ['Annual cost per student', get('pricing_amount'), '₹80–120 (paper + ink)'],
+                  ].map(([feature, ae, paper]) => (
+                    <tr key={feature} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-6 py-3 font-medium text-slate-700">{feature}</td>
+                      <td className="px-4 py-3 text-center font-semibold text-[#14532d]">{ae}</td>
+                      <td className="px-4 py-3 text-center text-slate-500">{paper}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -716,8 +811,8 @@ export const LandingPage: React.FC = () => {
 
         <div className="text-xs text-emerald-200/80 font-medium">
           {c(COPY.ctaContact)}:{' '}
-          <a href="mailto:founder@tumdah.com" className="underline hover:text-white transition-colors">
-            founder@tumdah.com
+          <a href="mailto:hello@attendease.in" className="underline hover:text-white transition-colors">
+            hello@attendease.in
           </a>
         </div>
 
@@ -743,7 +838,7 @@ export const LandingPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-5 font-semibold">
               <Link to="/privacy" className="hover:text-white transition-colors">{c(COPY.footerPrivacy)}</Link>
               <Link to="/terms" className="hover:text-white transition-colors">{c(COPY.footerTerms)}</Link>
-              <a href="mailto:founder@tumdah.com" className="hover:text-white transition-colors">{c(COPY.footerContact)}</a>
+              <a href="mailto:hello@attendease.in" className="hover:text-white transition-colors">{c(COPY.footerContact)}</a>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
@@ -796,6 +891,8 @@ export const LandingPage: React.FC = () => {
             )}
 
             <TextField
+              id="demo-form-name"
+              data-testid="demo-form-name"
               label={c(COPY.demoName)}
               required
               value={demoForm.name}
@@ -805,6 +902,8 @@ export const LandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <TextField
+                id="demo-form-phone"
+                data-testid="demo-form-phone"
                 label={c(COPY.demoPhone)}
                 type="tel"
                 prefixText="+91"
@@ -814,6 +913,8 @@ export const LandingPage: React.FC = () => {
                 placeholder="98765 43210"
               />
               <TextField
+                id="demo-form-email"
+                data-testid="demo-form-email"
                 label={c(COPY.demoEmail)}
                 type="email"
                 value={demoForm.email}
@@ -824,6 +925,8 @@ export const LandingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <TextField
+                id="demo-form-school"
+                data-testid="demo-form-school"
                 label={c(COPY.demoSchool)}
                 required
                 value={demoForm.schoolName}
@@ -831,6 +934,8 @@ export const LandingPage: React.FC = () => {
                 placeholder="Green Valley High School"
               />
               <TextField
+                id="demo-form-district"
+                data-testid="demo-form-district"
                 label={c(COPY.demoDistrict)}
                 required
                 value={demoForm.district}
@@ -845,6 +950,7 @@ export const LandingPage: React.FC = () => {
               </label>
               <select
                 id="demo-student-count"
+                data-testid="demo-student-count"
                 value={demoForm.studentCount}
                 onChange={(e) => setDemoForm({ ...demoForm, studentCount: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 outline-none focus:border-[#14532d] cursor-pointer"
@@ -869,6 +975,8 @@ export const LandingPage: React.FC = () => {
                 {c(COPY.demoCancel)}
               </Button>
               <Button
+                id="demo-form-submit"
+                data-testid="demo-form-submit"
                 variant="primary"
                 size="md"
                 type="submit"

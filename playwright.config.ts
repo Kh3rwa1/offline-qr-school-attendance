@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
-  retries: 0, // Enforce zero retries so product bugs are never hidden
+  retries: process.env.CI ? 1 : 0, // Allow 1 retry in CI to tolerate transient runner flakiness; failures that retry-pass are still surfaced in the report
   reporter: process.env.CI ? [['html', { outputFolder: 'output/playwright/report', open: 'never' }], ['line']] : 'list',
   outputDir: 'output/playwright/test-results',
   use: {

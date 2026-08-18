@@ -136,6 +136,32 @@ export const SchoolAdminDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* First-run guidance — shown only when no students have been imported yet */}
+      {totalStudents === 0 && (
+        <div className="p-6 rounded-3xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+          <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center shadow-xs shrink-0">
+            <Users className="w-6 h-6 text-[#15803d]" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <h3 className="font-extrabold text-[#0f172a] font-display text-base">
+              {t('firstRunImportTitle')}
+            </h3>
+            <p className="text-sm text-slate-600">
+              {t('firstRunImportDesc')}
+            </p>
+          </div>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => navigate('/app/school-admin/students')}
+            leftIcon={<ArrowRight className="w-4 h-4" />}
+            className="min-h-[44px] rounded-2xl font-display text-sm font-bold shrink-0"
+          >
+            {t('firstRunAddStudents')}
+          </Button>
+        </div>
+      )}
+
       {/* Navigation Quick Action Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <button

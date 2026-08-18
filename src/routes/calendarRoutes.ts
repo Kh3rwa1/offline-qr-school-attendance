@@ -32,8 +32,18 @@ const SourceTypeSchema = z.enum([
   'SYSTEM_TEMPLATE',
 ]);
 
+const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const CalendarQuerySchema = z.object({
+  startDate: DateSchema,
+  endDate: DateSchema,
+  versionId: z.string().uuid().optional(),
+}).refine((value) => value.startDate <= value.endDate, {
+  message: 'CALENDAR_RANGE_INVALID',
+  path: ['endDate'],
+});
+
 const UpsertDaySchema = z.object({
-  calendarDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  calendarDate: DateSchema,
   classification: ClassificationSchema,
   reason: z.string().max(255).optional(),
   isWorkingDay: z.boolean().optional(),
@@ -43,14 +53,17 @@ const UpsertDaySchema = z.object({
 });
 
 const BulkRangeSchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: DateSchema,
+  endDate: DateSchema,
   classification: ClassificationSchema,
   reason: z.string().max(255).optional(),
   isWorkingDay: z.boolean().optional(),
   sourceType: SourceTypeSchema.default('SCHOOL_CONFIRMED'),
   sourceReference: z.string().max(1000).optional(),
   isApproximate: z.boolean().default(false),
+}).refine((value) => value.startDate <= value.endDate, {
+  message: 'CALENDAR_RANGE_INVALID',
+  path: ['endDate'],
 });
 
 const YearSchema = z.coerce.number().int().min(2000).max(2100);
@@ -73,12 +86,21 @@ calendarRouter.get(
   requireTenant,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
+      const currentYear = new Date().getFullYear();
+      const rawStartDate = req.query.startDate;
+      const rawEndDate = req.query.endDate;
+      const rawVersionId = req.query.versionId;
+      if (rawStartDate !== undefined && typeof rawStartDate !== 'string') throw new Error('CALENDAR_DATE_INVALID');
+      if (rawEndDate !== undefined && typeof rawEndDate !== 'string') throw new Error('CALENDAR_DATE_INVALID');
+      if (rawVersionId !== undefined && typeof rawVersionId !== 'string') throw new Error('CALENDAR_VERSION_ID_INVALID');
+      const query = CalendarQuerySchema.parse({
+        startDate: rawStartDate ?? `${currentYear}-01-01`,
+        endDate: rawEndDate ?? `${currentYear}-12-31`,
+        versionId: rawVersionId,
+      });
       const schoolId = req.activeSchoolId!;
-      const startDate = (req.query.startDate as string) || `${new Date().getFullYear()}-01-01`;
-      const endDate = (req.query.endDate as string) || `${new Date().getFullYear()}-12-31`;
-      const versionId = req.query.versionId ? z.string().uuid().parse(req.query.versionId) : undefined;
-      const result = await getCalendarDays(schoolId, startDate, endDate, versionId);
-      res.json({ success: true, schoolId, startDate, endDate, ...result });
+      const result = await getCalendarDays(schoolId, query.startDate, query.endDate, query.versionId);
+      res.json({ success: true, schoolId, startDate: query.startDate, endDate: query.endDate, ...result });
     } catch (error) {
       sendError(res, error);
     }

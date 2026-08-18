@@ -369,10 +369,14 @@ EOF
 
   SERVER_DOMAIN=$(grep '^SERVER_DOMAIN=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || echo "")
   LAN_IP=$(get_lan_ip)
-  
-  ACCESS_URL="{{http://${LAN_IP}}}"
+
+  # Composed with printf so that no stray characters can ever reach the banner.
+  # This address is what a school types into a browser; it must be exact.
+  ACCESS_URL="$(printf '%s://%s' 'http' "${LAN_IP}")"
+  ACCESS_SCHEME="http"
   if [ -n "${SERVER_DOMAIN}" ] && [ "${SERVER_DOMAIN}" != "localhost" ] && [ "${SERVER_DOMAIN}" != "127.0.0.1" ]; then
-    ACCESS_URL="{{https://${SERVER_DOMAIN}}}"
+    ACCESS_URL="$(printf '%s://%s' 'https' "${SERVER_DOMAIN}")"
+    ACCESS_SCHEME="https"
   fi
 
   echo "\n============================================================"
@@ -387,7 +391,7 @@ EOF
     echo " • Monitoring:          http://127.0.0.1:9090 (Prometheus)"
     echo " • Alert Console:       http://127.0.0.1:9093 (Alertmanager)"
   fi
-  if [[ "${ACCESS_URL}" =~ ^http:// ]]; then
+  if [ "${ACCESS_SCHEME}" = "http" ]; then
     echo " • Note: Automatic HTTPS is active for public DNS domain names."
     echo "         LAN IP access uses plaintext HTTP on port 80."
   fi

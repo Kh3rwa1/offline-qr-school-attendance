@@ -102,7 +102,8 @@ perform_backup() {
   PG_VERSION=$(pg_dump --version 2>/dev/null | head -n 1 || echo "PostgreSQL")
 
   # Step 3: Compress and encrypt into temporary encrypted file
-  if ! gzip -c "${TEMP_RAW}" | openssl enc -aes-256-cbc -pbkdf2 -salt -pass pass:"${BACKUP_ENCRYPTION_KEY}" > "${TEMP_ENC}"; then
+  # Use 'pass env:' to avoid exposing the key in ps/procfs cmdline output.
+  if ! gzip -c "${TEMP_RAW}" | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_ENCRYPTION_KEY > "${TEMP_ENC}"; then
     echo "[$(date -u +'%Y-%m-%d %H:%M:%S UTC')] ❌ Encryption/compression stage failed!" >&2
     rm -rf "${TMP_DIR}"
     return 1
@@ -110,7 +111,7 @@ perform_backup() {
   rm -f "${TEMP_RAW}"
 
   # Step 4: Self-test decryption and archive decompression before publishing
-  if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -in "${TEMP_ENC}" | gunzip -t >/dev/null 2>&1; then
+  if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "${TEMP_ENC}" | gunzip -t >/dev/null 2>&1; then
     echo "[$(date -u +'%Y-%m-%d %H:%M:%S UTC')] ❌ Self-test integrity check failed on generated encrypted archive!" >&2
     rm -rf "${TMP_DIR}"
     return 1

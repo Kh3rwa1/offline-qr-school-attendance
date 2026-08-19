@@ -164,7 +164,7 @@ resolve_compose_profiles() {
 
 check_preflight() {
   echo "\n🔍 Checking System Pre-flight Requirements..."
-  
+
   OS_TYPE="$(uname -s)"
   ARCH_TYPE="$(uname -m)"
   
@@ -251,6 +251,20 @@ check_preflight() {
   fi
   COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || echo "v2")
   echo " • Compose Plugin:   ${COMPOSE_VERSION}"
+
+  # 7. Clock synchronization check (NTP).
+  # RFID timestamp replay protection and backup timestamping require a
+  # synchronized clock. Warn if drift exceeds ±60 s; continue regardless
+  # because the chrony/systemd-timesyncd daemon may not be queryable in CI.
+  if command -v timedatectl >/dev/null 2>&1; then
+    NTP_SYNC=$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || echo "")
+    if [ "${NTP_SYNC}" = "yes" ]; then
+      echo " • NTP Sync:         ✅ Clock is synchronized"
+    else
+      echo " • NTP Sync:         ⚠️ Clock synchronization status unknown or not synced"
+      echo "                     Install chrony: sudo apt-get install -y chrony && sudo systemctl enable --now chrony"
+    fi
+  fi
 }
 
 ensure_secrets() {
@@ -497,9 +511,22 @@ cmd_backup() {
     exit 1
   fi
 
+  if [ "${#BACKUP_KEY}" -lt 32 ]; then
+    echo "❌ Error: BACKUP_ENCRYPTION_KEY must be at least 32 characters long." >&2
+    exit 1
+  fi
+
+  # Pass the encryption key via a file descriptor (not the process command line)
+  # to prevent the key from appearing in `ps aux` output.
+  PASSPHRASE_FILE=$(mktemp)
+  chmod 0600 "${PASSPHRASE_FILE}"
+  printf '%s' "${BACKUP_KEY}" > "${PASSPHRASE_FILE}"
+
   dcompose exec -T db pg_dump -U attendance_migration -d school_attendance | \
     gzip -c | \
-    openssl enc -aes-256-cbc -pbkdf2 -salt -pass pass:"${BACKUP_KEY}" > "${TARGET_ENC}"
+    openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"${PASSPHRASE_FILE}" > "${TARGET_ENC}"
+
+  rm -f "${PASSPHRASE_FILE}"
 
   SHA256_HASH=$(openssl dgst -sha256 "${TARGET_ENC}" | awk '{print $2}')
   echo "${SHA256_HASH}  $(basename "${TARGET_ENC}")" > "./backups/${BACKUP_NAME}.checksums.sha256"
@@ -536,9 +563,14 @@ cmd_restore() {
   fi
 
   echo " • Decrypting and streaming backup to PostgreSQL..."
-  openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_KEY}" -in "${RESTORE_TARGET}" | \
+  # Pass the encryption key via a file descriptor (not the command line).
+  PASSPHRASE_FILE=$(mktemp)
+  chmod 0600 "${PASSPHRASE_FILE}"
+  printf '%s' "${BACKUP_KEY}" > "${PASSPHRASE_FILE}"
+  openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"${PASSPHRASE_FILE}" -in "${RESTORE_TARGET}" | \
     gunzip -c | \
     dcompose exec -T db psql -U attendance_migration -d school_attendance
+  rm -f "${PASSPHRASE_FILE}"
 
   echo "✅ Database restore successfully completed."
 }

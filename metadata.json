@@ -1,10 +1,8 @@
 {
-  "name": "Offline QR School Attendance",
-  "description": "Bilingual English/Bengali offline-first QR school attendance system for government schools in West Bengal.",
+  "name": "AttendEase OS",
+  "description": "UHF RFID Gate Attendance Appliance for Zebra FX9600 with offline QR fallback. Multilingual (EN/BN/HI) school attendance platform for government schools.",
   "requestFramePermissions": [
     "camera"
   ],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }

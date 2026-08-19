@@ -83,3 +83,157 @@ groups:
         annotations:
           summary: "Off-site backup copy is more than 48 hours old"
           description: "Off-site replication is configured but no new verified copy has landed in over 48 hours. The nightly upload is silently failing or the appliance has lost outbound internet access."
+
+  # ---------------------------------------------------------------------------
+  # Disk space — the most common silent killer on a school appliance running
+  # for years without monitoring.
+  # ---------------------------------------------------------------------------
+  - name: disk_capacity
+    rules:
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.20
+        for: 10m
+        labels:
+          severity: warning
+          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#disk-space"
+        annotations:
+          summary: "Disk space is below 20% on {{ $labels.instance }}"
+          description: "Available disk space is {{ $value | humanizePercentage }}. Backups and logs may start failing. Free space immediately: docker system prune -f"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.05
+        for: 5m
+        labels:
+          severity: critical
+          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#disk-space"
+        annotations:
+          summary: "Disk space is critically low (<5%) on {{ $labels.instance }}"
+          description: "The appliance is nearly out of disk space. Database writes and backups will fail. Immediate action required."
+
+  # ---------------------------------------------------------------------------
+  # TLS certificate expiry — Caddy auto-renews, but renewal can fail on a
+  # server that has lost outbound internet access or DNS resolution.
+  # ---------------------------------------------------------------------------
+  - name: certificate_expiry
+    rules:
+      - alert: TlsCertExpiryWarning
+        expr: app_tls_cert_expiry_seconds > 0 and app_tls_cert_expiry_seconds < 1209600
+        for: 1h
+        labels:
+          severity: warning
+          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#tls-certificate"
+        annotations:
+          summary: "TLS certificate expires in less than 14 days"
+          description: "The TLS certificate for {{ $labels.domain }} expires in {{ $value | humanizeDuration }}. Check Caddy auto-renewal: docker compose logs caddy"
+
+      - alert: TlsCertExpiryCritical
+        expr: app_tls_cert_expiry_seconds > 0 and app_tls_cert_expiry_seconds < 259200
+        for: 30m
+        labels:
+          severity: critical
+          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#tls-certificate"
+        annotations:
+          summary: "TLS certificate expires in less than 3 days — URGENT"
+          description: "The TLS certificate for {{ $labels.domain }} expires in {{ $value | humanizeDuration }}. Teachers will see browser security warnings and cannot log in."
+
+  # ---------------------------------------------------------------------------
+  # Clock drift — stale NTP sync breaks RFID replay protection and
+  # backup timestamp integrity.
+  # ---------------------------------------------------------------------------
+  - name: clock_integrity
+    rules:
+      - alert: ClockDriftHigh
+        expr: abs(node_timex_offset_seconds) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "System clock drift exceeds 1 second"
+          description: "The appliance clock is {{ $value }}s off from NTP. RFID replay-protection windows and backup timestamps may be inaccurate. Check NTP: timedatectl status"
+
+      - alert: NtpUnsynchronized
+        expr: node_timex_sync_status != 1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NTP time synchronization is lost"
+          description: "The system clock is no longer synchronized to an NTP server. Install chrony: sudo apt-get install -y chrony && sudo systemctl enable --now chrony"
+
+  # ---------------------------------------------------------------------------
+  # Application update / rollback lifecycle
+  # ---------------------------------------------------------------------------
+  - name: update_health
+    rules:
+      - alert: UpdateRollbackOccurred
+        expr: increase(app_update_rollback_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application update was automatically rolled back"
+          description: "The most recent update failed health checks and was rolled back to the previous version. Check update logs: docker compose logs app | tail -200"
+
+      - alert: RestoreDrillOverdue
+        expr: (time() - app_restore_drill_latest_timestamp_seconds) > 2592000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disaster recovery restore drill has not run for 30 days"
+          description: "The automated restore drill verifies that backups are actually restorable. Run it manually: ./bin/attendease restore ./backups/<latest>.sql.gz.enc --dry-run"
+
+  # ---------------------------------------------------------------------------
+  # SMS worker stall
+  # ---------------------------------------------------------------------------
+  - name: sms_worker_health
+    rules:
+      - alert: SmsWorkerHeartbeatStale
+        expr: (time() - app_sms_worker_last_heartbeat_seconds) > 120
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SMS worker heartbeat is stale (>2 minutes)"
+          description: "The SMS worker has not updated its heartbeat. Parent absence notifications are not being sent. Restart: docker compose restart sms-worker"
+
+      - alert: SmsWorkerDown
+        expr: absent(app_sms_worker_last_heartbeat_seconds)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SMS worker metrics are absent — worker may be crashed"
+          description: "No SMS worker heartbeat metrics found. The worker container may have crashed. Check: docker compose logs sms-worker"
+
+      - alert: SmsQueueOldestMessageStale
+        expr: app_sms_queue_oldest_message_age_seconds > 7200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Oldest SMS in queue is more than 2 hours old"
+          description: "An SMS notification has been waiting more than 2 hours. The worker may be stalled or the SMS provider may be unreachable."
+
+  # ---------------------------------------------------------------------------
+  # Authentication anomaly detection
+  # ---------------------------------------------------------------------------
+  - name: auth_anomalies
+    rules:
+      - alert: ElevatedAuthFailures
+        expr: rate(app_auth_failures_total[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated authentication failure rate (>0.5/s)"
+          description: "More than 0.5 authentication failures per second over the past 5 minutes. This may indicate a brute-force attack or misconfigured client. Rate limiting should be active."
+
+      - alert: AttendanceRejectionRateHigh
+        expr: (rate(app_attendance_ingestion_rejected_total[10m]) / rate(app_attendance_ingestion_total[10m])) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Attendance ingestion rejection rate exceeds 10%"
+          description: "More than 10% of attendance records are being rejected. Check for clock skew, expired QR tokens, or RFID replay attempts."

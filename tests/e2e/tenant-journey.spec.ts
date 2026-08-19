@@ -44,11 +44,11 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
 
   test('2. Public demo request form submits to API and displays verified success confirmation', async ({ page }) => {
     await page.goto(baseUrl);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click demo request button via data-testid
     const demoBtn = page.getByTestId('header-book-demo-btn');
-    await expect(demoBtn).toBeVisible();
+    await expect(demoBtn).toBeVisible({ timeout: 10000 });
     await demoBtn.click();
 
     const form = page.getByTestId('demo-request-form');
@@ -66,13 +66,26 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     // Check mandatory explicit consent checkbox
     await form.locator('#demo-consent-checkbox').check();
 
-    // Submit form (submit button lives inside the dialog form)
+    // Submit form and wait for the API response before asserting success state.
+    // Firefox on CI can render networkidle before the dialog's React state settles;
+    // waitForResponse pins the assertion to the actual network round-trip.
     const submitBtn = form.locator('#demo-form-submit');
     await submitBtn.scrollIntoViewIfNeeded();
-    await submitBtn.click();
+
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes('/api/v1/public/demo-requests') && r.request().method() === 'POST',
+        { timeout: 20000 }
+      ),
+      submitBtn.click(),
+    ]);
+    // If the API itself failed, surface the status in the error message.
+    if (!response.ok()) {
+      throw new Error(`Demo request API returned ${response.status()}: ${await response.text()}`);
+    }
 
     // Verify success confirmation card
-    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('demo-success-state')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/Demo request successfully received|ডেমোর অনুরোধ/i)).toBeVisible();
     await expect(page.getByText(testPhone)).toBeVisible();
   });

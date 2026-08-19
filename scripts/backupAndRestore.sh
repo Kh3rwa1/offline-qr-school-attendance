@@ -20,6 +20,8 @@ if [ -z "${BACKUP_ENCRYPTION_KEY}" ]; then
   echo "Error: BACKUP_ENCRYPTION_KEY environment variable is required for encryption."
   exit 1
 fi
+# Export so openssl 'pass env:' can read it from the process environment.
+export BACKUP_ENCRYPTION_KEY
 
 # Ensure TARGET_DATABASE_URL is a genuinely separate database for fresh-target restoration testing
 SOURCE_DB_NAME=$(echo "${DATABASE_URL}" | sed -E 's|.*/([^?]+).*|\1|')
@@ -41,11 +43,12 @@ trap cleanup EXIT
 START_TIME=$(date +%s)
 
 echo "1. Creating AES-256 encrypted PostgreSQL backup from ${SOURCE_DB_NAME} to ${BACKUP_FILE}..."
-pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -out "${BACKUP_FILE}"
+# Use 'pass env:' to keep the key out of process command-line arguments.
+pg_dump "${DATABASE_URL}" | gzip -c | openssl enc -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -out "${BACKUP_FILE}"
 echo "Backup created and encrypted successfully. Size: $(du -sh "${BACKUP_FILE}" | cut -f1)"
 
 echo "2. Decrypting and verifying backup archive integrity..."
-openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"${BACKUP_ENCRYPTION_KEY}" -in "${BACKUP_FILE}" | gunzip -c > "${RESTORE_FILE}"
+openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "${BACKUP_FILE}" | gunzip -c > "${RESTORE_FILE}"
 echo "Decryption successful. Uncompressed dump size: $(du -sh "${RESTORE_FILE}" | cut -f1)"
 
 echo "3. Restoring dump into separate fresh test database ${RESTORE_DB_NAME} with ON_ERROR_STOP=1..."

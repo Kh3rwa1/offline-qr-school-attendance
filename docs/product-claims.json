@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Machine-readable product claims registry. Every public-facing claim must appear here. CI validates this file on every commit.",
+  "version": "1.3.0",
+  "lastUpdated": "2026-08-18",
+  "revalidationIntervalDays": 90,
+  "claims": [
+    {
+      "id": "offline-qr-attendance",
+      "claim": "Teachers can take attendance offline on supported mobile phone cameras. Data saves to local storage and syncs when reconnected.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.0.0",
+      "evidenceFiles": [
+        "tests/offlineSync.test.ts",
+        "tests/e2e/offline-scenarios.spec.ts"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Requires browser camera permission. Firefox mobile background sync requires user interaction on reconnect."
+    },
+    {
+      "id": "zebra-fx9600-payload-compatibility",
+      "claim": "Zebra FX9600 IoT Connector webhook JSON tag-read payload specification compatible and verified against documented contracts.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.2.0",
+      "evidenceFiles": [
+        "tests/rfid/zebraHttpEndpoint.test.ts",
+        "tests/rfid/zebraIotConnector.test.ts",
+        "scripts/hardware-runner.ts",
+        "output/hardware-certification-report.json"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Software contract simulation only. No physical FX9600 hardware tested. Physical commissioning is EXTERNALLY_PENDING."
+    },
+    {
+      "id": "physical-fx9600-commissioning",
+      "claim": "Physical on-site Zebra FX9600 reader gate commissioning requires on-site RF calibration, doorway tuning, and technician acceptance.",
+      "status": "EXTERNALLY_PENDING",
+      "introducedVersion": null,
+      "evidenceFiles": [
+        "docs/hardware/FX9600_COMMISSIONING_TEMPLATE.md",
+        "docs/hardware/FX9600_EVIDENCE_REQUIREMENTS.md",
+        "docs/audits/EXTERNAL_VALIDATION_REGISTER.md"
+      ],
+      "lastVerificationDate": null,
+      "revalidationIntervalDays": null,
+      "limitations": "No physical hardware available. Must not be described as production-certified without signed commissioning report from docs/hardware/FX9600_COMMISSIONING_TEMPLATE.md."
+    },
+    {
+      "id": "postgresql-rls-tenant-isolation",
+      "claim": "PostgreSQL Row-Level Security enforces strict tenant separation. Cross-tenant data access is blocked at the database level.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.0.0",
+      "evidenceFiles": [
+        "tests/postgresRls.integration.test.ts",
+        "tests/tenantIsolation.test.ts",
+        "scripts/run-postgres-rls-suite.ts"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 30,
+      "limitations": "Requires correct role configuration. Tested in CI with real PostgreSQL 16."
+    },
+    {
+      "id": "encrypted-backups",
+      "claim": "Automated AES-256-CBC encrypted appliance database snapshots with SHA-256 integrity checksum manifests.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.1.0",
+      "evidenceFiles": [
+        "tests/backupFaultInjection.test.ts",
+        "scripts/backupAndRestore.sh",
+        "docker/backup-entrypoint.sh"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 30,
+      "limitations": "AES-256-CBC provides confidentiality but is unauthenticated. Integrity is protected by SHA-256 manifest checksum + self-test decryption. Full AEAD (AES-GCM) is on the migration roadmap."
+    },
+    {
+      "id": "r2-offsite-replication",
+      "claim": "Cloudflare R2 off-site backup replication with SigV4 authentication and integrity validation drill.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.2.0",
+      "evidenceFiles": [
+        "tests/cloudflareR2Replication.test.ts",
+        "scripts/runR2LiveDrill.ts",
+        "docker/offsite-upload.sh"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Unit tests use mocked R2 API. Real off-site replication requires live R2 credentials. Status: EXTERNALLY_PENDING for live credentials validation."
+    },
+    {
+      "id": "sms-queue",
+      "claim": "Transactional absence notification jobs are queued in PostgreSQL upon session finalization.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.0.0",
+      "evidenceFiles": [
+        "tests/notificationsAndSms.test.ts",
+        "tests/dltSmsProvider.test.ts"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Queue creation and processing are automation-verified. Live carrier delivery requires DLT credentials and is EXTERNALLY_PENDING."
+    },
+    {
+      "id": "real-telecom-delivery",
+      "claim": "Carrier SMS dispatch requires active school DLT principal entity registration and telecom sender credentials.",
+      "status": "EXTERNALLY_PENDING",
+      "introducedVersion": null,
+      "evidenceFiles": [
+        "docs/audits/EXTERNAL_VALIDATION_REGISTER.md"
+      ],
+      "lastVerificationDate": null,
+      "revalidationIntervalDays": null,
+      "limitations": "No DLT credentials available. Must not be presented as verified carrier delivery without authentic delivery receipts."
+    },
+    {
+      "id": "wcag-aa-automated",
+      "claim": "Automated WCAG 2.1/2.2 Level AA rule auditing across all key routes, dialogs, and navigation via axe-core.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.2.0",
+      "evidenceFiles": [
+        "tests/e2e/axe-matrix.spec.ts",
+        "tests/a11yAndMobileUx.test.tsx"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 30,
+      "limitations": "Automated axe-core covers rule-based WCAG violations. Does not substitute for human assistive-technology evaluation."
+    },
+    {
+      "id": "human-accessibility-certification",
+      "claim": "Formal assistive technology evaluations with native TalkBack, VoiceOver, and NVDA human users are planned.",
+      "status": "EXTERNALLY_PENDING",
+      "introducedVersion": null,
+      "evidenceFiles": [
+        "docs/audits/ACCESSIBILITY_HUMAN_VALIDATION_PLAN.md",
+        "docs/audits/EXTERNAL_VALIDATION_REGISTER.md"
+      ],
+      "lastVerificationDate": null,
+      "revalidationIntervalDays": null,
+      "limitations": "No human UAT evidence. Must not be described as human-certified accessible until signed evaluation reports are filed in EXTERNAL_VALIDATION_REGISTER.md."
+    },
+    {
+      "id": "government-acceptance",
+      "claim": "Reports are generated for school administrative review. Official department acceptance is determined by authorized education authorities.",
+      "status": "EXTERNALLY_PENDING",
+      "introducedVersion": null,
+      "evidenceFiles": [
+        "docs/audits/EXTERNAL_VALIDATION_REGISTER.md"
+      ],
+      "lastVerificationDate": null,
+      "revalidationIntervalDays": null,
+      "limitations": "No government acceptance obtained. Must not be described as government-approved or UDISE+-certified."
+    },
+    {
+      "id": "multilingual-ui",
+      "claim": "Complete English, Bengali, and Hindi interfaces across all dashboards, wizard flows, and public pages.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.1.0",
+      "evidenceFiles": [
+        "tests/i18nCompleteness.test.ts",
+        "tests/e2e/bengali-journeys.spec.ts",
+        "tests/landingPageLocalization.test.ts"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Hindi coverage is primarily landing pages and onboarding. Some admin workflows are English-dominant."
+    },
+    {
+      "id": "installer-ubuntu-amd64",
+      "claim": "One-command production installation on Ubuntu 22.04 and 24.04 LTS (amd64).",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.2.0",
+      "evidenceFiles": [
+        "scripts/install.sh",
+        ".github/workflows/ci.yml"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 30,
+      "limitations": "Tested on GitHub-hosted ubuntu-22.04 and ubuntu-24.04 runners (amd64 only)."
+    },
+    {
+      "id": "installer-arm64",
+      "claim": "Installation script supports ARM64 (aarch64) architecture detection and installation.",
+      "status": "EXPERIMENTAL",
+      "introducedVersion": "1.2.0",
+      "evidenceFiles": [
+        "scripts/install.sh"
+      ],
+      "lastVerificationDate": null,
+      "revalidationIntervalDays": null,
+      "limitations": "ARM64 path is code-implemented but has no native CI runner validation. EXTERNALLY_PENDING native arm64 runner test. See docs/audit/BASELINE_AUDIT.md blocker B-3."
+    },
+    {
+      "id": "cosign-image-signing",
+      "claim": "Container images are signed with Cosign keyless OIDC signing and have SLSA build-provenance attestation.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.3.0",
+      "evidenceFiles": [
+        ".github/workflows/release.yml"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Signing executes in the release workflow on tag push. Not executed on main branch pushes."
+    },
+    {
+      "id": "prometheus-monitoring",
+      "claim": "Prometheus + Alertmanager monitoring with alert rules for application, database, backup, SMS worker, and RFID gateway.",
+      "status": "VERIFIED_AUTOMATION",
+      "introducedVersion": "1.2.0",
+      "evidenceFiles": [
+        "monitoring/alerts.yaml",
+        "monitoring/appliance-alerts.yml",
+        "monitoring/rfid-alerts.yml",
+        "docker-compose.yml"
+      ],
+      "lastVerificationDate": "2026-08-18",
+      "revalidationIntervalDays": 90,
+      "limitations": "Monitoring is opt-in profile. Alert delivery requires ALERT_EMAIL_TO or ALERT_WEBHOOK_URL to be configured. Dead-man heartbeat alert is present."
+    }
+  ]
+}

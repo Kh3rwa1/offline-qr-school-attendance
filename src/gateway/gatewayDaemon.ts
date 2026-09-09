@@ -28,6 +28,25 @@ export interface GatewayDiagnosticResult {
   status: 'READY' | 'NO_READERS_FOUND' | 'SOCKET_UNAVAILABLE' | 'SIMULATION_ACTIVE';
 }
 
+/**
+ * Builds a gateway URL that exactly matches the server mount point:
+ * /api/v1/schools/:schoolId/rfid/*.
+ */
+export function buildRfidApiUrl(
+  serverBaseUrl: string,
+  schoolId: string,
+  endpoint: string,
+): string {
+  const baseUrl = serverBaseUrl.trim().replace(/\/+$/, '');
+  const normalizedEndpoint = endpoint.trim().replace(/^\/+|\/+$/g, '');
+
+  if (!baseUrl) throw new Error('GATEWAY_CONFIG_ERROR: serverBaseUrl is required');
+  if (!schoolId) throw new Error('GATEWAY_CONFIG_ERROR: schoolId is required');
+  if (!normalizedEndpoint) throw new Error('GATEWAY_CONFIG_ERROR: RFID endpoint is required');
+
+  return `${baseUrl}/api/v1/schools/${encodeURIComponent(schoolId)}/rfid/${normalizedEndpoint}`;
+}
+
 export class GatewayDaemon {
   private adapter: GatewayAdapter;
   private queue: OutboxQueue;
@@ -68,26 +87,27 @@ export class GatewayDaemon {
   async runDiagnostics(): Promise<GatewayDiagnosticResult> {
     const socketPath = process.env.PCSCD_SOCKET_PATH || '/var/run/pcscd/pcscd.comm';
     const pcscSocketAvailable = fs.existsSync(socketPath) || process.platform === 'darwin';
-    let nativeLibraryLoaded = true;
+    const simulationMode = this.config.useSimulator === true;
+    const health = await this.adapter.getHealth().catch(() => ({ connected: false }));
+
+    let nativeLibraryLoaded = false;
     let readersDetected: string[] = [];
+    let status: GatewayDiagnosticResult['status'];
 
-    try {
-      if (this.config.useSimulator) {
-        readersDetected = ['Simulated ACS ACR1252U 0', 'Simulated HID Omnikey 5422 1'];
-      } else {
-        // Native enumeration probe
-        readersDetected = ['ACS ACR1252U USB Smart Card Reader', 'HID Global OMNIKEY 5422'];
-      }
-    } catch {
-      nativeLibraryLoaded = false;
-    }
-
-    let status: GatewayDiagnosticResult['status'] = 'READY';
-    if (this.config.useSimulator) {
+    if (simulationMode) {
+      readersDetected = ['Simulated PC/SC Reader'];
       status = 'SIMULATION_ACTIVE';
     } else if (!pcscSocketAvailable) {
       status = 'SOCKET_UNAVAILABLE';
-    } else if (readersDetected.length === 0) {
+    } else if (health.connected) {
+      // A native transport only reports connected after the PC/SC module loaded
+      // and a real reader/card connection was established.
+      nativeLibraryLoaded = true;
+      readersDetected = [this.config.readerName || 'Connected PC/SC Reader'];
+      status = 'READY';
+    } else {
+      // Never invent hardware identities. Until the native adapter establishes
+      // a connection, report the state honestly as not detected.
       status = 'NO_READERS_FOUND';
     }
 
@@ -96,7 +116,7 @@ export class GatewayDaemon {
       nativeLibraryLoaded,
       readersDetected,
       supportedHardwareModels: ['ACS ACR1252U', 'ACS ACR122U', 'HID Omnikey 5422', 'HID Omnikey 5022'],
-      simulationMode: !!this.config.useSimulator,
+      simulationMode,
       diagnosticTimestamp: new Date().toISOString(),
       status,
     };
@@ -104,17 +124,19 @@ export class GatewayDaemon {
 
   async start(): Promise<void> {
     console.log(`[GatewayDaemon] Starting RFID Gateway for School ${this.config.schoolId}, Reader ${this.config.readerId}...`);
-    
-    // Execute diagnostic on startup
-    const diag = await this.runDiagnostics();
-    console.log(`[GatewayDaemon] Hardware Diagnostic Status: ${diag.status} (Simulation: ${diag.simulationMode}, Readers: ${diag.readersDetected.length})`);
-    
-    if (process.env.NODE_ENV === 'production' && !this.config.useSimulator && diag.status === 'SOCKET_UNAVAILABLE') {
-      console.warn('[GatewayDaemon] Notice: PC/SC daemon socket not found at /var/run/pcscd/pcscd.comm. Ensure pcscd daemon is started on host.');
+
+    const preflight = await this.runDiagnostics();
+    console.log(`[GatewayDaemon] Hardware preflight: ${preflight.status} (Simulation: ${preflight.simulationMode}, Readers: ${preflight.readersDetected.length})`);
+
+    if (process.env.NODE_ENV === 'production' && !this.config.useSimulator && preflight.status === 'SOCKET_UNAVAILABLE') {
+      console.warn('[GatewayDaemon] Notice: PC/SC daemon socket not found. Ensure pcscd is running and PCSCD_SOCKET_PATH is correct.');
     }
 
     await this.adapter.connect();
     this.running = true;
+
+    const connectedDiagnostics = await this.runDiagnostics();
+    console.log(`[GatewayDaemon] Hardware connection status: ${connectedDiagnostics.status} (Readers: ${connectedDiagnostics.readersDetected.length})`);
 
     // Background sync loop for offline outbox items
     this.startOutboxSyncLoop();
@@ -123,13 +145,13 @@ export class GatewayDaemon {
     const port = this.config.port || 4000;
     this.server = http.createServer(async (req, res) => {
       if (req.url === '/health' || req.url === '/api/v1/health') {
-        const health = await this.adapter.getHealth();
+        const healthResult = await this.adapter.getHealth();
         const queueSize = this.queue.size();
         const diagnostics = await this.runDiagnostics();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-          status: 'HEALTHY',
-          health,
+          status: healthResult.connected ? 'HEALTHY' : 'DEGRADED',
+          health: healthResult,
           outboxQueueDepth: queueSize,
           diagnostics,
         }));
@@ -166,7 +188,7 @@ export class GatewayDaemon {
 
     try {
       // Attempt immediate online scan submission
-      const response = await fetch(`${this.config.serverBaseUrl}/api/v1/${this.config.schoolId}/rfid/scans`, {
+      const response = await fetch(buildRfidApiUrl(this.config.serverBaseUrl, this.config.schoolId, 'scans'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,7 +233,7 @@ export class GatewayDaemon {
       const signature = computeCanonicalSignature(payload, this.config.sharedSecret);
 
       try {
-        const res = await fetch(`${this.config.serverBaseUrl}/api/v1/${this.config.schoolId}/rfid/offline/sync`, {
+        const res = await fetch(buildRfidApiUrl(this.config.serverBaseUrl, this.config.schoolId, 'offline/sync'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

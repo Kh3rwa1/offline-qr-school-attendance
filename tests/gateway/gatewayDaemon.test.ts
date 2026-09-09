@@ -5,6 +5,7 @@ import { buildRfidApiUrl, GatewayDaemon } from '../../src/gateway/gatewayDaemon'
 
 const scratchRoot = path.join(process.cwd(), 'scratch', 'gateway-daemon-tests');
 const originalPcscSocketPath = process.env.PCSCD_SOCKET_PATH;
+const syntheticSecret = 'test-secret-32-chars-length-environment';
 
 afterEach(() => {
   if (originalPcscSocketPath === undefined) {
@@ -37,8 +38,8 @@ describe('GatewayDaemon production contracts', () => {
       schoolId: '00000000-0000-0000-0000-000000000001',
       readerId: 'reader-test-01',
       serverBaseUrl: 'http://localhost:3000',
-      sharedSecret: 'gateway-test-secret-at-least-32-bytes',
-      cardMasterKey: 'gateway-card-key-at-least-32-bytes',
+      sharedSecret: syntheticSecret,
+      cardMasterKey: syntheticSecret,
       storageDir: path.join(scratchRoot, 'native'),
       useSimulator: false,
     });
@@ -55,8 +56,8 @@ describe('GatewayDaemon production contracts', () => {
       schoolId: '00000000-0000-0000-0000-000000000001',
       readerId: 'reader-test-02',
       serverBaseUrl: 'http://localhost:3000',
-      sharedSecret: 'gateway-test-secret-at-least-32-bytes',
-      cardMasterKey: 'gateway-card-key-at-least-32-bytes',
+      sharedSecret: syntheticSecret,
+      cardMasterKey: syntheticSecret,
       storageDir: path.join(scratchRoot, 'simulated'),
       useSimulator: true,
     });

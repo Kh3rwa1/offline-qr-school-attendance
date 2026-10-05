@@ -81,7 +81,8 @@ kubectl create secret generic school-attendance-secrets \
   --from-literal=RFID_HMAC_SECRET="kind-ci-rfid-hmac-secret-012345678901234567890123456789" \
   --from-literal=RFID_CARD_MASTER_KEY="kind-ci-rfid-card-master-key-012345678901234567890123456789" \
   --from-literal=AUTH_DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
-  --from-literal=KMS_MASTER_KEY="kind-ci-kms-master-key-012345678901234567890123456789"
+  --from-literal=KMS_MASTER_KEY="kind-ci-kms-master-key-012345678901234567890123456789" \
+  --from-literal=READER_TOKEN_PEPPER="kind-ci-reader-pepper-012345678901234567890123456789"
 
 # 6. Apply all Kubernetes manifests
 echo "6. Applying Kubernetes manifests from k8s/..."

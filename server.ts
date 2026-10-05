@@ -27,6 +27,7 @@ import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
 import { csrfProtection } from './src/middleware/csrfProtection';
+import { resolveSchoolId } from './src/middleware/resolveSchoolId';
 import { initRedis } from './src/services/redisService';
 import {
   zebraJsonParser,
@@ -89,7 +90,7 @@ export async function createApp() {
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
-  app.use('/api', rateLimitPolicies.generalApi, csrfProtection);
+  app.use('/api', rateLimitPolicies.generalApi, csrfProtection, resolveSchoolId);
 
   app.use(metricsMiddleware);
 

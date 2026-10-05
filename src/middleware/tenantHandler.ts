@@ -29,20 +29,30 @@ export function tenantHandler(handler: TenantHandlerFn) {
       return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
     }
 
-    const urlMatch = req.originalUrl?.match(/\/schools\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
-    const targetSchoolId =
-      req.params.schoolId ||
-      urlMatch?.[1] ||
-      (req.headers['x-school-id'] as string) ||
-      req.body?.schoolId ||
-      req.query?.schoolId;
+    const urlMatch = req.originalUrl?.match(/\/schools\/([^/?#]+)/i);
+    const targetSchoolId = (req as any).schoolId || req.params.schoolId || urlMatch?.[1];
 
     if (!targetSchoolId) {
       return res.status(400).json({ success: false, error: 'MISSING_SCHOOL_ID', message: 'Target schoolId is required' });
     }
 
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(targetSchoolId))) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetSchoolId))) {
       return res.status(400).json({ success: false, error: 'INVALID_SCHOOL_ID' });
+    }
+
+    const candidates: Array<[string, unknown]> = [
+      ['header', req.headers['x-school-id']],
+      ['query', req.query?.schoolId],
+      ['body', req.body?.schoolId],
+    ];
+    for (const [source, val] of candidates) {
+      if (val !== undefined && val !== null && String(val) !== targetSchoolId) {
+        return res.status(400).json({
+          success: false,
+          error: 'SCHOOL_ID_MISMATCH',
+          message: `schoolId in ${source} does not match schoolId in URL path`,
+        });
+      }
     }
 
     const { memberships, user } = req.sessionContext;

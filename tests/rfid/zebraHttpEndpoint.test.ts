@@ -497,9 +497,8 @@ describe('HTTP API /api/v1/schools/:schoolId/rfid/zebra/reads Ingest Suite', () 
             classSectionId: testClassSectionId,
             teacherId: teacherUserId,
             sessionDate: todayDate,
+            sessionType: 'DAILY',
             status: 'OPEN',
-            startedAt: new Date(),
-            sourceMode: 'MANUAL',
           })
           .returning();
       });

@@ -56,7 +56,6 @@ async function runR2LiveDrill() {
         academicYearId: ay.id,
         className: 'Class 12',
         sectionName: 'Science',
-        medium: 'ENGLISH',
       })
       .returning();
 

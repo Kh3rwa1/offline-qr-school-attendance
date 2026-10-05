@@ -4,7 +4,7 @@ import argon2 from 'argon2';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { db, withTenantContext } from '../db';
-import { users, schools, schoolMemberships, academicYears, classSections, students, enrollments, auditLogs } from '../db/schema';
+import { users, schools, schoolMemberships, academicYears, classSections, students, enrollments, auditLogs, guardians, studentGuardians } from '../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/authMiddleware';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
@@ -304,7 +304,6 @@ setupRouter.post('/import-roster', rateLimitPolicies.setupImport, requireAuth, a
                 academicYearId: currentAy.id,
                 className: row.className,
                 sectionName: row.sectionName,
-                medium: 'BENGALI',
               })
               .returning({ id: classSections.id });
             classSectionId = newClass.id;
@@ -323,10 +322,26 @@ setupRouter.post('/import-roster', rateLimitPolicies.setupImport, requireAuth, a
             studentCode,
             name: row.studentName,
             gender: row.gender,
-            guardianPhone: row.guardianPhone || null,
             status: 'ACTIVE',
           })
           .returning({ id: students.id });
+
+        if (row.guardianPhone) {
+          const [g] = await tx
+            .insert(guardians)
+            .values({
+              schoolId,
+              name: `${row.studentName}'s Guardian`,
+              phoneNumber: row.guardianPhone,
+              relationship: 'PARENT',
+            })
+            .returning({ id: guardians.id });
+          await tx.insert(studentGuardians).values({
+            studentId: newStudent.id,
+            guardianId: g.id,
+            isPrimary: true,
+          });
+        }
 
         // Create enrollment
         await tx.insert(enrollments).values({

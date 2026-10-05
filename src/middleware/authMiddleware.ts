@@ -14,35 +14,43 @@ export async function requireAuth(
   res: Response,
   next: NextFunction
 ) {
-  const cookieToken = req.cookies?.session;
-  const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
-  const token = cookieToken || headerToken;
-
-  if (!token) {
-    return res.status(401).json({
-      error: 'UNAUTHORIZED',
-      message: translate('sessionExpired', (req.headers['accept-language'] as Language) || 'en'),
-    });
+  if (req.sessionContext && req.user) {
+    return next();
   }
 
-  const session = await getSession(token);
-  if (!session) {
-    return res.status(401).json({
-      error: 'INVALID_SESSION',
-      message: translate('sessionExpired', (req.headers['accept-language'] as Language) || 'en'),
-    });
-  }
+  try {
+    const cookieToken = req.cookies?.session;
+    const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    const token = cookieToken || headerToken;
 
-  if (session.user.status === 'SUSPENDED') {
-    return res.status(403).json({
-      error: 'USER_SUSPENDED',
-      message: translate('suspendedAccount', (req.headers['accept-language'] as Language) || 'en'),
-    });
-  }
+    if (!token) {
+      return res.status(401).json({
+        error: 'UNAUTHORIZED',
+        message: translate('sessionExpired', (req.headers['accept-language'] as Language) || 'en'),
+      });
+    }
 
-  req.sessionContext = session;
-  req.user = session.user;
-  next();
+    const session = await getSession(token);
+    if (!session) {
+      return res.status(401).json({
+        error: 'INVALID_SESSION',
+        message: translate('sessionExpired', (req.headers['accept-language'] as Language) || 'en'),
+      });
+    }
+
+    if (session.user.status === 'SUSPENDED') {
+      return res.status(403).json({
+        error: 'USER_SUSPENDED',
+        message: translate('suspendedAccount', (req.headers['accept-language'] as Language) || 'en'),
+      });
+    }
+
+    req.sessionContext = session;
+    req.user = session.user;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 export function requireRole(allowedRoles: string[]) {

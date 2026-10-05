@@ -26,8 +26,9 @@ import {
 } from './cryptoService';
 import { decryptReaderSecret } from './readerService';
 import { getRedisClient } from '../redisService';
+import { LIMITS } from '../../middleware/bodyParsers';
 
-export const MAX_PAYLOAD_BYTES = 512 * 1024; // 512 KB
+export const MAX_PAYLOAD_BYTES = LIMITS.zebraWebhook; // one source of truth
 export const MAX_BATCH_READS = 250;
 
 export interface ZebraTagReadRaw {

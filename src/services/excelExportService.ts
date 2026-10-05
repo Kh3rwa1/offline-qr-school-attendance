@@ -21,7 +21,7 @@ export function sanitizeSpreadsheetValue(val: any): any {
  * Clean & Deduplicate Sheet Names within Excel 31-character limit
  */
 export function sanitizeSheetName(name: string, existingNames: Set<string>): string {
-  let cleaned = name.replace(/[:\\/?*\[\]]/g, '_').trim().slice(0, 31);
+  let cleaned = name.replace(/[:\\/?*[\]]/g, '_').trim().slice(0, 31);
   if (!cleaned) cleaned = 'Sheet';
 
   if (!existingNames.has(cleaned.toLowerCase())) {

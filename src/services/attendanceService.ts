@@ -220,7 +220,8 @@ export async function updateSessionStatus(params: {
     const [session] = await tx
       .select()
       .from(attendanceSessions)
-      .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)));
+      .where(and(eq(attendanceSessions.schoolId, schoolId), eq(attendanceSessions.id, sessionId)))
+      .for('update');
 
     if (!session) {
       throw new Error('SESSION_NOT_FOUND');
@@ -248,7 +249,7 @@ export async function updateSessionStatus(params: {
     // Handle finalization logic
     if (newStatus === 'FINALIZED') {
       if (autoMarkAbsentForUnmarked) {
-        // Find all UNMARKED records for this session
+        // Find all UNMARKED records for this session with row-lock
         const unmarked = await tx
           .select()
           .from(attendanceRecords)
@@ -258,30 +259,34 @@ export async function updateSessionStatus(params: {
               eq(attendanceRecords.attendanceSessionId, sessionId),
               eq(attendanceRecords.status, 'UNMARKED')
             )
-          );
+          )
+          .for('update');
 
-        for (const rec of unmarked) {
-          const clientEventId = `auto-absent-${sessionId}-${rec.studentId}-${Date.now()}`;
-          await tx.insert(attendanceEvents).values({
+        if (unmarked.length > 0) {
+          const now = new Date();
+          const eventValues = unmarked.map((rec: any) => ({
             schoolId,
-            clientEventId,
+            clientEventId: `auto-absent-${sessionId}-${rec.studentId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             attendanceSessionId: sessionId,
             studentId: rec.studentId,
             eventType: 'FINALIZATION_AUTO_ABSENT',
             statusValue: 'ABSENT',
-            clientTimestamp: new Date(),
-            serverReceivedAt: new Date(),
+            clientTimestamp: now,
+            serverReceivedAt: now,
             actorId,
             metadata: { note: 'Auto-marked ABSENT upon session finalization' },
-          });
+          }));
 
+          await tx.insert(attendanceEvents).values(eventValues);
+
+          const unmarkedIds = unmarked.map((r: any) => r.id);
           await tx
             .update(attendanceRecords)
             .set({
               status: 'ABSENT',
-              lastUpdatedAt: new Date(),
+              lastUpdatedAt: now,
             })
-            .where(eq(attendanceRecords.id, rec.id));
+            .where(inArray(attendanceRecords.id, unmarkedIds));
         }
       }
     }

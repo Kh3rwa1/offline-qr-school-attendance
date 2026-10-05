@@ -15,6 +15,7 @@ import {
 import { processNotificationQueue } from '../services/notificationWorker';
 import { redactPhoneNumber } from '../services/sms/smsUtils';
 import { createAuditLog } from '../services/auditLogService';
+import { isPlatformSuperAdmin } from '../auth/session';
 
 const router = Router();
 
@@ -187,7 +188,11 @@ router.get(
       if (err.message === 'INVALID_PAGINATION_CURSOR') {
         return res.status(400).json({ success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
       }
-      return res.status(500).json({ success: false, error: err.message });
+      return res.status(500).json({
+        success: false,
+        error: 'SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+      });
     }
   }
 );
@@ -254,7 +259,11 @@ router.get(
       if (err.message === 'INVALID_PAGINATION_CURSOR') {
         return res.status(400).json({ success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
       }
-      return res.status(500).json({ success: false, error: err.message });
+      return res.status(500).json({
+        success: false,
+        error: 'SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+      });
     }
   }
 );
@@ -297,7 +306,11 @@ router.post(
 
       return res.json({ success: true, job: updated });
     } catch (err: any) {
-      return res.status(500).json({ success: false, error: err.message });
+      return res.status(500).json({
+        success: false,
+        error: 'SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+      });
     }
   }
 );
@@ -317,7 +330,10 @@ router.get(
       const settings = await getSchoolSmsSettings(schoolId);
       return res.json({ settings });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({
+        error: 'SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+      });
     }
   }
 );
@@ -341,7 +357,10 @@ router.put(
       });
       return res.json({ settings: updated });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({
+        error: 'SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+      });
     }
   }
 );
@@ -355,10 +374,9 @@ router.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const isSuperAdmin = Boolean(
-        req.sessionContext?.platformRole === 'SUPER_ADMIN' ||
+        isPlatformSuperAdmin(req.sessionContext) ||
         req.user?.platformRole === 'SUPER_ADMIN' ||
-        req.userRole === 'SUPER_ADMIN' ||
-        req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN')
+        req.userRole === 'SUPER_ADMIN'
       );
 
       const isSchoolAdmin = Boolean(
@@ -382,7 +400,11 @@ router.post(
       const result = await processNotificationQueue({ limit, providerName, schoolId: schoolId || undefined });
       return res.json({ success: true, ...result });
     } catch (err: any) {
-      return res.status(500).json({ success: false, error: err.message });
+      return res.status(500).json({
+        success: false,
+        error: 'SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+      });
     }
   }
 );

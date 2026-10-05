@@ -601,7 +601,7 @@ export const LandingPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               {verifiedTestimonials.map((t) => (
                 <div key={t.id} className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-                  <p className="text-base italic text-slate-700 leading-relaxed">"{t.quote}"</p>
+                  <p className="text-base italic text-slate-700 leading-relaxed">&ldquo;{t.quote}&rdquo;</p>
                   <div>
                     <div className="font-bold text-slate-900">{t.personName}</div>
                     <div className="text-sm text-slate-700">{t.role}, {t.organization}</div>

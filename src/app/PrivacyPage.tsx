@@ -61,14 +61,14 @@ export const PrivacyPage: React.FC = () => (
       <Section title="3. What we never do">
         <p>
           We never sell student or staff data. We never show advertising. One school can never see
-          another school's data. The camera is used only to scan student ID cards — no photos are
+          another school&apos;s data. The camera is used only to scan student ID cards — no photos are
           stored.
         </p>
       </Section>
 
       <Section title="4. Where data is stored">
         <p>
-          Each school's data lives in its own separate, protected workspace. Backups are encrypted,
+          Each school&apos;s data lives in its own separate, protected workspace. Backups are encrypted,
           and important platform actions are recorded in a tamper-proof audit log kept for 7 years as
           per Government of India record-keeping rules.
         </p>

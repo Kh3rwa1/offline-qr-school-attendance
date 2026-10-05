@@ -63,8 +63,8 @@ export const TermsPage: React.FC = () => (
 
       <Section title="4. Acceptable use">
         <p>
-          Use the service only for your own school's attendance. Attempting to access another
-          school's workspace is strictly prohibited and is recorded in the platform audit log.
+          Use the service only for your own school&apos;s attendance. Attempting to access another
+          school&apos;s workspace is strictly prohibited and is recorded in the platform audit log.
         </p>
       </Section>
 

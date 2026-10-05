@@ -20,7 +20,6 @@ import {
 } from './schemas/students';
 
 export const studentRouter = Router();
-studentRouter.use(requireAuth);
 
 const StudentParams = z.object({
   schoolId: Uuid,

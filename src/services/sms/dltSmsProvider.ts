@@ -1,6 +1,6 @@
 import { env } from '../../env';
 import crypto from 'node:crypto';
-import { CallbackVerificationResult, ParsedCallbackPayload, SmsProvider, SmsSendParams, SmsSendResult } from './smsProvider';
+import { CallbackVerificationResult, ParsedCallbackPayload, SmsProvider, SmsSendParams, SmsSendResult } from './types';
 import { redactPhoneNumber } from './smsUtils';
 
 /**

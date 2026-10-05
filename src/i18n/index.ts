@@ -6,11 +6,8 @@ import { enTranslations } from './en';
 import { bnTranslations } from './bn';
 import { hiTranslations } from './hi';
 
-export type Language = 'en' | 'bn' | 'hi';
-
-// Derive keys from the English dictionary directly (NOT from the aggregated
-// `translations` map) so the type graph stays acyclic — hi.ts imports this type.
-export type TranslationKey = keyof typeof enTranslations;
+import type { Language, TranslationKey } from './types';
+export type { Language, TranslationKey };
 
 export const translations = {
   en: enTranslations,

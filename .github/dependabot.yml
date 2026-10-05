@@ -5,12 +5,18 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "node"
+        versions: ["23.x", "25.x", "27.x"]
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "node"
+        versions: ["23.x", "25.x", "27.x"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

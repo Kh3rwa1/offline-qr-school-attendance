@@ -2,7 +2,7 @@
 // The translate() helper falls back to English for any key not listed here —
 // which is exactly how Hinglish works in practice: Hindi sentences with
 // familiar English product terms (Login, Attendance, Sync, Badge, Server).
-import type { TranslationKey } from './index';
+import type { TranslationKey } from './types';
 
 export const hiTranslations: Partial<Record<TranslationKey, string>> = {
   // App & Navigation

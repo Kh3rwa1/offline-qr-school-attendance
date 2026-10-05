@@ -139,18 +139,25 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const frozenData = Object.freeze(parsed.data);
+const baseData = { ...parsed.data };
+const inTestRuntime = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 
-export const env = new Proxy(frozenData, {
+export const env = new Proxy(baseData, {
   get(target, prop: string | symbol) {
-    if (typeof prop === 'string' && process.env.NODE_ENV === 'test' && prop in process.env) {
-      return (process.env as Record<string, unknown>)[prop];
+    if (inTestRuntime && typeof prop === 'string') {
+      if (prop in process.env) {
+        return (process.env as Record<string, unknown>)[prop];
+      }
     }
     return (target as unknown as Record<string | symbol, unknown>)[prop];
   },
+  set(_target, _prop, _value) {
+    if (inTestRuntime) return true;
+    throw new Error('Cannot mutate environment configuration in non-test mode');
+  },
 });
 
-export type Env = typeof frozenData;
+export type Env = typeof parsed.data;
 
 export function validateProductionEnv() {
   if (process.env.NODE_ENV === 'production') {
@@ -161,6 +168,20 @@ export function validateProductionEnv() {
       throw new Error(
         'FATAL_SECURITY_CONFIGURATION: Fake SMS provider is strictly prohibited in production mode. Configure a real provider or console.'
       );
+    }
+    const authDbUrl = process.env.AUTH_DATABASE_URL;
+    if (authDbUrl) {
+      try {
+        const parsedAuthUrl = new URL(authDbUrl);
+        if (parsedAuthUrl.protocol !== 'postgres:' && parsedAuthUrl.protocol !== 'postgresql:') {
+          throw new Error('AUTH_DATABASE_URL must be a valid postgres:// or postgresql:// URL.');
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `FATAL_AUTH_DATABASE_URL_MALFORMED: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL: ${msg}`
+        );
+      }
     }
   }
 

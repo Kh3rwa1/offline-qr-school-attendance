@@ -13,7 +13,7 @@ export async function runMigrations() {
   if (env.DATABASE_URL && !isPlaceholderDbUrl) {
     await migratePostgres(db, { migrationsFolder });
   } else {
-    await migratePglite(db, { migrationsFolder });
+    await migratePglite(db as unknown as Parameters<typeof migratePglite>[0], { migrationsFolder });
   }
   console.log('Database migrations completed.');
 }

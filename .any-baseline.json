@@ -100,7 +100,7 @@
   "src/services/schoolService.ts": 18,
   "src/services/sessionReconciler.ts": 2,
   "src/services/sms/dltSmsProvider.ts": 5,
-  "src/services/sms/smsProvider.ts": 9,
+  "src/services/sms/smsProvider.ts": 6,
   "src/services/studentService.ts": 2,
   "src/services/syncService.ts": 7,
   "src/services/tenantImportExportService.ts": 11,

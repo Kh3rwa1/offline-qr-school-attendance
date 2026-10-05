@@ -28,6 +28,14 @@ import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/met
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
 import { csrfProtection } from './src/middleware/csrfProtection';
 import { initRedis } from './src/services/redisService';
+import {
+  zebraJsonParser,
+  smsCallbackParser,
+  defaultJsonParser,
+  defaultFormParser,
+  bodyParserErrorHandler,
+} from './src/middleware/bodyParsers';
+import { requestId } from './src/middleware/requestId';
 
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
@@ -46,14 +54,16 @@ export async function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
-  app.use(
-    express.json({
-      verify: (req: any, _res, buf) => {
-        req.rawBody = buf;
-      },
-    })
-  );
-  app.use(express.urlencoded({ extended: true }));
+  app.use(requestId);
+
+  // Route-specific parsers FIRST (parse only, then fall through via next())
+  app.post('/api/v1/schools/:schoolId/rfid/zebra/reads', zebraJsonParser);
+  app.post('/api/v1/notifications/callback', smsCallbackParser);
+
+  // Global parsers skip anything already parsed
+  app.use(defaultJsonParser);
+  app.use(defaultFormParser);
+  app.use(bodyParserErrorHandler);
   app.use(cookieParser());
 
   app.use((req, res, next) => {

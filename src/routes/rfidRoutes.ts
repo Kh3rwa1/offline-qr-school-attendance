@@ -13,6 +13,7 @@ import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
 import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
+import type { RawBodyRequest } from '../middleware/bodyParsers';
 
 export const rfidRouter = Router();
 
@@ -30,7 +31,10 @@ rfidRouter.post(
   async (req: any, res: Response) => {
     try {
       const schoolId = req.params.schoolId;
-      const rawBody = (req as any).rawBody || Buffer.from(JSON.stringify(req.body || {}));
+      const rawBody = (req as RawBodyRequest).rawBody;
+      if (!rawBody) {
+        return res.status(400).json({ success: false, error: 'MALFORMED_BODY', message: 'Request body required' });
+      }
       const parsedBody = req.body || {};
       const headers = req.headers || {};
 

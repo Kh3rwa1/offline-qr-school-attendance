@@ -40,21 +40,11 @@ export async function loginAs(
       : [];
   const cookieHeader = loginCookieList.map((c) => c.split(';')[0]).join('; ');
 
-  const csrfRes = await request(app).get('/api/v1/auth/csrf');
-  const csrf = csrfRes.body?.csrfToken;
-  const rawCsrfCookies = csrfRes.headers['set-cookie'];
-  const csrfCookieList: string[] = Array.isArray(rawCsrfCookies)
-    ? rawCsrfCookies
-    : typeof rawCsrfCookies === 'string'
-      ? [rawCsrfCookies]
-      : [];
-  const csrfCookies = csrfCookieList.map((c) => c.split(';')[0]).join('; ');
-  const combinedCookies = [cookieHeader, csrfCookies].filter(Boolean).join('; ');
-
+  const csrf = loginRes.body?.csrfToken;
   const schoolId = loginRes.body?.activeSchoolId || '00000000-0000-0000-0000-000000000001';
 
   return {
-    cookies: combinedCookies,
+    cookies: cookieHeader,
     csrf,
     schoolId,
     user: loginRes.body?.user,

@@ -16,6 +16,8 @@ import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, g
 import type { RawBodyRequest } from '../middleware/bodyParsers';
 import { AppError, toAppError } from '../errors/AppError';
 import { logError } from '../errors/logError';
+import { generateReaderToken } from '../services/rfid/readerTokens';
+import { writeAuditLog } from '../services/auditLogService';
 
 export const rfidRouter = Router();
 
@@ -684,6 +686,49 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+  })
+);
+
+rfidRouter.post(
+  '/:schoolId/rfid/readers/:readerId/rotate-token',
+  requireAuth,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  tenantHandler(async ({ schoolId, req, user }) => {
+    const { readerId } = req.params;
+    const { token, hash, hint } = generateReaderToken();
+    const updated = await withTenantContext(schoolId, (tx) =>
+      tx
+        .update(rfidReaders)
+        .set({
+          bearerTokenHash: hash,
+          bearerTokenHint: hint,
+          bearerTokenCreatedAt: new Date(),
+        })
+        .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)))
+        .returning({ id: rfidReaders.id, name: rfidReaders.name })
+    );
+
+    if (!Array.isArray(updated) || !updated.length) return { status: 404, body: { success: false, error: 'READER_NOT_FOUND' } };
+
+    await writeAuditLog({
+      schoolId,
+      actorId: user.id,
+      action: 'RFID_READER_TOKEN_ROTATED',
+      targetId: readerId,
+    });
+
+    return {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+      body: {
+        success: true,
+        readerId,
+        token, // shown ONCE. Never retrievable again.
+        tokenHint: hint,
+        warning:
+          'Copy this token into the Zebra IoT Connector now. It will not be shown again. The previous token is revoked immediately.',
+      },
+    };
   })
 );
 

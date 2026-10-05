@@ -15,7 +15,7 @@ let systemPoolInstance: pg.Pool | undefined;
 
 type ContextMode = 'TENANT' | 'SYSTEM';
 type ContextStore = { tx: any; mode: ContextMode; schoolId?: string };
-const tenantTransaction = new AsyncLocalStorage<ContextStore>();
+export const tenantTransaction = new AsyncLocalStorage<ContextStore>();
 
 // PostgreSQL Connection Pool Budget Configuration
 const PG_POOL_MAX_APP = parseInt(process.env.PG_POOL_MAX_APP || process.env.PG_POOL_MAX || '15', 10);

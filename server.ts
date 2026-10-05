@@ -36,9 +36,8 @@ import {
   defaultFormParser,
   bodyParserErrorHandler,
 } from './src/middleware/bodyParsers';
+import { errorMiddleware } from './src/http/errorMiddleware';
 import { requestId } from './src/middleware/requestId';
-import { toAppError } from './src/errors/AppError';
-import { logError } from './src/errors/logError';
 
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
@@ -217,16 +216,7 @@ export async function createApp() {
     });
   }
 
-  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const e = toAppError(err);
-    logError(req as any, e);
-    res.status(e.status).json({
-      success: false,
-      error: e.code,
-      message: e.publicMessage,
-      requestId: (req as any).id,
-    });
-  });
+  app.use(errorMiddleware);
 
   return app;
 }

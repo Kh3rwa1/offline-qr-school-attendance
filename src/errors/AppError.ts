@@ -68,24 +68,17 @@ export class ConflictError extends AppError {
 export const readerAuthFailed = (internal: Record<string, unknown>) =>
   new AppError('UNAUTHORIZED_READER', 401, 'Reader authentication failed', { internal });
 
-/** Transitional: maps legacy `throw new Error('PREFIX: ...')` to AppError. Delete in Phase 3. */
 export function toAppError(err: unknown): AppError {
   if (err instanceof AppError) return err;
-  const msg = err instanceof Error ? err.message : String(err);
-  const legacy: Array<[string, () => AppError]> = [
-    ['UNAUTHORIZED_READER', () => readerAuthFailed({ legacyMessage: msg })],
-    ['FORBIDDEN_READER', () => new AppError('FORBIDDEN_READER', 403, 'Reader is not permitted', { internal: { legacyMessage: msg } })],
-    ['MALFORMED_PAYLOAD', () => new AppError('MALFORMED_PAYLOAD', 400, 'Malformed payload', { internal: { legacyMessage: msg } })],
-    ['PAYLOAD_TOO_LARGE', () => new AppError('PAYLOAD_TOO_LARGE', 413, 'Payload too large')],
-    ['BATCH_TOO_LARGE', () => new AppError('BATCH_TOO_LARGE', 413, 'Too many reads in one batch')],
-    ['OVERSIZED_BATCH', () => new AppError('BATCH_TOO_LARGE', 413, 'Too many reads in one batch')],
-    ['CONFIG_ERROR', () => new AppError('READER_NOT_CONFIGURED', 503, 'Reader integration unavailable', { internal: { legacyMessage: msg } })],
-    ['MALFORMED_BODY', () => new AppError('MALFORMED_BODY', 400, 'Malformed body', { internal: { legacyMessage: msg } })],
-    ['MISSING_SCHOOL_ID', () => new AppError('MISSING_SCHOOL_ID', 400, 'School must be specified in the URL path')],
-    ['SCHOOL_ID_MISMATCH', () => new AppError('SCHOOL_ID_MISMATCH', 400, 'Conflicting school identifiers in request')],
-  ];
-  for (const [prefix, make] of legacy) {
-    if (msg.startsWith(prefix)) return make();
+  if (typeof err === 'object' && err !== null) {
+    const status =
+      (err as { status?: number; statusCode?: number }).status ||
+      (err as { statusCode?: number }).statusCode;
+    if (typeof status === 'number' && status >= 400 && status < 600) {
+      const code = (err as { code?: string }).code || 'ERROR';
+      const msg = (err as { message?: string }).message || 'An error occurred';
+      return new AppError(code, status, msg, { cause: err });
+    }
   }
   return new AppError('INTERNAL_ERROR', 500, 'An unexpected error occurred', { cause: err });
 }

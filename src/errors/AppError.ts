@@ -3,12 +3,17 @@ export class AppError extends Error {
   readonly status: number;
   readonly publicMessage: string;
   readonly internal?: Record<string, unknown>;
+  readonly details?: Array<{ path: string; code: string }>;
 
   constructor(
     code: string,
     status: number,
     publicMessage: string,
-    opts: { internal?: Record<string, unknown>; cause?: unknown } = {}
+    opts: {
+      internal?: Record<string, unknown>;
+      cause?: unknown;
+      details?: Array<{ path: string; code: string }>;
+    } = {}
   ) {
     super(`${code}: ${publicMessage}`, { cause: opts.cause });
     this.name = 'AppError';
@@ -16,6 +21,7 @@ export class AppError extends Error {
     this.status = status;
     this.publicMessage = publicMessage;
     this.internal = opts.internal;
+    this.details = opts.details;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 

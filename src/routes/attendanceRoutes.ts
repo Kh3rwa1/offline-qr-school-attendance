@@ -1,8 +1,8 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { requireTenant } from '../middleware/tenantMiddleware';
-import { validateRequest, commonSchemas } from '../middleware/validate';
+import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { tenantRoute } from '../http/tenantRoute';
+import { AppError } from '../errors/AppError';
 import {
   getTeacherAssignedClasses,
   createAttendanceSession,
@@ -15,168 +15,119 @@ import {
   SessionStatus,
   AttendanceStatus,
 } from '../services/attendanceService';
-import { db } from '../db';
 import { attendanceSessions, classSections } from '../db/schema';
 import { eq, and, inArray, sql, desc } from 'drizzle-orm';
+import { encodeCursor, decodeCursor } from '../services/paginationHelper';
+import {
+  CreateAttendanceSessionBody,
+  UpdateAttendanceSessionStatusBody,
+  ProcessAttendanceScanBody,
+  AttendanceStatusEnum,
+  Uuid,
+} from './schemas/attendance';
 
 const router = Router({ mergeParams: true });
-
-const createSessionSchema = z.object({
-  classSectionId: commonSchemas.uuid,
-  sessionDate: commonSchemas.isoDate,
-  sessionType: commonSchemas.sessionType.optional().default('DAILY'),
-  teacherId: commonSchemas.uuid.optional(),
-});
-
-const updateStatusSchema = z.object({
-  newStatus: commonSchemas.sessionStatus.optional(),
-  status: commonSchemas.sessionStatus.optional(),
-  reason: z.string().optional(),
-  autoMarkAbsentForUnmarked: z.boolean().optional(),
-});
-
-const scanSchema = z.object({
-  clientEventId: z.string().min(1, 'MISSING_CLIENT_EVENT_ID'),
-  rawToken: z.string().optional(),
-  studentId: commonSchemas.uuid.optional(),
-  statusValue: commonSchemas.attendanceStatus.optional().default('PRESENT'),
-  clientTimestamp: commonSchemas.isoTimestamp.optional(),
-  deviceId: commonSchemas.uuid.optional(),
-  source: commonSchemas.scanSource.optional().default('CAMERA'),
-  metadata: z.record(z.string(), z.any()).optional(),
-});
+router.use(requireAuth);
 
 // 1. Get Assigned Classes for Teacher / Admin
 router.get(
   '/classes',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const user = req.user!;
-      const userRole = req.userRole!;
-
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    handler: async ({ schoolId, user, req }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
       const assignedClasses = await getTeacherAssignedClasses({
         schoolId,
         teacherId: user.id,
         userRole,
       });
-
-      res.json({ success: true, data: assignedClasses });
-    } catch (error: any) {
-      console.error('Error fetching assigned classes:', error);
-      res.status(500).json({
-        success: false,
-        error: 'FAILED_TO_FETCH_CLASSES',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch assigned classes' : error.message,
-      });
-    }
-  }
+      return { status: 200, data: assignedClasses };
+    },
+  })
 );
 
 // 1b. Get Today Gate Attendance (Teacher-safe Gate Ingest Overview & Poll)
 router.get(
   '/today-gate',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const user = req.user!;
-      const userRole = req.userRole!;
-      const classSectionId = req.query.classSectionId as string | undefined;
-
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    query: z.object({ classSectionId: Uuid.optional() }).strict(),
+    handler: async ({ schoolId, user, query, req }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
       const result = await getTodayGateAttendance({
         schoolId,
-        classSectionId,
+        classSectionId: query.classSectionId,
         actorId: user.id,
         userRole,
       });
-
-      res.json({ success: true, ...result });
-    } catch (error: any) {
-      console.error('Error fetching today gate attendance:', error);
-      res.status(500).json({
-        success: false,
-        error: 'FAILED_TO_FETCH_TODAY_GATE',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch gate attendance' : error.message,
-      });
-    }
-  }
+      return { status: 200, body: { success: true, ...result } };
+    },
+  })
 );
 
 // 2. Create Attendance Session
 router.post(
   '/sessions',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const user = req.user!;
-      const userRole = req.userRole!;
-      const { classSectionId, sessionDate, sessionType } = req.body;
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'],
+    body: CreateAttendanceSessionBody,
+    handler: async ({ schoolId, user, body, req }) => {
+      try {
+        const userRole = (req as AuthenticatedRequest).userRole!;
+        const sessionResult = await createAttendanceSession({
+          schoolId,
+          classSectionId: body.classSectionId,
+          teacherId: body.teacherId || user.id,
+          sessionDate: body.sessionDate,
+          sessionType: body.sessionType || 'DAILY',
+          actorId: user.id,
+          userRole,
+        });
 
-      if (!classSectionId || !sessionDate) {
-        res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS' });
-        return;
+        return {
+          status: 201,
+          body: {
+            success: true,
+            data: sessionResult.session || sessionResult,
+            session: sessionResult.session,
+            details: sessionResult,
+          },
+        };
+      } catch (error: any) {
+        if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
+          throw new AppError('UNAUTHORIZED_TEACHER_NOT_ASSIGNED', 403, 'Teacher is not assigned to this class section');
+        }
+        throw error;
       }
-
-      const sessionResult = await createAttendanceSession({
-        schoolId,
-        classSectionId,
-        teacherId: user.id,
-        sessionDate,
-        sessionType: sessionType || 'DAILY',
-        actorId: user.id,
-        userRole,
-      });
-
-      res.status(201).json({
-        success: true,
-        data: sessionResult.session || sessionResult,
-        session: sessionResult.session,
-        details: sessionResult,
-      });
-    } catch (error: any) {
-      console.error('Error creating attendance session:', error);
-      if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
-        res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
-        return;
-      }
-      res.status(500).json({
-        success: false,
-        error: 'FAILED_TO_CREATE_SESSION',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to create session' : error.message,
-      });
-    }
-  }
+    },
+  })
 );
-
-import { encodeCursor, decodeCursor, parseLimit } from '../services/paginationHelper';
 
 // 3. List Attendance Sessions (Deterministic Cursor Pagination)
 router.get(
   '/sessions',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const user = req.user!;
-      const userRole = req.userRole!;
-      const { classSectionId, sessionDate, cursor } = req.query;
-      const limit = parseLimit(req.query.limit as string | undefined, 50, 200);
-      const decoded = decodeCursor(cursor as string);
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    query: z
+      .object({
+        classSectionId: Uuid.optional(),
+        sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        cursor: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        page: z.coerce.number().int().min(1).max(10000).optional(),
+      })
+      .strict(),
+    handler: async ({ schoolId, user, query, req, tx }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
+      const { classSectionId, sessionDate, cursor, limit, page } = query;
+      const decoded = decodeCursor(cursor);
 
       const conditions: any[] = [eq(attendanceSessions.schoolId, schoolId)];
-      if (classSectionId) {
-        conditions.push(eq(attendanceSessions.classSectionId, classSectionId as string));
-      }
-      if (sessionDate) {
-        conditions.push(eq(attendanceSessions.sessionDate, sessionDate as string));
-      }
+      if (classSectionId) conditions.push(eq(attendanceSessions.classSectionId, classSectionId));
+      if (sessionDate) conditions.push(eq(attendanceSessions.sessionDate, sessionDate));
 
       if (decoded) {
         const cursorDate = decoded.timestamp || '';
@@ -188,20 +139,18 @@ router.get(
       if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(userRole)) {
         const assigned = await getTeacherAssignedClasses({ schoolId, teacherId: user.id, userRole });
         const assignedIds = assigned.map((c: { classSectionId: string }) => c.classSectionId);
-        if (classSectionId && !assignedIds.includes(classSectionId as string)) {
-          res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
-          return;
+        if (classSectionId && !assignedIds.includes(classSectionId)) {
+          throw new AppError('UNAUTHORIZED_TEACHER_NOT_ASSIGNED', 403, 'Teacher is not assigned to this class section');
         }
         if (!classSectionId) {
           if (assignedIds.length === 0) {
-            res.json({ success: true, data: [], nextCursor: null, hasMore: false, limit });
-            return;
+            return { status: 200, body: { success: true, data: [], nextCursor: null, hasMore: false, limit } };
           }
           conditions.push(inArray(attendanceSessions.classSectionId, assignedIds));
         }
       }
 
-      const query = db
+      const q = tx
         .select({
           id: attendanceSessions.id,
           schoolId: attendanceSessions.schoolId,
@@ -220,285 +169,212 @@ router.get(
         .orderBy(desc(attendanceSessions.sessionDate), desc(attendanceSessions.id))
         .limit(limit + 1);
 
-      if (!decoded && req.query.page && Number(req.query.page) > 1) {
-        query.offset((Number(req.query.page) - 1) * limit);
+      if (!decoded && page && page > 1) {
+        q.offset((page - 1) * limit);
       }
 
-      const rows = await query;
+      const rows = await q;
       const hasMore = rows.length > limit;
       const sessions = hasMore ? rows.slice(0, limit) : rows;
 
       let nextCursor: string | null = null;
       if (hasMore && sessions.length > 0) {
         const last = sessions[sessions.length - 1];
-        nextCursor = encodeCursor({
-          id: last.id,
-          timestamp: last.sessionDate,
-        });
+        nextCursor = encodeCursor({ id: last.id, timestamp: last.sessionDate });
       }
 
-      res.json({
-        success: true,
-        data: sessions,
-        sessions,
-        nextCursor,
-        hasMore,
-        limit,
-      });
-    } catch (error: any) {
-      if (error.message === 'INVALID_PAGINATION_CURSOR') {
-        res.status(400).json({ success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
-        return;
-      }
-      console.error('Error listing attendance sessions:', error);
-      res.status(500).json({
-        success: false,
-        error: 'FAILED_TO_LIST_SESSIONS',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to list sessions' : error.message,
-      });
-    }
-  }
+      return {
+        status: 200,
+        body: {
+          success: true,
+          data: sessions,
+          sessions,
+          nextCursor,
+          hasMore,
+          limit,
+        },
+      };
+    },
+  })
 );
 
 // 4. Get Attendance Session Details (with Roster Snapshot & Records)
 router.get(
   '/sessions/:sessionId',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const user = req.user!;
-      const userRole = req.userRole!;
-      const { sessionId } = req.params;
-
-      const details = await getAttendanceSessionDetails(schoolId, sessionId, user.id, userRole);
-      if (!details) {
-        res.status(404).json({ success: false, error: 'SESSION_NOT_FOUND' });
-        return;
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    params: z.object({ sessionId: Uuid }),
+    handler: async ({ schoolId, user, params, req }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
+      try {
+        const details = await getAttendanceSessionDetails(schoolId, params.sessionId, user.id, userRole);
+        if (!details) {
+          throw new AppError('SESSION_NOT_FOUND', 404, 'Session not found');
+        }
+        return { status: 200, data: details };
+      } catch (error: any) {
+        if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
+          throw new AppError('UNAUTHORIZED_TEACHER_NOT_ASSIGNED', 403, 'Teacher is not assigned to this class section');
+        }
+        throw error;
       }
-
-      res.json({ success: true, data: details });
-    } catch (error: any) {
-      console.error('Error fetching session details:', error);
-      if (error.message === 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED') {
-        res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
-        return;
-      }
-      res.status(500).json({
-        success: false,
-        error: 'FAILED_TO_FETCH_SESSION',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch session' : error.message,
-      });
-    }
-  }
+    },
+  })
 );
 
 // 5. Update Attendance Session Status (State Machine)
 router.patch(
   '/sessions/:sessionId/status',
-  requireAuth,
-  requireTenant,
-  validateRequest({
-    params: z.object({
-      schoolId: commonSchemas.uuid,
-      sessionId: commonSchemas.uuid,
-    }),
-    body: updateStatusSchema,
-  }),
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const { sessionId } = req.params;
-      const user = req.user!;
-      const userRole = req.userRole!;
-      const { newStatus, status, reason, autoMarkAbsentForUnmarked } = req.body;
-      const targetStatus = newStatus || status;
-
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'],
+    params: z.object({ sessionId: Uuid }),
+    body: UpdateAttendanceSessionStatusBody,
+    handler: async ({ schoolId, user, params, body, req }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
+      const targetStatus = body.newStatus || body.status;
       if (!targetStatus) {
-        res.status(400).json({ success: false, error: 'MISSING_STATUS_PARAMETER' });
-        return;
+        throw new AppError('MISSING_STATUS_PARAMETER', 400, 'Status or newStatus is required');
       }
-
-      const updated = await updateSessionStatus({
-        schoolId,
-        sessionId,
-        actorId: user.id,
-        userRole,
-        newStatus: targetStatus as SessionStatus,
-        reason,
-        autoMarkAbsentForUnmarked: !!autoMarkAbsentForUnmarked,
-      });
-
-      res.json({ success: true, data: updated });
-    } catch (error: any) {
-      console.error('Error updating session status:', error);
-      const statusMap: Record<string, number> = {
-        FINALIZED_SESSION_LOCKED: 400,
-        REOPEN_REQUIRES_ADMIN_ROLE: 403,
-        REOPEN_REASON_REQUIRED: 400,
-        SESSION_NOT_FOUND: 404,
-      };
-
-      const status = statusMap[error.message] || 500;
-      const isKnown = Boolean(statusMap[error.message]);
-      res.status(status).json({
-        success: false,
-        error: isKnown ? error.message : 'FAILED_TO_UPDATE_SESSION_STATUS',
-        message: !isKnown ? (process.env.NODE_ENV === 'production' ? 'Failed to update session status' : error.message) : undefined,
-      });
-    }
-  }
+      try {
+        const updated = await updateSessionStatus({
+          schoolId,
+          sessionId: params.sessionId,
+          actorId: user.id,
+          userRole,
+          newStatus: targetStatus as SessionStatus,
+          reason: body.reason,
+          autoMarkAbsentForUnmarked: !!body.autoMarkAbsentForUnmarked,
+        });
+        return { status: 200, data: updated };
+      } catch (error: any) {
+        const statusMap: Record<string, { status: number; message: string }> = {
+          FINALIZED_SESSION_LOCKED: { status: 400, message: 'Session is finalized and locked' },
+          REOPEN_REQUIRES_ADMIN_ROLE: { status: 403, message: 'Only administrators can reopen a finalized session' },
+          REOPEN_REASON_REQUIRED: { status: 400, message: 'Reason is required to reopen session' },
+          SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
+        };
+        const mapped = statusMap[error.message];
+        if (mapped) {
+          throw new AppError(error.message, mapped.status, mapped.message);
+        }
+        throw error;
+      }
+    },
+  })
 );
 
 // 6. Process Scan Event (Shared processQRCode endpoint for Camera QR and USB Keyboard-wedge Scanner)
 router.post(
   '/sessions/:sessionId/scan',
-  requireAuth,
-  requireTenant,
-  validateRequest({
-    params: z.object({
-      schoolId: commonSchemas.uuid,
-      sessionId: commonSchemas.uuid,
-    }),
-    body: scanSchema,
-  }) as any,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const { sessionId } = req.params;
-      const user = req.user!;
-      const {
-        clientEventId,
-        rawToken,
-        studentId,
-        statusValue,
-        clientTimestamp,
-        deviceId,
-        source,
-        metadata,
-      } = req.body;
-
-      const result = await processQRCode({
-        schoolId,
-        sessionId,
-        actorId: user.id,
-        userRole: req.userRole!,
-        clientEventId,
-        rawToken,
-        studentId,
-        statusValue: statusValue as AttendanceStatus,
-        clientTimestamp: clientTimestamp || new Date().toISOString(),
-        deviceId,
-        source,
-        metadata,
-      });
-
-      res.json({ success: true, data: result });
-    } catch (error: any) {
-      console.error('Error processing scan event:', error);
-      const statusMap: Record<string, number> = {
-        WRONG_SCHOOL_QR: 403,
-        REVOKED_QR_TOKEN: 400,
-        INVALID_QR_TOKEN: 400,
-        STUDENT_NOT_IN_ROSTER: 404,
-        FINALIZED_SESSION_LOCKED: 400,
-        SESSION_NOT_FOUND: 404,
-      };
-
-      const status = statusMap[error.message] || 500;
-      const isKnown = Boolean(statusMap[error.message]);
-      res.status(status).json({
-        success: false,
-        error: isKnown ? error.message : 'FAILED_TO_PROCESS_SCAN',
-        message: !isKnown ? (process.env.NODE_ENV === 'production' ? 'Failed to process scan' : error.message) : undefined,
-      });
-    }
-  }
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'],
+    params: z.object({ sessionId: Uuid }),
+    body: ProcessAttendanceScanBody,
+    handler: async ({ schoolId, user, params, body, req }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
+      try {
+        const result = await processQRCode({
+          schoolId,
+          sessionId: params.sessionId,
+          actorId: user.id,
+          userRole,
+          clientEventId: body.clientEventId,
+          rawToken: body.rawToken,
+          studentId: body.studentId,
+          statusValue: body.statusValue as AttendanceStatus,
+          clientTimestamp: body.clientTimestamp || new Date().toISOString(),
+          deviceId: body.deviceId,
+          source: body.source,
+          metadata: body.metadata,
+        });
+        return { status: 200, data: result };
+      } catch (error: any) {
+        const statusMap: Record<string, { status: number; message: string }> = {
+          WRONG_SCHOOL_QR: { status: 403, message: 'QR belongs to a different school' },
+          REVOKED_QR_TOKEN: { status: 400, message: 'QR token is revoked' },
+          INVALID_QR_TOKEN: { status: 400, message: 'Invalid QR token' },
+          STUDENT_NOT_IN_ROSTER: { status: 404, message: 'Student is not in the session roster' },
+          FINALIZED_SESSION_LOCKED: { status: 400, message: 'Session is finalized and locked' },
+          SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
+        };
+        const mapped = statusMap[error.message];
+        if (mapped) {
+          throw new AppError(error.message, mapped.status, mapped.message);
+        }
+        throw error;
+      }
+    },
+  })
 );
 
 // 7. Manual Attendance Status Control & Correction
 router.post(
   '/sessions/:sessionId/manual',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const { sessionId } = req.params;
-      const user = req.user!;
-      const userRole = req.userRole!;
-      const { recordId, studentId, newStatus, reason, clientEventId } = req.body;
-
-      if (!newStatus || (!recordId && !studentId)) {
-        res.status(400).json({ success: false, error: 'MISSING_REQUIRED_PARAMETERS' });
-        return;
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'],
+    params: z.object({ sessionId: Uuid }),
+    body: z
+      .object({
+        recordId: Uuid.optional(),
+        studentId: Uuid.optional(),
+        newStatus: AttendanceStatusEnum,
+        reason: z.string().trim().max(500).optional(),
+        clientEventId: z.string().trim().optional(),
+      })
+      .strict(),
+    handler: async ({ schoolId, user, params, body, req }) => {
+      const userRole = (req as AuthenticatedRequest).userRole!;
+      if (!body.recordId && !body.studentId) {
+        throw new AppError('MISSING_REQUIRED_PARAMETERS', 400, 'Either recordId or studentId is required');
       }
-
-      const updatedRecord = await manualStatusUpdate({
-        schoolId,
-        sessionId,
-        recordId,
-        studentId,
-        newStatus: newStatus as AttendanceStatus,
-        reason,
-        actorId: user.id,
-        userRole,
-        clientEventId,
-      });
-
-      res.json({ success: true, data: updatedRecord });
-    } catch (error: any) {
-      console.error('Error manually updating attendance:', error);
-      const statusMap: Record<string, number> = {
-        FINALIZED_SESSION_LOCKED: 400,
-        CORRECTION_REASON_REQUIRED: 400,
-        ATTENDANCE_RECORD_NOT_FOUND: 404,
-        SESSION_NOT_FOUND: 404,
-      };
-
-      const status = statusMap[error.message] || 500;
-      const isKnown = Boolean(statusMap[error.message]);
-      res.status(status).json({
-        success: false,
-        error: isKnown ? error.message : 'FAILED_TO_UPDATE_ATTENDANCE',
-        message: !isKnown ? (process.env.NODE_ENV === 'production' ? 'Failed to update attendance' : error.message) : undefined,
-      });
-    }
-  }
+      try {
+        const updatedRecord = await manualStatusUpdate({
+          schoolId,
+          sessionId: params.sessionId,
+          recordId: body.recordId,
+          studentId: body.studentId,
+          newStatus: body.newStatus as AttendanceStatus,
+          reason: body.reason,
+          actorId: user.id,
+          userRole,
+          clientEventId: body.clientEventId,
+        });
+        return { status: 200, data: updatedRecord };
+      } catch (error: any) {
+        const statusMap: Record<string, { status: number; message: string }> = {
+          FINALIZED_SESSION_LOCKED: { status: 400, message: 'Session is finalized and locked' },
+          CORRECTION_REASON_REQUIRED: { status: 400, message: 'Correction reason is required' },
+          ATTENDANCE_RECORD_NOT_FOUND: { status: 404, message: 'Attendance record not found' },
+          SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
+        };
+        const mapped = statusMap[error.message];
+        if (mapped) {
+          throw new AppError(error.message, mapped.status, mapped.message);
+        }
+        throw error;
+      }
+    },
+  })
 );
 
 // 8. Daily Class Attendance Report
 router.get(
   '/reports/daily',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const { classSectionId, sessionDate } = req.query;
-
-      if (!classSectionId || !sessionDate) {
-        res.status(400).json({ success: false, error: 'MISSING_QUERY_PARAMETERS' });
-        return;
-      }
-
-      const report = await getDailyClassReport(
-        schoolId,
-        classSectionId as string,
-        sessionDate as string
-      );
-
-      res.json({ success: true, data: report });
-    } catch (error: any) {
-      console.error('Error generating daily class report:', error);
-      res.status(500).json({
-        success: false,
-        error: 'FAILED_TO_GENERATE_REPORT',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to generate report' : error.message,
-      });
-    }
-  }
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    query: z
+      .object({
+        classSectionId: Uuid,
+        sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .strict(),
+    handler: async ({ schoolId, query }) => {
+      const report = await getDailyClassReport(schoolId, query.classSectionId, query.sessionDate);
+      return { status: 200, data: report };
+    },
+  })
 );
 
 export default router;

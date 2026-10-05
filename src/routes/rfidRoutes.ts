@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { tenantHandler } from '../middleware/tenantHandler';
+import { tenantRoute } from '../http/tenantRoute';
 import { readerAuthMiddleware, ReaderAuthenticatedRequest } from '../middleware/readerAuthMiddleware';
 import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
@@ -122,8 +122,9 @@ rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll-epc',
   rateLimitPolicies.rfidEnrollment,
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { studentId, epc, tid, expiresAt } = req.body;
       if (!studentId || !epc) {
@@ -167,6 +168,7 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
@@ -174,8 +176,9 @@ rfidRouter.post(
   '/:schoolId/rfid/credentials/enroll',
   rateLimitPolicies.rfidEnrollment,
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { studentId, credentialDigest, securityMode, keyVersion, expiresAt } = req.body;
       const credential = await credentialService.enrollCredential({
@@ -191,6 +194,7 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
@@ -199,8 +203,10 @@ import { encodeCursor, decodeCursor, parseLimit } from '../services/paginationHe
 rfidRouter.get(
   '/:schoolId/rfid/credentials',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const studentId = req.query.studentId as string;
       if (studentId) {
@@ -226,14 +232,17 @@ rfidRouter.get(
       }
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/credentials/:credentialId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const credential = await credentialService.getCredentialById(req.params.credentialId, schoolId);
       if (!credential) return { status: 404, body: { success: false, error: 'Credential not found' } };
@@ -241,14 +250,16 @@ rfidRouter.get(
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/activate',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const credential = await credentialService.activateCredential(
         req.params.credentialId,
@@ -259,14 +270,16 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/suspend',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { reason } = req.body;
       const credential = await credentialService.suspendCredential(
@@ -279,14 +292,16 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/reactivate',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { reason } = req.body || {};
       const credential = await credentialService.reactivateCredential(
@@ -300,14 +315,16 @@ rfidRouter.post(
       const statusCode = error.statusCode || 400;
       return { status: statusCode, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/revoke',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { reason } = req.body;
       const credential = await credentialService.revokeCredential(
@@ -320,14 +337,16 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/:credentialId/replace',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { newCredentialDigest, securityMode, keyVersion } = req.body;
       const credential = await credentialService.replaceCredential({
@@ -342,14 +361,16 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/credentials/bulk-enroll',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const { entries } = req.body;
       const results = await credentialService.bulkEnroll({
@@ -361,20 +382,24 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/credentials/student/:studentId/history',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const credentials = await credentialService.getCredentialHistory(schoolId, req.params.studentId);
       return { status: 200, body: { success: true, credentials } };
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );
 
@@ -384,8 +409,9 @@ rfidRouter.get(
 rfidRouter.post(
   '/:schoolId/rfid/readers/register',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.registerReader({
         schoolId,
@@ -404,14 +430,17 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/readers',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const readers = await readerService.listReaders(schoolId, {
         status: req.query.status as any,
@@ -420,14 +449,17 @@ rfidRouter.get(
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const reader = await readerService.getReaderById(req.params.readerId, schoolId);
       if (!reader) return { status: 404, body: { success: false, error: 'Reader not found' } };
@@ -435,28 +467,32 @@ rfidRouter.get(
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/approve',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.approveReader(req.params.readerId, schoolId, user.id);
       return { status: 200, body: { success: true, reader } };
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/suspend',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.suspendReader(
         req.params.readerId,
@@ -468,14 +504,16 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/revoke',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const reader = await readerService.revokeReader(
         req.params.readerId,
@@ -487,34 +525,40 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.patch(
   '/:schoolId/rfid/readers/:readerId',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId }) => {
     try {
       const reader = await readerService.updateReaderConfig(req.params.readerId, schoolId, req.body);
       return { status: 200, body: { success: true, reader } };
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/readers/:readerId/health',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
       return { status: 200, body: { success: true, health } };
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );
 
@@ -596,7 +640,10 @@ rfidRouter.get(
 rfidRouter.get(
   '/:schoolId/rfid/reports/scans',
   requireAuth,
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const limit = parseLimit(req.query.limit as string, 50, 200);
       const cursor = req.query.cursor as string | undefined;
@@ -682,28 +729,32 @@ rfidRouter.get(
       }
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/provision',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR']),
-  tenantHandler(async ({ req, schoolId, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
+    handler: async ({ req, schoolId, user }) => {
     try {
       const provisioning = await readerService.provisionReader(req.params.readerId, schoolId, user.id);
       return { status: 200, body: { success: true, provisioning } };
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+      },
   })
 );
 
 rfidRouter.post(
   '/:schoolId/rfid/readers/:readerId/rotate-token',
   requireAuth,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  tenantHandler(async ({ schoolId, req, user }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    handler: async ({ schoolId, req, user }) => {
     const { readerId } = req.params;
     const { token, hash, hint } = generateReaderToken();
     const updated = await withTenantContext(schoolId, (tx) =>
@@ -739,26 +790,34 @@ rfidRouter.post(
           'Copy this token into the Zebra IoT Connector now. It will not be shown again. The previous token is revoked immediately.',
       },
     };
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/reports/readers',
   requireAuth,
-  tenantHandler(async ({ schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    handler: async ({ schoolId }) => {
     try {
       const readers = await readerService.listReaders(schoolId);
       return { status: 200, body: { success: true, report: readers } };
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/reports/rejections',
   requireAuth,
-  tenantHandler(async ({ req, schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    handler: async ({ req, schoolId }) => {
     try {
       const limit = parseLimit(req.query.limit as string, 50, 200);
       const cursor = req.query.cursor as string | undefined;
@@ -812,13 +871,17 @@ rfidRouter.get(
       }
       return internalError(error);
     }
+      },
   })
 );
 
 rfidRouter.get(
   '/:schoolId/rfid/reports/summary',
   requireAuth,
-  tenantHandler(async ({ schoolId }) => {
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    handler: async ({ schoolId }) => {
     try {
       return await withTenantContext(schoolId, async (tx) => {
         const scans = await tx
@@ -887,5 +950,6 @@ rfidRouter.get(
     } catch (error: any) {
       return internalError(error);
     }
+      },
   })
 );

@@ -14,6 +14,8 @@ import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
 import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
 import type { RawBodyRequest } from '../middleware/bodyParsers';
+import { AppError, toAppError } from '../errors/AppError';
+import { logError } from '../errors/logError';
 
 export const rfidRouter = Router();
 
@@ -30,35 +32,24 @@ rfidRouter.post(
   rateLimitPolicies.rfidScan,
   async (req: any, res: Response) => {
     try {
-      const schoolId = req.params.schoolId;
       const rawBody = (req as RawBodyRequest).rawBody;
-      if (!rawBody) {
-        return res.status(400).json({ success: false, error: 'MALFORMED_BODY', message: 'Request body required' });
-      }
-      const parsedBody = req.body || {};
-      const headers = req.headers || {};
-
+      if (!rawBody) throw new AppError('MALFORMED_BODY', 400, 'Request body required');
       const result = await processZebraIotWebhook({
-        schoolId,
+        schoolId: req.params.schoolId,
         rawBody,
-        parsedBody,
-        headers,
+        parsedBody: req.body,
+        headers: req.headers,
       });
-
       return res.status(200).json(result);
-    } catch (error: any) {
-      const errMsg = error.message || 'ZEBRA_INGEST_FAILED';
-      if (errMsg.includes('UNAUTHORIZED_READER')) {
-        return res.status(401).json({ success: false, error: 'UNAUTHORIZED_READER', message: errMsg });
-      }
-      if (errMsg.includes('FORBIDDEN_READER')) {
-        return res.status(403).json({ success: false, error: 'FORBIDDEN_READER', message: errMsg });
-      }
-      if (errMsg.includes('CONFIG_ERROR')) {
-        return res.status(500).json({ success: false, error: 'CONFIG_ERROR', message: errMsg });
-      }
-      console.error('Zebra IoT Connector webhook error:', error);
-      return res.status(500).json({ success: false, error: 'ZEBRA_INGEST_ERROR', message: errMsg });
+    } catch (err) {
+      const e = toAppError(err);
+      logError(req as any, e);
+      return res.status(e.status).json({
+        success: false,
+        error: e.code,
+        message: e.publicMessage,
+        requestId: (req as any).id,
+      });
     }
   }
 );

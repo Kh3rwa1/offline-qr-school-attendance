@@ -27,6 +27,7 @@ import {
 import { decryptReaderSecret } from './readerService';
 import { getRedisClient } from '../redisService';
 import { LIMITS } from '../../middleware/bodyParsers';
+import { AppError, readerAuthFailed } from '../../errors/AppError';
 
 export const MAX_PAYLOAD_BYTES = LIMITS.zebraWebhook; // one source of truth
 export const MAX_BATCH_READS = 250;
@@ -167,12 +168,14 @@ export async function processZebraIotWebhook(params: {
   const readerSearchKey = headerReaderId || readerIdentifier;
 
   if (!readerSearchKey) {
-    throw new Error('UNAUTHORIZED_READER: Missing reader identification in headers or payload');
+    throw readerAuthFailed({ reason: 'missing_reader_identification', schoolId });
   }
 
   // Enforce batch size limit
   if (reads.length > MAX_BATCH_READS) {
-    throw new Error(`OVERSIZED_BATCH: Batch contains ${reads.length} reads, maximum permitted is ${MAX_BATCH_READS}`);
+    throw new AppError('BATCH_TOO_LARGE', 413, 'Too many reads in one batch', {
+      internal: { count: reads.length, max: MAX_BATCH_READS },
+    });
   }
 
   // 3. Query Reader and School Timezone from Database with Tenant Isolation
@@ -206,11 +209,7 @@ export async function processZebraIotWebhook(params: {
   });
 
   if (!reader) {
-    throw new Error(`UNAUTHORIZED_READER: Reader '${readerSearchKey}' not registered to school '${schoolId}'`);
-  }
-
-  if (reader.status !== 'ACTIVE') {
-    throw new Error(`FORBIDDEN_READER: Reader status is '${reader.status}'`);
+    throw readerAuthFailed({ reason: 'reader_not_found', readerSearchKey, schoolId });
   }
 
   // 4. Authenticate Reader (Strict per-reader fail-closed HMAC Signature or Bearer Token)
@@ -219,7 +218,9 @@ export async function processZebraIotWebhook(params: {
     : null;
 
   if (!readerSecret && !reader.bearerTokenDigest) {
-    throw new Error('CONFIG_ERROR: Reader has no provisioned shared secret or bearer token digest (fail-closed)');
+    throw new AppError('READER_NOT_CONFIGURED', 503, 'Reader integration unavailable', {
+      internal: { reason: 'no_secret_or_token', readerId: reader.id },
+    });
   }
 
   const signatureHeader =
@@ -244,7 +245,13 @@ export async function processZebraIotWebhook(params: {
   }
 
   if (!isAuthValid) {
-    throw new Error('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
+    throw readerAuthFailed({ reason: 'invalid_credentials', readerId: reader.id, schoolId });
+  }
+
+  if (reader.status !== 'ACTIVE') {
+    throw new AppError('FORBIDDEN_READER', 403, 'Reader is not permitted', {
+      internal: { readerId: reader.id, status: reader.status },
+    });
   }
 
   // 5. Update Reader Heartbeat / Last Seen

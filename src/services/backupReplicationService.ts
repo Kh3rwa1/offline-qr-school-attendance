@@ -577,7 +577,7 @@ export class CloudflareR2ReplicationService {
       throw new Error(`BACKUP_FILE_NOT_FOUND: ${backupFilePath}`);
     }
 
-    const manifestFilePath = backupFilePath.replace(/\.sql\.gz\.enc$/, '.manifest.json');
+    const manifestFilePath = backupFilePath.replace(/\.(sql\.gz\.enc|dump\.age)$/, '.manifest.json');
     if (!fs.existsSync(manifestFilePath)) {
       throw new Error(`MANIFEST_FILE_NOT_FOUND: ${manifestFilePath}`);
     }
@@ -595,7 +595,7 @@ export class CloudflareR2ReplicationService {
     }
 
     const deploymentId = manifestJson.deploymentId || 'default-deployment';
-    const backupId = manifestJson.backupId || path.basename(backupFilePath, '.sql.gz.enc');
+    const backupId = manifestJson.backupId || path.basename(backupFilePath).replace(/\.(sql\.gz\.enc|dump\.age)$/, '');
     const now = new Date();
     const year = String(now.getUTCFullYear());
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -641,6 +641,19 @@ export class CloudflareR2ReplicationService {
         type: 'checksum',
       });
 
+      // 3.5. Upload Signature File if present (.sig)
+      const sigFilePath = `${manifestFilePath}.sig`;
+      let remoteSigKey: string | undefined;
+      if (fs.existsSync(sigFilePath)) {
+        const sigBytes = fs.readFileSync(sigFilePath);
+        const sigFileName = path.basename(sigFilePath);
+        remoteSigKey = `${basePath}/${sigFileName}`;
+        await this.putObject(remoteSigKey, sigBytes, 'text/plain', {
+          backupId,
+          type: 'signature',
+        });
+      }
+
       // 4. MANDATORY REMOTE VERIFICATION (HEAD Request)
       console.log(`[CloudflareR2] Performing post-upload remote HEAD verification on r2://${this.config.bucket}/${remoteBackupKey}...`);
       const headResult = await this.headObject(remoteBackupKey);
@@ -665,6 +678,7 @@ export class CloudflareR2ReplicationService {
         backup: remoteBackupKey,
         manifest: remoteManifestKey,
         checksum: remoteChecksumKey,
+        ...(remoteSigKey ? { signature: remoteSigKey } : {}),
       };
       manifestJson.remoteVerificationTimestamp = replicatedAt;
       fs.writeFileSync(manifestFilePath, JSON.stringify(manifestJson, null, 2));

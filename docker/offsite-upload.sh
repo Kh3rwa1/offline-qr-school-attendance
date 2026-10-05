@@ -234,9 +234,9 @@ fi
 log "verified ${REMOTE_SIZE} bytes off-site (sha256:$(printf '%s' "${LOCAL_SHA}" | cut -c1-12)...)"
 
 # ---------------------------------------------------------------------------
-# Replicate the sibling manifest too (best effort, never fatal)
+# Replicate the sibling manifest and signature too (best effort, never fatal)
 # ---------------------------------------------------------------------------
-MANIFEST_LOCAL="$(printf '%s' "${LOCAL_FILE}" | sed 's/\.sql\.gz\.enc$/.manifest.json/')"
+MANIFEST_LOCAL="$(printf '%s' "${LOCAL_FILE}" | sed -e 's/\.sql\.gz\.enc$/.manifest.json/' -e 's/\.dump\.age$/.manifest.json/')"
 if [ "${MANIFEST_LOCAL}" != "${LOCAL_FILE}" ] && [ -f "${MANIFEST_LOCAL}" ]; then
   MANIFEST_BASENAME="$(basename "${MANIFEST_LOCAL}")"
   if printf '%s' "${MANIFEST_BASENAME}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
@@ -250,6 +250,24 @@ if [ "${MANIFEST_LOCAL}" != "${LOCAL_FILE}" ] && [ -f "${MANIFEST_LOCAL}" ]; the
       log "manifest replicated: ${MANIFEST_BASENAME}"
     else
       log "warning: manifest replication failed (archive itself is safely off-site)"
+    fi
+  fi
+
+  SIG_LOCAL="${MANIFEST_LOCAL}.sig"
+  if [ -f "${SIG_LOCAL}" ]; then
+    SIG_BASENAME="$(basename "${SIG_LOCAL}")"
+    if printf '%s' "${SIG_BASENAME}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+      SIG_URI="$(printf '%s' "${CANONICAL_URI}" | sed "s|/${BASENAME}$|/${SIG_BASENAME}|")"
+      set +e
+      SIG_CODE="$(put_object "${SIG_LOCAL}" "${SIG_URI}")"
+      SIG_RC=$?
+      set -e
+      rm -f /tmp/offsite-put-body.txt
+      if [ "${SIG_RC}" -eq 0 ] && [ "${SIG_CODE}" = "200" ]; then
+        log "signature replicated: ${SIG_BASENAME}"
+      else
+        log "warning: signature replication failed"
+      fi
     fi
   fi
 fi

@@ -45,7 +45,7 @@ describe('Hardened SPA Fallback & Static Serving Test Suite', () => {
   });
 
   it('2. Returns 404 JSON for nested unknown API paths', async () => {
-    const res = await fetch(`${baseUrl}/api/v1/schools/fake-id/unknown-action`, {
+    const res = await fetch(`${baseUrl}/api/v1/schools/00000000-0000-4000-8000-000000000000/unknown-action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),

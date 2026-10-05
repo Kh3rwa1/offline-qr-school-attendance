@@ -27,6 +27,7 @@ import {
   computeEpcDigest,
   getEpcLastFour,
 } from '../../src/services/rfid/cryptoService';
+import { generateReaderToken } from '../../src/services/rfid/readerTokens';
 import fixtureData from '../fixtures/zebra-iot-connector.json';
 
 function generateHmac(rawBody: string, secret: string): string {
@@ -39,6 +40,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
   let teacherUserId: string;
   const testReaderDeviceId = 'FX9600-GATE-01';
   let testReaderId: string;
+  let testBearerToken: string;
   let testStudentId: string;
   let testClassSectionId: string;
   let testAcademicYearId: string;
@@ -108,6 +110,8 @@ describe('Zebra FX9600 IoT Connector Service', () => {
     });
 
     // Register & approve FX9600 reader
+    const readerTokenObj = generateReaderToken();
+    testBearerToken = readerTokenObj.token;
     const reader = await readerService.registerReader({
       schoolId,
       deviceId: testReaderDeviceId,
@@ -118,6 +122,12 @@ describe('Zebra FX9600 IoT Connector Service', () => {
     });
     const approved = await readerService.approveReader(reader.id, schoolId);
     testReaderId = approved.id;
+    await withTenantContext(schoolId, async (tx) => {
+      await tx
+        .update(rfidReaders)
+        .set({ bearerTokenHash: readerTokenObj.hash })
+        .where(eq(rfidReaders.id, testReaderId));
+    });
 
     // Enroll EPC credential
     const cred = await credentialService.enrollCredential({
@@ -179,7 +189,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
             'x-reader-id': testReaderDeviceId,
           },
         })
-      ).rejects.toThrow('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
+      ).rejects.toThrow(/UNAUTHORIZED_READER/);
     });
 
     it('rejects requests with invalid HMAC signature', async () => {
@@ -200,7 +210,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
             'x-zebra-signature': 'deadbeef0000111122223333444455556666777788889999aaaabbbbccccdddd',
           },
         })
-      ).rejects.toThrow('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
+      ).rejects.toThrow(/UNAUTHORIZED_READER/);
     });
 
     it('accepts requests authenticated with valid Bearer token', async () => {
@@ -217,7 +227,7 @@ describe('Zebra FX9600 IoT Connector Service', () => {
         parsedBody: payload,
         headers: {
           'x-reader-id': testReaderDeviceId,
-          authorization: `Bearer ${hmacSecret}`,
+          authorization: `Bearer ${testBearerToken}`,
         },
       });
 

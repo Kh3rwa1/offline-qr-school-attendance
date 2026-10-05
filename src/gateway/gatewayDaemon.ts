@@ -86,7 +86,9 @@ export class GatewayDaemon {
 
   async runDiagnostics(): Promise<GatewayDiagnosticResult> {
     const socketPath = process.env.PCSCD_SOCKET_PATH || '/var/run/pcscd/pcscd.comm';
-    const pcscSocketAvailable = fs.existsSync(socketPath) || process.platform === 'darwin';
+    const pcscSocketAvailable = process.env.PCSCD_SOCKET_PATH
+      ? fs.existsSync(process.env.PCSCD_SOCKET_PATH)
+      : (fs.existsSync(socketPath) || process.platform === 'darwin');
     const simulationMode = this.config.useSimulator === true;
     const health = await this.adapter.getHealth().catch(() => ({ connected: false }));
 

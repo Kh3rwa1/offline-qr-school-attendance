@@ -3,10 +3,15 @@ import type { Request, Response, NextFunction } from 'express';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function resolveSchoolId(req: Request, res: Response, next: NextFunction) {
-  const pathMatch = (req.originalUrl || req.url || '').match(/\/schools\/([^/?#]+)/i);
+  const url = req.originalUrl || req.url || '';
+  if (url.startsWith('/api/v1/public/') || url.startsWith('/readyz') || url.startsWith('/metrics')) {
+    return next();
+  }
+
+  const pathMatch = url.match(/\/schools\/([^/?#]+)/i);
   const pathId = req.params?.schoolId || pathMatch?.[1];
 
-  if (!pathId) return next(); // not a school-scoped route
+  if (!pathId || pathId === 'by-slug') return next(); // not a school-scoped route
 
   if (!UUID.test(pathId)) {
     return res.status(400).json({ success: false, error: 'INVALID_SCHOOL_ID' });

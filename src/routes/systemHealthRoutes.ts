@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Response } from 'express';
 import fs from 'node:fs';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
@@ -34,10 +35,10 @@ systemHealthRouter.get(
         ]);
         redisStatus = pingRes === 'PONG' ? 'CONNECTED' : 'IN_MEMORY_FALLBACK';
       } else {
-        redisStatus = process.env.ALLOW_IN_MEMORY_RATE_LIMITER === 'true' ? 'IN_MEMORY_FALLBACK' : 'DISCONNECTED';
+        redisStatus = env.ALLOW_IN_MEMORY_RATE_LIMITER === 'true' ? 'IN_MEMORY_FALLBACK' : 'DISCONNECTED';
       }
     } catch {
-      redisStatus = process.env.ALLOW_IN_MEMORY_RATE_LIMITER === 'true' ? 'IN_MEMORY_FALLBACK' : 'DISCONNECTED';
+      redisStatus = env.ALLOW_IN_MEMORY_RATE_LIMITER === 'true' ? 'IN_MEMORY_FALLBACK' : 'DISCONNECTED';
     }
 
     // 1. Latest backup timestamp & manifest metadata
@@ -46,7 +47,7 @@ systemHealthRouter.get(
     let backupChecksumSha256: string | null = null;
     let backupAgeSeconds: number | null = null;
 
-    const backupDir = process.env.BACKUP_DIR || (fs.existsSync('./backups') ? './backups' : '/backups');
+    const backupDir = env.BACKUP_DIR || (fs.existsSync('./backups') ? './backups' : '/backups');
     const backupLatestPath = `${backupDir}/LATEST`;
     const manifestLatestPath = `${backupDir}/LATEST_MANIFEST.json`;
 
@@ -65,8 +66,8 @@ systemHealthRouter.get(
     } catch {
       // Non-filesystem fallback
     }
-    if (!latestBackupTimestamp && process.env.LATEST_BACKUP_TIMESTAMP) {
-      latestBackupTimestamp = process.env.LATEST_BACKUP_TIMESTAMP;
+    if (!latestBackupTimestamp && env.LATEST_BACKUP_TIMESTAMP) {
+      latestBackupTimestamp = env.LATEST_BACKUP_TIMESTAMP;
     }
 
     if (latestBackupTimestamp) {
@@ -88,21 +89,21 @@ systemHealthRouter.get(
     }
 
     // 3. Migration journal version
-    const migrationJournalVersion = process.env.SCHEMA_VERSION || '0014_school_slug_tenancy';
+    const migrationJournalVersion = env.SCHEMA_VERSION || '0014_school_slug_tenancy';
 
     // 4. KMS Provider Mode (Never returns key material)
-    const kmsProviderMode = process.env.KMS_PROVIDER
-      ? process.env.KMS_PROVIDER
-      : process.env.KMS_MASTER_KEY
+    const kmsProviderMode = env.KMS_PROVIDER
+      ? env.KMS_PROVIDER
+      : env.KMS_MASTER_KEY
       ? 'LOCAL_AES_256_GCM'
       : 'LOCAL_SOFTWARE_DERIVED';
 
     // 5. RFID Card Proof Enforcement State
-    const rfidCardProofEnforced = process.env.STRICT_CARD_PROOF !== 'false';
+    const rfidCardProofEnforced = env.STRICT_CARD_PROOF !== 'false';
 
     // 6. Worker Heartbeat age in seconds (from heartbeat file or claimed notification jobs)
     let workerHeartbeatAgeSeconds: number | null = null;
-    const heartbeatPath = process.env.WORKER_HEARTBEAT_FILE || '/tmp/worker-heartbeat';
+    const heartbeatPath = env.WORKER_HEARTBEAT_FILE || '/tmp/worker-heartbeat';
     try {
       if (fs.existsSync(heartbeatPath)) {
         const stats = fs.statSync(heartbeatPath);
@@ -136,7 +137,7 @@ systemHealthRouter.get(
       if (backupAgeSeconds > 36 * 3600) {
         backupIsStale = true;
       }
-    } else if (process.env.NODE_ENV === 'production') {
+    } else if (env.NODE_ENV === 'production') {
       backupIsStale = true;
     }
 

@@ -1,6 +1,7 @@
+import { env } from '../../../env';
 import { getRedisClient } from '../../redisService';
 
-const TTL_SEC = Number(process.env.RFID_DEBOUNCE_SECONDS ?? 30);
+const TTL_SEC = Number(env.RFID_DEBOUNCE_SECONDS ?? 30);
 const key = (schoolId: string, digest: string) => `rfid:db:${schoolId}:${digest}`;
 
 /** Fail-open: if Redis is down, nothing is debounced and Postgres idempotency takes over. */

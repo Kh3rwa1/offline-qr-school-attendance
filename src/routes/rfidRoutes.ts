@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { tenantRoute } from '../http/tenantRoute';
@@ -34,7 +35,7 @@ rfidRouter.post(
     try {
       const rawBody = (req as RawBodyRequest).rawBody;
       if (!rawBody) throw new AppError('MALFORMED_BODY', 400, 'Request body required');
-      if (process.env.RFID_INGEST_V2 === 'true') {
+      if (env.RFID_INGEST_V2) {
         const result = await processZebraBatch({
           schoolId: req.params.schoolId,
           rawBody,
@@ -106,7 +107,7 @@ rfidRouter.post(
       return res.status(result.decision === 'ACCEPTED' ? 200 : 400).json(result);
     } catch (error: any) {
       console.error('Scan processing API error:', error);
-      const message = process.env.NODE_ENV === 'production' ? 'An unexpected scan processing error occurred' : error.message;
+      const message = env.NODE_ENV === 'production' ? 'An unexpected scan processing error occurred' : error.message;
       return res.status(500).json({ error: 'SCAN_PROCESSING_FAILED', message });
     }
   }
@@ -551,7 +552,7 @@ rfidRouter.post(
       return res.status(500).json({
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
       });
     }
   }
@@ -571,7 +572,7 @@ rfidRouter.get(
       return res.status(500).json({
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
       });
     }
   }
@@ -588,7 +589,7 @@ rfidRouter.post(
       return res.status(500).json({
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
       });
     }
   }
@@ -605,7 +606,7 @@ rfidRouter.get(
       return res.status(500).json({
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
       });
     }
   }

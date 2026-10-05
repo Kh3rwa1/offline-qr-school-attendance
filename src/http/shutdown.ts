@@ -1,11 +1,12 @@
+import { env } from '../env';
 import type { Server } from 'node:http';
 import type { Request, Response, NextFunction } from 'express';
 import { closeDatabasePools } from '../db';
 import { closeRedis } from '../services/redisService';
 import { logger } from '../lib/logger';
 
-const DRAIN_MS = Number(process.env.SHUTDOWN_DRAIN_MS ?? 20_000);
-const READINESS_GRACE_MS = Number(process.env.SHUTDOWN_READINESS_GRACE_MS ?? 3_000);
+const DRAIN_MS = Number(env.SHUTDOWN_DRAIN_MS ?? 20_000);
+const READINESS_GRACE_MS = Number(env.SHUTDOWN_READINESS_GRACE_MS ?? 3_000);
 
 let draining = false;
 let inflight = 0;

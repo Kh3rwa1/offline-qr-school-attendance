@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
@@ -20,7 +21,7 @@ const loginSchema = z.object({
 
 const sessionCookieOptions = {
   httpOnly: true,
-  secure: process.env.COOKIE_SECURE === 'true' || (process.env.NODE_ENV === 'production' && process.env.ALLOW_HTTP_COOKIE !== 'true'),
+  secure: env.COOKIE_SECURE === 'true' || (env.NODE_ENV === 'production' && env.ALLOW_HTTP_COOKIE !== 'true'),
   sameSite: 'lax' as const,
   path: '/',
 };

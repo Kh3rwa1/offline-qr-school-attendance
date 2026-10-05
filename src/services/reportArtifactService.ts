@@ -1,3 +1,4 @@
+import { env } from '../env';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -47,11 +48,11 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 export function getReportArtifactMaxBytes(): number {
-  return parsePositiveInt(process.env.REPORT_ARTIFACT_MAX_BYTES, 50 * 1024 * 1024);
+  return parsePositiveInt(env.REPORT_ARTIFACT_MAX_BYTES, 50 * 1024 * 1024);
 }
 
 function getStorageBackend(): ReportArtifactStorageBackend {
-  const configured = (process.env.REPORT_ARTIFACT_STORAGE || 'database').toLowerCase();
+  const configured = (env.REPORT_ARTIFACT_STORAGE || 'database').toLowerCase();
   if (configured !== 'database' && configured !== 'filesystem') {
     throw new Error('REPORT_ARTIFACT_STORAGE_INVALID');
   }
@@ -59,7 +60,7 @@ function getStorageBackend(): ReportArtifactStorageBackend {
 }
 
 function getFilesystemRoot(): string {
-  return path.resolve(process.env.REPORT_ARTIFACT_DIR || './report-artifacts');
+  return path.resolve(env.REPORT_ARTIFACT_DIR || './report-artifacts');
 }
 
 function assertUuid(value: string, code: string) {

@@ -1,3 +1,4 @@
+import { env } from '../env';
 import crypto from 'node:crypto';
 import { eq, and, inArray, lt, lte, or, isNull, sql } from 'drizzle-orm';
 import { db, withSystemContext, withTenantContext } from '../db';
@@ -62,7 +63,7 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
       .set({ status: 'QUEUED', claimedAt: null, claimedBy: null })
       .where(and(...staleConditions));
 
-    if (process.env.DATABASE_URL) {
+    if (env.DATABASE_URL) {
       try {
         // Atomic FOR UPDATE SKIP LOCKED claim query for multi-replica concurrency safety
         const claimedRows = schoolId
@@ -105,7 +106,7 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
           return rawRows.map(mapRowToJob);
         }
       } catch (err: any) {
-        if (process.env.NODE_ENV === 'production') {
+        if (env.NODE_ENV === 'production') {
           console.error('[NotificationWorker] Atomic queue claim failed in production:', err.message);
           throw new Error(`ATOMIC_QUEUE_CLAIM_FAILED: ${err.message}`);
         }
@@ -176,7 +177,7 @@ async function processClaimedJob(job: ClaimedJob, provider: SmsProvider, maxRetr
       await db.update(notificationJobs).set({ status: 'CANCELLED', failureReason: 'SCHOOL_DISABLED', claimedAt: null, claimedBy: null }).where(eq(notificationJobs.id, job.id));
       return 'CANCELLED';
     }
-    if (!settings && process.env.NODE_ENV === 'production') {
+    if (!settings && env.NODE_ENV === 'production') {
       await db.update(notificationJobs).set({ status: 'PERMANENT_FAILURE', failureReason: 'SMS_SETTINGS_REQUIRED', attemptCount: job.attemptCount + 1, claimedAt: null, claimedBy: null }).where(eq(notificationJobs.id, job.id));
       await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount + 1, status: 'PERMANENT_FAILURE', errorMessage: 'SMS_SETTINGS_REQUIRED' });
       return 'PERMANENT_FAILURE';
@@ -198,7 +199,7 @@ async function processClaimedJob(job: ClaimedJob, provider: SmsProvider, maxRetr
     }
 
     const isFake = provider.name === 'fake' || provider.name === 'console';
-    if (process.env.NODE_ENV === 'production' && !isFake && (!effectiveSettings.dltPrincipalEntityId || !effectiveSettings.dltHeader)) {
+    if (env.NODE_ENV === 'production' && !isFake && (!effectiveSettings.dltPrincipalEntityId || !effectiveSettings.dltHeader)) {
       await db.update(notificationJobs).set({ status: 'PERMANENT_FAILURE', failureReason: 'DLT_CONFIGURATION_REQUIRED', attemptCount: job.attemptCount + 1, claimedAt: null, claimedBy: null }).where(eq(notificationJobs.id, job.id));
       await db.insert(notificationAttempts).values({ jobId: job.id, attemptNumber: job.attemptCount + 1, status: 'PERMANENT_FAILURE', errorMessage: 'DLT_CONFIGURATION_REQUIRED' });
       return 'PERMANENT_FAILURE';

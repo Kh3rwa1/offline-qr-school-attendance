@@ -1,3 +1,4 @@
+import { env } from '../env';
 type QueueJob<T> = {
   run: () => Promise<T>;
   resolve: (value: T) => void;
@@ -11,11 +12,11 @@ function positiveInteger(value: string | undefined, fallback: number): number {
 
 export function getReportGenerationLimits() {
   return {
-    maxConcurrent: positiveInteger(process.env.REPORT_GENERATION_CONCURRENCY, 1),
-    maxPending: positiveInteger(process.env.REPORT_GENERATION_MAX_PENDING, 8),
-    maxEstimatedCells: positiveInteger(process.env.REPORT_MAX_ESTIMATED_CELLS, 750_000),
-    maxPeriodDays: positiveInteger(process.env.REPORT_MAX_PERIOD_DAYS, 370),
-    maxStudents: positiveInteger(process.env.REPORT_MAX_STUDENTS, 5_000),
+    maxConcurrent: positiveInteger(env.REPORT_GENERATION_CONCURRENCY, 1),
+    maxPending: positiveInteger(env.REPORT_GENERATION_MAX_PENDING, 8),
+    maxEstimatedCells: positiveInteger(env.REPORT_MAX_ESTIMATED_CELLS, 750_000),
+    maxPeriodDays: positiveInteger(env.REPORT_MAX_PERIOD_DAYS, 370),
+    maxStudents: positiveInteger(env.REPORT_MAX_STUDENTS, 5_000),
   };
 }
 

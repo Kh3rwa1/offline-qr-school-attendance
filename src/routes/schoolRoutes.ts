@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
@@ -161,7 +162,7 @@ schoolRouter.patch(
       if (err.code === 'SCHOOL_NOT_FOUND') {
         return res.status(404).json({ success: false, error: 'SCHOOL_NOT_FOUND' });
       }
-      const message = process.env.NODE_ENV === 'production' ? 'Failed to update school' : err.message;
+      const message = env.NODE_ENV === 'production' ? 'Failed to update school' : err.message;
       return res.status(500).json({ success: false, error: 'SCHOOL_UPDATE_FAILED', message });
     }
   }

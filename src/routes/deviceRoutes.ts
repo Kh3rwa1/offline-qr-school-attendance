@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
@@ -35,7 +36,7 @@ deviceRouter.post(
       if (err.message === 'DEVICE_REVOKED') {
         return res.status(403).json({ error: 'DEVICE_REVOKED', message: 'Device has been revoked' });
       }
-      const message = process.env.NODE_ENV === 'production' ? 'An unexpected internal error occurred' : err.message;
+      const message = env.NODE_ENV === 'production' ? 'An unexpected internal error occurred' : err.message;
       return res.status(500).json({ error: 'INTERNAL_ERROR', message });
     }
   }

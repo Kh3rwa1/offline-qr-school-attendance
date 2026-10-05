@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { db, executeSql } from './index';
 import { verifyPassword } from '../auth/password';
 import pg from 'pg';
@@ -9,17 +10,17 @@ const DUMMY_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXlzYWx0MTIzNDU2
 let authPoolInstance: pg.Pool | undefined;
 
 if (
-  process.env.NODE_ENV === 'production' &&
-  !process.env.AUTH_DATABASE_URL &&
-  process.env.DATABASE_URL &&
-  (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+  env.NODE_ENV === 'production' &&
+  !env.AUTH_DATABASE_URL &&
+  env.DATABASE_URL &&
+  (env.DATABASE_URL.startsWith('postgres://') || env.DATABASE_URL.startsWith('postgresql://'))
 ) {
   throw new Error('AUTH_DATABASE_URL is required in production for role-separated authentication.');
 }
 
 function getAuthPool(): pg.Pool | null {
   if (authPoolInstance) return authPoolInstance;
-  const authUrl = process.env.AUTH_DATABASE_URL;
+  const authUrl = env.AUTH_DATABASE_URL;
   const isPlaceholder = authUrl?.includes('replace-with-') || authUrl?.includes('replace_with_');
   if (authUrl && !isPlaceholder && (authUrl.startsWith('postgres://') || authUrl.startsWith('postgresql://'))) {
     authPoolInstance = new pg.Pool({
@@ -29,7 +30,7 @@ function getAuthPool(): pg.Pool | null {
     });
     return authPoolInstance;
   }
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     throw new Error('FATAL_AUTH_DATABASE_CONFIG: Production mode requires a valid PostgreSQL URL for AUTH_DATABASE_URL.');
   }
   return null;
@@ -76,9 +77,9 @@ export async function lookupAuthUserByPhone(phoneNumber: string): Promise<{
   }
 
   if (
-    process.env.NODE_ENV === 'production' &&
-    process.env.DATABASE_URL &&
-    (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+    env.NODE_ENV === 'production' &&
+    env.DATABASE_URL &&
+    (env.DATABASE_URL.startsWith('postgres://') || env.DATABASE_URL.startsWith('postgresql://'))
   ) {
     throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }
@@ -115,9 +116,9 @@ export async function getUserSchoolMemberships(userId: string): Promise<Array<{
   }
 
   if (
-    process.env.NODE_ENV === 'production' &&
-    process.env.DATABASE_URL &&
-    (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+    env.NODE_ENV === 'production' &&
+    env.DATABASE_URL &&
+    (env.DATABASE_URL.startsWith('postgres://') || env.DATABASE_URL.startsWith('postgresql://'))
   ) {
     throw new Error('FATAL_AUTH_DATABASE_UNAVAILABLE: Dedicated auth database pool required in production mode.');
   }

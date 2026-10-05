@@ -1,3 +1,4 @@
+import { env } from '../env';
 import http from 'http';
 import { GatewayAdapter } from '../services/rfid/adapters/gatewayAdapter';
 import { OutboxQueue } from './outboxQueue';
@@ -57,7 +58,7 @@ export class GatewayDaemon {
   constructor(options: GatewayDaemonOptions) {
     this.config = options;
 
-    if (process.env.NODE_ENV === 'production' && !options.useSimulator) {
+    if (env.NODE_ENV === 'production' && !options.useSimulator) {
       if (!options.sharedSecret || options.sharedSecret.length < 32) {
         throw new Error('GATEWAY_FATAL: sharedSecret must be at least 32 bytes in production');
       }
@@ -67,7 +68,7 @@ export class GatewayDaemon {
     }
 
     const storageDir = options.storageDir || path.join(process.cwd(), 'gateway-data');
-    const storageKey = options.storageKey || process.env.GATEWAY_STORAGE_KEY || process.env.RFID_OUTBOX_ENCRYPTION_KEY || options.sharedSecret;
+    const storageKey = options.storageKey || env.GATEWAY_STORAGE_KEY || env.RFID_OUTBOX_ENCRYPTION_KEY || options.sharedSecret;
     this.queue = new OutboxQueue({
       storageDir,
       deviceEncryptionKey: storageKey,
@@ -85,9 +86,9 @@ export class GatewayDaemon {
   }
 
   async runDiagnostics(): Promise<GatewayDiagnosticResult> {
-    const socketPath = process.env.PCSCD_SOCKET_PATH || '/var/run/pcscd/pcscd.comm';
-    const pcscSocketAvailable = process.env.PCSCD_SOCKET_PATH
-      ? fs.existsSync(process.env.PCSCD_SOCKET_PATH)
+    const socketPath = env.PCSCD_SOCKET_PATH || '/var/run/pcscd/pcscd.comm';
+    const pcscSocketAvailable = env.PCSCD_SOCKET_PATH
+      ? fs.existsSync(env.PCSCD_SOCKET_PATH)
       : (fs.existsSync(socketPath) || process.platform === 'darwin');
     const simulationMode = this.config.useSimulator === true;
     const health = await this.adapter.getHealth().catch(() => ({ connected: false }));
@@ -130,7 +131,7 @@ export class GatewayDaemon {
     const preflight = await this.runDiagnostics();
     console.log(`[GatewayDaemon] Hardware preflight: ${preflight.status} (Simulation: ${preflight.simulationMode}, Readers: ${preflight.readersDetected.length})`);
 
-    if (process.env.NODE_ENV === 'production' && !this.config.useSimulator && preflight.status === 'SOCKET_UNAVAILABLE') {
+    if (env.NODE_ENV === 'production' && !this.config.useSimulator && preflight.status === 'SOCKET_UNAVAILABLE') {
       console.warn('[GatewayDaemon] Notice: PC/SC daemon socket not found. Ensure pcscd is running and PCSCD_SOCKET_PATH is correct.');
     }
 
@@ -259,21 +260,21 @@ export class GatewayDaemon {
 
 // Runnable CLI entrypoint
 if (process.argv[1]?.includes('gatewayDaemon') || process.argv[1]?.includes('gateway.cjs')) {
-  const schoolId = process.env.SCHOOL_ID || (process.env.NODE_ENV === 'production' ? '' : '00000000-0000-0000-0000-000000000001');
-  const readerId = process.env.RFID_READER_ID || (process.env.NODE_ENV === 'production' ? '' : 'gateway_reader_01');
-  const serverBaseUrl = process.env.APP_URL || 'http://localhost:3000';
-  const sharedSecret = process.env.RFID_HMAC_SECRET;
-  const cardMasterKey = process.env.RFID_CARD_MASTER_KEY;
-  const storageKey = process.env.GATEWAY_STORAGE_KEY || process.env.RFID_OUTBOX_ENCRYPTION_KEY;
-  const port = parseInt(process.env.GATEWAY_PORT || '4000', 10);
-  const useSimulator = process.env.USE_SIMULATOR === 'true' || process.env.NODE_ENV !== 'production';
+  const schoolId = env.SCHOOL_ID || (env.NODE_ENV === 'production' ? '' : '00000000-0000-0000-0000-000000000001');
+  const readerId = env.RFID_READER_ID || (env.NODE_ENV === 'production' ? '' : 'gateway_reader_01');
+  const serverBaseUrl = env.APP_URL || 'http://localhost:3000';
+  const sharedSecret = env.RFID_HMAC_SECRET;
+  const cardMasterKey = env.RFID_CARD_MASTER_KEY;
+  const storageKey = env.GATEWAY_STORAGE_KEY || env.RFID_OUTBOX_ENCRYPTION_KEY;
+  const port = parseInt(env.GATEWAY_PORT || '4000', 10);
+  const useSimulator = env.USE_SIMULATOR === 'true' || env.NODE_ENV !== 'production';
 
   if (!schoolId || !readerId) {
     console.error('Fatal: SCHOOL_ID and RFID_READER_ID environment variables are required.');
     process.exit(1);
   }
 
-  if (process.env.NODE_ENV === 'production' && !useSimulator) {
+  if (env.NODE_ENV === 'production' && !useSimulator) {
     if (!sharedSecret || !cardMasterKey) {
       console.error('Fatal: RFID_HMAC_SECRET and RFID_CARD_MASTER_KEY are required in production mode.');
       process.exit(1);

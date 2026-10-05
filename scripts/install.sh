@@ -515,6 +515,17 @@ provision_backup_keys() {
     mkdir -p "$dir"
   fi
   chmod 700 "$dir" 2>/dev/null || true
+
+  if ! command -v age >/dev/null 2>&1 || ! command -v age-keygen >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y age jq >/dev/null 2>&1 || true
+      else
+        apt-get update -qq && apt-get install -y age jq >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+
   if [ ! -f "$dir/backup-signing.ed25519" ]; then
     ssh-keygen -t ed25519 -N "" -C "attendease-backup@$(hostname)" -f "$dir/backup-signing.ed25519" >/dev/null 2>&1
     chmod 600 "$dir/backup-signing.ed25519" 2>/dev/null || true

@@ -378,8 +378,9 @@ jobs:
 
       - name: Execute Encrypted Snapshot Backup
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y age jq
           ./bin/attendease backup
-          test -n "$(ls -1 ./backups/*.sql.gz.enc)"
+          test -n "$(ls -1 ./backups/*.dump.age ./backups/*.sql.gz.enc 2>/dev/null)"
 
       - name: Simulate Host Daemon Restart & Self-Healing Repair
         run: |
@@ -417,7 +418,7 @@ jobs:
 
       - name: Execute Database Restore from Backup Snapshot
         run: |
-          LATEST_BACKUP=$(ls -1t ./backups/*.sql.gz.enc | head -n 1)
+          LATEST_BACKUP=$(ls -1t ./backups/*.dump.age ./backups/*.sql.gz.enc 2>/dev/null | head -n 1)
           ./bin/attendease restore "${LATEST_BACKUP}" -y
           for i in {1..20}; do
             if curl -fsS http://127.0.0.1:3000/readyz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/readyz >/dev/null 2>&1; then
@@ -487,6 +488,7 @@ jobs:
           RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
+          READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -583,6 +585,7 @@ jobs:
           RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
+          READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           # Seed step runs as COMPONENT=migrate so validateProductionEnv() is
@@ -607,6 +610,7 @@ jobs:
           RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
+          READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"
@@ -630,6 +634,7 @@ jobs:
           RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
+          READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"

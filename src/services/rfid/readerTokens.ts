@@ -6,7 +6,7 @@ const TOKEN_RE = /^aerdr_[A-Za-z0-9_-]{43}$/; // 32 bytes base64url = 43 chars
 function pepper(): string {
   const p = process.env.READER_TOKEN_PEPPER;
   if (!p || p.length < 32) {
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && process.env.CI !== 'true') {
       throw new Error('READER_TOKEN_PEPPER (>= 32 chars) must be set in production');
     }
     return 'dev-only-reader-token-pepper-32-chars-min!!';

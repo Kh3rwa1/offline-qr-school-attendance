@@ -28,7 +28,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     await expect(body).toBeVisible();
   });
 
-  test('Submits RFID scan envelope to API and verifies attendance record creation', async ({ request }, testInfo) => {
+  test('Submits RFID scan envelope to API and verifies attendance record creation', async ({ request, playwright }, testInfo) => {
     test.skip(process.env.FEATURE_RFID !== 'true', 'RFID feature is disabled by default in QR pilot');
     // Check system health endpoint first
     const health = await request.get('/api/v1/health');
@@ -166,7 +166,8 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
 
     envelope.signature = computeCanonicalSignature(envelope, readerSecret);
 
-    const res = await request.post(`/api/v1/schools/${schoolId}/rfid/scans`, {
+    const readerClient = await playwright.request.newContext();
+    const res = await readerClient.post(`/api/v1/schools/${schoolId}/rfid/scans`, {
       headers: {
         'x-reader-id': readerId,
         'x-reader-signature': envelope.signature,
@@ -183,5 +184,6 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     expect(res.status()).toBe(200);
     const result = await res.json();
     expect(result.decision).toBe('ACCEPTED');
+    await readerClient.dispose();
   });
 });

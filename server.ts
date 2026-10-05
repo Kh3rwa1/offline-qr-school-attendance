@@ -27,7 +27,18 @@ import { executeSql } from './src/db/index';
 import { metricsMiddleware, renderPrometheusMetrics } from './src/middleware/metrics';
 import { rateLimitPolicies } from './src/middleware/distributedRateLimiter';
 import { csrfProtection } from './src/middleware/csrfProtection';
+import { resolveSchoolId } from './src/middleware/resolveSchoolId';
 import { initRedis } from './src/services/redisService';
+import {
+  zebraJsonParser,
+  smsCallbackParser,
+  defaultJsonParser,
+  defaultFormParser,
+  bodyParserErrorHandler,
+} from './src/middleware/bodyParsers';
+import { requestId } from './src/middleware/requestId';
+import { toAppError } from './src/errors/AppError';
+import { logError } from './src/errors/logError';
 
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
@@ -46,14 +57,16 @@ export async function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
-  app.use(
-    express.json({
-      verify: (req: any, _res, buf) => {
-        req.rawBody = buf;
-      },
-    })
-  );
-  app.use(express.urlencoded({ extended: true }));
+  app.use(requestId);
+
+  // Route-specific parsers FIRST (parse only, then fall through via next())
+  app.post('/api/v1/schools/:schoolId/rfid/zebra/reads', zebraJsonParser);
+  app.post('/api/v1/notifications/callback', smsCallbackParser);
+
+  // Global parsers skip anything already parsed
+  app.use(defaultJsonParser);
+  app.use(defaultFormParser);
+  app.use(bodyParserErrorHandler);
   app.use(cookieParser());
 
   app.use((req, res, next) => {
@@ -77,7 +90,7 @@ export async function createApp() {
   app.use('/api/v1/auth/login', rateLimitPolicies.login);
   app.use('/api/v1/notifications/callback', rateLimitPolicies.callback);
   app.use('/api/v1/notifications/process-queue', rateLimitPolicies.adminQueue);
-  app.use('/api', rateLimitPolicies.generalApi, csrfProtection);
+  app.use('/api', rateLimitPolicies.generalApi, csrfProtection, resolveSchoolId);
 
   app.use(metricsMiddleware);
 
@@ -204,18 +217,14 @@ export async function createApp() {
     });
   }
 
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Unhandled server error:', err);
-    const status = err.status || err.statusCode || 500;
-    const message =
-      process.env.NODE_ENV === 'production' && status === 500
-        ? 'An unexpected error occurred. Please try again later.'
-        : err.message || 'INTERNAL_SERVER_ERROR';
-
-    res.status(status).json({
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const e = toAppError(err);
+    logError(req as any, e);
+    res.status(e.status).json({
       success: false,
-      error: 'SERVER_ERROR',
-      message,
+      error: e.code,
+      message: e.publicMessage,
+      requestId: (req as any).id,
     });
   });
 

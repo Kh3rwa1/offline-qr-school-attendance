@@ -631,6 +631,10 @@ export const rfidReaders = pgTable(
     keyVersion: integer('key_version').notNull().default(1),
     clockDriftMs: integer('clock_drift_ms'),
     lastSequenceNumber: bigint('last_sequence_number', { mode: 'number' }).default(0).notNull(),
+    bearerTokenHash: text('bearer_token_hash'),
+    bearerTokenHint: varchar('bearer_token_hint', { length: 8 }),
+    bearerTokenCreatedAt: timestamp('bearer_token_created_at', { withTimezone: true }),
+    bearerTokenLastUsedAt: timestamp('bearer_token_last_used_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -640,6 +644,9 @@ export const rfidReaders = pgTable(
       .on(table.deviceId)
       .where(sql`${table.status} IN ('PENDING', 'ACTIVE', 'SUSPENDED')`),
     statusIdx: index('rfid_readers_status_idx').on(table.schoolId, table.status),
+    bearerTokenHashUq: uniqueIndex('rfid_readers_bearer_token_hash_uq')
+      .on(table.bearerTokenHash)
+      .where(sql`${table.bearerTokenHash} IS NOT NULL`),
   })
 );
 

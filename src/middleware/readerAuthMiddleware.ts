@@ -33,9 +33,17 @@ export const readerAuthMiddleware = async (
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Missing reader credentials or signature headers' });
     }
 
-    const schoolId = req.params.schoolId || body.schoolId;
+    const schoolId = (req as any).schoolId || req.params.schoolId;
     if (!schoolId) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing schoolId' });
+    }
+
+    if (body.schoolId !== undefined && body.schoolId !== null && String(body.schoolId) !== schoolId) {
+      return res.status(400).json({
+        success: false,
+        error: 'SCHOOL_ID_MISMATCH',
+        message: 'schoolId in body does not match schoolId in URL path',
+      });
     }
 
     // Validate timestamp freshness (max 5 minutes)

@@ -67,6 +67,7 @@ services:
       RFID_HMAC_SECRET: ${RFID_HMAC_SECRET:-}
       RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:-}
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-}
+      READER_TOKEN_PEPPER: ${READER_TOKEN_PEPPER:-}
     volumes:
       - ./backups:/backups:ro
     healthcheck:

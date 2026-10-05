@@ -26,8 +26,12 @@ import {
 } from './cryptoService';
 import { decryptReaderSecret } from './readerService';
 import { getRedisClient } from '../redisService';
+import { LIMITS } from '../../middleware/bodyParsers';
+import { AppError, readerAuthFailed } from '../../errors/AppError';
+import { authenticateZebraRequest } from './zebraAuth';
+import { classifyReadTime } from './readFreshness';
 
-export const MAX_PAYLOAD_BYTES = 512 * 1024; // 512 KB
+export const MAX_PAYLOAD_BYTES = LIMITS.zebraWebhook; // one source of truth
 export const MAX_BATCH_READS = 250;
 
 export interface ZebraTagReadRaw {
@@ -156,7 +160,7 @@ export async function processZebraIotWebhook(params: {
     throw new Error(`OVERSIZED_PAYLOAD: Payload size ${rawBytesLength} exceeds maximum limit of ${MAX_PAYLOAD_BYTES} bytes`);
   }
 
-  // 2. Identify Reader from Headers or Payload
+  // 2. Identify Reader from Headers or Payload & Authenticate via zebraAuth
   const headerReaderId =
     (headers['x-reader-id'] as string) ||
     (headers['x-zebra-reader-id'] as string) ||
@@ -165,96 +169,30 @@ export async function processZebraIotWebhook(params: {
   const { reads, readerIdentifier, eventType } = extractZebraTagReads(parsedBody);
   const readerSearchKey = headerReaderId || readerIdentifier;
 
-  if (!readerSearchKey) {
-    throw new Error('UNAUTHORIZED_READER: Missing reader identification in headers or payload');
-  }
+  const rawBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody || '', 'utf8');
+  const reader = await authenticateZebraRequest({
+    schoolId,
+    headers,
+    rawBody: rawBuffer,
+    readerIdentifier: readerSearchKey,
+  });
 
   // Enforce batch size limit
   if (reads.length > MAX_BATCH_READS) {
-    throw new Error(`OVERSIZED_BATCH: Batch contains ${reads.length} reads, maximum permitted is ${MAX_BATCH_READS}`);
+    throw new AppError('BATCH_TOO_LARGE', 413, 'Too many reads in one batch', {
+      internal: { count: reads.length, max: MAX_BATCH_READS },
+    });
   }
 
-  // 3. Query Reader and School Timezone from Database with Tenant Isolation
-  const { reader, schoolTimezone } = await withTenantContext(schoolId, async (tx) => {
-    const [byUuid] = /^[0-9a-fA-F-]{36}$/.test(readerSearchKey)
-      ? await tx
-          .select()
-          .from(rfidReaders)
-          .where(and(eq(rfidReaders.id, readerSearchKey), eq(rfidReaders.schoolId, schoolId)))
-      : [];
-
-    let foundReader = byUuid;
-    if (!foundReader) {
-      const [byDeviceId] = await tx
-        .select()
-        .from(rfidReaders)
-        .where(and(eq(rfidReaders.deviceId, readerSearchKey), eq(rfidReaders.schoolId, schoolId)));
-      foundReader = byDeviceId;
-    }
-
+  // 3. Query School Timezone from Database with Tenant Isolation
+  const schoolTimezone = await withTenantContext(schoolId, async (tx) => {
     const [sc] = await tx
       .select({ timezone: schools.timezone })
       .from(schools)
       .where(eq(schools.id, schoolId))
       .limit(1);
 
-    return {
-      reader: foundReader,
-      schoolTimezone: sc?.timezone || 'Asia/Kolkata',
-    };
-  });
-
-  if (!reader) {
-    throw new Error(`UNAUTHORIZED_READER: Reader '${readerSearchKey}' not registered to school '${schoolId}'`);
-  }
-
-  if (reader.status !== 'ACTIVE') {
-    throw new Error(`FORBIDDEN_READER: Reader status is '${reader.status}'`);
-  }
-
-  // 4. Authenticate Reader (Strict per-reader fail-closed HMAC Signature or Bearer Token)
-  const readerSecret = reader.sharedSecretEncrypted
-    ? decryptReaderSecret(reader.sharedSecretEncrypted)
-    : null;
-
-  if (!readerSecret && !reader.bearerTokenDigest) {
-    throw new Error('CONFIG_ERROR: Reader has no provisioned shared secret or bearer token digest (fail-closed)');
-  }
-
-  const signatureHeader =
-    (headers['x-zebra-signature'] as string) ||
-    (headers['x-reader-signature'] as string) ||
-    (headers['x-signature'] as string) ||
-    (headers['x-hub-signature-256'] as string);
-
-  const authHeader = headers['authorization'] as string;
-
-  let isAuthValid = false;
-
-  if (signatureHeader && readerSecret) {
-    isAuthValid = verifyZebraHmacSignature(rawBody, signatureHeader, readerSecret);
-  } else if (authHeader) {
-    // Check bearer token against bearerTokenDigest if stored, or readerSecret
-    if (reader.bearerTokenDigest) {
-      isAuthValid = verifyBearerToken(authHeader, reader.bearerTokenDigest);
-    } else if (readerSecret) {
-      isAuthValid = verifyBearerToken(authHeader, readerSecret);
-    }
-  }
-
-  if (!isAuthValid) {
-    throw new Error('UNAUTHORIZED_READER: Invalid or missing HMAC signature or Bearer token');
-  }
-
-  // 5. Update Reader Heartbeat / Last Seen
-  await withTenantContext(schoolId, async (tx) => {
-    await tx
-      .update(rfidReaders)
-      .set({
-        lastSeenAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(rfidReaders.id, reader.id));
+    return sc?.timezone || 'Asia/Kolkata';
   });
 
   // Heartbeat / keepalive payload with no tag reads
@@ -320,14 +258,51 @@ export async function processZebraIotWebhook(params: {
       continue;
     }
 
-    const timestampVal = read.timestamp || read.firstSeen || read.lastSeen || Date.now();
-    const scanDate = typeof timestampVal === 'number' ? new Date(timestampVal) : new Date(timestampVal);
-    const scanTimeMs = isNaN(scanDate.getTime()) ? Date.now() : scanDate.getTime();
-    const truncatedSecond = Math.floor(scanTimeMs / 1000);
+    const rawTs = read.timestamp ?? read.firstSeen ?? read.lastSeen ?? null;
+    const readTs = rawTs !== null ? (typeof rawTs === 'number' ? new Date(rawTs) : new Date(rawTs)) : null;
+    const now = new Date();
+    const freshness = classifyReadTime(readTs, now, schoolTimezone);
+
     const antennaPort = typeof read.antenna === 'number' ? read.antenna : typeof read.antenna_port === 'number' ? read.antenna_port : parseInt(String(read.antenna || read.antenna_port || '1'), 10) || 1;
     const peakRssi = typeof read.peakRssi === 'number' ? Math.round(read.peakRssi) : typeof read.rssi === 'number' ? Math.round(read.rssi) : parseInt(String(read.peakRssi || read.rssi || '-60'), 10) || -60;
     const readCount = typeof read.reads === 'number' ? read.reads : typeof read.read_count === 'number' ? read.read_count : typeof read.count === 'number' ? read.count : 1;
     const vendorEventId = read.vendorEventId || read.eventId || undefined;
+
+    if (freshness === 'FUTURE_SKEW' || freshness === 'WRONG_SCHOOL_DAY') {
+      rejectedCount++;
+      const rejectionReason = freshness === 'FUTURE_SKEW' ? 'FUTURE_CLOCK_SKEW' : 'STALE_WRONG_SCHOOL_DAY';
+      await withTenantContext(schoolId, async (tx) => {
+        await tx
+          .insert(rfidScanEvents)
+          .values({
+            schoolId,
+            readerId: reader.id,
+            epcDigest,
+            epcLastFour: epcLast4,
+            scanTimestamp: readTs || now,
+            antennaPort,
+            peakRssi,
+            readCount,
+            decision: 'REJECTED',
+            rejectionCode: rejectionReason,
+            clientEventId: `${reader.id}-${epcDigest}-${Math.floor((readTs || now).getTime() / 1000)}-rej`,
+            idempotencyKey: crypto.createHash('sha256').update(`${schoolId}:${reader.id}:${epcDigest}:${(readTs || now).getTime()}`).digest('hex'),
+            payloadHash,
+          })
+          .onConflictDoNothing();
+      });
+      results.push({
+        epcDigest,
+        epcLastFour: epcLast4,
+        decision: 'REJECTED',
+        reason: rejectionReason,
+      });
+      continue;
+    }
+
+    const effectiveScanDate = (freshness === 'MISSING_TIMESTAMP' || !readTs) ? now : readTs;
+    const scanTimeMs = isNaN(effectiveScanDate.getTime()) ? Date.now() : effectiveScanDate.getTime();
+    const truncatedSecond = Math.floor(scanTimeMs / 1000);
 
     // Stable, deterministic client event ID and idempotency key
     const clientEventId = `${reader.id}-${epcDigest}-${truncatedSecond}`;
@@ -548,7 +523,7 @@ export async function processZebraIotWebhook(params: {
     }
 
     // 10. Find or Resolve Today's Attendance Session (using school's configured timezone)
-    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: schoolTimezone }).format(scanDate);
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: schoolTimezone }).format(effectiveScanDate);
     // Use reader's assigned classSection if configured, otherwise student's active enrolled classSection
     let targetClassSectionId = reader.assignedClassSectionId || studentInfo.classSectionId;
 

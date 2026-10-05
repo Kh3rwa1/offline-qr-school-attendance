@@ -378,8 +378,8 @@ describe('RFID Router & Middleware Integration Suite', () => {
   }
 
   it('POST /:schoolId/rfid/scans rejects request for wrong school', async () => {
-    const envelope = buildSignedEnvelope(credentialDigest1);
     const wrongSchoolId = '00000000-0000-4000-8000-000000000999';
+    const envelope = buildSignedEnvelope(credentialDigest1, { schoolId: wrongSchoolId });
 
     const res = await invokeScanEndpoint(wrongSchoolId, {
       'x-reader-id': readerId,

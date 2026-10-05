@@ -433,7 +433,7 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
         const address = server.address() as any;
         const url = `http://127.0.0.1:${address.port}`;
 
-        const res = await fetch(`${url}/api/v1/schools/dummy-id/rfid/readers`);
+        const res = await fetch(`${url}/api/v1/schools/00000000-0000-0000-0000-000000000000/rfid/readers`);
         expect(res.status).toBe(404);
 
         await new Promise<void>((resolve) => server.close(() => resolve()));

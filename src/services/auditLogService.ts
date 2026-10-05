@@ -1,4 +1,4 @@
-import { withSystemContext } from '../db';
+import { withSystemContext, tenantTransaction } from '../db';
 import { auditLogs } from '../db/schema';
 
 export interface AuditLogParams {
@@ -33,8 +33,9 @@ export function sanitizeMetadata(data?: Record<string, any>): Record<string, any
 }
 
 export async function createAuditLog(params: AuditLogParams, customTx?: any) {
-  if (customTx) {
-    const [inserted] = await customTx
+  const activeTx = customTx || tenantTransaction.getStore()?.tx;
+  if (activeTx) {
+    const [inserted] = await activeTx
       .insert(auditLogs)
       .values({
         schoolId: params.schoolId || null,
@@ -69,5 +70,27 @@ export async function createAuditLog(params: AuditLogParams, customTx?: any) {
 
     if (!inserted) throw new Error('AUDIT_LOG_WRITE_FAILED');
     return inserted;
+  });
+}
+
+export async function writeAuditLog(params: {
+  schoolId?: string | null;
+  actorId?: string | null;
+  action: string;
+  targetId?: string | null;
+  resourceType?: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  metadata?: Record<string, any>;
+}) {
+  return createAuditLog({
+    schoolId: params.schoolId,
+    actorId: params.actorId,
+    action: params.action,
+    resourceType: params.resourceType || 'RFID_READER',
+    resourceId: params.targetId,
+    ipAddress: params.ipAddress,
+    userAgent: params.userAgent,
+    metadata: params.metadata,
   });
 }

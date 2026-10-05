@@ -13,6 +13,11 @@ import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
 import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
+import type { RawBodyRequest } from '../middleware/bodyParsers';
+import { AppError, toAppError } from '../errors/AppError';
+import { logError } from '../errors/logError';
+import { generateReaderToken } from '../services/rfid/readerTokens';
+import { writeAuditLog } from '../services/auditLogService';
 
 export const rfidRouter = Router();
 
@@ -29,32 +34,24 @@ rfidRouter.post(
   rateLimitPolicies.rfidScan,
   async (req: any, res: Response) => {
     try {
-      const schoolId = req.params.schoolId;
-      const rawBody = (req as any).rawBody || Buffer.from(JSON.stringify(req.body || {}));
-      const parsedBody = req.body || {};
-      const headers = req.headers || {};
-
+      const rawBody = (req as RawBodyRequest).rawBody;
+      if (!rawBody) throw new AppError('MALFORMED_BODY', 400, 'Request body required');
       const result = await processZebraIotWebhook({
-        schoolId,
+        schoolId: req.params.schoolId,
         rawBody,
-        parsedBody,
-        headers,
+        parsedBody: req.body,
+        headers: req.headers,
       });
-
       return res.status(200).json(result);
-    } catch (error: any) {
-      const errMsg = error.message || 'ZEBRA_INGEST_FAILED';
-      if (errMsg.includes('UNAUTHORIZED_READER')) {
-        return res.status(401).json({ success: false, error: 'UNAUTHORIZED_READER', message: errMsg });
-      }
-      if (errMsg.includes('FORBIDDEN_READER')) {
-        return res.status(403).json({ success: false, error: 'FORBIDDEN_READER', message: errMsg });
-      }
-      if (errMsg.includes('CONFIG_ERROR')) {
-        return res.status(500).json({ success: false, error: 'CONFIG_ERROR', message: errMsg });
-      }
-      console.error('Zebra IoT Connector webhook error:', error);
-      return res.status(500).json({ success: false, error: 'ZEBRA_INGEST_ERROR', message: errMsg });
+    } catch (err) {
+      const e = toAppError(err);
+      logError(req as any, e);
+      return res.status(e.status).json({
+        success: false,
+        error: e.code,
+        message: e.publicMessage,
+        requestId: (req as any).id,
+      });
     }
   }
 );
@@ -689,6 +686,49 @@ rfidRouter.post(
     } catch (error: any) {
       return { status: 400, body: { success: false, error: error.message } };
     }
+  })
+);
+
+rfidRouter.post(
+  '/:schoolId/rfid/readers/:readerId/rotate-token',
+  requireAuth,
+  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
+  tenantHandler(async ({ schoolId, req, user }) => {
+    const { readerId } = req.params;
+    const { token, hash, hint } = generateReaderToken();
+    const updated = await withTenantContext(schoolId, (tx) =>
+      tx
+        .update(rfidReaders)
+        .set({
+          bearerTokenHash: hash,
+          bearerTokenHint: hint,
+          bearerTokenCreatedAt: new Date(),
+        })
+        .where(and(eq(rfidReaders.id, readerId), eq(rfidReaders.schoolId, schoolId)))
+        .returning({ id: rfidReaders.id, name: rfidReaders.name })
+    );
+
+    if (!Array.isArray(updated) || !updated.length) return { status: 404, body: { success: false, error: 'READER_NOT_FOUND' } };
+
+    await writeAuditLog({
+      schoolId,
+      actorId: user.id,
+      action: 'RFID_READER_TOKEN_ROTATED',
+      targetId: readerId,
+    });
+
+    return {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+      body: {
+        success: true,
+        readerId,
+        token, // shown ONCE. Never retrievable again.
+        tokenHint: hint,
+        warning:
+          'Copy this token into the Zebra IoT Connector now. It will not be shown again. The previous token is revoked immediately.',
+      },
+    };
   })
 );
 

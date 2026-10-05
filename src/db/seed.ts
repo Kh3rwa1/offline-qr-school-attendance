@@ -1,6 +1,7 @@
 import { hashPassword } from '../auth/password';
 import { getDb, executeSql } from './index';
 import { runMigrations } from './migrate';
+import { hashReaderToken } from '../services/rfid/readerTokens';
 import {
   schools,
   academicYears,
@@ -10,6 +11,7 @@ import {
   classSections,
   teacherAssignments,
   students,
+  rfidReaders,
 } from './schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -46,7 +48,7 @@ export async function seedDatabase() {
     [superAdminUser] = await db
       .insert(users)
       .values({
-        fullName: 'System Super Admin',
+        fullName: 'System Super Admin 1',
         phoneNumber: '+919000000000',
         passwordHash: superAdminHash,
         status: 'ACTIVE',
@@ -54,6 +56,26 @@ export async function seedDatabase() {
       .returning();
   } else {
     superAdminUser = existingSuperAdmin[0];
+  }
+
+  const existingSuperAdmin2 = await db
+    .select()
+    .from(users)
+    .where(eq(users.phoneNumber, '+919000000001'));
+
+  let superAdminUser2;
+  if (existingSuperAdmin2.length === 0) {
+    [superAdminUser2] = await db
+      .insert(users)
+      .values({
+        fullName: 'System Super Admin 2',
+        phoneNumber: '+919000000001',
+        passwordHash: superAdminHash,
+        status: 'ACTIVE',
+      })
+      .returning();
+  } else {
+    superAdminUser2 = existingSuperAdmin2[0];
   }
 
   // 2. Create School A
@@ -106,12 +128,14 @@ export async function seedDatabase() {
     schoolB = existingSchoolB[0];
   }
 
-  // Assign Super Admin membership to School A & B
+  // Assign Super Admin memberships to School A & B
   await db
     .insert(schoolMemberships)
     .values([
       { schoolId: schoolA.id, userId: superAdminUser.id, role: 'SUPER_ADMIN', status: 'ACTIVE' },
       { schoolId: schoolB.id, userId: superAdminUser.id, role: 'SUPER_ADMIN', status: 'ACTIVE' },
+      { schoolId: schoolA.id, userId: superAdminUser2.id, role: 'SUPER_ADMIN', status: 'ACTIVE' },
+      { schoolId: schoolB.id, userId: superAdminUser2.id, role: 'SUPER_ADMIN', status: 'ACTIVE' },
     ])
     .onConflictDoNothing();
 
@@ -227,6 +251,48 @@ export async function seedDatabase() {
       userId: teacherA1.id,
       employeeId: 'EMP-A-01',
       designation: 'Assistant Teacher (Math)',
+    }).onConflictDoNothing();
+  }
+
+  // School A Teacher 2
+  let [teacherA2] = await db
+    .insert(users)
+    .values({
+      fullName: 'Subhash Chandra Bose',
+      phoneNumber: '+919100000005',
+      passwordHash: teacherPassHash,
+      status: 'ACTIVE',
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (!teacherA2) {
+    [teacherA2] = await db.select().from(users).where(eq(users.phoneNumber, '+919100000005'));
+  }
+
+  if (teacherA2) {
+    await db
+      .update(users)
+      .set({ status: 'ACTIVE' })
+      .where(eq(users.id, teacherA2.id));
+
+    await db.insert(schoolMemberships).values({
+      schoolId: schoolA.id,
+      userId: teacherA2.id,
+      role: 'TEACHER',
+      status: 'ACTIVE',
+    }).onConflictDoNothing();
+
+    await db
+      .update(schoolMemberships)
+      .set({ status: 'ACTIVE' })
+      .where(and(eq(schoolMemberships.schoolId, schoolA.id), eq(schoolMemberships.userId, teacherA2.id)));
+
+    await db.insert(teacherProfiles).values({
+      schoolId: schoolA.id,
+      userId: teacherA2.id,
+      employeeId: 'EMP-A-02',
+      designation: 'Assistant Teacher (English)',
     }).onConflictDoNothing();
   }
 
@@ -378,6 +444,27 @@ export async function seedDatabase() {
     }).onConflictDoNothing();
   }
 
+  // School B RFID Operator
+  const [rfidOpB] = await db
+    .insert(users)
+    .values({
+      fullName: 'Aloke Manna (Station Haripur)',
+      phoneNumber: '+919200000004',
+      passwordHash: rfidOpPassHash,
+      status: 'ACTIVE',
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (rfidOpB) {
+    await db.insert(schoolMemberships).values({
+      schoolId: schoolB.id,
+      userId: rfidOpB.id,
+      role: 'RFID_OPERATOR',
+      status: 'ACTIVE',
+    }).onConflictDoNothing();
+  }
+
   // 5. Create Default Class Sections
   let schoolAClass5A: any;
   if (academicYearA) {
@@ -465,6 +552,51 @@ export async function seedDatabase() {
       .onConflictDoNothing();
   }
 
+  if (teacherA2 && schoolAClass6A) {
+    await db
+      .insert(teacherAssignments)
+      .values({
+        schoolId: schoolA.id,
+        teacherId: teacherA2.id,
+        classSectionId: schoolAClass6A.id,
+      })
+      .onConflictDoNothing();
+  }
+
+  // 6. Test RFID Readers with Dedicated Bearer Tokens (Ready for Pen Testing)
+  const testTokenA = 'aerdr_TestSchoolAGateReaderToken2026Secure01234xx';
+  const testTokenB = 'aerdr_TestSchoolBGateReaderToken2026Secure56789xx';
+
+  await db
+    .insert(rfidReaders)
+    .values([
+      {
+        schoolId: schoolA.id,
+        deviceId: 'ZEBRA-FX9600-SCH-A-GATE1',
+        name: 'School A Main Gate Reader',
+        location: 'Main Gate Turnstile',
+        status: 'ACTIVE',
+        readerModel: 'ZEBRA_FX9600',
+        securityCapability: 'ZEBRA_FX9600',
+        bearerTokenHash: hashReaderToken(testTokenA),
+        bearerTokenHint: '34xx',
+        bearerTokenCreatedAt: new Date(),
+      },
+      {
+        schoolId: schoolB.id,
+        deviceId: 'ZEBRA-FX9600-SCH-B-GATE1',
+        name: 'School B Main Gate Reader',
+        location: 'Main Gate Turnstile',
+        status: 'ACTIVE',
+        readerModel: 'ZEBRA_FX9600',
+        securityCapability: 'ZEBRA_FX9600',
+        bearerTokenHash: hashReaderToken(testTokenB),
+        bearerTokenHint: '89xx',
+        bearerTokenCreatedAt: new Date(),
+      },
+    ])
+    .onConflictDoNothing();
+
   console.log('Seed completed successfully!');
   return {
     schoolA,
@@ -475,9 +607,11 @@ export async function seedDatabase() {
     schoolAClass6A,
     schoolBClass6A,
     teacherUser: teacherA1,
+    teacherUser2: teacherA2,
     adminUser: adminA,
     schoolAdminUser: adminA,
     superAdminUser,
+    superAdminUser2,
   };
 }
 

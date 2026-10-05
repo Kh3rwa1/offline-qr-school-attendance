@@ -15,6 +15,7 @@ UNATTENDED=0
 DRY_RUN=0
 PURGE=0
 RESTORE_TARGET=""
+VERIFY_ONLY=0
 TARGET_IMAGE="${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:latest}"
 
 # Monitoring runs by default. An appliance nobody is watching fails silently.
@@ -70,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       MONITORING_OVERRIDE="true"
       shift
       ;;
+    --verify-only)
+      VERIFY_ONLY=1
+      shift
+      ;;
     --help|-h)
       echo "AttendEase OS CLI ($VERSION)"
       echo "Usage: ./scripts/install.sh [COMMAND] [OPTIONS]"
@@ -78,8 +83,8 @@ while [[ $# -gt 0 ]]; do
       echo "  install      Full pre-flight validation and appliance deployment (default)"
       echo "  status       Display live container, health, and worker status"
       echo "  diagnostics  Run detailed system diagnostic report"
-      echo "  backup       Execute immediate local AES-256 encrypted backup"
-      echo "  restore      Restore database from an encrypted backup archive"
+      echo "  backup       Execute immediate local authenticated encrypted backup"
+      echo "  restore      Restore database from an encrypted signed backup archive"
       echo "  repair       Self-healing: restart services and verify health"
       echo "  update       Safe upgrade with automatic rollback on health failure"
       echo "  rollback     Revert to previous recorded container image version"
@@ -93,6 +98,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --purge          Purge all database volumes on uninstall"
       echo "  --no-monitoring  Do not start Prometheus and Alertmanager"
       echo "  --monitoring     Start monitoring even if disabled in the config file"
+      echo "  --verify-only    Verify backup signature and checksum without restoring"
       exit 0
       ;;
     *)
@@ -116,6 +122,11 @@ log_header() {
   echo "============================================================"
   echo " $1"
   echo "============================================================"
+}
+
+die() {
+  echo "❌ Error: $*" >&2
+  exit 1
 }
 
 get_lan_ip() {
@@ -323,6 +334,7 @@ cmd_install() {
   log_header "AttendEase OS — QR Pilot Production Installer"
   check_preflight
   ensure_secrets
+  provision_backup_keys >/dev/null || true
   resolve_compose_profiles
 
   if [ "${MONITORING_ACTIVE}" -eq 1 ] && [ "${TOTAL_RAM_MB:-0}" -gt 0 ] && [ "${TOTAL_RAM_MB}" -lt 2048 ]; then
@@ -399,7 +411,7 @@ EOF
   echo " • Appliance URL:       ${ACCESS_URL}"
   echo " • First-Run Wizard:    ${ACCESS_URL}/setup"
   echo " • Local Port (Direct): http://127.0.0.1:3000"
-  echo " • Encrypted Backups:   ./backups (AES-256-CBC PBKDF2)"
+  echo " • Encrypted Backups:   ./backups (age + Ed25519 signed)"
   echo " • Management CLI:      ./bin/attendease [status|backup|update]"
   if [ "${MONITORING_ACTIVE}" -eq 1 ]; then
     echo " • Monitoring:          http://127.0.0.1:9090 (Prometheus)"
@@ -447,7 +459,7 @@ cmd_status() {
     echo " • Database & Readiness:🔴 NOT READY"
   fi
 
-  LATEST_BACKUP=$(find ./backups -name "*.sql.gz.enc" 2>/dev/null | sort -r | head -n 1 || true)
+  LATEST_BACKUP=$(find ./backups \( -name "*.dump.age" -o -name "*.sql.gz.enc" \) 2>/dev/null | sort -r | head -n 1 || true)
   if [ -n "${LATEST_BACKUP}" ]; then
     echo " • Latest Local Backup: 🟢 $(basename "${LATEST_BACKUP}")"
   else
@@ -496,65 +508,175 @@ cmd_diagnostics() {
   dcompose logs --tail=30
 }
 
+provision_backup_keys() {
+  local dir="${BACKUP_KEYS_DIR:-/etc/attendease/backup-keys}"
+  if ! mkdir -p "$dir" 2>/dev/null; then
+    dir="./backups/keys"
+    mkdir -p "$dir"
+  fi
+  chmod 700 "$dir" 2>/dev/null || true
+
+  if ! command -v age >/dev/null 2>&1 || ! command -v age-keygen >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y age jq >/dev/null 2>&1 || true
+      else
+        apt-get update -qq && apt-get install -y age jq >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+
+  if [ ! -f "$dir/backup-signing.ed25519" ]; then
+    ssh-keygen -t ed25519 -N "" -C "attendease-backup@$(hostname)" -f "$dir/backup-signing.ed25519" >/dev/null 2>&1
+    chmod 600 "$dir/backup-signing.ed25519" 2>/dev/null || true
+    chmod 644 "$dir/backup-signing.ed25519.pub" 2>/dev/null || true
+  fi
+  # Encrypt to the school's provisioned public key (stored off-appliance),
+  # or generate a local age keypair for single-box setups
+  if [ ! -f "$dir/backup.agekey" ]; then
+    age-keygen -o "$dir/backup.agekey" >/dev/null 2>&1
+    chmod 600 "$dir/backup.agekey" 2>/dev/null || true
+    age-keygen -y "$dir/backup.agekey" > "$dir/backup.agekey.pub" 2>/dev/null
+  fi
+  # Authorized signers file for restore verification
+  echo "attendease-backup@$(hostname) $(cat "$dir/backup-signing.ed25519.pub")" \
+    > "$dir/allowed_signers"
+  chmod 644 "$dir/allowed_signers" 2>/dev/null || true
+  echo "$dir"
+}
+
 cmd_backup() {
-  log_header "AttendEase OS — Creating Encrypted Backup Snapshot"
+  log_header "AttendEase OS — Creating Encrypted Signed Backup Snapshot"
   mkdir -p ./backups
   chmod 0700 ./backups
 
-  TIMESTAMP=$(date +%Y%m%d%H%M%S)
-  BACKUP_NAME="attendease-${TIMESTAMP}"
-  TARGET_ENC="./backups/${BACKUP_NAME}.sql.gz.enc"
+  local keys_dir
+  keys_dir=$(provision_backup_keys)
+  local ts
+  ts=$(date -u +%Y%m%dT%H%M%SZ)
+  local outdir="${BACKUP_DIR:-./backups}"
+  mkdir -p "$outdir"
+  local base="$outdir/backup-$ts"
+  local recipient
+  recipient=$(cat "$keys_dir/backup.agekey.pub")
+  local signing_key="$keys_dir/backup-signing.ed25519"
+  local manifest="$base.manifest.json"
 
-  BACKUP_KEY=$(grep '^BACKUP_ENCRYPTION_KEY=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
-  if [ -z "${BACKUP_KEY}" ]; then
-    echo "❌ Error: Missing mandatory BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}. Failing closed for security." >&2
-    exit 1
-  fi
+  # 1. Dump plain sql into a pipe, compress, encrypt with authenticated cipher
+  # Manifest written alongside, signed separately
+  dcompose exec -T db pg_dump -U attendance_migration -d school_attendance \
+    --format=custom --compress=9 \
+    | age -r "$recipient" -o "$base.dump.age"
 
-  if [ "${#BACKUP_KEY}" -lt 32 ]; then
-    echo "❌ Error: BACKUP_ENCRYPTION_KEY must be at least 32 characters long." >&2
-    exit 1
-  fi
+  # 2. Checksums and metadata
+  local size
+  size=$(stat -c%s "$base.dump.age" 2>/dev/null || stat -f%z "$base.dump.age")
+  local sha
+  sha=$(sha256sum "$base.dump.age" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$base.dump.age" | cut -d' ' -f1)
+  local app_ver="${ATTENDEASE_VERSION:-$VERSION}"
 
-  # Pass the encryption key via a file descriptor (not the process command line)
-  # to prevent the key from appearing in `ps aux` output.
-  PASSPHRASE_FILE=$(mktemp)
-  chmod 0600 "${PASSPHRASE_FILE}"
-  printf '%s' "${BACKUP_KEY}" > "${PASSPHRASE_FILE}"
+  cat > "$manifest" <<EOF
+{
+  "formatVersion": 2,
+  "timestamp": "$ts",
+  "hostname": "$(hostname)",
+  "appVersion": "$app_ver",
+  "cipher": "age-x25519-chacha20poly1305",
+  "sha256": "$sha",
+  "bytes": $size
+}
+EOF
 
-  dcompose exec -T db pg_dump -U attendance_migration -d school_attendance | \
-    gzip -c | \
-    openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"${PASSPHRASE_FILE}" > "${TARGET_ENC}"
-
-  rm -f "${PASSPHRASE_FILE}"
-
-  SHA256_HASH=$(openssl dgst -sha256 "${TARGET_ENC}" | awk '{print $2}')
-  echo "${SHA256_HASH}  $(basename "${TARGET_ENC}")" > "./backups/${BACKUP_NAME}.checksums.sha256"
-
-  echo "✅ Encrypted backup snapshot created: ${TARGET_ENC}"
-  echo " • SHA-256: ${SHA256_HASH}"
+  # 3. Sign the manifest with Ed25519
+  ssh-keygen -Y sign -f "$signing_key" -n "attendease-backup" "$manifest"
+  # Produces $manifest.sig
+  echo "✅ Backup complete: $base.dump.age"
+  echo " • Manifest:  $manifest"
+  echo " • Signature: $manifest.sig"
+  echo " • SHA-256:   $sha"
 }
 
 cmd_restore() {
   log_header "AttendEase OS — Database Recovery from Backup"
-  if [ -z "${RESTORE_TARGET}" ]; then
-    echo "❌ Error: Specify backup file path. Example: ./scripts/install.sh restore ./backups/attendease-latest.sql.gz.enc" >&2
-    exit 1
+  local file="${RESTORE_TARGET:-${1:-}}"
+  if [ -z "${file}" ]; then
+    die "Specify backup file path. Example: ./scripts/install.sh restore ./backups/backup-20261005T120000Z.dump.age"
   fi
 
-  if [ ! -f "${RESTORE_TARGET}" ]; then
-    echo "❌ Error: Backup file '${RESTORE_TARGET}' not found." >&2
-    exit 1
+  if [ ! -f "${file}" ]; then
+    die "Backup file '${file}' not found."
   fi
 
-  BACKUP_KEY=$(grep '^BACKUP_ENCRYPTION_KEY=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
-  if [ -z "${BACKUP_KEY}" ]; then
-    echo "❌ Error: Missing mandatory BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}. Failing closed for security." >&2
-    exit 1
+  # Support legacy AES-256-CBC .sql.gz.enc backups
+  if [[ "${file}" == *.sql.gz.enc ]]; then
+    echo "⚠️ Warning: Restoring legacy unauthenticated AES-CBC backup."
+    BACKUP_KEY=$(grep '^BACKUP_ENCRYPTION_KEY=' "${CONFIG_FILE}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+    if [ -z "${BACKUP_KEY}" ]; then
+      die "Missing mandatory BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}."
+    fi
+    if [ "${VERIFY_ONLY}" -eq 1 ]; then
+      echo "✅ Legacy file verified present."
+      return 0
+    fi
+    echo "⚠️ Restoring database will overwrite current state."
+    if [ "${UNATTENDED:-0}" -ne 1 ]; then
+      read -rp "Are you sure you want to proceed? [y/N]: " CONFIRM
+      if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
+        echo "Restore aborted."
+        exit 0
+      fi
+    fi
+    echo " • Decrypting legacy backup..."
+    PASSPHRASE_FILE=$(mktemp)
+    chmod 0600 "${PASSPHRASE_FILE}"
+    printf '%s' "${BACKUP_KEY}" > "${PASSPHRASE_FILE}"
+    openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"${PASSPHRASE_FILE}" -in "${file}" | \
+      gunzip -c | \
+      dcompose exec -T db psql -U attendance_migration -d school_attendance
+    rm -f "${PASSPHRASE_FILE}"
+    echo "✅ Legacy database restore successfully completed."
+    return 0
+  fi
+
+  local manifest="${file%.dump.age}.manifest.json"
+  local sig="$manifest.sig"
+  local keys_dir="${BACKUP_KEYS_DIR:-/etc/attendease/backup-keys}"
+  if [ ! -d "$keys_dir" ] && [ -d "./backups/keys" ]; then
+    keys_dir="./backups/keys"
+  fi
+  local signers="$keys_dir/allowed_signers"
+  local key="$keys_dir/backup.agekey"
+
+  [[ -f "$file" && -f "$manifest" && -f "$sig" ]] || die "Incomplete backup set"
+
+  # 1. Verify signature on manifest FIRST
+  local hostname_signer
+  hostname_signer=$(jq -r '.hostname // empty' "$manifest" 2>/dev/null || hostname)
+  if ! ssh-keygen -Y verify -f "$signers" -I "attendease-backup@$hostname_signer" \
+    -n "attendease-backup" -s "$sig" < "$manifest" 2>/dev/null; then
+    if ! ssh-keygen -Y verify -f "$signers" -I "attendease-backup@$(hostname)" \
+      -n "attendease-backup" -s "$sig" < "$manifest" 2>/dev/null; then
+      die "BACKUP SIGNATURE VERIFICATION FAILED — possible tampering"
+    fi
+  fi
+  echo " • Signature verification passed (Ed25519)"
+
+  # 2. Check hash matches manifest
+  local actual_sha
+  actual_sha=$(sha256sum "$file" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$file" | cut -d' ' -f1)
+  local expected_sha
+  expected_sha=$(jq -r .sha256 "$manifest")
+  [[ "$actual_sha" == "$expected_sha" ]] \
+    || die "BACKUP CHECKSUM MISMATCH: manifest claims $expected_sha, got $actual_sha"
+  echo " • Checksum verification passed (${actual_sha:0:16}...)"
+
+  if [ "${VERIFY_ONLY}" -eq 1 ]; then
+    echo "✅ Backup verification passed successfully: signature and checksum valid."
+    return 0
   fi
 
   echo "⚠️ Restoring database will overwrite current state."
-  if [ "${UNATTENDED}" -ne 1 ]; then
+  if [ "${UNATTENDED:-0}" -ne 1 ]; then
     read -rp "Are you sure you want to proceed? [y/N]: " CONFIRM
     if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
       echo "Restore aborted."
@@ -562,17 +684,14 @@ cmd_restore() {
     fi
   fi
 
-  echo " • Decrypting and streaming backup to PostgreSQL..."
-  # Pass the encryption key via a file descriptor (not the command line).
-  PASSPHRASE_FILE=$(mktemp)
-  chmod 0600 "${PASSPHRASE_FILE}"
-  printf '%s' "${BACKUP_KEY}" > "${PASSPHRASE_FILE}"
-  openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"${PASSPHRASE_FILE}" -in "${RESTORE_TARGET}" | \
-    gunzip -c | \
-    dcompose exec -T db psql -U attendance_migration -d school_attendance
-  rm -f "${PASSPHRASE_FILE}"
+  # 3. Decrypt and restore in a single transaction
+  echo " • Decrypting with age and restoring in a single transaction..."
+  age -d -i "$key" "$file" \
+    | dcompose exec -T db pg_restore -U attendance_migration -d school_attendance \
+        --clean --if-exists --single-transaction \
+    || die "Restore failed"
 
-  echo "✅ Database restore successfully completed."
+  echo "Restore completed successfully from $file"
 }
 
 cmd_repair() {
@@ -588,7 +707,7 @@ cmd_update() {
   
   echo "1. Creating pre-update snapshot backup..."
   cmd_backup
-  PRE_UPDATE_BACKUP=$(find ./backups -name "*.sql.gz.enc" 2>/dev/null | sort -r | head -n 1 || true)
+  PRE_UPDATE_BACKUP=$(find ./backups \( -name "*.dump.age" -o -name "*.sql.gz.enc" \) 2>/dev/null | sort -r | head -n 1 || true)
 
   CURRENT_IMAGE_REF="ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0"
   if [ -f "${STATE_FILE}" ]; then

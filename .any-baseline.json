@@ -1,5 +1,4 @@
 {
-  "server.ts": 2,
   "sms-worker.ts": 3,
   "src/app/AppRouter.tsx": 2,
   "src/app/LandingPage.tsx": 1,
@@ -65,7 +64,7 @@
   "src/routes/notificationRoutes.ts": 14,
   "src/routes/publicRoutes.ts": 2,
   "src/routes/reportRoutes.ts": 26,
-  "src/routes/rfidRoutes.ts": 47,
+  "src/routes/rfidRoutes.ts": 39,
   "src/routes/schoolRoutes.ts": 4,
   "src/routes/setupRoutes.ts": 6,
   "src/routes/studentRoutes.ts": 5,

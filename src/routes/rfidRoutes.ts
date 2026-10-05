@@ -22,10 +22,7 @@ import { writeAuditLog } from '../services/auditLogService';
 
 export const rfidRouter = Router();
 
-function internalError(error: any) {
-  const message = process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message;
-  return { status: 500, body: { success: false, error: 'INTERNAL_SERVER_ERROR', message } };
-}
+
 
 // ============================================================================
 // ZEBRA FX9600 IOT CONNECTOR WEBHOOK INGEST ENDPOINT
@@ -227,10 +224,10 @@ rfidRouter.get(
         },
       };
     } catch (error: any) {
-      if (error.message === 'INVALID_PAGINATION_CURSOR') {
-        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      if (error.message === "INVALID_PAGINATION_CURSOR") {
+        throw new AppError("INVALID_PAGINATION_CURSOR", 400, "The provided pagination cursor is invalid or malformed");
       }
-      return internalError(error);
+      throw error;
     }
       },
   })
@@ -243,13 +240,9 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    try {
-      const credential = await credentialService.getCredentialById(req.params.credentialId, schoolId);
-      if (!credential) return { status: 404, body: { success: false, error: 'Credential not found' } };
+    const credential = await credentialService.getCredentialById(req.params.credentialId, schoolId);
+      if (!credential) return { status: 404, body: { success: false, error: "Credential not found" } };
       return { status: 200, body: { success: true, credential } };
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );
@@ -393,12 +386,8 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    try {
-      const credentials = await credentialService.getCredentialHistory(schoolId, req.params.studentId);
+    const credentials = await credentialService.getCredentialHistory(schoolId, req.params.studentId);
       return { status: 200, body: { success: true, credentials } };
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );
@@ -441,14 +430,10 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    try {
-      const readers = await readerService.listReaders(schoolId, {
+    const readers = await readerService.listReaders(schoolId, {
         status: req.query.status as any,
       });
       return { status: 200, body: { success: true, readers } };
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );
@@ -460,13 +445,9 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    try {
-      const reader = await readerService.getReaderById(req.params.readerId, schoolId);
-      if (!reader) return { status: 404, body: { success: false, error: 'Reader not found' } };
+    const reader = await readerService.getReaderById(req.params.readerId, schoolId);
+      if (!reader) return { status: 404, body: { success: false, error: "Reader not found" } };
       return { status: 200, body: { success: true, reader } };
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );
@@ -552,12 +533,8 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    try {
-      const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
+    const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
       return { status: 200, body: { success: true, health } };
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );
@@ -724,10 +701,10 @@ rfidRouter.get(
         },
       };
     } catch (error: any) {
-      if (error.message === 'INVALID_PAGINATION_CURSOR') {
-        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      if (error.message === "INVALID_PAGINATION_CURSOR") {
+        throw new AppError("INVALID_PAGINATION_CURSOR", 400, "The provided pagination cursor is invalid or malformed");
       }
-      return internalError(error);
+      throw error;
     }
       },
   })
@@ -801,12 +778,8 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR', 'TEACHER', 'REPORT_VIEWER'],
     writes: false,
     handler: async ({ schoolId }) => {
-    try {
-      const readers = await readerService.listReaders(schoolId);
+    const readers = await readerService.listReaders(schoolId);
       return { status: 200, body: { success: true, report: readers } };
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );
@@ -866,10 +839,10 @@ rfidRouter.get(
         },
       };
     } catch (error: any) {
-      if (error.message === 'INVALID_PAGINATION_CURSOR') {
-        return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
+      if (error.message === "INVALID_PAGINATION_CURSOR") {
+        throw new AppError("INVALID_PAGINATION_CURSOR", 400, "The provided pagination cursor is invalid or malformed");
       }
-      return internalError(error);
+      throw error;
     }
       },
   })
@@ -882,8 +855,7 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR', 'TEACHER', 'REPORT_VIEWER'],
     writes: false,
     handler: async ({ schoolId }) => {
-    try {
-      return await withTenantContext(schoolId, async (tx) => {
+    return await withTenantContext(schoolId, async (tx) => {
         const scans = await tx
           .select({
             id: rfidScanEvents.id,
@@ -947,9 +919,6 @@ rfidRouter.get(
           },
         };
       });
-    } catch (error: any) {
-      return internalError(error);
-    }
       },
   })
 );

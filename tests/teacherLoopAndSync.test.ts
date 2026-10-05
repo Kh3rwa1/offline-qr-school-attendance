@@ -103,7 +103,6 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
             academicYearId: ay.id,
             className: 'Class 4',
             sectionName: 'A',
-            medium: 'BENGALI',
           })
           .returning();
         unassignedClassId = cs.id;
@@ -114,8 +113,6 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
             phoneNumber: `+9198${Date.now().toString().slice(-8)}`,
             passwordHash: 'dummy-hash',
             fullName: 'Soumen Roy',
-            role: 'TEACHER',
-            status: 'ACTIVE',
           })
           .returning();
         teacherId = u.id;
@@ -176,7 +173,6 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
             academicYearId: ay.id,
             className: 'Class 8',
             sectionName: 'B',
-            medium: 'BENGALI',
           })
           .returning();
         classSectionId = cs.id;
@@ -187,8 +183,6 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
             phoneNumber: `+9197${Date.now().toString().slice(-8)}`,
             passwordHash: 'dummy-hash',
             fullName: 'Moumita Sen',
-            role: 'TEACHER',
-            status: 'ACTIVE',
           })
           .returning();
         teacherId = u.id;
@@ -204,7 +198,6 @@ describe('WP1 & WP2 — Teacher Loop, Cryptographic Digests & Sync Integrity', (
           schoolId: school.id,
           teacherId: u.id,
           classSectionId: cs.id,
-          academicYearId: ay.id,
         });
 
         const [s1] = await tx

@@ -12,6 +12,7 @@ const FORBIDDEN_PATTERNS = [
   { pattern: /Verification Passed/i, label: 'Fabricated compliance claim: Verification Passed' },
   { pattern: /Certified\b/i, label: 'Fabricated compliance claim: Certified' },
   { pattern: /Zero Active/i, label: 'Fabricated status claim: Zero Active' },
+  { pattern: /set_config\(\s*'app\.(current_school_id|is_system)'[^)]*,\s*false\s*\)/, label: 'Session-level tenant config leaks across pooled connections. Use withTenantContext.' },
 ];
 
 const SCAN_DIR = path.resolve(process.cwd(), 'src');

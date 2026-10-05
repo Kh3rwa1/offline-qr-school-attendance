@@ -1,11 +1,12 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware';
 import { translate } from '../i18n';
-import { setTenantContext } from '../db';
+import { withTenantContext } from '../db';
 import { isPlatformSuperAdmin } from '../auth/session';
+import { isUuid } from '../lib/ids';
 
 /**
- * Tenant middleware: verifies tenant membership and sets active school context GUC.
+ * Tenant middleware: verifies tenant membership and wraps the request in transaction-local tenant context.
  */
 export async function requireTenant(
   req: AuthenticatedRequest,
@@ -16,7 +17,7 @@ export async function requireTenant(
     return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   }
 
-  const urlMatch = req.originalUrl?.match(/\/schools\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
+  const urlMatch = req.originalUrl?.match(/\/schools\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
   const targetSchoolId =
     req.params.schoolId ||
     urlMatch?.[1] ||
@@ -28,7 +29,7 @@ export async function requireTenant(
     return res.status(400).json({ success: false, error: 'MISSING_SCHOOL_ID', message: 'Target schoolId is required' });
   }
 
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(targetSchoolId))) {
+  if (!isUuid(String(targetSchoolId))) {
     return res.status(400).json({ success: false, error: 'INVALID_SCHOOL_ID' });
   }
 
@@ -56,12 +57,19 @@ export async function requireTenant(
   req.activeSchoolId = String(targetSchoolId);
   req.userRole = targetMembership?.role || (isSuperAdmin ? 'SUPER_ADMIN' : undefined);
 
-  try {
-    await setTenantContext(String(targetSchoolId));
-    next();
-  } catch (error: any) {
+  return withTenantContext(String(targetSchoolId), async () => {
+    return new Promise<void>((resolve, reject) => {
+      res.once('finish', () => resolve());
+      res.once('close', () => resolve());
+      try {
+        next();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }).catch((err) => {
     if (!res.headersSent) {
-      res.status(500).json({ success: false, error: 'TENANT_CONTEXT_FAILED' });
+      next(err);
     }
-  }
+  });
 }

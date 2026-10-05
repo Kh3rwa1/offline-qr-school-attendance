@@ -97,7 +97,6 @@ describe('Tenant Data Migration Round-Trip & Portability Suite', () => {
           academicYearId: ay.id,
           className: 'Class 9',
           sectionName: 'A',
-          medium: 'BENGALI',
         })
         .returning();
 

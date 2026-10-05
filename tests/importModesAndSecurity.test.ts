@@ -75,7 +75,6 @@ describe('Student Import Modes, Token Security & RFC CSV Suite', () => {
           academicYearId: ay.id,
           className: 'Class 10',
           sectionName: 'A',
-          medium: 'BENGALI',
         })
         .returning();
 

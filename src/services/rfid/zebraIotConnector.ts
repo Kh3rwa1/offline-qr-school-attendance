@@ -283,7 +283,7 @@ export async function processZebraIotWebhook(params: {
             antennaPort,
             peakRssi,
             readCount,
-            decision: 'REJECTED',
+            decision: freshness === 'FUTURE_SKEW' ? 'FUTURE_SKEW' : 'WRONG_SCHOOL_DAY',
             rejectionCode: rejectionReason,
             clientEventId: `${reader.id}-${epcDigest}-${Math.floor((readTs || now).getTime() / 1000)}-rej`,
             idempotencyKey: crypto.createHash('sha256').update(`${schoolId}:${reader.id}:${epcDigest}:${(readTs || now).getTime()}`).digest('hex'),
@@ -647,9 +647,8 @@ export async function processZebraIotWebhook(params: {
             classSectionId: targetClassSectionId,
             teacherId: assignedTeacherId,
             sessionDate: todayDate,
+            sessionType: 'GATE_ARRIVAL',
             status: 'OPEN',
-            startedAt: new Date(scanTimeMs),
-            sourceMode: 'RFID_GATE',
           })
           .onConflictDoNothing()
           .returning();
@@ -878,7 +877,7 @@ export async function processZebraIotWebhook(params: {
       decision: 'ACCEPTED',
       studentId: studentInfo.studentId,
       studentName: studentInfo.fullName,
-      rollNumber: studentInfo.rollNumber || undefined,
+      rollNumber: studentInfo.rollNumber ? String(studentInfo.rollNumber) : undefined,
       classSectionId: targetClassSectionId,
       attendanceSessionId: session.id,
       attendanceRecordId: recordResult.recordId,

@@ -98,7 +98,6 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
           academicYearId: ay.id,
           className: 'Class 5',
           sectionName: 'A',
-          capacity: 40,
         })
         .returning();
       classSectionId = cs.id;
@@ -107,8 +106,6 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
         schoolId: school.id,
         teacherId: teacherUser.id,
         classSectionId: cs.id,
-        academicYearId: ay.id,
-        isClassTeacher: true,
       });
 
       const [st] = await tx
@@ -460,7 +457,6 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
           academicYearId: ay.id,
           className: 'Class 6',
           sectionName: 'B',
-          capacity: 40,
         })
         .returning();
       classSectionId = cs.id;
@@ -469,8 +465,6 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
         schoolId: school.id,
         teacherId: teacherUser.id,
         classSectionId: cs.id,
-        academicYearId: ay.id,
-        isClassTeacher: true,
       });
 
       const [st] = await tx
@@ -607,7 +601,6 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
           academicYearId: ay.id,
           className: 'Class 7',
           sectionName: 'A',
-          capacity: 40,
         })
         .returning();
       classSectionId = cs.id;
@@ -616,8 +609,6 @@ describe('Teacher Gate Experience, Plain Language UI & Reports Integration', () 
         schoolId: school.id,
         teacherId: teacherUser.id,
         classSectionId: cs.id,
-        academicYearId: ay.id,
-        isClassTeacher: true,
       });
 
       const [st1] = await tx

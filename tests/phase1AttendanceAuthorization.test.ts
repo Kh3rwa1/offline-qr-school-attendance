@@ -43,9 +43,8 @@ describe('Phase 1 — Attendance Authorization & Idempotency Hardening Tests', (
         schoolId: seeded.schoolA.id,
         userId: seeded.teacherUser.id,
         deviceIdentifier: `DEV-P1-${Date.now()}-${Math.random()}`,
-        deviceName: 'Test Tablet',
-        deviceType: 'TABLET',
-        status: 'APPROVED',
+        deviceModel: 'Test Tablet',
+        status: 'AUTHORIZED',
       })
       .returning();
   });

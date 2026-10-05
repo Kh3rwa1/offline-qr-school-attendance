@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import { db, setTenantContext, resetTenantContext } from '../src/db';
+import { db } from '../src/db';
 import { runMigrations } from '../src/db/migrate';
 import {
   schools,
@@ -59,7 +59,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
   });
 
   beforeEach(async () => {
-    await resetTenantContext();
     getFakeSmsProvider().clearSentMessages();
 
     // Setup seed school & hierarchy
@@ -74,8 +73,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
       })
       .returning();
     schoolId = sc.id;
-
-    await setTenantContext(schoolId);
 
     const [ay] = await db
       .insert(academicYears)
@@ -289,7 +286,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-11',
           sessionType: 'DAILY',
@@ -331,7 +327,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-12',
           sessionType: 'DAILY',
@@ -374,7 +369,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-13',
           sessionType: 'DAILY',
@@ -417,7 +411,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-14',
           sessionType: 'DAILY',
@@ -463,7 +456,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-15',
           sessionType: 'DAILY',
@@ -503,7 +495,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-16',
           sessionType: 'DAILY',
@@ -548,7 +539,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-17',
           sessionType: 'DAILY',
@@ -595,7 +585,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-19',
           sessionType: 'DAILY',
@@ -642,7 +631,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-20',
           sessionType: 'DAILY',
@@ -722,7 +710,6 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
         .values({
           schoolId,
           classSectionId,
-          academicYearId,
           teacherId: testUserId,
           sessionDate: '2026-08-18',
           sessionType: 'DAILY',

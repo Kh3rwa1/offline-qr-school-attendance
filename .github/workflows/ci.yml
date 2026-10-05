@@ -219,6 +219,23 @@ jobs:
           PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
         run: npm run test:postgres
 
+      - name: Production bundle boots without devDependencies
+        env:
+          DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: production
+          SESSION_SECRET: ci-session-secret-01234567890123456789012345678901
+          READER_TOKEN_PEPPER: ci-reader-token-pepper-01234567890123456789
+          RFID_CREDENTIAL_DIGEST_KEY: ci-credential-digest-01234567890123456789
+        run: |
+          npm run build
+          rm -rf node_modules && npm ci --omit=dev
+          timeout 15 node dist/server.cjs &
+          sleep 8
+          curl -fsS http://127.0.0.1:3000/api/v1/health
+
   backup-and-restore-drill:
     name: Encrypted Backup & Restore RLS Verification Drill
     runs-on: ubuntu-latest

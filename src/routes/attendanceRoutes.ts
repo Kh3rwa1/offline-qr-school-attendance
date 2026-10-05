@@ -66,7 +66,11 @@ router.get(
       res.json({ success: true, data: assignedClasses });
     } catch (error: any) {
       console.error('Error fetching assigned classes:', error);
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_CLASSES' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_FETCH_CLASSES',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch assigned classes' : error.message,
+      });
     }
   }
 );
@@ -93,7 +97,11 @@ router.get(
       res.json({ success: true, ...result });
     } catch (error: any) {
       console.error('Error fetching today gate attendance:', error);
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_TODAY_GATE' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_FETCH_TODAY_GATE',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch gate attendance' : error.message,
+      });
     }
   }
 );
@@ -137,7 +145,11 @@ router.post(
         res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
         return;
       }
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_CREATE_SESSION' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_CREATE_SESSION',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to create session' : error.message,
+      });
     }
   }
 );
@@ -239,7 +251,11 @@ router.get(
         return;
       }
       console.error('Error listing attendance sessions:', error);
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_LIST_SESSIONS' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_LIST_SESSIONS',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to list sessions' : error.message,
+      });
     }
   }
 );
@@ -269,7 +285,11 @@ router.get(
         res.status(403).json({ success: false, error: 'UNAUTHORIZED_TEACHER_NOT_ASSIGNED' });
         return;
       }
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_SESSION' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_FETCH_SESSION',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch session' : error.message,
+      });
     }
   }
 );
@@ -320,9 +340,12 @@ router.patch(
         SESSION_NOT_FOUND: 404,
       };
 
-      res.status(statusMap[error.message] || 500).json({
+      const status = statusMap[error.message] || 500;
+      const isKnown = Boolean(statusMap[error.message]);
+      res.status(status).json({
         success: false,
-        error: error.message || 'FAILED_TO_UPDATE_SESSION_STATUS',
+        error: isKnown ? error.message : 'FAILED_TO_UPDATE_SESSION_STATUS',
+        message: !isKnown ? (process.env.NODE_ENV === 'production' ? 'Failed to update session status' : error.message) : undefined,
       });
     }
   }
@@ -383,9 +406,12 @@ router.post(
         SESSION_NOT_FOUND: 404,
       };
 
-      res.status(statusMap[error.message] || 500).json({
+      const status = statusMap[error.message] || 500;
+      const isKnown = Boolean(statusMap[error.message]);
+      res.status(status).json({
         success: false,
-        error: error.message || 'FAILED_TO_PROCESS_SCAN',
+        error: isKnown ? error.message : 'FAILED_TO_PROCESS_SCAN',
+        message: !isKnown ? (process.env.NODE_ENV === 'production' ? 'Failed to process scan' : error.message) : undefined,
       });
     }
   }
@@ -431,9 +457,12 @@ router.post(
         SESSION_NOT_FOUND: 404,
       };
 
-      res.status(statusMap[error.message] || 500).json({
+      const status = statusMap[error.message] || 500;
+      const isKnown = Boolean(statusMap[error.message]);
+      res.status(status).json({
         success: false,
-        error: error.message || 'FAILED_TO_UPDATE_ATTENDANCE',
+        error: isKnown ? error.message : 'FAILED_TO_UPDATE_ATTENDANCE',
+        message: !isKnown ? (process.env.NODE_ENV === 'production' ? 'Failed to update attendance' : error.message) : undefined,
       });
     }
   }
@@ -463,7 +492,11 @@ router.get(
       res.json({ success: true, data: report });
     } catch (error: any) {
       console.error('Error generating daily class report:', error);
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_GENERATE_REPORT' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_GENERATE_REPORT',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to generate report' : error.message,
+      });
     }
   }
 );

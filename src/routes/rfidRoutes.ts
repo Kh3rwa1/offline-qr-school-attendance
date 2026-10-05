@@ -16,6 +16,11 @@ import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, g
 
 export const rfidRouter = Router();
 
+function internalError(error: any) {
+  const message = process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message;
+  return { status: 500, body: { success: false, error: 'INTERNAL_SERVER_ERROR', message } };
+}
+
 // ============================================================================
 // ZEBRA FX9600 IOT CONNECTOR WEBHOOK INGEST ENDPOINT
 // ============================================================================
@@ -97,7 +102,8 @@ rfidRouter.post(
       return res.status(result.decision === 'ACCEPTED' ? 200 : 400).json(result);
     } catch (error: any) {
       console.error('Scan processing API error:', error);
-      return res.status(500).json({ error: 'SCAN_PROCESSING_FAILED', message: error.message });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected scan processing error occurred' : error.message;
+      return res.status(500).json({ error: 'SCAN_PROCESSING_FAILED', message });
     }
   }
 );
@@ -211,7 +217,7 @@ rfidRouter.get(
       if (error.message === 'INVALID_PAGINATION_CURSOR') {
         return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
       }
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -226,7 +232,7 @@ rfidRouter.get(
       if (!credential) return { status: 404, body: { success: false, error: 'Credential not found' } };
       return { status: 200, body: { success: true, credential } };
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -360,7 +366,7 @@ rfidRouter.get(
       const credentials = await credentialService.getCredentialHistory(schoolId, req.params.studentId);
       return { status: 200, body: { success: true, credentials } };
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -405,7 +411,7 @@ rfidRouter.get(
       });
       return { status: 200, body: { success: true, readers } };
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -420,7 +426,7 @@ rfidRouter.get(
       if (!reader) return { status: 404, body: { success: false, error: 'Reader not found' } };
       return { status: 200, body: { success: true, reader } };
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -500,7 +506,7 @@ rfidRouter.get(
       const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
       return { status: 200, body: { success: true, health } };
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -514,7 +520,11 @@ rfidRouter.post(
       await readerService.recordHeartbeat(req.params.readerId, req.params.schoolId);
       return res.json({ success: true, status: 'ok' });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'INTERNAL_SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+      });
     }
   }
 );
@@ -530,7 +540,11 @@ rfidRouter.get(
       const roster = await offlineService.generateOfflineRoster(req.params.schoolId);
       return res.json({ success: true, roster });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'INTERNAL_SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+      });
     }
   }
 );
@@ -543,7 +557,11 @@ rfidRouter.post(
       const results = await offlineService.syncOfflineEvents(req.params.schoolId, req.body.events || []);
       return res.json({ success: true, results });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'INTERNAL_SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+      });
     }
   }
 );
@@ -556,7 +574,11 @@ rfidRouter.get(
       const policy = offlineService.getOfflinePolicy(req.params.schoolId);
       return res.json({ success: true, policy });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'INTERNAL_SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
+      });
     }
   }
 );
@@ -651,7 +673,7 @@ rfidRouter.get(
       if (error.message === 'INVALID_PAGINATION_CURSOR') {
         return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
       }
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -678,7 +700,7 @@ rfidRouter.get(
       const readers = await readerService.listReaders(schoolId);
       return { status: 200, body: { success: true, report: readers } };
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -738,7 +760,7 @@ rfidRouter.get(
       if (error.message === 'INVALID_PAGINATION_CURSOR') {
         return { status: 400, body: { success: false, error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' } };
       }
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );
@@ -813,7 +835,7 @@ rfidRouter.get(
         };
       });
     } catch (error: any) {
-      return { status: 500, body: { success: false, error: error.message } };
+      return internalError(error);
     }
   })
 );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
-// @ts-ignore
+// @ts-expect-error jsdom module resolution in test environment
 import { JSDOM } from 'jsdom';
 import { BentoScannerGrid } from '../src/components/BentoScannerGrid';
 import { Header } from '../src/components/Header';

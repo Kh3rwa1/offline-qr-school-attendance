@@ -35,7 +35,8 @@ deviceRouter.post(
       if (err.message === 'DEVICE_REVOKED') {
         return res.status(403).json({ error: 'DEVICE_REVOKED', message: 'Device has been revoked' });
       }
-      return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, stack: err.stack });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected internal error occurred' : err.message;
+      return res.status(500).json({ error: 'INTERNAL_ERROR', message });
     }
   }
 );

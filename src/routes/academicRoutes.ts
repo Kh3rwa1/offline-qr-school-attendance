@@ -64,7 +64,8 @@ academicRouter.post(
       if (err.code === '23505' || err.message?.includes('unique')) {
         return res.status(409).json({ error: 'DUPLICATE_ACADEMIC_YEAR', message: 'Academic year name already exists' });
       }
-      return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message;
+      return res.status(500).json({ error: 'SERVER_ERROR', message });
     }
   }
 );
@@ -152,7 +153,8 @@ academicRouter.post(
           message: 'Class section already exists for this academic year',
         });
       }
-      return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message;
+      return res.status(500).json({ error: 'SERVER_ERROR', message });
     }
   }
 );
@@ -200,7 +202,8 @@ academicRouter.post(
       if (err.code === '23505' || err.message?.includes('unique')) {
         return res.status(409).json({ error: 'DUPLICATE_ASSIGNMENT', message: 'Teacher already assigned to this class' });
       }
-      return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message;
+      return res.status(500).json({ error: 'SERVER_ERROR', message });
     }
   }
 );

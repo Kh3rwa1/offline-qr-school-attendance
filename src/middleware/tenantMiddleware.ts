@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware';
 import { translate } from '../i18n';
 import { setTenantContext } from '../db';
+import { isPlatformSuperAdmin } from '../auth/session';
 
 /**
  * Tenant middleware: verifies tenant membership and sets active school context GUC.
@@ -32,7 +33,7 @@ export async function requireTenant(
   }
 
   const { memberships } = req.sessionContext;
-  const isSuperAdmin = req.sessionContext.platformRole === 'SUPER_ADMIN' || req.sessionContext.user?.platformRole === 'SUPER_ADMIN' || memberships.some((membership) => membership.role === 'SUPER_ADMIN');
+  const isSuperAdmin = isPlatformSuperAdmin(req.sessionContext);
   const targetMembership = memberships.find((membership) => membership.schoolId === targetSchoolId);
 
   if (!isSuperAdmin) {

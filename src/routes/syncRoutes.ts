@@ -63,8 +63,11 @@ router.get(
 
       res.json({ success: true, data: rosterPackage });
     } catch (error: any) {
-      console.error('Error fetching offline roster package:', error);
-      res.status(500).json({ success: false, error: error.message || 'FAILED_TO_FETCH_ROSTER' });
+      res.status(500).json({
+        success: false,
+        error: 'FAILED_TO_FETCH_ROSTER',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch roster' : error.message,
+      });
     }
   }
 );
@@ -110,7 +113,11 @@ router.post(
         res.status(403).json({ success: false, error: error.message });
         return;
       }
-      res.status(500).json({ success: false, error: error.message || 'SYNC_FAILED' });
+      res.status(500).json({
+        success: false,
+        error: 'SYNC_FAILED',
+        message: process.env.NODE_ENV === 'production' ? 'Batch sync failed' : error.message,
+      });
     }
   }
 );

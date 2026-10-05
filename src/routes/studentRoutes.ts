@@ -39,7 +39,8 @@ studentRouter.get(
       if (err.message === 'INVALID_PAGINATION_CURSOR') {
         return res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
       }
-      return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : err.message;
+      return res.status(500).json({ error: 'SERVER_ERROR', message });
     }
   }
 );
@@ -110,7 +111,8 @@ studentRouter.post(
       if (err.message === 'DUPLICATE_ROLL_NUMBER') {
         return res.status(409).json({ error: 'DUPLICATE_ROLL_NUMBER', message: 'Roll number already exists in this class section' });
       }
-      return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+      const message = process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : err.message;
+      return res.status(500).json({ error: 'SERVER_ERROR', message });
     }
   }
 );

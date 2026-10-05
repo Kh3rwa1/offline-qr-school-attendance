@@ -5,7 +5,7 @@ import { db, withSystemContext } from '../db';
 import { users, schoolMemberships, schools } from '../db/schema';
 import { verifyPassword } from '../auth/password';
 import { timingSafeVerifyPassword, lookupAuthUserByPhone, getUserSchoolMemberships } from '../db/authFunctions';
-import { createSession, invalidateSession } from '../auth/session';
+import { createSession, invalidateSession, isPlatformSuperAdmin } from '../auth/session';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { createAuditLog } from '../services/auditLogService';
 import { generateCsrfToken, setCsrfCookies, clearCsrfCookies, CSRF_COOKIE_NAME, CSRF_SIG_COOKIE_NAME } from '../middleware/csrfProtection';
@@ -146,7 +146,7 @@ authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest,
   }
 
   const { schoolId } = parsed.data;
-  const isSuperAdmin = req.user?.platformRole === 'SUPER_ADMIN' || req.sessionContext?.platformRole === 'SUPER_ADMIN' || req.sessionContext?.memberships?.some((m) => m.role === 'SUPER_ADMIN');
+  const isSuperAdmin = isPlatformSuperAdmin(req.sessionContext);
 
   const memberships = await getUserSchoolMemberships(req.user!.id);
   const targetMembership = memberships.find((m) => m.schoolId === schoolId);
@@ -163,6 +163,12 @@ authRouter.post('/switch-school', requireAuth, async (req: AuthenticatedRequest,
 
   if (!targetSchool || targetSchool.status !== 'ACTIVE') {
     return res.status(403).json({ error: 'SCHOOL_NOT_ACTIVE', message: 'Target school is not active' });
+  }
+
+  // Cleanly invalidate previous session before issuing new session
+  const prevToken = req.cookies?.session || req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (prevToken) {
+    await invalidateSession(prevToken);
   }
 
   const session = await createSession(req.user!.id, schoolId);

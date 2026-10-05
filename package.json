@@ -1,6 +1,6 @@
 {
   "name": "offline-qr-school-attendance",
-  "description": "Hybrid Offline QR + Production RFID/NFC School Attendance Platform",
+  "description": "Hybrid Offline QR + Production UHF RFID School Attendance Appliance",
   "private": true,
   "version": "1.3.0",
   "type": "module",
@@ -10,10 +10,10 @@
     "build:gateway": "esbuild src/gateway/gatewayDaemon.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/gateway.cjs",
     "start": "node dist/server.cjs",
     "start:gateway": "node dist/gateway.cjs",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && eslint . --quiet",
     "check:guardrail": "tsx scripts/verify-no-forbidden-strings.ts",
     "check:claims": "tsx scripts/verify-product-claims.ts",
-    "check": "tsc --noEmit && tsx scripts/verify-no-forbidden-strings.ts && tsx scripts/verify-no-inline-i18n-ternaries.ts && tsx scripts/verify-product-claims.ts",
+    "check": "tsc --noEmit && eslint . --quiet && tsx scripts/verify-no-forbidden-strings.ts && tsx scripts/verify-no-inline-i18n-ternaries.ts && tsx scripts/verify-product-claims.ts",
     "test": "bash scripts/run-ci-tests.sh",
     "test:e2e": "playwright test",
     "e2e:server": "tsx scripts/e2e-server.ts",
@@ -28,7 +28,6 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
     "@tanstack/react-query": "^5.101.4",
-    "@types/express-rate-limit": "^5.1.3",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "argon2": "^0.45.1",
@@ -45,7 +44,7 @@
     "ioredis": "^6.0.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "multer": "^2.3.0",
+    "multer": "^2.4.0",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
     "rate-limit-redis": "^6.0.1",
@@ -56,6 +55,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.1.14",
     "@types/better-sqlite3": "^9.6.0",
@@ -69,11 +69,17 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
+    "@typescript-eslint/parser": "^8.71.0",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.25.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "fake-indexeddb": "^6.2.5",
+    "globals": "^16.5.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
@@ -83,7 +89,9 @@
   },
   "overrides": {
     "uuid": "^11.1.1",
-    "brace-expansion": "^1.1.18"
+    "brace-expansion": "^1.1.21",
+    "ip-address": "^10.7.3",
+    "qs": "^6.16.0"
   },
   "optionalDependencies": {
     "pcsclite": "^1.0.1"

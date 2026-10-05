@@ -136,7 +136,6 @@ export async function createApp() {
   app.use('/api/v1/audit', platformAuditRouter);
   app.use('/api/v1/system', systemHealthRouter);
   app.use('/api/v1/schools/:schoolId/notifications', notificationRouter);
-  app.use('/api/notifications', notificationRouter);
   app.use('/api/v1/notifications', notificationRouter);
 
   app.all('/api/*', (_req, res) => {
@@ -145,6 +144,12 @@ export async function createApp() {
       error: 'API_ENDPOINT_NOT_FOUND',
       message: 'The requested API endpoint was not found on this server.',
     });
+  });
+
+  app.get('/runtime-env.js', (_req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.send(`window.__FEATURE_RFID__ = ${process.env.FEATURE_RFID === 'true'};`);
   });
 
   if (process.env.NODE_ENV !== 'production' && process.env.TEST_SERVER_STATIC !== 'true') {
@@ -179,7 +184,9 @@ export async function createApp() {
             normalizedPath.endsWith('.html') ||
             normalizedPath.endsWith('/sw.js') ||
             normalizedPath.endsWith('/manifest.json') ||
-            normalizedPath.endsWith('/font-loader.js')
+            normalizedPath.endsWith('/font-loader.js') ||
+            normalizedPath.endsWith('/theme-loader.js') ||
+            normalizedPath.endsWith('/runtime-env.js')
           ) {
             res.setHeader('Cache-Control', 'no-cache, must-revalidate');
           } else if (/\.(jpe?g|png|webp|svg|ico|woff2?)$/.test(normalizedPath)) {
@@ -191,11 +198,7 @@ export async function createApp() {
 
     app.get('*', rateLimitPolicies.spaFallback, (req, res, next) => {
       if (!req.path.startsWith('/api')) {
-        const injectedHtml = indexHtmlContent.replace(
-          '</head>',
-          `<script>window.__FEATURE_RFID__ = ${process.env.FEATURE_RFID === 'true'};</script></head>`
-        );
-        return res.type('html').send(injectedHtml);
+        return res.type('html').send(indexHtmlContent);
       }
       next();
     });

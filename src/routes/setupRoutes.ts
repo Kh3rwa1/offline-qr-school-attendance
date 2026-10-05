@@ -95,7 +95,8 @@ setupRouter.get('/status', rateLimitPolicies.setupStatus, async (_req: Request, 
       },
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'FAILED_SETUP_STATUS', message: err.message });
+    const message = process.env.NODE_ENV === 'production' ? 'Failed to fetch setup status' : err.message;
+    res.status(500).json({ error: 'FAILED_SETUP_STATUS', message });
   }
 });
 
@@ -224,7 +225,8 @@ setupRouter.post('/initialize', rateLimitPolicies.setupInitialize, async (req: R
       schoolId: createdSchoolId,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: 'INITIALIZATION_FAILED', message: err.message });
+    const message = process.env.NODE_ENV === 'production' ? 'Failed to initialize system' : err.message;
+    return res.status(500).json({ error: 'INITIALIZATION_FAILED', message });
   }
 });
 
@@ -348,6 +350,7 @@ setupRouter.post('/import-roster', rateLimitPolicies.setupImport, requireAuth, a
       classesCreated: classMap.size,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: 'IMPORT_FAILED', message: err.message });
+    const message = process.env.NODE_ENV === 'production' ? 'Failed to import roster' : err.message;
+    return res.status(500).json({ error: 'IMPORT_FAILED', message });
   }
 });

@@ -323,7 +323,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                           <td className="p-3 font-mono text-ink-soft">+91 ******4321</td>
                           <td className="p-3 text-ink-soft max-w-xs">
                             <div className="text-xs italic bg-surface-soft p-2 rounded-xl border border-line leading-relaxed">
-                              "{text}"
+                              &ldquo;{text}&rdquo;
                             </div>
                           </td>
                           <td className="p-3 font-mono">
@@ -548,7 +548,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   </div>
 
                   <div className="py-2.5 flex justify-between">
-                    <span className="text-forest-700 dark:text-forest-600 font-bold">Today's Class Segment Total</span>
+                    <span className="text-forest-700 dark:text-forest-600 font-bold">Today&apos;s Class Segment Total</span>
                     <span className="font-bold font-mono text-forest-700 dark:text-forest-600">{todayTotalSegments} Segments</span>
                   </div>
 
@@ -590,14 +590,14 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   {language === 'bn' ? 'সরাসরি সেশনের তথ্যের ভিত্তিতে প্রাক্কলন' : 'Active Session Extrapolation'}
                 </h3>
                 <p className="t-body text-xs text-ink-soft mt-0.5">
-                  Extrapolating monthly segment metrics directly from today's active school register state.
+                  Extrapolating monthly segment metrics directly from today&apos;s active school register state.
                 </p>
               </div>
             </div>
 
             <div className="flex gap-4 bg-surface px-4 py-2.5 rounded-2xl border border-line shadow-2xs self-stretch md:self-auto justify-around">
               <div className="text-center px-1">
-                <div className="t-label text-ink-muted">Today's Segments</div>
+                <div className="t-label text-ink-muted">Today&apos;s Segments</div>
                 <div className="text-xl font-extrabold text-forest-700 dark:text-forest-600 font-mono mt-0.5">{todayTotalSegments}</div>
               </div>
               <div className="w-px bg-line" />
@@ -626,7 +626,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({ students, language }
                   <TrendingUp className="w-3.5 h-3.5 text-ink-muted" />
                   <span>Projected Absentee Alerts</span>
                 </div>
-                <p className="t-body text-xs text-ink-soft mt-1">Based on today's localized attendance trend</p>
+                <p className="t-body text-xs text-ink-soft mt-1">Based on today&apos;s localized attendance trend</p>
               </div>
               <div className="text-2xl font-extrabold text-ink font-display mt-4">{monthlyExtrapolatedAbsences} SMS</div>
             </div>

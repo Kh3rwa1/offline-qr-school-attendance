@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
-import { db } from '../db';
+import { db, withTenantContext } from '../db';
 import { rfidReaders } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { SecurityCapability } from '../services/rfid/adapters/types';
@@ -45,10 +45,12 @@ export const readerAuthMiddleware = async (
     }
 
     // Validate reader exists and is ACTIVE in rfidReaders table
-    const [reader] = await db
-      .select()
-      .from(rfidReaders)
-      .where(and(eq(rfidReaders.id, readerId)));
+    const [reader] = await withTenantContext(schoolId, async (tx) => {
+      return await tx
+        .select()
+        .from(rfidReaders)
+        .where(eq(rfidReaders.id, readerId));
+    });
 
     if (!reader || reader.schoolId !== schoolId) {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'Reader not registered to target school' });

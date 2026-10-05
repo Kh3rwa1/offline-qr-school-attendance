@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware';
 import { translate } from '../i18n';
 import { withTenantContext } from '../db';
+import { isPlatformSuperAdmin } from '../auth/session';
 
 export interface TenantContext {
   req: AuthenticatedRequest;
@@ -45,7 +46,7 @@ export function tenantHandler(handler: TenantHandlerFn) {
     }
 
     const { memberships, user } = req.sessionContext;
-    const isSuperAdmin = memberships.some((m) => m.role === 'SUPER_ADMIN');
+    const isSuperAdmin = isPlatformSuperAdmin(req.sessionContext);
     const targetMembership = memberships.find((m) => m.schoolId === targetSchoolId);
 
     if (!isSuperAdmin) {
@@ -117,9 +118,13 @@ export function tenantHandler(handler: TenantHandlerFn) {
       };
 
       const statusCode = statusMap[error.message] || 500;
+      const safeMessage =
+        statusCode === 500 && process.env.NODE_ENV === 'production'
+          ? 'An unexpected tenant transaction error occurred'
+          : error.message || 'TENANT_TRANSACTION_FAILED';
       return res.status(statusCode).json({
         success: false,
-        error: error.message || 'TENANT_TRANSACTION_FAILED',
+        error: safeMessage,
       });
     }
   };

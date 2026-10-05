@@ -10,3 +10,5 @@ output/
 gateway-data/
 backups/
 .update.lock
+data/
+report-artifacts/

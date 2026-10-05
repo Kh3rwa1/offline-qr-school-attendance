@@ -162,3 +162,12 @@ export async function invalidateSession(token: string): Promise<void> {
     await tx.delete(authSessions).where(eq(authSessions.sessionToken, hashedToken));
   });
 }
+
+export function isPlatformSuperAdmin(session?: SessionContext | null): boolean {
+  if (!session) return false;
+  return (
+    session.platformRole === 'SUPER_ADMIN' ||
+    session.user?.platformRole === 'SUPER_ADMIN' ||
+    session.memberships?.some((m) => m.role === 'SUPER_ADMIN') === true
+  );
+}

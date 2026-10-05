@@ -36,6 +36,8 @@ import {
   bodyParserErrorHandler,
 } from './src/middleware/bodyParsers';
 import { requestId } from './src/middleware/requestId';
+import { toAppError } from './src/errors/AppError';
+import { logError } from './src/errors/logError';
 
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
@@ -214,18 +216,14 @@ export async function createApp() {
     });
   }
 
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Unhandled server error:', err);
-    const status = err.status || err.statusCode || 500;
-    const message =
-      process.env.NODE_ENV === 'production' && status === 500
-        ? 'An unexpected error occurred. Please try again later.'
-        : err.message || 'INTERNAL_SERVER_ERROR';
-
-    res.status(status).json({
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const e = toAppError(err);
+    logError(req as any, e);
+    res.status(e.status).json({
       success: false,
-      error: 'SERVER_ERROR',
-      message,
+      error: e.code,
+      message: e.publicMessage,
+      requestId: (req as any).id,
     });
   });
 

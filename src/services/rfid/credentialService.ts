@@ -82,6 +82,8 @@ export async function enrollCredential(params: {
       })
       .returning();
 
+    if (!inserted) throw new Error('CREDENTIAL_ENROLL_FAILED');
+
     await createAuditLog({
       schoolId,
       actorId: operatorUserId,
@@ -152,14 +154,15 @@ export async function reactivateCredential(credentialId: string, schoolId: strin
       .where(and(eq(rfidCredentials.id, credentialId), eq(rfidCredentials.schoolId, schoolId)))
       .limit(1);
 
-    if (existing.length === 0) {
+    const target = existing[0];
+    if (!target) {
       const err: any = new Error('CARD_NOT_FOUND: RFID credential not found');
       err.statusCode = 404;
       throw err;
     }
 
-    if (existing[0].status !== 'SUSPENDED') {
-      const err: any = new Error(`CARD_NOT_SUSPENDED: Cannot reactivate card with status ${existing[0].status}`);
+    if (target.status !== 'SUSPENDED') {
+      const err: any = new Error(`CARD_NOT_SUSPENDED: Cannot reactivate card with status ${target.status}`);
       err.statusCode = 409;
       throw err;
     }
@@ -331,10 +334,12 @@ export async function listAllCredentials(
     let nextCursor: string | null = null;
     if (hasMore && records.length > 0) {
       const last = records[records.length - 1];
-      nextCursor = encodeCursor({
-        id: last.id,
-        timestamp: last.issuedAt ? new Date(last.issuedAt).toISOString() : undefined,
-      });
+      if (last) {
+        nextCursor = encodeCursor({
+          id: last.id,
+          timestamp: last.issuedAt ? new Date(last.issuedAt).toISOString() : undefined,
+        });
+      }
     }
 
     const sanitized = records.map((c: any) => ({
@@ -457,6 +462,8 @@ export async function bulkEnroll(params: {
           keyVersion: entry.keyVersion || 1,
           operatorUserId: params.operatorUserId,
         });
+
+        if (!res) throw new Error('CREDENTIAL_ENROLL_FAILED');
 
         // Activate directly
         await activateCredential(res.id, params.schoolId, params.operatorUserId);

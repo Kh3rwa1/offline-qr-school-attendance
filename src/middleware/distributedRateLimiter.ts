@@ -37,8 +37,9 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
     store = new RedisStore({
       sendCommand: async (...args: string[]) => {
         const client = getRateLimiterRedisClient();
-        if (client) {
-          return client.call(args[0], ...args.slice(1)) as any;
+        const command = args[0];
+        if (client && command) {
+          return client.call(command, ...args.slice(1)) as any;
         }
         throw new Error(`REDIS_RATE_LIMITER_UNAVAILABLE: Active Redis client is mandatory for production rate limit policy '${prefix}'.`);
       },

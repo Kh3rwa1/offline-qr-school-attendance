@@ -7,8 +7,7 @@ import {
   rfidScanEvents,
 } from '../../../db/schema';
 import { DUPLICATE_DECISIONS, type IngestContext, type Outcome } from './types';
-
-type Tx = any;
+import type { Tx } from '../../../db';
 
 export async function writeOutcomes(
   tx: Tx,
@@ -187,8 +186,8 @@ export async function writeOutcomes(
           scanTimestamp: o.read!.readAt,
           decision: o.decision,
           reviewFlag: o.reviewFlag ?? null,
-          captureMethod: 'RFID_GATE',
-          securityMode: 'UHF_EPC',
+          captureMethod: 'RFID_GATE' as const,
+          securityMode: 'UHF_EPC' as const,
         }))
       )
       .onConflictDoNothing({ target: rfidScanEvents.idempotencyKey });

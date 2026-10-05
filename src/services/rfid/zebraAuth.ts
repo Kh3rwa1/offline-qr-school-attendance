@@ -113,8 +113,10 @@ export async function authenticateZebraRequest(params: {
   throw readerAuthFailed({ reason: 'bearer_mismatch', schoolId });
 }
 
+import type { RfidReader } from '../../db/types';
+
 async function finalize(
-  reader: any,
+  reader: RfidReader,
   authMethod: AuthenticatedReader['authMethod']
 ): Promise<AuthenticatedReader> {
   if (reader.status !== 'ACTIVE') {

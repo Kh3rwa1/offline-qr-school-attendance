@@ -202,6 +202,9 @@ export class OutboxQueue {
       throw new Error('OUTBOX_CORRUPTED: Invalid format structure');
     }
     const [ivHex, tagHex, cipherHex] = parts;
+    if (!ivHex || !tagHex || !cipherHex) {
+      throw new Error('OUTBOX_CORRUPTED: Invalid format structure');
+    }
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const cipherText = Buffer.from(cipherHex, 'hex');

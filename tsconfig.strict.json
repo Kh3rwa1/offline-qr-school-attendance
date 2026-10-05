@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true
+  },
+  "include": [
+    "src/services/rfid/**/*",
+    "src/middleware/**/*",
+    "src/db/**/*",
+    "src/errors/**/*"
+  ],
+  "exclude": [
+    "src/db/seed.ts",
+    "src/db/seed_production.ts"
+  ]
+}

@@ -259,8 +259,11 @@ async function redisGetByPattern(prefix: string): Promise<Map<string, number>> {
       if (allKeys.length > 0) {
         const values = await client.mget(...allKeys);
         for (let i = 0; i < allKeys.length; i++) {
-          const shortKey = allKeys[i].replace(`${METRICS_KEY_PREFIX}`, '');
-          result.set(shortKey, values[i] ? parseFloat(values[i]!) : 0);
+          const key = allKeys[i];
+          if (!key) continue;
+          const val = values[i];
+          const shortKey = key.replace(`${METRICS_KEY_PREFIX}`, '');
+          result.set(shortKey, val ? parseFloat(val) : 0);
         }
         return result;
       }
@@ -297,8 +300,9 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
     httpDurationSumTotal += durationSec;
     httpDurationCountTotal += 1;
     for (let i = 0; i < HTTP_DURATION_BUCKETS.length; i += 1) {
-      if (durationSec <= HTTP_DURATION_BUCKETS[i]) {
-        httpDurationBucketCounts[i] += 1;
+      const bound = HTTP_DURATION_BUCKETS[i];
+      if (bound !== undefined && durationSec <= bound) {
+        httpDurationBucketCounts[i] = (httpDurationBucketCounts[i] ?? 0) + 1;
       }
     }
   });

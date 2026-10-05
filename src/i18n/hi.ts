@@ -561,4 +561,20 @@ export const hiTranslations: Partial<Record<TranslationKey, string>> = {
   calendarOptionalWorkingDay: 'Optional Working Day',
   importWestBengalHolidays: 'West Bengal Gazetted Holidays Import करें',
   importHolidaysSuccess: '{count} Holidays सफलतापूर्वक Import हुईं।',
+
+  // RFID Ingest Decisions
+  'rfid.decision.accepted': 'स्वीकृत',
+  'rfid.decision.alreadyPresent': 'पहले से उपस्थित चिह्नित',
+  'rfid.decision.duplicate': 'दोहराया गया स्कैन अनदेखा',
+  'rfid.decision.malformed': 'खराब स्कैन पेलोड',
+  'rfid.decision.clockIssue': 'रीडर घड़ी या गलत तिथि की समस्या',
+  'rfid.decision.unregistered': 'अपंजीकृत कार्ड',
+  'rfid.decision.suspended': 'निलंबित कार्ड',
+  'rfid.decision.orphaned': 'लावारिस क्रेडेंशियल',
+  'rfid.decision.studentInactive': 'छात्र निष्क्रिय या स्थानांतरित',
+  'rfid.decision.notEnrolled': 'छात्र चालू शैक्षणिक वर्ष में नामांकित नहीं',
+  'rfid.decision.schoolClosed': 'आज विद्यालय बंद है',
+  'rfid.decision.sessionFinalized': 'उपस्थिति सत्र पहले ही अंतिम रूप दे दिया गया',
+  'rfid.decision.noTeacher': 'कक्षा अनुभाग में कोई शिक्षक नियुक्त नहीं',
+  'rfid.decision.manualPreserved': 'शिक्षक की मैन्युअल उपस्थिति सुरक्षित रखी गई',
 };

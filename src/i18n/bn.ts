@@ -823,4 +823,20 @@ export const bnTranslations = {
   calendarOptionalWorkingDay: 'ঐচ্ছিক কর্মদিবস',
   importWestBengalHolidays: 'পশ্চিমবঙ্গের সরকারি ছুটির তালিকা যুক্ত করুন',
   importHolidaysSuccess: '{count}টি পশ্চিমবঙ্গের সরকারি ছুটি যুক্ত করা হয়েছে।',
+
+  // RFID Ingest Decisions
+  'rfid.decision.accepted': 'গৃহীত হয়েছে',
+  'rfid.decision.alreadyPresent': 'ইতিমধ্যে উপস্থিত চিহ্নিত',
+  'rfid.decision.duplicate': 'পুনরাবৃত্ত স্ক্যান বাতিল',
+  'rfid.decision.malformed': 'ত্রুটিপূর্ণ স্ক্যান পে-লোড',
+  'rfid.decision.clockIssue': 'রিডারের ঘড়ির সমস্যা বা ভুল তারিখ',
+  'rfid.decision.unregistered': 'অনিবন্ধিত কার্ড',
+  'rfid.decision.suspended': 'স্থগিত কার্ড',
+  'rfid.decision.orphaned': 'অননুমোদিত শংসাপত্র',
+  'rfid.decision.studentInactive': 'শিক্ষার্থী নিষ্ক্রিয় বা স্থানান্তরিত',
+  'rfid.decision.notEnrolled': 'শিক্ষার্থী বর্তমান শিক্ষাবর্ষে নথিভুক্ত নয়',
+  'rfid.decision.schoolClosed': 'আজ বিদ্যালয় বন্ধ',
+  'rfid.decision.sessionFinalized': 'উপস্থিতি সেশন ইতিমধ্যে চূড়ান্ত হয়েছে',
+  'rfid.decision.noTeacher': 'শ্রেণি বিভাগে কোনো শিক্ষক নিযুক্ত নেই',
+  'rfid.decision.manualPreserved': 'শিক্ষকের ম্যানুয়াল উপস্থিতি অপরিবর্তিত রাখা হয়েছে',
 };

@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { withTenantContext, type Tx } from '../db';
 import { resolveSchoolId } from '../middleware/resolveSchoolId';
 import { AppError, toAppError } from '../errors/AppError';
-import { assertMembership, type Role, type SessionUser, type SessionContext } from '../auth/session';
+import { assertMembership, getSession, type Role, type SessionUser, type SessionContext } from '../auth/session';
 
 export interface RouteResult<T> {
   status?: number;
@@ -42,9 +42,28 @@ export function tenantRoute<
 >(spec: Spec<P, Q, B, T>): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
-      const sessionContext = (req as Request & { sessionContext?: SessionContext }).sessionContext;
+      let sessionContext = (req as Request & { sessionContext?: SessionContext }).sessionContext;
+      if (!sessionContext) {
+        const cookieToken = req.cookies?.session;
+        const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+        const token = cookieToken || headerToken;
+        if (token) {
+          const session = await getSession(token);
+          if (session) {
+            if (session.user.status === 'SUSPENDED') {
+              throw new AppError('USER_SUSPENDED', 403, 'User account is suspended');
+            }
+            sessionContext = session;
+            (req as Request & { sessionContext?: SessionContext; user?: SessionUser }).sessionContext = session;
+            (req as Request & { sessionContext?: SessionContext; user?: SessionUser }).user = session.user;
+          } else {
+            throw new AppError('INVALID_SESSION', 401, 'Invalid or expired session');
+          }
+        }
+      }
       const user = sessionContext?.user;
       if (!user) throw new AppError('UNAUTHORIZED', 401, 'Authentication required');
+
 
       const schoolId = resolveSchoolId(req) as string;
       const membership = await assertMembership(user, schoolId, spec.roles, sessionContext); // throws AppError 403

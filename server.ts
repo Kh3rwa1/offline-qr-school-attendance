@@ -37,7 +37,8 @@ import {
   bodyParserErrorHandler,
 } from './src/middleware/bodyParsers';
 import { errorMiddleware } from './src/http/errorMiddleware';
-import { requestId } from './src/middleware/requestId';
+import crypto from 'node:crypto';
+import pinoHttp from 'pino-http';
 import { inflightTracker, installGracefulShutdown, isDraining } from './src/http/shutdown';
 import { logger } from './src/lib/logger';
 
@@ -59,7 +60,29 @@ export async function createApp() {
   app.set('trust proxy', 1);
 
   app.use(inflightTracker);
-  app.use(requestId);
+  app.use(
+    pinoHttp({
+      logger,
+      genReqId: (req, res) => {
+        const inc = req.headers['x-request-id'];
+        const id = typeof inc === 'string' && /^[A-Za-z0-9._-]{8,64}$/.test(inc) ? inc : crypto.randomUUID();
+        res.setHeader('X-Request-Id', id);
+        return id;
+      },
+      serializers: {
+        req: (r) => ({ id: r.id, method: r.method, url: (r.url ?? '').split('?')[0] }),
+      },
+      customLogLevel: (_req, res, err) =>
+        err || (res.statusCode && res.statusCode >= 500)
+          ? 'error'
+          : res.statusCode && res.statusCode >= 400
+            ? 'warn'
+            : 'info',
+      autoLogging: {
+        ignore: (req) => req.url === '/api/v1/health' || req.url === '/metrics' || req.url === '/readyz',
+      },
+    })
+  );
 
   // Route-specific parsers FIRST (parse only, then fall through via next())
   app.post('/api/v1/schools/:schoolId/rfid/zebra/reads', zebraJsonParser);

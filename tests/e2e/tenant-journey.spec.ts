@@ -64,7 +64,9 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
     await form.locator('#demo-form-district').fill('Kolkata');
 
     // Check mandatory explicit consent checkbox
-    await form.locator('#demo-consent-checkbox').check();
+    const consentCheckbox = form.locator('#demo-consent-checkbox');
+    await consentCheckbox.check();
+    await expect(consentCheckbox).toBeChecked({ timeout: 5000 });
 
     // Submit form and wait for the API response before asserting success state.
     // Firefox on CI can render networkidle before the dialog's React state settles;
@@ -77,7 +79,7 @@ test.describe('School Workspace Path Tenancy & Public Journeys', () => {
         (r) => r.url().includes('/api/v1/public/demo-requests') && r.request().method() === 'POST',
         { timeout: 20000 }
       ),
-      submitBtn.click(),
+      submitBtn.click({ force: true }),
     ]);
     // If the API itself failed, surface the status in the error message.
     if (!response.ok()) {

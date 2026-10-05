@@ -9,7 +9,7 @@ import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { QrCode, ArrowRight } from 'lucide-react';
-import { offlineDb } from '../../db/offlineDb';
+import { offlineDb } from '../../offline/offlineDb';
 
 export const AssignedClasses: React.FC = () => {
   const { activeSchoolId, activeSchoolName } = useActiveSchool();

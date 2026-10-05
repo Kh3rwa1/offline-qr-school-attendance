@@ -7,7 +7,7 @@ import * as schema from './schema';
 import { env } from '../env';
 import { isUuid } from '../lib/ids';
 
-const require = createRequire(import.meta.url);
+
 
 export type Db = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -75,19 +75,35 @@ export function isDbPoolOverloaded(): boolean {
 
 const isPlaceholder = (url?: string) => !url || /replace[-_]with[-_]/.test(url);
 
+type TestDriverProvider = () => { db: Db; client: unknown };
+let testDriverProvider: TestDriverProvider | undefined;
+
+export function registerTestDriver(provider: TestDriverProvider) {
+  testDriverProvider = provider;
+}
+
 function createDb(): Db {
+  if (testDriverProvider) {
+    const testDb = testDriverProvider();
+    client = testDb.client;
+    return testDb.db;
+  }
+
   if (isPlaceholder(env.DATABASE_URL)) {
     if (env.NODE_ENV === 'production') {
       throw new Error('DATABASE_URL is missing or a placeholder. Refusing to start on an in-memory database.');
     }
-    // Dev/test only. Kept behind this branch so it can move to an injected driver.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PGlite } = require('@electric-sql/pglite');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { drizzle } = require('drizzle-orm/pglite');
-    const pgliteInstance = new PGlite();
-    client = pgliteInstance;
-    return drizzle(pgliteInstance, { schema }) as unknown as Db; // the ONE sanctioned cast
+    // Dev/test only fallback if test driver wasn't pre-registered via setupFiles
+    try {
+      const loader = typeof require === 'function' ? require : createRequire(import.meta.url);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createTestDb } = loader('./testDriver.ts');
+      const testDb = createTestDb();
+      client = testDb.client;
+      return testDb.db;
+    } catch {
+      throw new Error('DATABASE_URL is required or test driver must be registered.');
+    }
   }
 
   validateDatabaseConnectionBudget();
@@ -112,12 +128,10 @@ export function getDb(): Db {
   return dbInstance;
 }
 
-const rawDb: Db = getDb();
-
 function getSystemDb(): Db {
   if (systemDbInstance) return systemDbInstance;
   if (!env.SYSTEM_DATABASE_URL || isPlaceholder(env.SYSTEM_DATABASE_URL) || env.SYSTEM_DATABASE_URL === env.DATABASE_URL) {
-    systemDbInstance = rawDb;
+    systemDbInstance = getDb();
     return systemDbInstance;
   }
   systemPoolInstance = new pg.Pool({
@@ -134,13 +148,14 @@ function getSystemDb(): Db {
   return systemDbInstance;
 }
 
-export const db: Db = new Proxy(rawDb, {
-  get(target, prop, receiver) {
+export const db: Db = new Proxy({} as Db, {
+  get(_target, prop, receiver) {
     const active = store.getStore();
     if (prop === 'transaction' && active) {
       // Real nested semantics: SAVEPOINT, not "pretend"
       return (cb: (tx: Tx) => Promise<unknown>) => active.tx.transaction(cb);
     }
+    const target = getDb();
     const source = active && prop in active.tx ? active.tx : target;
     const value = Reflect.get(source, prop, receiver);
     return typeof value === 'function' ? value.bind(source) : value;
@@ -161,7 +176,7 @@ export async function withTenantContext<T>(schoolId: string, fn: (tx: Tx) => Pro
     if (active.schoolId !== schoolId) throw new Error('TENANT_CONTEXT_SWITCH_FORBIDDEN');
     return fn(active.tx);
   }
-  return rawDb.transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     // ALWAYS transaction-local (true). Never leaks to the pooled connection.
     await tx.execute(sql`SELECT set_config('app.is_system', 'false', true), set_config('app.current_school_id', ${schoolId}, true)`);
     return store.run({ tx, mode: 'TENANT', schoolId }, () => fn(tx));
@@ -180,6 +195,13 @@ export async function withSystemContext<T>(fn: (tx: Tx) => Promise<T>): Promise<
   });
 }
 
+const additionalPoolClosers = new Set<() => Promise<void>>();
+
+export function registerDatabasePoolCloser(closer: () => Promise<void>): () => void {
+  additionalPoolClosers.add(closer);
+  return () => { additionalPoolClosers.delete(closer); };
+}
+
 export async function closeDatabasePools(): Promise<void> {
   if (appPoolInstance) {
     await appPoolInstance.end().catch(() => {});
@@ -191,8 +213,9 @@ export async function closeDatabasePools(): Promise<void> {
   }
   dbInstance = undefined;
   systemDbInstance = undefined;
-  try {
-    const { closeAuthPool } = await import('./authFunctions');
-    await closeAuthPool();
-  } catch {}
+  for (const closer of additionalPoolClosers) {
+    try {
+      await closer();
+    } catch {}
+  }
 }

@@ -1,5 +1,5 @@
 import { env } from '../env';
-import { db, executeSql } from './index';
+import { db, executeSql, registerDatabasePoolCloser } from './index';
 import { verifyPassword } from '../auth/password';
 import pg from 'pg';
 import { sql } from 'drizzle-orm';
@@ -42,6 +42,7 @@ export async function closeAuthPool(): Promise<void> {
     authPoolInstance = undefined;
   }
 }
+registerDatabasePoolCloser(closeAuthPool);
 
 export async function timingSafeVerifyPassword(userHash: string | null | undefined, passwordAttempt: string): Promise<boolean> {
   const hashToVerify = userHash && userHash.startsWith('$argon2') ? userHash : DUMMY_PASSWORD_HASH;

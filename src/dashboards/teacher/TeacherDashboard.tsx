@@ -33,7 +33,7 @@ import {
   offlineDb,
   OfflineSessionItem,
   OutboxEventItem,
-} from '../../db/offlineDb';
+} from '../../offline/offlineDb';
 import { CameraScannerService, setupUSBScannerListener } from '../../services/scannerService';
 import {
   playScanSuccessFeedback,

@@ -3,7 +3,7 @@ import { useOfflineStatus } from '../../app/OfflineStatusProvider';
 import { useActiveSchool } from '../../app/ActiveSchoolProvider';
 import { useLanguage } from '../../app/LanguageProvider';
 import { getUserSafeError } from '../../errors/userSafeErrors';
-import { offlineDb } from '../../db/offlineDb';
+import { offlineDb } from '../../offline/offlineDb';
 import { StatCard } from '../../components/shared/StatCard';
 import { Button } from '../../components/shared/Button';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';

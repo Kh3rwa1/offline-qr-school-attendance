@@ -2,7 +2,7 @@ import { env } from '../env';
 import { hashPassword } from '../auth/password';
 import { getDb, executeSql } from './index';
 import { runMigrations } from './migrate';
-import { hashReaderToken } from '../services/rfid/readerTokens';
+import { hashReaderToken } from '../auth/readerTokens';
 import {
   schools,
   academicYears,

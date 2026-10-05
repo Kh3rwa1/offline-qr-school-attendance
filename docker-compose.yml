@@ -46,6 +46,8 @@ services:
       dockerfile: Dockerfile
     container_name: school_attendance_app
     restart: always
+    init: true
+    stop_grace_period: 30s
     ports:
       - '3000:3000'
     environment:
@@ -156,6 +158,8 @@ services:
       dockerfile: Dockerfile
     container_name: school_attendance_sms_worker
     restart: always
+    init: true
+    stop_grace_period: 30s
     environment:
       NODE_ENV: production
       COMPONENT: worker

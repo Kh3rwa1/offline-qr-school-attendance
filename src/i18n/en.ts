@@ -823,4 +823,20 @@ export const enTranslations = {
   calendarOptionalWorkingDay: 'Optional Working Day',
   importWestBengalHolidays: 'Import West Bengal Gazetted Holidays',
   importHolidaysSuccess: '{count} West Bengal holidays imported successfully.',
+
+  // RFID Ingest Decisions
+  'rfid.decision.accepted': 'Accepted',
+  'rfid.decision.alreadyPresent': 'Already marked present',
+  'rfid.decision.duplicate': 'Duplicate read ignored',
+  'rfid.decision.malformed': 'Malformed read payload',
+  'rfid.decision.clockIssue': 'Reader clock skew or wrong date',
+  'rfid.decision.unregistered': 'Unregistered card',
+  'rfid.decision.suspended': 'Suspended card',
+  'rfid.decision.orphaned': 'Orphaned credential',
+  'rfid.decision.studentInactive': 'Student inactive or transferred',
+  'rfid.decision.notEnrolled': 'Student not enrolled in current academic year',
+  'rfid.decision.schoolClosed': 'School closed today',
+  'rfid.decision.sessionFinalized': 'Attendance session already finalized',
+  'rfid.decision.noTeacher': 'No teacher assigned to class section',
+  'rfid.decision.manualPreserved': 'Teacher manual attendance preserved',
 };

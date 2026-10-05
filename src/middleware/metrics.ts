@@ -546,5 +546,9 @@ export async function renderPrometheusMetrics(req?: Request): Promise<{ authoriz
     lines.push(`attendance_by_capture_method_total{method="${method}"} ${count}`);
   }
 
+  // --- RFID Gate Ingest V2 Metrics ---
+  const { renderRfidIngestMetrics } = await import('../services/rfid/ingest/metrics');
+  lines.push(...renderRfidIngestMetrics());
+
   return { authorized: true, content: lines.join('\n') + '\n' };
 }

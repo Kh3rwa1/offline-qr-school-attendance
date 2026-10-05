@@ -250,6 +250,11 @@ export const enrollments = pgTable(
       table.rollNumber,
       table.academicYearId
     ),
+    enrollmentStudentYearIdx: index('enrollments_student_year_idx').on(
+      table.schoolId,
+      table.studentId,
+      table.academicYearId
+    ),
   })
 );
 
@@ -370,14 +375,23 @@ export const attendanceRecords = pgTable(
     firstScannedAt: timestamp('first_scanned_at', { withTimezone: true }),
     lastUpdatedAt: timestamp('last_updated_at', { withTimezone: true }).notNull().defaultNow(),
     hasConflict: boolean('has_conflict').notNull().default(false),
-    // RFID extensions (migration 0010)
+    // RFID extensions (migration 0010 & 0022)
     captureMethod: varchar('capture_method', { length: 30 }).notNull().default('QR'),
+    source: varchar('source', { length: 30 }).default('RFID'),
     confidenceLevel: varchar('confidence_level', { length: 20 }).notNull().default('HIGH'),
     direction: varchar('direction', { length: 20 }),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    needsReview: boolean('needs_review').notNull().default(false),
+    reviewReason: varchar('review_reason', { length: 30 }),
   },
   (table) => ({
     recordUnique: uniqueIndex('attendance_records_unique_idx').on(
       table.schoolId,
+      table.attendanceSessionId,
+      table.studentId
+    ),
+    sessionStudentUnique: uniqueIndex('attendance_records_session_student_uq').on(
       table.attendanceSessionId,
       table.studentId
     ),
@@ -544,6 +558,10 @@ export const scanDecisionEnum = pgEnum('scan_decision', [
   'SUSPENDED_CARD', 'READER_REVOKED', 'WRONG_SCHOOL', 'NO_ACTIVE_SESSION',
   'ALREADY_PRESENT', 'REPLAY_REJECTED', 'CLOCK_SKEW', 'RATE_LIMITED',
   'DEPENDENCY_UNAVAILABLE',
+  'MALFORMED_READ', 'FUTURE_SKEW', 'WRONG_SCHOOL_DAY', 'UNREGISTERED_CARD',
+  'CREDENTIAL_ORPHANED', 'STUDENT_INACTIVE', 'NOT_ENROLLED', 'SCHOOL_CLOSED',
+  'SESSION_FINALIZED', 'NO_TEACHER_ASSIGNED', 'MANUAL_OVERRIDE_PRESERVED',
+  'DUPLICATE_IN_BATCH', 'DUPLICATE_DEBOUNCED',
 ]);
 
 export const directionModeEnum = pgEnum('direction_mode', [
@@ -596,9 +614,10 @@ export const rfidCredentials = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    activeStudentUnique: uniqueIndex('rfid_credentials_active_student_idx')
-      .on(table.schoolId, table.studentId)
-      .where(sql`${table.status} = 'ACTIVE'`),
+    credentialSchoolEpcUnique: uniqueIndex('rfid_credentials_school_epc_uq').on(
+      table.schoolId,
+      table.credentialDigest
+    ),
     digestSchoolUnique: uniqueIndex('rfid_credentials_digest_school_idx')
       .on(table.schoolId, table.credentialDigest)
       .where(sql`${table.status} IN ('PENDING', 'ACTIVE', 'SUSPENDED')`),
@@ -678,6 +697,8 @@ export const rfidScanEvents = pgTable(
     securityMode: rfidSecurityModeEnum('security_mode').notNull().default('UHF_EPC'),
     processingLatencyMs: integer('processing_latency_ms'),
     isOffline: boolean('is_offline').notNull().default(false),
+    studentId: uuid('student_id').references(() => students.id, { onDelete: 'set null' }),
+    reviewFlag: varchar('review_flag', { length: 30 }),
     nonce: varchar('nonce', { length: 255 }),
     payloadHash: varchar('payload_hash', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -687,8 +708,10 @@ export const rfidScanEvents = pgTable(
     idempotencyKeyUnique: uniqueIndex('rfid_scan_events_idempotency_idx')
       .on(table.schoolId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    idemUnique: uniqueIndex('rfid_scan_events_idem_uq').on(table.idempotencyKey),
     readerSequenceUnique: uniqueIndex('rfid_scan_events_reader_seq_unique').on(table.schoolId, table.readerId, table.sequenceNumber),
     readerIdx: index('rfid_scan_events_reader_idx').on(table.schoolId, table.readerId, table.scanTimestamp),
+    schoolTimeIdx: index('rfid_scan_events_school_time_idx').on(table.schoolId, table.scanTimestamp),
     decisionIdx: index('rfid_scan_events_decision_idx').on(table.schoolId, table.decision, table.scanTimestamp),
     sessionIdx: index('rfid_scan_events_session_idx').on(table.schoolId, table.attendanceSessionId, table.scanTimestamp),
     epcDigestIdx: index('rfid_scan_events_epc_digest_idx').on(table.schoolId, table.epcDigest, table.scanTimestamp),

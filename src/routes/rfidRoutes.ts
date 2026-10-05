@@ -12,6 +12,7 @@ import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
 
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
+import { processZebraBatch } from '../services/rfid/ingest';
 import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
 import type { RawBodyRequest } from '../middleware/bodyParsers';
 import { AppError, toAppError } from '../errors/AppError';
@@ -36,6 +37,15 @@ rfidRouter.post(
     try {
       const rawBody = (req as RawBodyRequest).rawBody;
       if (!rawBody) throw new AppError('MALFORMED_BODY', 400, 'Request body required');
+      if (process.env.RFID_INGEST_V2 === 'true') {
+        const result = await processZebraBatch({
+          schoolId: req.params.schoolId,
+          rawBody,
+          parsedBody: req.body,
+          headers: req.headers,
+        });
+        return res.status(200).json(result);
+      }
       const result = await processZebraIotWebhook({
         schoolId: req.params.schoolId,
         rawBody,

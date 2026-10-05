@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { isCsrfExempt, requestPath } from './csrfExemptions';
 
 /**
  * CSRF Protection Secret
@@ -133,21 +134,22 @@ export function clearCsrfCookies(res: Response): void {
   });
 }
 
+export const SESSION_COOKIE_NAME = 'session';
+
+function isMachineRoute(req: Request): boolean {
+  return /\/rfid\/(?:zebra\/reads|scans)\/?$/i.test(requestPath(req));
+}
+
 /**
  * Checks if a requested path matches any documented exemption rule.
  */
 export function isRouteExempt(path: string, originalUrl?: string): boolean {
-  const url = originalUrl || path;
-  if (
-    process.env.FEATURE_RFID === 'true' &&
-    (url.includes('/rfid/scans') ||
-      path.includes('/rfid/scans') ||
-      url.includes('/rfid/zebra/reads') ||
-      path.includes('/rfid/zebra/reads'))
-  ) {
-    return true;
-  }
-  return EXEMPT_ROUTES.some((rule) => (rule.exact ? path === rule.path || url === rule.path : path.startsWith(rule.path) || url.startsWith(rule.path)));
+  const pseudoReq = {
+    method: 'POST',
+    url: originalUrl || path,
+    originalUrl: originalUrl || path,
+  } as Request;
+  return isCsrfExempt(pseudoReq);
 }
 
 /**
@@ -160,9 +162,8 @@ export function isRouteExempt(path: string, originalUrl?: string): boolean {
  * 4. Fail-closed Origin/Referer verification against cross-origin forgery attacks.
  */
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
-  const sessionCookie = req.cookies?.session;
+  const sessionCookie = req.cookies?.[SESSION_COOKIE_NAME];
   const method = req.method.toUpperCase();
-  const reqPath = req.path;
 
   // 1. Issue or refresh CSRF tokens on safe read requests
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
@@ -179,7 +180,12 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   // 2. State-changing requests (POST, PUT, PATCH, DELETE)
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     // Check documented exemption
-    if (isRouteExempt(reqPath, req.originalUrl)) {
+    if (isCsrfExempt(req)) {
+      // Defense in depth: exempt machine routes must NOT carry a session cookie.
+      // A browser hitting them with cookies is either a bug or an attack.
+      if (req.cookies?.[SESSION_COOKIE_NAME] && isMachineRoute(req)) {
+        return res.status(403).json({ success: false, error: 'CSRF_COOKIE_ON_MACHINE_ROUTE' });
+      }
       return next();
     }
 

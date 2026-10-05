@@ -29,14 +29,16 @@ export async function getSchoolSettings(schoolId: string): Promise<{ timezone: s
   return { timezone };
 }
 
-function readerIdFrom(body: any, headers: Record<string, string | string[] | undefined>): string | undefined {
+function readerIdFrom(body: unknown, headers: Record<string, string | string[] | undefined>): string | undefined {
   const headerId =
     (headers['x-reader-id'] as string) ||
     (headers['x-zebra-reader-id'] as string) ||
     (headers['x-device-id'] as string);
   if (headerId) return headerId;
   if (body && typeof body === 'object') {
-    return body.reader_name || body.hostname || body.deviceId || body.readerId;
+    const b = body as Record<string, unknown>;
+    const val = b['reader_name'] || b['hostname'] || b['deviceId'] || b['readerId'];
+    if (typeof val === 'string') return val;
   }
   return undefined;
 }

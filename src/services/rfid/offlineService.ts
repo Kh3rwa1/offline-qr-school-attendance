@@ -117,14 +117,17 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
 
   const dedupedValidEvents: ScanEnvelope[] = [];
   for (const [clientEventId, group] of clientEventGroups.entries()) {
+    const firstEvent = group[0];
+    if (!firstEvent) continue;
     if (group.length === 1) {
-      dedupedValidEvents.push(group[0]);
+      dedupedValidEvents.push(firstEvent);
     } else {
       // Multiple items in the same batch share the same clientEventId
-      const firstHash = computePayloadHash(group[0]);
+      const firstHash = computePayloadHash(firstEvent);
       let allMatch = true;
       for (let i = 1; i < group.length; i++) {
-        if (computePayloadHash(group[i]) !== firstHash) {
+        const item = group[i];
+        if (!item || computePayloadHash(item) !== firstHash) {
           allMatch = false;
           break;
         }
@@ -138,7 +141,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
         });
       } else {
         // Identical duplicate payloads submitted in the same batch
-        dedupedValidEvents.push(group[0]);
+        dedupedValidEvents.push(firstEvent);
       }
     }
   }

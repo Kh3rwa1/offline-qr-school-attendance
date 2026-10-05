@@ -15,12 +15,14 @@ type Raw = Record<string, unknown>;
 
 function sanitizePayload(obj: unknown): boolean {
   if (!obj || typeof obj !== 'object') return true;
-  for (const key of Object.keys(obj)) {
+  const rec = obj as Record<string, unknown>;
+  for (const key of Object.keys(rec)) {
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
       return false;
     }
-    if (typeof (obj as any)[key] === 'object' && (obj as any)[key] !== null) {
-      if (!sanitizePayload((obj as any)[key])) return false;
+    const val = rec[key];
+    if (typeof val === 'object' && val !== null) {
+      if (!sanitizePayload(val)) return false;
     }
   }
   return true;

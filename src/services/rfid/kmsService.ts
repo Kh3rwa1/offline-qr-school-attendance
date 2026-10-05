@@ -172,6 +172,9 @@ export class KMSService {
           throw new Error('KMS_DECRYPT_FAILED: Invalid envelope format');
         }
         const [ivHex, tagHex, cipherHex] = parts;
+        if (!ivHex || !tagHex || !cipherHex) {
+          throw new Error('KMS_DECRYPT_FAILED: Invalid envelope format');
+        }
         envelope = {
           version: 1,
           algorithm: 'AES-256-GCM',

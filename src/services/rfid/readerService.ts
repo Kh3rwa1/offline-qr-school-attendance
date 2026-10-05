@@ -38,6 +38,9 @@ export function decryptReaderSecret(encryptedStr: string): string {
       throw new Error('Invalid ciphertext structure (expected iv:tag:ciphertext)');
     }
     const [ivHex, tagHex, cipherHex] = parts;
+    if (!ivHex || !tagHex || !cipherHex) {
+      throw new Error('Invalid ciphertext structure (expected iv:tag:ciphertext)');
+    }
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const cipherText = Buffer.from(cipherHex, 'hex');
@@ -132,6 +135,8 @@ export async function registerReader(params: {
         status: 'PENDING',
       })
       .returning();
+
+    if (!inserted) throw new Error('READER_REGISTRATION_FAILED');
 
     await createAuditLog({
       schoolId: params.schoolId,

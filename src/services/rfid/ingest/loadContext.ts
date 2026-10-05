@@ -9,8 +9,7 @@ import {
   academicCalendarDays,
 } from '../../../db/schema';
 import type { IngestContext, NormalizedRead } from './types';
-
-type Tx = any;
+import type { Tx } from '../../../db';
 
 export async function isSchoolOpen(tx: Tx, schoolId: string, schoolDate: string): Promise<boolean> {
   const [day] = await tx
@@ -59,7 +58,7 @@ export async function loadContext(
     .from(rfidCredentials)
     .where(and(eq(rfidCredentials.schoolId, schoolId), inArray(rfidCredentials.credentialDigest, digests)));
 
-  const studentIds: string[] = Array.from(new Set<string>(creds.map((c: any) => String(c.studentId))));
+  const studentIds: string[] = Array.from(new Set<string>(creds.map((c) => String(c.studentId))));
 
   // Q2: students + current enrollment in one join
   const studentRows = studentIds.length
@@ -88,7 +87,7 @@ export async function loadContext(
         .where(and(eq(students.schoolId, schoolId), inArray(students.id, studentIds)))
     : [];
 
-  const sectionIds: string[] = Array.from(new Set<string>(studentRows.map((s: any) => s.classSectionId).filter(Boolean) as string[]));
+  const sectionIds: string[] = Array.from(new Set<string>(studentRows.map((s) => s.classSectionId).filter((id): id is string => Boolean(id))));
 
   // Q3 + Q4 sequential on single transaction connection
   const sessions = sectionIds.length
@@ -135,22 +134,22 @@ export async function loadContext(
     schoolDate,
     isSchoolDay,
     debounced,
-    credsByDigest: new Map(creds.map((c: any) => [c.epcDigest, c])),
+    credsByDigest: new Map(creds.map((c) => [c.epcDigest, c])),
     studentsById: new Map(
-      studentRows.map((s: any) => [
+      studentRows.map((s) => [
         s.id,
         { id: s.id, name: s.name, status: s.status, photoUrl: s.photoUrl },
       ])
     ),
     enrollmentByStudent: new Map(
       studentRows
-        .filter((s: any) => s.classSectionId)
-        .map((s: any) => [
+        .filter((s): s is typeof s & { classSectionId: string } => Boolean(s.classSectionId))
+        .map((s) => [
           s.id,
-          { studentId: s.id, classSectionId: s.classSectionId!, rollNumber: s.rollNumber ?? null },
+          { studentId: s.id, classSectionId: s.classSectionId, rollNumber: s.rollNumber ?? null },
         ])
     ),
-    sessionBySection: new Map(sessions.map((s: any) => [s.classSectionId, s])),
+    sessionBySection: new Map(sessions.map((s) => [s.classSectionId, s])),
     teacherBySection,
   };
 }

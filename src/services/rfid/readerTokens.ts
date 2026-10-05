@@ -26,6 +26,7 @@ export function generateReaderToken(): { token: string; hash: string; hint: stri
 export function parseBearer(header: string | string[] | undefined): string | null {
   if (typeof header !== 'string') return null;
   const m = /^Bearer\s+(\S+)$/i.exec(header.trim());
-  if (!m || !TOKEN_RE.test(m[1])) return null; // reject malformed early — cheap, no DB hit
-  return m[1];
+  const token = m?.[1];
+  if (!token || !TOKEN_RE.test(token)) return null; // reject malformed early — cheap, no DB hit
+  return token;
 }

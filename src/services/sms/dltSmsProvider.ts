@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import crypto from 'node:crypto';
 import { CallbackVerificationResult, ParsedCallbackPayload, SmsProvider, SmsSendParams, SmsSendResult } from './smsProvider';
 import { redactPhoneNumber } from './smsUtils';
@@ -9,14 +10,14 @@ export class DltSmsProvider implements SmsProvider {
   readonly name = 'dlt';
 
   constructor(
-    private apiKey = process.env.DLT_SMS_API_KEY || 'dlt-key',
-    private senderHeader = process.env.DLT_SMS_HEADER || 'SCHATT',
-    private webhookSecret = process.env.DLT_WEBHOOK_SECRET || 'dlt-webhook-secret'
+    private apiKey = env.DLT_SMS_API_KEY || 'dlt-key',
+    private senderHeader = env.DLT_SMS_HEADER || 'SCHATT',
+    private webhookSecret = env.DLT_WEBHOOK_SECRET || 'dlt-webhook-secret'
   ) {}
 
   async sendSms(params: SmsSendParams): Promise<SmsSendResult> {
     // Fail closed in production mode if credentials are defaults
-    if (process.env.NODE_ENV === 'production' && (this.apiKey === 'dlt-key' || this.webhookSecret === 'dlt-webhook-secret')) {
+    if (env.NODE_ENV === 'production' && (this.apiKey === 'dlt-key' || this.webhookSecret === 'dlt-webhook-secret')) {
       console.error('[DltSmsProvider] Unconfigured placeholder credentials in production mode!');
       return {
         success: false,
@@ -43,7 +44,7 @@ export class DltSmsProvider implements SmsProvider {
     }
 
     const dltHeader = params.dltHeader || this.senderHeader;
-    const dltPrincipalEntityId = params.dltPrincipalEntityId || process.env.DLT_PRINCIPAL_ENTITY_ID;
+    const dltPrincipalEntityId = params.dltPrincipalEntityId || env.DLT_PRINCIPAL_ENTITY_ID;
 
     if (!dltPrincipalEntityId || !dltHeader) {
       return {
@@ -56,7 +57,7 @@ export class DltSmsProvider implements SmsProvider {
     const idempotencyKey = params.jobId || Math.random().toString(36).substring(2, 10);
     console.log(`[DltSmsProvider] Submitting SMS to ${redactPhoneNumber(cleanPhone)} | Header: ${dltHeader} | EntityID: ${dltPrincipalEntityId} | IdempotencyKey: ${idempotencyKey}`);
 
-    const gatewayUrl = process.env.DLT_SMS_GATEWAY_URL || 'https://api.dlt-sms-gateway.com/v1/send';
+    const gatewayUrl = env.DLT_SMS_GATEWAY_URL || 'https://api.dlt-sms-gateway.com/v1/send';
 
     try {
       const resp = await fetch(gatewayUrl, {

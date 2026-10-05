@@ -256,7 +256,7 @@ export async function createApp() {
 
 export async function startServer() {
   const app = await createApp();
-  const PORT = parseInt(env.PORT || '3000', 10);
+  const PORT = Number(env.PORT || 3000);
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server listening on http://0.0.0.0:${PORT}`);
   });

@@ -1,3 +1,4 @@
+import { env } from '../env';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -52,18 +53,18 @@ export class CloudflareR2ReplicationService {
   private readonly PART_SIZE = 5 * 1024 * 1024; // 5 MB
 
   constructor(config?: Partial<CloudflareR2Config>) {
-    const accountId = config?.accountId || process.env.R2_ACCOUNT_ID || '';
-    const accessKeyId = config?.accessKeyId || process.env.R2_ACCESS_KEY_ID || '';
-    const secretAccessKey = config?.secretAccessKey || process.env.R2_SECRET_ACCESS_KEY || '';
-    const bucket = config?.bucket || process.env.R2_BUCKET || '';
+    const accountId = config?.accountId || env.R2_ACCOUNT_ID || '';
+    const accessKeyId = config?.accessKeyId || env.R2_ACCESS_KEY_ID || '';
+    const secretAccessKey = config?.secretAccessKey || env.R2_SECRET_ACCESS_KEY || '';
+    const bucket = config?.bucket || env.R2_BUCKET || '';
     const defaultEndpoint = accountId ? `https://${accountId}.r2.cloudflarestorage.com` : '';
-    const endpoint = config?.endpoint || process.env.R2_ENDPOINT || defaultEndpoint;
-    const prefix = config?.prefix || process.env.R2_PREFIX || 'attendease-backups/';
-    const jurisdiction = config?.jurisdiction || process.env.R2_JURISDICTION;
-    const retentionDays = config?.retentionDays ?? parseInt(process.env.R2_RETENTION_DAYS || '30', 10);
-    const uploadTimeoutSeconds = config?.uploadTimeoutSeconds ?? parseInt(process.env.R2_UPLOAD_TIMEOUT_SECONDS || '60', 10);
-    const maxRetries = config?.maxRetries ?? parseInt(process.env.R2_MAX_RETRIES || '3', 10);
-    const requiredInProduction = config?.requiredInProduction ?? (process.env.R2_REQUIRED_IN_PRODUCTION === 'true' || process.env.NODE_ENV === 'production');
+    const endpoint = config?.endpoint || env.R2_ENDPOINT || defaultEndpoint;
+    const prefix = config?.prefix || env.R2_PREFIX || 'attendease-backups/';
+    const jurisdiction = config?.jurisdiction || env.R2_JURISDICTION;
+    const retentionDays = config?.retentionDays ?? parseInt(env.R2_RETENTION_DAYS || '30', 10);
+    const uploadTimeoutSeconds = config?.uploadTimeoutSeconds ?? parseInt(env.R2_UPLOAD_TIMEOUT_SECONDS || '60', 10);
+    const maxRetries = config?.maxRetries ?? parseInt(env.R2_MAX_RETRIES || '3', 10);
+    const requiredInProduction = config?.requiredInProduction ?? (env.R2_REQUIRED_IN_PRODUCTION === 'true' || env.NODE_ENV === 'production');
 
     if (bucket && accessKeyId && secretAccessKey) {
       this.config = {
@@ -107,7 +108,7 @@ export class CloudflareR2ReplicationService {
     }
 
     if (!this.config.endpoint.startsWith('https://')) {
-      if (process.env.NODE_ENV === 'production' || this.config.requiredInProduction) {
+      if (env.NODE_ENV === 'production' || this.config.requiredInProduction) {
         throw new Error(`R2_INSECURE_ENDPOINT: Cloudflare R2 endpoint must use HTTPS in production (received: ${this.config.endpoint})`);
       }
     }

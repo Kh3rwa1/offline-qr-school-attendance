@@ -1,3 +1,4 @@
+import { env } from '../env';
 export interface SystemAlert {
   id: string;
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
@@ -11,7 +12,7 @@ export class AlertingService {
   private webhookUrl: string | null;
 
   constructor(webhookUrl?: string | null) {
-    this.webhookUrl = webhookUrl || process.env.ALERT_WEBHOOK_URL || null;
+    this.webhookUrl = webhookUrl || env.ALERT_WEBHOOK_URL || null;
   }
 
   async dispatchAlert(alert: SystemAlert): Promise<{ sent: boolean; reason?: string }> {

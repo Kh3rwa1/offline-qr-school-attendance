@@ -40,7 +40,6 @@
   "src/db/index.ts": 1,
   "src/db/seed.ts": 3,
   "src/db/seed_production.ts": 16,
-  "src/env.ts": 1,
   "src/errors/AppError.ts": 5,
   "src/errors/userSafeErrors.ts": 1,
   "src/gateway/gatewayDaemon.ts": 1,

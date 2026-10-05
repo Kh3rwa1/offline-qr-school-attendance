@@ -1,8 +1,9 @@
+import { env } from '../env';
 import pino from 'pino';
 
 export const loggerOptions: pino.LoggerOptions = {
-  level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-  base: { service: process.env.PG_APPLICATION_NAME ?? 'attendease-web' },
+  level: env.LOG_LEVEL ?? (env.NODE_ENV === 'production' ? 'info' : 'debug'),
+  base: { service: env.PG_APPLICATION_NAME ?? 'attendease-web' },
   timestamp: pino.stdTimeFunctions.isoTime,
   redact: {
     censor: '[REDACTED]',
@@ -28,7 +29,7 @@ export const loggerOptions: pino.LoggerOptions = {
       'internal.readerIdentifier',
     ],
   },
-  transport: process.env.NODE_ENV === 'production' ? undefined : { target: 'pino-pretty' },
+  transport: env.NODE_ENV === 'production' ? undefined : { target: 'pino-pretty' },
 };
 
 export const logger = pino(loggerOptions);

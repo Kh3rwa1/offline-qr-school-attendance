@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { isCsrfExempt, requestPath } from './csrfExemptions';
@@ -8,8 +9,8 @@ import { isCsrfExempt, requestPath } from './csrfExemptions';
  * Fails closed in production if secret is missing or insecure.
  */
 export function getCsrfSecret(): string {
-  const secret = process.env.CSRF_SECRET || process.env.SESSION_SECRET;
-  if (process.env.NODE_ENV === 'production') {
+  const secret = env.CSRF_SECRET || env.SESSION_SECRET;
+  if (env.NODE_ENV === 'production') {
     if (!secret || secret.length < 32) {
       throw new Error('CSRF_SECRET (or SESSION_SECRET of at least 32 characters) must be explicitly provided in production mode');
     }
@@ -94,7 +95,7 @@ export function verifyCsrfToken(token: string, signature: string, sessionToken?:
  * Sets the CSRF cookie pair on the HTTP response.
  */
 export function setCsrfCookies(res: Response, token: string, signature: string): void {
-  const isSecure = process.env.COOKIE_SECURE === 'true' || (process.env.NODE_ENV === 'production' && process.env.ALLOW_HTTP_COOKIE !== 'true');
+  const isSecure = env.COOKIE_SECURE === 'true' || (env.NODE_ENV === 'production' && env.ALLOW_HTTP_COOKIE !== 'true');
 
   // Readable by frontend JavaScript to attach to request headers
   res.cookie(CSRF_COOKIE_NAME, token, {
@@ -119,7 +120,7 @@ export function setCsrfCookies(res: Response, token: string, signature: string):
  * Clears the CSRF cookie pair on session destruction / logout.
  */
 export function clearCsrfCookies(res: Response): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = env.NODE_ENV === 'production';
   res.clearCookie(CSRF_COOKIE_NAME, {
     httpOnly: false,
     secure: isProduction,
@@ -190,7 +191,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     }
 
     // Test runner header exemptions: STRICTLY non-production AND explicitly enabled
-    const isTestBypassAllowed = process.env.NODE_ENV !== 'production' && process.env.ALLOW_TEST_BYPASS === 'true';
+    const isTestBypassAllowed = env.NODE_ENV !== 'production' && env.ALLOW_TEST_BYPASS === 'true';
     if (isTestBypassAllowed) {
       if (req.headers['x-benchmark-load-test'] === 'true' || req.headers['x-playwright-e2e'] === 'true') {
         return next();
@@ -227,7 +228,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
           message: 'Invalid origin header on mutating request',
         });
       }
-    } else if (process.env.NODE_ENV === 'production' && !origin) {
+    } else if (env.NODE_ENV === 'production' && !origin) {
       // In production, cookie-authenticated mutating requests from browsers must include Origin/Referer
       const isBrowserFetch = req.headers['sec-fetch-site'] || req.headers['user-agent'];
       if (isBrowserFetch && req.headers['sec-fetch-site'] === 'cross-site') {

@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Request, Response, NextFunction } from 'express';
 import { getDbPoolMetrics } from '../db';
 import crypto from 'node:crypto';
@@ -48,7 +49,7 @@ let backupSnapshotCache: BackupSnapshot | null = null;
 let backupSnapshotCachedAt = 0;
 
 function resolveBackupDir(): string {
-  if (process.env.BACKUP_DIR) return process.env.BACKUP_DIR;
+  if (env.BACKUP_DIR) return env.BACKUP_DIR;
   try {
     if (fs.existsSync('./backups')) return './backups';
   } catch {
@@ -369,9 +370,9 @@ export const rfidMetrics = {
  * Strictly requires Authorization: Bearer <METRICS_AUTH_TOKEN> header in production.
  */
 export async function renderPrometheusMetrics(req?: Request): Promise<{ authorized: boolean; content: string }> {
-  const requiredToken = process.env.METRICS_AUTH_TOKEN;
+  const requiredToken = env.METRICS_AUTH_TOKEN;
 
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     if (!requiredToken) {
       return { authorized: false, content: 'METRICS_AUTH_TOKEN_REQUIRED_IN_PRODUCTION' };
     }

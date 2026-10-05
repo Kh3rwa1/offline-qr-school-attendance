@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import argon2 from 'argon2';
@@ -65,12 +66,12 @@ setupRouter.get('/status', rateLimitPolicies.setupStatus, async (_req: Request, 
       dbStatus = 'disconnected';
     }
 
-    const backupConfigured = Boolean(process.env.BACKUP_ENCRYPTION_KEY && process.env.BACKUP_ENCRYPTION_KEY.length >= 32);
-    const r2Configured = Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
-    const smsConfigured = Boolean(process.env.SMS_PROVIDER && process.env.SMS_PROVIDER !== 'fake');
+    const backupConfigured = Boolean(env.BACKUP_ENCRYPTION_KEY && env.BACKUP_ENCRYPTION_KEY.length >= 32);
+    const r2Configured = Boolean(env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY);
+    const smsConfigured = Boolean(env.SMS_PROVIDER && env.SMS_PROVIDER !== 'fake');
 
     let workerAlive = false;
-    const heartbeatFile = process.env.WORKER_HEARTBEAT_FILE || '/tmp/worker-heartbeat';
+    const heartbeatFile = env.WORKER_HEARTBEAT_FILE || '/tmp/worker-heartbeat';
     try {
       if (fs.existsSync(heartbeatFile)) {
         const stats = fs.statSync(heartbeatFile);
@@ -86,16 +87,16 @@ setupRouter.get('/status', rateLimitPolicies.setupStatus, async (_req: Request, 
         backupConfigured,
         r2Configured,
         smsConfigured,
-        smsProvider: process.env.SMS_PROVIDER || 'console',
+        smsProvider: env.SMS_PROVIDER || 'console',
         workerAlive,
-        serverDomain: process.env.SERVER_DOMAIN || 'localhost',
-        featureRfid: process.env.FEATURE_RFID === 'true',
+        serverDomain: env.SERVER_DOMAIN || 'localhost',
+        featureRfid: env.FEATURE_RFID === 'true',
         version: '1.0.0',
         timestamp: new Date().toISOString(),
       },
     });
   } catch (err: any) {
-    const message = process.env.NODE_ENV === 'production' ? 'Failed to fetch setup status' : err.message;
+    const message = env.NODE_ENV === 'production' ? 'Failed to fetch setup status' : err.message;
     res.status(500).json({ error: 'FAILED_SETUP_STATUS', message });
   }
 });
@@ -225,7 +226,7 @@ setupRouter.post('/initialize', rateLimitPolicies.setupInitialize, async (req: R
       schoolId: createdSchoolId,
     });
   } catch (err: any) {
-    const message = process.env.NODE_ENV === 'production' ? 'Failed to initialize system' : err.message;
+    const message = env.NODE_ENV === 'production' ? 'Failed to initialize system' : err.message;
     return res.status(500).json({ error: 'INITIALIZATION_FAILED', message });
   }
 });
@@ -365,7 +366,7 @@ setupRouter.post('/import-roster', rateLimitPolicies.setupImport, requireAuth, a
       classesCreated: classMap.size,
     });
   } catch (err: any) {
-    const message = process.env.NODE_ENV === 'production' ? 'Failed to import roster' : err.message;
+    const message = env.NODE_ENV === 'production' ? 'Failed to import roster' : err.message;
     return res.status(500).json({ error: 'IMPORT_FAILED', message });
   }
 });

@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
 import { db, withTenantContext } from '../db';
@@ -69,16 +70,16 @@ export const readerAuthMiddleware = async (
     }
 
     // Strict mTLS certificate fingerprint verification for certificate-bound readers
-    if (reader.certificateFingerprint || process.env.RFID_ENFORCE_INGRESS_MTLS === 'true') {
+    if (reader.certificateFingerprint || env.RFID_ENFORCE_INGRESS_MTLS === 'true') {
       const ingressSecret = (req.headers['x-trusted-ingress-secret'] as string) || '';
-      const expectedIngressSecret = process.env.TRUSTED_INGRESS_SECRET || '';
+      const expectedIngressSecret = env.TRUSTED_INGRESS_SECRET || '';
 
       // Always require TRUSTED_INGRESS_SECRET when verifying certificate fingerprints
-      if (!expectedIngressSecret && process.env.NODE_ENV === 'production') {
+      if (!expectedIngressSecret && env.NODE_ENV === 'production') {
         return res.status(500).json({ error: 'CONFIG_ERROR', message: 'TRUSTED_INGRESS_SECRET is required for certificate-bound readers in production' });
       }
 
-      if (!expectedIngressSecret && process.env.NODE_ENV !== 'production') {
+      if (!expectedIngressSecret && env.NODE_ENV !== 'production') {
         // Skip mTLS block completely in dev when secret is omitted for convenience
       } else {
         const bufA = Buffer.from(ingressSecret);
@@ -89,7 +90,7 @@ export const readerAuthMiddleware = async (
 
         const certFingerprint =
           (req.headers['x-ingress-verified-reader-fingerprint'] as string) ||
-          (process.env.NODE_ENV === 'test' ? (req.headers['x-client-cert-fingerprint'] as string) : undefined);
+          (env.NODE_ENV === 'test' ? (req.headers['x-client-cert-fingerprint'] as string) : undefined);
 
         const normalizeFp = (fp?: string) => (fp ? fp.replace(/[:\s-]/g, '').toLowerCase() : '');
         const normInput = normalizeFp(certFingerprint);
@@ -104,8 +105,8 @@ export const readerAuthMiddleware = async (
     // Determine reader secret (per-reader secret or fallback global RFID_HMAC_SECRET). Fail closed if missing in non-test.
     const hmacSecret =
       (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
-      process.env.RFID_HMAC_SECRET ||
-      (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      env.RFID_HMAC_SECRET ||
+      (env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
     if (!hmacSecret) {
       return res.status(401).json({ error: 'UNAUTHORIZED_READER', message: 'No cryptographic secret configured for reader authentication' });
     }

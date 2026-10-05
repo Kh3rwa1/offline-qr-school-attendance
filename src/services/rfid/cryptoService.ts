@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import crypto from 'crypto';
 
 /**
@@ -124,7 +125,7 @@ export function computeCredentialDigest(
   schoolIdParam?: string,
   keyVersionParam?: number
 ): string {
-  let secret = process.env.RFID_CREDENTIAL_DIGEST_KEY || process.env.RFID_HMAC_SECRET;
+  let secret = env.RFID_CREDENTIAL_DIGEST_KEY || env.RFID_HMAC_SECRET;
   let schoolId = '';
   let keyVersion = 1;
   let securityMode = 'SECURE';
@@ -151,7 +152,7 @@ export function computeCredentialDigest(
   }
 
   if (!secret) {
-    if (process.env.NODE_ENV === 'test') {
+    if (env.NODE_ENV === 'test') {
       secret = 'test-secret-32-chars-length-environment';
     } else {
       throw new Error('RFID_CREDENTIAL_DIGEST_KEY must be configured for credential digest computation');

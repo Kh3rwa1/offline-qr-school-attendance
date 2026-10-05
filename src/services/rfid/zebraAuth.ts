@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import { and, eq } from 'drizzle-orm';
 import { withTenantContext } from '../../db';
 import { rfidReaders } from '../../db/schema';
@@ -15,7 +16,7 @@ export interface AuthenticatedReader {
   assignedClassSectionId?: string | null;
 }
 
-const LEGACY_FALLBACK = process.env.LEGACY_READER_BEARER_FALLBACK === 'true';
+const LEGACY_FALLBACK = env.LEGACY_READER_BEARER_FALLBACK;
 export const LEGACY_SUNSET = '2026-12-31';
 
 export async function findReaderByIdentifier(schoolId: string, readerIdentifier: string) {

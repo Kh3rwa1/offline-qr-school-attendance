@@ -1,3 +1,4 @@
+import { env } from '../../../env';
 import { eq } from 'drizzle-orm';
 import { withTenantContext } from '../../../db';
 import { schools } from '../../../db/schema';
@@ -64,7 +65,7 @@ export function summarize(all: Outcome[], processedCount: number) {
   if (acceptedCount + duplicateCount + rejectedCount !== processedCount || all.length !== processedCount) {
     // Invariant violation = bug. Fail loudly in test, log loudly in prod.
     const err = new Error(`INGEST_INVARIANT: ${all.length} results for ${processedCount} reads`);
-    if (process.env.NODE_ENV !== 'production') throw err;
+    if (env.NODE_ENV !== 'production') throw err;
     console.error(err);
   }
   return { processedCount, acceptedCount, duplicateCount, rejectedCount };

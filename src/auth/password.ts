@@ -1,7 +1,8 @@
+import { env } from '../env';
 import argon2 from 'argon2';
 
 export async function hashPassword(password: string): Promise<string> {
-  const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+  const isTest = env.NODE_ENV === 'test' || env.VITEST === 'true';
   return await argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: isTest ? 2048 : 65536,

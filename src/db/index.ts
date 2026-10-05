@@ -25,17 +25,17 @@ export const tenantTransaction = new AsyncLocalStorage<ContextStore>();
 const store = tenantTransaction;
 
 // PostgreSQL Connection Pool Budget Configuration
-const PG_POOL_MAX_APP = parseInt(process.env.PG_POOL_MAX_APP || process.env.PG_POOL_MAX || '15', 10);
-const PG_POOL_MAX_SYS = parseInt(process.env.PG_POOL_MAX_SYS || '5', 10);
-const PG_POOL_MIN = parseInt(process.env.PG_POOL_MIN || '2', 10);
-const PG_IDLE_TIMEOUT_MS = parseInt(process.env.PG_IDLE_TIMEOUT_MS || '30000', 10);
-const PG_CONNECTION_TIMEOUT_MS = parseInt(process.env.PG_CONNECTION_TIMEOUT_MS || '5000', 10);
-const PG_STATEMENT_TIMEOUT_MS = parseInt(process.env.PG_STATEMENT_TIMEOUT_MS || '10000', 10);
-const PG_IDLE_IN_TRANSACTION_TIMEOUT_MS = parseInt(process.env.PG_IDLE_IN_TRANSACTION_TIMEOUT_MS || '5000', 10);
+const PG_POOL_MAX_APP = parseInt(env.PG_POOL_MAX_APP || env.PG_POOL_MAX || '15', 10);
+const PG_POOL_MAX_SYS = parseInt(env.PG_POOL_MAX_SYS || '5', 10);
+const PG_POOL_MIN = parseInt(env.PG_POOL_MIN || '2', 10);
+const PG_IDLE_TIMEOUT_MS = parseInt(env.PG_IDLE_TIMEOUT_MS || '30000', 10);
+const PG_CONNECTION_TIMEOUT_MS = parseInt(env.PG_CONNECTION_TIMEOUT_MS || '5000', 10);
+const PG_STATEMENT_TIMEOUT_MS = parseInt(env.PG_STATEMENT_TIMEOUT_MS || '10000', 10);
+const PG_IDLE_IN_TRANSACTION_TIMEOUT_MS = parseInt(env.PG_IDLE_IN_TRANSACTION_TIMEOUT_MS || '5000', 10);
 
-const WEB_REPLICA_COUNT = parseInt(process.env.WEB_REPLICA_COUNT || '2', 10);
-const SMS_WORKER_REPLICA_COUNT = parseInt(process.env.SMS_WORKER_REPLICA_COUNT || '2', 10);
-const MAX_ALLOWED_DB_CONNECTIONS = parseInt(process.env.MAX_ALLOWED_DB_CONNECTIONS || '100', 10);
+const WEB_REPLICA_COUNT = parseInt(env.WEB_REPLICA_COUNT || '2', 10);
+const SMS_WORKER_REPLICA_COUNT = parseInt(env.SMS_WORKER_REPLICA_COUNT || '2', 10);
+const MAX_ALLOWED_DB_CONNECTIONS = parseInt(env.MAX_ALLOWED_DB_CONNECTIONS || '100', 10);
 
 /**
  * Validates connection pool budget on startup accounting for app and system pools per replica.
@@ -45,7 +45,7 @@ export function validateDatabaseConnectionBudget(): { totalBudget: number; maxAl
   const totalBudget = (WEB_REPLICA_COUNT * processBudget) + (SMS_WORKER_REPLICA_COUNT * processBudget);
   const valid = totalBudget <= MAX_ALLOWED_DB_CONNECTIONS;
 
-  if (!valid && process.env.NODE_ENV === 'production') {
+  if (!valid && env.NODE_ENV === 'production') {
     throw new Error(
       `DB_CONNECTION_BUDGET_EXCEEDED: Configured pool budget (${totalBudget}) exceeds max allowed database connections (${MAX_ALLOWED_DB_CONNECTIONS}). ` +
       `Web replicas (${WEB_REPLICA_COUNT} x ${processBudget}) + Worker replicas (${SMS_WORKER_REPLICA_COUNT} x ${processBudget}).`
@@ -77,7 +77,7 @@ const isPlaceholder = (url?: string) => !url || /replace[-_]with[-_]/.test(url);
 
 function createDb(): Db {
   if (isPlaceholder(env.DATABASE_URL)) {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       throw new Error('DATABASE_URL is missing or a placeholder. Refusing to start on an in-memory database.');
     }
     // Dev/test only. Kept behind this branch so it can move to an injected driver.
@@ -99,7 +99,7 @@ function createDb(): Db {
     connectionTimeoutMillis: PG_CONNECTION_TIMEOUT_MS,
     statement_timeout: PG_STATEMENT_TIMEOUT_MS,
     idle_in_transaction_session_timeout: PG_IDLE_IN_TRANSACTION_TIMEOUT_MS,
-    application_name: process.env.PG_APPLICATION_NAME || 'school_attendance_web',
+    application_name: env.PG_APPLICATION_NAME || 'school_attendance_web',
   });
   appPoolInstance = pool;
   client = pool;

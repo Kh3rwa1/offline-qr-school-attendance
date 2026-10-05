@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import crypto from 'node:crypto';
 import { db, withTenantContext } from '../../db';
 import {
@@ -215,7 +216,7 @@ export async function processZebraIotWebhook(params: {
   let rejectedCount = 0;
 
   const redis = getRedisClient();
-  const cooldownMs = parseInt(process.env.RFID_DUPLICATE_TAP_COOLDOWN_MS || '30000', 10);
+  const cooldownMs = parseInt(env.RFID_DUPLICATE_TAP_COOLDOWN_MS || '30000', 10);
   const payloadHash = crypto.createHash('sha256').update(rawBody).digest('hex');
 
   // 6. Process Tag Reads

@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import { redactPhoneNumber } from './smsUtils';
 
 /**
@@ -219,10 +220,10 @@ providerRegistry.set('console', consoleProvider);
 providerRegistry.set('dlt', dltProvider);
 
 export function getSmsProvider(providerName?: string): SmsProvider {
-  const configured = providerName || process.env.SMS_PROVIDER || (process.env.NODE_ENV === 'production' ? undefined : 'fake');
+  const configured = providerName || env.SMS_PROVIDER || (env.NODE_ENV === 'production' ? undefined : 'fake');
   if (!configured) throw new Error('SMS_PROVIDER_REQUIRED');
   const name = configured.toLowerCase();
-  if (process.env.NODE_ENV === 'production' && (name === 'fake' || name === 'console') && process.env.ALLOW_FAKE_SMS_IN_PRODUCTION !== 'true') {
+  if (env.NODE_ENV === 'production' && (name === 'fake' || name === 'console') && env.ALLOW_FAKE_SMS_IN_PRODUCTION !== 'true') {
     throw new Error('PRODUCTION_SMS_PROVIDER_FORBIDDEN');
   }
   const provider = providerRegistry.get(name);

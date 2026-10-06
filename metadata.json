@@ -1,6 +1,14 @@
 {
   "name": "AttendEase OS",
   "description": "UHF RFID Gate Attendance Appliance for Zebra FX9600 with offline QR fallback. Multilingual (EN/BN/HI) school attendance platform for government schools.",
+  "topics": [
+    "rfid",
+    "uhf",
+    "zebra-fx9600",
+    "school-attendance",
+    "india",
+    "bengali"
+  ],
   "requestFramePermissions": [
     "camera"
   ],

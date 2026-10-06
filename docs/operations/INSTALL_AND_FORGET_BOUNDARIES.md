@@ -103,7 +103,7 @@ These are engineering targets. Formal production SLA commitments require an expl
 If the original server is permanently unavailable:
 
 1. **Provision a new Ubuntu 22.04/24.04 server** with the same minimum specs (2 GB RAM, 20 GB disk)
-2. **Clone the repository**: `git clone https://github.com/Kh3rwa1/offline-qr-school-attendance.git /opt/attendease`
+2. **Clone the repository**: `git clone https://github.com/Kh3rwa1/attendease-os.git /opt/attendease`
 3. **Copy your `.env` file** from a secure backup location to `/opt/attendease/.env`
 4. **Run the installer**: `cd /opt/attendease && ./scripts/install.sh install -y`
 5. **Restore the database**:

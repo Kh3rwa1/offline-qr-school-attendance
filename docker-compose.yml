@@ -40,7 +40,7 @@ services:
         max-file: "5"
 
   app:
-    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}
+    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/attendease-os:v2.0.0}
     build:
       context: .
       dockerfile: Dockerfile
@@ -125,7 +125,7 @@ services:
         condition: service_healthy
 
   migrate:
-    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}
+    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/attendease-os:v2.0.0}
     build:
       context: .
       dockerfile: Dockerfile
@@ -153,7 +153,7 @@ services:
         condition: service_completed_successfully
 
   sms-worker:
-    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}
+    image: ${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/attendease-os:v2.0.0}
     build:
       context: .
       dockerfile: Dockerfile

@@ -130,12 +130,12 @@ jobs:
           category: trivy-filesystem
 
       - name: Build Container Image for Security Scanning
-        run: docker build -t offline-qr-school-attendance:scan .
+        run: docker build -t attendease-os:scan .
 
       - name: Run Trivy Container Image Scan (Strict Exit Code Enforcement)
         run: |
-          trivy image --exit-code 1 --ignore-unfixed --scanners vuln --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif offline-qr-school-attendance:scan
-          trivy image --ignore-unfixed --scanners vuln --severity HIGH,CRITICAL --format json --output trivy-image-results.json offline-qr-school-attendance:scan
+          trivy image --exit-code 1 --ignore-unfixed --scanners vuln --severity HIGH,CRITICAL --format sarif --output trivy-image-results.sarif attendease-os:scan
+          trivy image --ignore-unfixed --scanners vuln --severity HIGH,CRITICAL --format json --output trivy-image-results.json attendease-os:scan
 
       - name: Upload Security Vulnerability Scan Artifacts
         if: always()

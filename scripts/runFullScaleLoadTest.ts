@@ -654,7 +654,7 @@ export async function runFullScaleLoadTest(
     timestamp: new Date().toISOString(),
     gitCommitSha: commitSha,
     workflowRunId: process.env.GITHUB_RUN_ID || 'local',
-    repository: process.env.GITHUB_REPOSITORY || 'Kh3rwa1/offline-qr-school-attendance',
+    repository: process.env.GITHUB_REPOSITORY || 'Kh3rwa1/attendease-os',
     runnerType: process.env.RUNNER_OS ? `${process.env.RUNNER_OS}-${process.env.RUNNER_ARCH || 'x64'}` : 'local',
     nodeVersion: process.version,
     postgresVersion: measuredPostgresVersion,

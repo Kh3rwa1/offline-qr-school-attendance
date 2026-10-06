@@ -7,7 +7,7 @@ set -euo pipefail
 
 umask 077
 
-VERSION="1.3.0"
+VERSION="2.0.0"
 CONFIG_FILE=".env"
 STATE_FILE=".attendease_state.json"
 COMMAND="install"
@@ -16,7 +16,7 @@ DRY_RUN=0
 PURGE=0
 RESTORE_TARGET=""
 VERIFY_ONLY=0
-TARGET_IMAGE="${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:latest}"
+TARGET_IMAGE="${ATTENDEASE_IMAGE:-ghcr.io/kh3rwa1/attendease-os:latest}"
 
 # Monitoring runs by default. An appliance nobody is watching fails silently.
 MONITORING_OVERRIDE=""
@@ -382,7 +382,7 @@ cmd_install() {
   fi
 
   # Record installed state
-  INSTALLED_IMAGE="${TARGET_IMAGE:-ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0}"
+  INSTALLED_IMAGE="${TARGET_IMAGE:-ghcr.io/kh3rwa1/attendease-os:v2.0.0}"
   cat <<EOF > "${STATE_FILE}"
 {
   "version": "${VERSION}",
@@ -614,8 +614,15 @@ cmd_restore() {
     if [ -z "${BACKUP_KEY}" ]; then
       die "Missing mandatory BACKUP_ENCRYPTION_KEY in ${CONFIG_FILE}."
     fi
-    if [ "${VERIFY_ONLY}" -eq 1 ]; then
-      echo "✅ Legacy file verified present."
+    if [ "${VERIFY_ONLY}" -eq 1 ] || [ "${DRY_RUN:-0}" -eq 1 ]; then
+      echo " • Performing dry-run validation (decryption and gunzip check)..."
+      PASSPHRASE_FILE=$(mktemp)
+      chmod 0600 "${PASSPHRASE_FILE}"
+      printf '%s' "${BACKUP_KEY}" > "${PASSPHRASE_FILE}"
+      openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"${PASSPHRASE_FILE}" -in "${file}" | \
+        gzip -t || die "Dry-run decryption/decompression failed"
+      rm -f "${PASSPHRASE_FILE}"
+      echo "✅ Dry-run legacy backup verification passed: decryption and gzip valid without touching database."
       return 0
     fi
     echo "⚠️ Restoring database will overwrite current state."
@@ -670,8 +677,11 @@ cmd_restore() {
     || die "BACKUP CHECKSUM MISMATCH: manifest claims $expected_sha, got $actual_sha"
   echo " • Checksum verification passed (${actual_sha:0:16}...)"
 
-  if [ "${VERIFY_ONLY}" -eq 1 ]; then
-    echo "✅ Backup verification passed successfully: signature and checksum valid."
+  if [ "${VERIFY_ONLY}" -eq 1 ] || [ "${DRY_RUN:-0}" -eq 1 ]; then
+    echo " • Performing dry-run validation (decryption and integrity verification)..."
+    age -d -i "$key" "$file" | (gzip -t 2>/dev/null || cat > /dev/null) \
+      || die "Dry-run decryption verification failed"
+    echo "✅ Dry-run restore check passed: signature, checksum, and decryption verified without modifying database."
     return 0
   fi
 
@@ -709,9 +719,9 @@ cmd_update() {
   cmd_backup
   PRE_UPDATE_BACKUP=$(find ./backups \( -name "*.dump.age" -o -name "*.sql.gz.enc" \) 2>/dev/null | sort -r | head -n 1 || true)
 
-  CURRENT_IMAGE_REF="ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0"
+  CURRENT_IMAGE_REF="ghcr.io/kh3rwa1/attendease-os:v2.0.0"
   if [ -f "${STATE_FILE}" ]; then
-    CURRENT_IMAGE_REF=$(grep '"current_image"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2- | tr -d '", ' || echo "ghcr.io/kh3rwa1/offline-qr-school-attendance:v1.3.0")
+    CURRENT_IMAGE_REF=$(grep '"current_image"' "${STATE_FILE}" 2>/dev/null | cut -d':' -f2- | tr -d '", ' || echo "ghcr.io/kh3rwa1/attendease-os:v2.0.0")
   fi
 
   echo "\n2. Pulling target release container image (${TARGET_IMAGE})..."

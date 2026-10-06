@@ -137,7 +137,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           cosign verify \
-            --certificate-identity-regexp "https://github.com/Kh3rwa1/offline-qr-school-attendance" \
+            --certificate-identity-regexp "https://github.com/Kh3rwa1/(attendease-os|offline-qr-school-attendance)" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             ${{ env.PUBLISHED_DIGEST }}
 

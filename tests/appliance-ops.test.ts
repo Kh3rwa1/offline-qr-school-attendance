@@ -174,9 +174,11 @@ SMS_PROVIDER="console"
 
     it('handles bin/attendease CLI wrapper execution', () => {
       const helpOutput = execSync(`bash bin/attendease --help`, { encoding: 'utf8' });
-      expect(helpOutput).toContain('AttendEase OS CLI (1.3.0)');
+      expect(helpOutput).toContain('AttendEase OS CLI (2.0.0)');
       expect(helpOutput).toContain('status');
       expect(helpOutput).toContain('backup');
+      expect(helpOutput).toContain('restore');
+      expect(helpOutput).toContain('--dry-run');
       expect(helpOutput).toContain('update');
       expect(helpOutput).toContain('rollback');
     });

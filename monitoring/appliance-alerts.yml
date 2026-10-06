@@ -95,7 +95,7 @@ groups:
         for: 10m
         labels:
           severity: warning
-          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#disk-space"
+          runbook: "https://github.com/Kh3rwa1/attendease-os/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#disk-space"
         annotations:
           summary: "Disk space is below 20% on {{ $labels.instance }}"
           description: "Available disk space is {{ $value | humanizePercentage }}. Backups and logs may start failing. Free space immediately: docker system prune -f"
@@ -105,7 +105,7 @@ groups:
         for: 5m
         labels:
           severity: critical
-          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#disk-space"
+          runbook: "https://github.com/Kh3rwa1/attendease-os/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#disk-space"
         annotations:
           summary: "Disk space is critically low (<5%) on {{ $labels.instance }}"
           description: "The appliance is nearly out of disk space. Database writes and backups will fail. Immediate action required."
@@ -121,7 +121,7 @@ groups:
         for: 1h
         labels:
           severity: warning
-          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#tls-certificate"
+          runbook: "https://github.com/Kh3rwa1/attendease-os/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#tls-certificate"
         annotations:
           summary: "TLS certificate expires in less than 14 days"
           description: "The TLS certificate for {{ $labels.domain }} expires in {{ $value | humanizeDuration }}. Check Caddy auto-renewal: docker compose logs caddy"
@@ -131,7 +131,7 @@ groups:
         for: 30m
         labels:
           severity: critical
-          runbook: "https://github.com/Kh3rwa1/offline-qr-school-attendance/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#tls-certificate"
+          runbook: "https://github.com/Kh3rwa1/attendease-os/blob/main/docs/runbooks/INCIDENT_RUNBOOKS.md#tls-certificate"
         annotations:
           summary: "TLS certificate expires in less than 3 days — URGENT"
           description: "The TLS certificate for {{ $labels.domain }} expires in {{ $value | humanizeDuration }}. Teachers will see browser security warnings and cannot log in."

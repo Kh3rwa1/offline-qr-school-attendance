@@ -7,7 +7,7 @@ last_verified: 2026-10-06
 
 # Branch Governance & Release Policy
 
-**Repository**: `https://github.com/Kh3rwa1/offline-qr-school-attendance`  
+**Repository**: `https://github.com/Kh3rwa1/attendease-os`  
 **Target Branch**: `main`  
 
 ---

@@ -16,7 +16,7 @@ On an Ubuntu 22.04/24.04 LTS (x86_64 or ARM64) server or appliance:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/Kh3rwa1/offline-qr-school-attendance.git /opt/attendease
+git clone https://github.com/Kh3rwa1/attendease-os.git /opt/attendease
 cd /opt/attendease
 
 # 2. Run the production installer

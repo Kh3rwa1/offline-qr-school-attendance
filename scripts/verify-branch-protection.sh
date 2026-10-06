@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 REPO_OWNER="${REPO_OWNER:-Kh3rwa1}"
-REPO_NAME="${REPO_NAME:-offline-qr-school-attendance}"
+REPO_NAME="${REPO_NAME:-attendease-os}"
 BRANCH="${BRANCH:-main}"
 STRICT="${REQUIRE_STRICT_BRANCH_PROTECTION:-true}"
 AUTH_TOKEN="${ADMIN_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"

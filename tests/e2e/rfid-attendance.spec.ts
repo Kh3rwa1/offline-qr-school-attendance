@@ -101,7 +101,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     }
 
     // Enroll & Activate Credential
-    const epcHex = 'E28011700000020B85794820';
+    const epcHex = `E28011700000020B${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const enrollRes = await request.post(`/api/v1/schools/${schoolId}/rfid/credentials/enroll`, {
       headers: csrfHeaders,
       data: { studentId, epc: epcHex, securityMode: 'SECURE' },

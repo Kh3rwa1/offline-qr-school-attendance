@@ -1,146 +1,94 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import { globSync } from 'node:fs';
 
-/**
- * CI Guardrail: Product Marketing Claims Verifier
- *
- * Scans all source files, documentation, and metadata to ensure no unsupported
- * government certification, DPDP legal compliance, or unverified hardware/performance
- * claims exist in public-facing copy.
- */
-
-interface ProhibitedPattern {
+export interface Rule {
+  id: string;
   regex: RegExp;
   label: string;
 }
 
-const PROHIBITED_PUBLIC_PATTERNS: ProhibitedPattern[] = [
-  { regex: /UDISE\+\s*(compliant|certified|verified\s*by|approved)/i, label: 'Unsupported UDISE+ compliance/certification claim' },
-  { regex: /government[\s-]*(approved|certified|ready\s*reports|standard)/i, label: 'Unsupported government approval/standard claim' },
-  { regex: /govt\s*standard/i, label: 'Unsupported govt standard claim' },
-  { regex: /official\s*government\s*format/i, label: 'Unsupported official government format claim' },
-  { regex: /guaranteed\s*(portal\s*)?acceptance/i, label: 'Unsupported guaranteed acceptance claim' },
-  { regex: /DPDP\s*(compliant|certified|legal\s*guarantee)/i, label: 'Unsupported DPDP certification claim' },
-  { regex: /Protected\s*under\s*India['’]s\s*DPDP\s*law(?!\s*and\s*access\s*controls)/i, label: 'Unsupported DPDP protection guarantee' },
-  { regex: /independently\s*certified/i, label: 'Unsupported independent certification claim' },
-  { regex: /hardware\s*certified\s*10\/10/i, label: 'Fabricated hardware 10/10 certification claim' },
-  { regex: /10\/10\s*certified/i, label: 'Fabricated 10/10 certified claim' },
-  { regex: /officially\s*validated/i, label: 'Unsupported officially validated claim' },
+export const RULES: Rule[] = [
+  { id: 'udise', regex: /UDISE\+\s*(compliant|certified|verified\s+by|approved)/i, label: 'UDISE+ compliance claim' },
+  { id: 'gov', regex: /government[\s-]*(approved|certified|standard)|govt\.?\s*standard|official\s+government\s+format/i, label: 'Government approval claim' },
+  { id: 'dpdp', regex: /DPDP[\s-]*(compliant|certified|approved)|compliant\s+with\s+(the\s+)?DPDP/i, label: 'DPDP compliance claim' },
+  { id: 'indep', regex: /independent(ly)?\s+(audit(ed)?|certif(ied|ication)|verif(ied|ication))/i, label: 'Independence claim' },
+  { id: 'cert', regex: /\b(production|hardware|site)\s+certif(ied|ication)\b|10\s*\/\s*10/i, label: 'Self-certification claim' },
+  { id: 'guarantee', regex: /\bguarantee[sd]?\b|\b100\s*%\s*(accura|reliab|uptime)/i, label: 'Guarantee claim' },
+  { id: 'enterprise', regex: /\benterprise[\s-]grade\b|\bbank[\s-]grade\b|\bmilitary[\s-]grade\b/i, label: 'Marketing grade claim' },
 ];
 
-// Directories and files to scan
-const TARGET_PATHS = [
-  'src',
+// Explicit, reviewable exemptions only:
+// <!-- claims-allow: dpdp | quoting the law's name in the legal review section -->
+// // claims-allow: cert | rule definition
+export const ALLOW_RE = /claims-allow:\s*([a-z,\s]+)\|\s*(.{10,})/;
+export const SCAN = [
   'README.md',
   'index.html',
-  'docs/STATUS.md',
-  'docs/performance',
-  'docs/hardware',
+  'CHANGELOG.md',
+  'THREAT_MODEL.md',
+  'SECURITY.md',
+  'docs/**/*.{md,json}',
+  'src/**/*.{ts,tsx,json}',
+  'public/**/*.{html,json}',
 ];
+export const SKIP = new Set(['scripts/verify-product-claims.ts', 'tests/productClaimsGuardrail.test.ts']);
 
-// Files or directories explicitly exempt from scan (e.g. guardrail definitions, audit baselines)
-const EXEMPT_FILES = [
-  'scripts/verify-product-claims.ts',
-  'scripts/verify-no-forbidden-strings.ts',
-  'src/config/productClaims.ts',
-  'docs/audits/TRUTH_LOCALIZATION_BASELINE.md',
-  'tests/productClaimsGuardrail.test.ts',
-  'docs/audits/INTERNAL_TECHNICAL_READINESS_REPORT.md',
-  'docs/audits/EXTERNAL_VALIDATION_REGISTER.md',
-];
-
-interface Violation {
+export interface Violation {
   file: string;
   line: number;
-  label: string;
+  rule: string;
   snippet: string;
 }
 
-const violations: Violation[] = [];
+export function runGuardrailOn(files: Record<string, string>): { violations: Violation[] } {
+  const violations: Violation[] = [];
+  for (const [file, content] of Object.entries(files)) {
+    if (SKIP.has(file) || file.startsWith('docs/archive/') || file.includes('/archive/')) continue;
+    const lines = content.split('\n');
+    lines.forEach((line, i) => {
+      // Join with next line so claims split across a soft-wrapped paragraph still match
+      const window = `${line} ${lines[i + 1] ?? ''}`;
+      const allow = ALLOW_RE.exec(line) ?? ALLOW_RE.exec(lines[i - 1] ?? '');
+      const allowed = new Set(allow?.[1]?.split(',').map((s) => s.trim()) ?? []);
 
-function isLineExempt(line: string): boolean {
-  const trimmed = line.trim();
-  if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
-    return true;
-  }
-  if (
-    line.includes('prohibitedPhrases') ||
-    line.includes('PROHIBITED') ||
-    line.includes('FORBIDDEN') ||
-    line.includes('prohibited') ||
-    line.includes('historical') ||
-    line.includes('Historical') ||
-    line.includes('ANTI-PATTERN') ||
-    line.includes('TRUTH_POLICY') ||
-    line.includes('does not claim') ||
-    line.includes('not claim') ||
-    line.includes('does not guarantee') ||
-    line.includes('not guaranteed') ||
-    line.includes('No specific') ||
-    line.includes('Replace:') ||
-    line.includes('With:') ||
-    line.includes('regex:') ||
-    line.includes('label:')
-  ) {
-    return true;
-  }
-  return false;
-}
-
-function scanFile(filePath: string) {
-  const relPath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
-  if (EXEMPT_FILES.some((ex) => relPath === ex || relPath.endsWith(ex))) {
-    return;
-  }
-
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n');
-
-  lines.forEach((line, index) => {
-    if (isLineExempt(line)) return;
-
-    for (const pattern of PROHIBITED_PUBLIC_PATTERNS) {
-      if (pattern.regex.test(line)) {
+      for (const r of RULES) {
+        if (!r.regex.test(window) || allowed.has(r.id)) continue;
+        if (!r.regex.test(line) && r.regex.test(lines[i + 1] ?? '')) continue; // reported on the next line instead
         violations.push({
-          file: relPath,
-          line: index + 1,
-          label: pattern.label,
-          snippet: line.trim(),
+          file,
+          line: i + 1,
+          rule: `${r.id}: ${r.label}`,
+          snippet: line.trim().slice(0, 140),
         });
       }
-    }
-  });
+    });
+  }
+  return { violations };
 }
 
-function traversePath(targetPath: string) {
-  const fullPath = path.resolve(process.cwd(), targetPath);
-  if (!fs.existsSync(fullPath)) return;
-
-  const stat = fs.statSync(fullPath);
-  if (stat.isFile()) {
-    scanFile(fullPath);
-  } else if (stat.isDirectory()) {
-    const entries = fs.readdirSync(fullPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
-      traversePath(path.join(targetPath, entry.name));
+export function scanRepository(): Violation[] {
+  const allFiles = Array.from(new Set(SCAN.flatMap((g) => globSync(g))));
+  const fileContents: Record<string, string> = {};
+  for (const file of allFiles) {
+    if (SKIP.has(file) || file.startsWith('docs/archive/') || file.includes('/archive/')) continue;
+    try {
+      if (fs.statSync(file).isFile()) {
+        fileContents[file] = fs.readFileSync(file, 'utf8');
+      }
+    } catch {
+      // ignore
     }
   }
+  return runGuardrailOn(fileContents).violations;
 }
 
-console.log('[CI Claims Guardrail] Scanning public copy & metadata for truthful compliance...');
-for (const p of TARGET_PATHS) {
-  traversePath(p);
-}
-
-if (violations.length > 0) {
-  console.error(`\n🚨 Product Claims Guardrail Failed: Found ${violations.length} prohibited public claim(s):`);
-  for (const v of violations) {
-    console.error(`  - [${v.file}:${v.line}] ${v.label}`);
-    console.error(`    Snippet: ${v.snippet}\n`);
+if (process.argv[1]?.includes('verify-product-claims')) {
+  const violations = scanRepository();
+  if (violations.length) {
+    console.error(`Claims guardrail: ${violations.length} unsupported claim(s)\n`);
+    for (const v of violations) console.error(`  ${v.file}:${v.line} [${v.rule}]\n    ${v.snippet}\n`);
+    console.error('Fix the copy, or add an explicit `claims-allow: <rule> | <reason>` marker for review.');
+    process.exit(1);
   }
-  process.exit(1);
-} else {
-  console.log('✅ Product Claims Guardrail Passed: All public copy satisfies truth standards.');
-  process.exit(0);
+  console.log('Claims guardrail passed.');
 }

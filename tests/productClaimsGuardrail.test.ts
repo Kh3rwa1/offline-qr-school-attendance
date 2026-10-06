@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PRODUCT_CLAIMS, ClaimStatus, ProductClaim } from '../src/config/productClaims';
+import { runGuardrailOn } from '../scripts/verify-product-claims';
 
 describe('Centralized Product Claims Registry & Guardrails', () => {
   it('registers all mandatory core, hardware, reporting, privacy, and performance claims', () => {
@@ -66,5 +67,13 @@ describe('Centralized Product Claims Registry & Guardrails', () => {
     expect(PRODUCT_CLAIMS.governmentAcceptance.prohibitedPhrases).toContain('Government approved');
     expect(PRODUCT_CLAIMS.dpdpAlignedPrivacyControls.prohibitedPhrases).toContain('DPDP certified');
     expect(PRODUCT_CLAIMS.physicalFx9600Commissioning.prohibitedPhrases).toContain('Hardware certified 10/10');
+  });
+
+  it.each([
+    ['* DPDP compliant storage', 'markdown bullet'],
+    ['Our historical record is DPDP compliant', 'keyword exemption'],
+    ['This system is fully DPDP\ncompliant', 'line wrap'],
+  ])('catches "%s" (%s)', (text) => {
+    expect(runGuardrailOn({ 'docs/x.md': text }).violations).toHaveLength(1);
   });
 });

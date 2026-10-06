@@ -18,14 +18,22 @@ function getRateLimiterRedisClient(): Redis | null {
   if (!redisUrl) return null;
   if (!redisClientInstance) {
     redisClientInstance = new Redis(redisUrl, {
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      lazyConnect: true,
-      retryStrategy: () => null,
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: true,
+      lazyConnect: false,
+      retryStrategy: (times) => Math.min(times * 50, 1000),
     });
     redisClientInstance.on('error', () => {});
   }
   return redisClientInstance;
+}
+
+export async function closeRateLimiterRedis(): Promise<void> {
+  if (redisClientInstance) {
+    const client = redisClientInstance;
+    redisClientInstance = null;
+    await client.quit().catch(() => undefined);
+  }
 }
 
 export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {

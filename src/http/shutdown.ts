@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import type { Request, Response, NextFunction } from 'express';
 import { closeDatabasePools } from '../db';
 import { closeRedis } from '../services/redisService';
+import { closeRateLimiterRedis } from '../middleware/distributedRateLimiter';
 import { logger } from '../lib/logger';
 
 const DRAIN_MS = Number(env.SHUTDOWN_DRAIN_MS ?? 20_000);
@@ -51,7 +52,7 @@ export function installGracefulShutdown(server: Server, extra: Array<() => Promi
     }
 
     // 4. Close resources in reverse dependency order
-    const results = await Promise.allSettled([...extra.map((f) => f()), closeRedis(), closeDatabasePools()]);
+    const results = await Promise.allSettled([...extra.map((f) => f()), closeRedis(), closeRateLimiterRedis(), closeDatabasePools()]);
     results
       .filter((r) => r.status === 'rejected')
       .forEach((r) => logger.error({ err: (r as PromiseRejectedResult).reason }, 'shutdown: close failed'));

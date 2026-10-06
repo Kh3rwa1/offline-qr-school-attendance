@@ -54,6 +54,7 @@ export const BaseSchema = z
     REDIS_KEY_HMAC_SECRET: z.string().optional(),
     BACKUP_ENCRYPTION_KEY: z.string().optional(),
     SMS_PROVIDER: z.string().optional(),
+    ABSENCE_SMS_DELAY_MINUTES: z.coerce.number().int().min(0).max(240).default(20),
     SMS_WEBHOOK_SECRET: z.string().optional(),
     DLT_SMS_API_KEY: z.string().optional(),
     DLT_SMS_SENDER_ID: z.string().optional(),
@@ -168,7 +169,7 @@ if (!parsed.success) {
 
 // Reject unknown variables that use the app's own prefixes (catches typos such as
 // RFID_INGEST_VS=true). `.strict()` is unusable because process.env holds PATH, HOME, etc.
-const APP_PREFIXES = ['PG_', 'RFID_', 'REDIS_', 'SMS_', 'R2_', 'BACKUP_', 'FEATURE_', 'SHUTDOWN_', 'READER_', 'CSRF_', 'SESSION_'];
+const APP_PREFIXES = ['PG_', 'RFID_', 'REDIS_', 'SMS_', 'R2_', 'BACKUP_', 'FEATURE_', 'SHUTDOWN_', 'READER_', 'CSRF_', 'SESSION_', 'ABSENCE_'];
 const KNOWN_KEYS = new Set(Object.keys(BaseSchema.shape));
 // Same prefix, different owner: read by the backup sidecar / installer scripts, which share .env.
 const FOREIGN_KEYS = new Set([
@@ -652,6 +653,11 @@ export const ENV_DOCS: Record<keyof z.infer<typeof EnvSchema>, EnvVarDoc> = {
     group: 'DLT SMS & Telecom Integration',
     help: 'Active SMS dispatch engine implementation (fake, console, dlt)',
     example: 'console',
+  },
+  ABSENCE_SMS_DELAY_MINUTES: {
+    group: 'DLT SMS & Telecom Integration',
+    help: 'Delay window in minutes before sending absence SMS notifications to prevent false alarms',
+    example: '20',
   },
   SMS_WEBHOOK_SECRET: {
     group: 'DLT SMS & Telecom Integration',

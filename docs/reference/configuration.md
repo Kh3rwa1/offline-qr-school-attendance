@@ -69,6 +69,7 @@ To update this reference or `.env.example`, edit `src/env.ts` and run `npm run g
 | `METRICS_AUTH_TOKEN` | Telemetry & Alerting | Bearer authentication token required to scrape Prometheus /metrics | yes | *(generated)* |
 | `ALERT_WEBHOOK_URL` | Telemetry & Alerting | HTTP webhook URL for dispatching urgent operational failure alerts | no | `https://alerts.example.com/webhook` |
 | `SMS_PROVIDER` | DLT SMS & Telecom Integration | Active SMS dispatch engine implementation (fake, console, dlt) | no | `console` |
+| `ABSENCE_SMS_DELAY_MINUTES` | DLT SMS & Telecom Integration | Delay window in minutes before sending absence SMS notifications to prevent false alarms | no | `20` |
 | `SMS_WEBHOOK_SECRET` | DLT SMS & Telecom Integration | HMAC secret for verifying inbound carrier delivery receipts | yes | *(generated)* |
 | `SMS_GATEWAY_URL` | DLT SMS & Telecom Integration | HTTP endpoint of telecom SMS gateway provider | no | `https://sms.example.com/send` |
 | `SMS_WORKER_INTERVAL_MS` | DLT SMS & Telecom Integration | Queue poll interval in milliseconds for background SMS worker | no | `5000` |

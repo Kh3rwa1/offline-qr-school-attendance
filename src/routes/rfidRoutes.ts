@@ -5,12 +5,14 @@ import { tenantRoute } from '../http/tenantRoute';
 import { credentialService } from '../services/rfid/credentialService';
 import { readerService } from '../services/rfid/readerService';
 import { db, withTenantContext } from '../db';
-import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/schema';
+import { z } from 'zod';
+import { rfidScanEvents, rfidReaders, rfidCredentials, students, schools } from '../db/schema';
 import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
+import { findAnomalies } from '../services/rfid/anomalies';
 
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
-import { processZebraBatch } from '../services/rfid/ingest';
+import { processZebraBatch, clearSchoolSettingsCache } from '../services/rfid/ingest';
 import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
 import type { RawBodyRequest } from '../middleware/bodyParsers';
 import { AppError, toAppError } from '../errors/AppError';
@@ -110,7 +112,9 @@ rfidRouter.post(
         },
       };
     } catch (error: any) {
-      return { status: 400, body: { success: false, error: error.message } };
+      const status = error.status || 400;
+      const code = error.code || error.message;
+      return { status, body: { success: false, error: code, message: error.message } };
     }
       },
   })
@@ -797,3 +801,84 @@ rfidRouter.get(
       },
   })
 );
+
+rfidRouter.patch(
+  '/:schoolId/rfid/mode',
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    params: z.object({ schoolId: z.string().uuid() }),
+    body: z.object({ mode: z.enum(['SHADOW', 'ASSISTED', 'LIVE']) }),
+    handler: async ({ tx, schoolId, user, body }) => {
+      const [current] = await tx
+        .select({ rfidMode: schools.rfidMode })
+        .from(schools)
+        .where(eq(schools.id, schoolId))
+        .limit(1);
+
+      if (!current) {
+        throw new AppError('SCHOOL_NOT_FOUND', 404, 'School not found');
+      }
+
+      const fromMode = current.rfidMode;
+      const toMode = body.mode;
+
+      await tx
+        .update(schools)
+        .set({ rfidMode: toMode, updatedAt: new Date() })
+        .where(eq(schools.id, schoolId));
+
+      await writeAuditLog({
+        schoolId,
+        actorId: user.id,
+        action: 'RFID_MODE_CHANGED',
+        resourceType: 'SCHOOL',
+        targetId: schoolId,
+        metadata: { from: fromMode, to: toMode },
+      });
+
+      clearSchoolSettingsCache(schoolId);
+
+      return {
+        data: {
+          schoolId,
+          rfidMode: toMode,
+          previousMode: fromMode,
+        },
+      };
+    },
+  })
+);
+
+rfidRouter.get(
+  '/:schoolId/rfid/anomalies',
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    writes: false,
+    params: z.object({ schoolId: z.string().uuid() }),
+    query: z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }),
+    handler: async ({ tx, schoolId, query }) => {
+      const [school] = await tx
+        .select({ timezone: schools.timezone })
+        .from(schools)
+        .where(eq(schools.id, schoolId))
+        .limit(1);
+
+      const tz = school?.timezone || 'Asia/Kolkata';
+      const date = query.date || new Date().toISOString().slice(0, 10);
+      const anomalies = await findAnomalies(tx, schoolId, date, tz);
+
+      return {
+        data: {
+          schoolId,
+          date,
+          timezone: tz,
+          count: anomalies.length,
+          anomalies,
+        },
+      };
+    },
+  })
+);
+

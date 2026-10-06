@@ -15,9 +15,10 @@ import {
   academicYears,
   classSections,
   teacherAssignments,
+  schools,
 } from '../../src/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
-import { processZebraBatch } from '../../src/services/rfid/ingest';
+import { processZebraBatch, clearSchoolSettingsCache } from '../../src/services/rfid/ingest';
 import { writeOutcomes } from '../../src/services/rfid/ingest/write';
 import type { Outcome } from '../../src/services/rfid/ingest/types';
 import { canonicalizeEpc, computeEpcDigest, getEpcLastFour } from '../../src/services/rfid/cryptoService';
@@ -238,6 +239,11 @@ describe('processZebraBatch (Postgres Integration)', () => {
     schoolId = seeded.schoolA.id;
     adminUserId = seeded.adminUser.id;
     teacherUserId = seeded.teacherUser.id;
+
+    await withTenantContext(schoolId, async (tx) => {
+      await tx.update(schools).set({ rfidMode: 'LIVE' }).where(eq(schools.id, schoolId));
+    });
+    clearSchoolSettingsCache(schoolId);
 
     // Academic Year
     const [ay] = await withTenantContext(schoolId, async (tx) => {

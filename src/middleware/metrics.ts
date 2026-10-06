@@ -555,5 +555,8 @@ export async function renderPrometheusMetrics(req?: Request): Promise<{ authoriz
   const { renderRfidIngestMetrics } = await import('../services/rfid/ingest/metrics');
   lines.push(...renderRfidIngestMetrics());
 
+  const { renderAnomalyMetrics } = await import('../services/rfid/anomalies');
+  lines.push(...renderAnomalyMetrics());
+
   return { authorized: true, content: lines.join('\n') + '\n' };
 }

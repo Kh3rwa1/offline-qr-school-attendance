@@ -173,33 +173,43 @@ export async function writeOutcomes(
   }
 
   // ── Step D: scan event log (everything except duplicates) ────────────────
-  const loggable = outcomes.filter((o) => o.read && !DUPLICATE_DECISIONS.has(o.decision));
-  if (loggable.length) {
-    await tx
-      .insert(rfidScanEvents)
-      .values(
-        loggable.map((o) => ({
-          schoolId: ctx.schoolId,
-          readerId: reader.id,
-          credentialId: o.credentialId ?? null,
-          studentId: o.studentId ?? null,
-          attendanceSessionId: o.classSectionId ? sessionIdBySection.get(o.classSectionId) ?? null : null,
-          clientEventId: o.read!.idempotencyKey,
-          idempotencyKey: o.read!.idempotencyKey,
-          epcDigest: o.read!.epcDigest,
-          epcLastFour: o.read!.epcLast4,
-          tidDigest: o.read!.tidDigest,
-          antennaPort: o.read!.antenna,
-          peakRssi: o.read!.rssi,
-          scanTimestamp: o.read!.readAt,
-          decision: o.decision,
-          reviewFlag: o.reviewFlag ?? null,
-          captureMethod: 'RFID_GATE' as const,
-          securityMode: 'UHF_EPC' as const,
-        }))
-      )
-      .onConflictDoNothing({ target: rfidScanEvents.idempotencyKey });
-  }
+  await writeScanEvents(tx, ctx, outcomes, reader);
 
   return outcomes;
+}
+
+export async function writeScanEvents(
+  tx: Tx,
+  ctx: IngestContext,
+  outcomes: Outcome[],
+  reader: { id: string }
+): Promise<void> {
+  const loggable = outcomes.filter((o) => o.read && !DUPLICATE_DECISIONS.has(o.decision));
+  if (!loggable.length) return;
+  const sessionIdBySection = new Map([...ctx.sessionBySection].map(([k, v]) => [k, v.id]));
+
+  await tx
+    .insert(rfidScanEvents)
+    .values(
+      loggable.map((o) => ({
+        schoolId: ctx.schoolId,
+        readerId: reader.id,
+        credentialId: o.credentialId ?? null,
+        studentId: o.studentId ?? null,
+        attendanceSessionId: o.classSectionId ? sessionIdBySection.get(o.classSectionId) ?? null : null,
+        clientEventId: o.read!.idempotencyKey,
+        idempotencyKey: o.read!.idempotencyKey,
+        epcDigest: o.read!.epcDigest,
+        epcLastFour: o.read!.epcLast4,
+        tidDigest: o.read!.tidDigest,
+        antennaPort: o.read!.antenna,
+        peakRssi: o.read!.rssi,
+        scanTimestamp: o.read!.readAt,
+        decision: o.decision,
+        reviewFlag: o.reviewFlag ?? null,
+        captureMethod: 'RFID_GATE' as const,
+        securityMode: 'UHF_EPC' as const,
+      }))
+    )
+    .onConflictDoNothing({ target: rfidScanEvents.idempotencyKey });
 }

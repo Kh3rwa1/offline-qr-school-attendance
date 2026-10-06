@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import { db } from '../src/db';
+import { env } from '../src/env';
 import { runMigrations } from '../src/db/migrate';
 import {
   schools,
@@ -56,10 +57,14 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
   let udiseSeq = 20000 + Math.floor(Math.random() * 5000);
 
   beforeAll(async () => {
+    process.env.ABSENCE_SMS_DELAY_MINUTES = '0';
+    env.ABSENCE_SMS_DELAY_MINUTES = 0;
     await runMigrations();
   });
 
   beforeEach(async () => {
+    process.env.ABSENCE_SMS_DELAY_MINUTES = '0';
+    env.ABSENCE_SMS_DELAY_MINUTES = 0;
     getFakeSmsProvider().clearSentMessages();
 
     // Setup seed school & hierarchy

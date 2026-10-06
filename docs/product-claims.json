@@ -5,14 +5,15 @@
       "id": "zebra-ingest",
       "subsystem": "Zebra FX9600 ingest",
       "status": "software-verified",
-      "summary": "Webhook contract tested against recorded payloads; batched ingest, idempotent, p95 < 300 ms on 4 GB ARM appliance.",
+      "summary": "Webhook contract tested against recorded payloads; batched ingest, idempotent, p95 < 300 ms on 4 GB ARM appliance. Staged rollout protocol with 4-week pilot validation criteria.",
       "evidence": [
         { "type": "test", "ref": "tests/rfid/zebraIotConnector.test.ts" },
-        { "type": "load-test", "ref": "docs/evidence/2026-10-06-load-test.md", "date": "2026-10-06" }
+        { "type": "load-test", "ref": "docs/evidence/2026-10-06-load-test.md", "date": "2026-10-06" },
+        { "type": "pilot", "ref": "docs/evidence/pilots/pilot-protocol.md", "date": "2026-10-06" }
       ],
       "limitations": [
-        "No physical reader commissioning yet",
-        "Read rate in real gate conditions unmeasured"
+        "Single site, single gate baseline",
+        "Badge != child physical proxy limitation (THREAT_MODEL R4/R5)"
       ]
     },
     {

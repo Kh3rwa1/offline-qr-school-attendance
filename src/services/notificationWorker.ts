@@ -8,9 +8,11 @@ import {
   schoolSmsSettings,
   notificationTemplates,
   schools,
+  attendanceRecords,
 } from '../db/schema';
 import { getSmsProvider, SmsProvider } from './sms/smsProvider';
 import { estimateSmsSegments } from './sms/smsUtils';
+import { hasConsent } from './privacy/consent';
 
 export interface WorkerProcessOptions {
   limit?: number;
@@ -43,6 +45,10 @@ function mapRowToJob(row: any): ClaimedJob {
     sentAt: row.sent_at ? new Date(row.sent_at) : (row.sentAt || null),
     deliveredAt: row.delivered_at ? new Date(row.delivered_at) : (row.deliveredAt || null),
     finalizedAttendanceVersion: row.finalized_attendance_version || row.finalizedAttendanceVersion || null,
+    sendAfter: row.send_after ? new Date(row.send_after) : (row.sendAfter || null),
+    attendanceRecordId: row.attendance_record_id || row.attendanceRecordId || null,
+    kind: row.kind || 'ABSENCE',
+    cancelledReason: row.cancelled_reason || row.cancelledReason || null,
   };
 }
 
@@ -70,10 +76,11 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
           ? await tx.execute(sql`
               WITH eligible AS (
                 SELECT id FROM notification_jobs
-                WHERE status IN ('QUEUED', 'FAILED')
+                WHERE status IN ('QUEUED', 'FAILED', 'SCHEDULED')
                   AND school_id = ${schoolId}::uuid
                   AND attempt_count < ${maxRetries}
                   AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+                  AND (send_after IS NULL OR send_after <= NOW())
                 ORDER BY queued_at ASC
                 LIMIT ${limit}
                 FOR UPDATE SKIP LOCKED
@@ -87,9 +94,10 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
           : await tx.execute(sql`
               WITH eligible AS (
                 SELECT id FROM notification_jobs
-                WHERE status IN ('QUEUED', 'FAILED')
+                WHERE status IN ('QUEUED', 'FAILED', 'SCHEDULED')
                   AND attempt_count < ${maxRetries}
                   AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+                  AND (send_after IS NULL OR send_after <= NOW())
                 ORDER BY queued_at ASC
                 LIMIT ${limit}
                 FOR UPDATE SKIP LOCKED
@@ -114,9 +122,10 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
     }
 
     const whereConditions = [
-      inArray(notificationJobs.status, ['QUEUED', 'FAILED']),
+      inArray(notificationJobs.status, ['QUEUED', 'FAILED', 'SCHEDULED']),
       lt(notificationJobs.attemptCount, maxRetries),
       or(isNull(notificationJobs.nextAttemptAt), lte(notificationJobs.nextAttemptAt, new Date())),
+      or(isNull(notificationJobs.sendAfter), lte(notificationJobs.sendAfter, new Date())),
     ];
     if (schoolId) {
       whereConditions.push(eq(notificationJobs.schoolId, schoolId));
@@ -135,7 +144,7 @@ async function claimEligibleJobs(limit: number, maxRetries: number, workerId: st
         .set({ status: 'SENDING', claimedAt: new Date(), claimedBy: workerId })
         .where(and(
           eq(notificationJobs.id, job.id),
-          inArray(notificationJobs.status, ['QUEUED', 'FAILED']),
+          inArray(notificationJobs.status, ['QUEUED', 'FAILED', 'SCHEDULED']),
         ))
         .returning();
       if (updated) claimed.push(updated);
@@ -193,6 +202,36 @@ async function processClaimedJob(job: ClaimedJob, provider: SmsProvider, maxRetr
       await db.update(notificationJobs).set({ status: 'CANCELLED', failureReason: 'SMS_DISABLED', claimedAt: null, claimedBy: null }).where(eq(notificationJobs.id, job.id));
       return 'CANCELLED';
     }
+
+    // Safety check: ensure student is still ABSENT if attendanceRecordId is linked
+    if (job.attendanceRecordId) {
+      const [rec] = await db
+        .select({ status: attendanceRecords.status })
+        .from(attendanceRecords)
+        .where(eq(attendanceRecords.id, job.attendanceRecordId))
+        .limit(1);
+
+      if (job.kind === 'ABSENCE' && rec && rec.status !== 'ABSENT') {
+        await db
+          .update(notificationJobs)
+          .set({ status: 'CANCELLED', failureReason: 'STATUS_CHANGED', cancelledReason: 'STATUS_CHANGED', claimedAt: null, claimedBy: null })
+          .where(eq(notificationJobs.id, job.id));
+        return 'CANCELLED';
+      }
+    }
+
+    // Privacy check: ensure guardian consent has been granted for ABSENCE_SMS
+    if (job.studentId) {
+      const consentGranted = await hasConsent(db, job.schoolId, job.studentId, 'ABSENCE_SMS');
+      if (!consentGranted) {
+        await db
+          .update(notificationJobs)
+          .set({ status: 'CANCELLED', failureReason: 'NO_CONSENT', cancelledReason: 'NO_CONSENT', claimedAt: null, claimedBy: null })
+          .where(eq(notificationJobs.id, job.id));
+        return 'CANCELLED';
+      }
+    }
+
     if (job.messageBody === 'GUARDIAN_OPTED_OUT' || job.messageBody === 'MISSING_GUARDIAN_PHONE' || job.messageBody === 'PHONE_NOT_IN_ALLOWLIST') {
       await db.update(notificationJobs).set({ status: 'CANCELLED', failureReason: job.messageBody, claimedAt: null, claimedBy: null }).where(eq(notificationJobs.id, job.id));
       return 'CANCELLED';

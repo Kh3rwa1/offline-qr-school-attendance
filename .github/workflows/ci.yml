@@ -317,6 +317,8 @@ jobs:
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
       BACKUP_ENCRYPTION_KEY: ci_backup_encryption_key_32bytes_long
+      READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+      RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
       ALLOW_IN_MEMORY_RATE_LIMITER: "true"
       SMS_PROVIDER: console
       ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -518,6 +520,8 @@ jobs:
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
           RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          DISABLE_RATE_LIMITING: "true"
+          TEST_SERVER_STATIC: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           LOAD_P95_THRESHOLD_MS: "2500"

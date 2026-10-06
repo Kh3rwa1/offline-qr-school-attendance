@@ -163,6 +163,7 @@ export const db: Db = new Proxy({} as Db, {
 });
 
 export async function executeSql(sqlQuery: string) {
+  if (!client) getDb();
   if (client && 'query' in client) return client.query(sqlQuery);
   if (client && 'exec' in client) return client.exec(sqlQuery);
   throw new Error('DATABASE_CLIENT_UNAVAILABLE');

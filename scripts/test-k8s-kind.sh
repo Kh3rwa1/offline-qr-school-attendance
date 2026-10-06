@@ -31,6 +31,7 @@ dump_diagnostics() {
   kubectl describe pods -A || true
   kubectl describe jobs -A || true
   kubectl logs -l app --all-containers --prefix --tail=200 || true
+  kubectl logs job/school-attendance-migration --tail=200 || true
 }
 
 cleanup() {
@@ -65,6 +66,15 @@ kubectl run redis --image=redis:7-alpine --port=6379 --expose
 echo "Waiting for database and cache pods to be ready..."
 kubectl wait --for=condition=ready pod/postgres --timeout=90s
 kubectl wait --for=condition=ready pod/redis --timeout=90s
+
+echo "Waiting for PostgreSQL service to accept connections..."
+for i in {1..30}; do
+  if kubectl exec pod/postgres -- pg_isready -U attendance_migration -d school_attendance >/dev/null 2>&1; then
+    echo "PostgreSQL is ready to accept connections!"
+    break
+  fi
+  sleep 2
+done
 
 # 5. Create Kubernetes Secret
 echo "5. Creating school-attendance-secrets Kubernetes Secret..."

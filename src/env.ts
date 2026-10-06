@@ -29,7 +29,7 @@ export const Schema = z
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).optional(),
     ALLOW_TEST_BYPASS: z.string().default('false'),
     APP_URL: z.string().optional(),
-    FEATURE_RFID: z.string().default('true'),
+    FEATURE_RFID: z.string().default('false'),
     KMS_MASTER_KEY: z.string().optional(),
     RFID_CARD_MASTER_KEY: z.string().optional(),
     RFID_REQUIRE_CARD_PROOF: z.string().default('false'),
@@ -130,19 +130,35 @@ export const Schema = z
             message: 'SESSION_SECRET must be at least 32 characters in production',
           });
         }
-        if (!e.READER_TOKEN_PEPPER || e.READER_TOKEN_PEPPER.length < 32) {
+        if (e.READER_TOKEN_PEPPER && e.READER_TOKEN_PEPPER.length < 32) {
           ctx.addIssue({
             code: 'custom',
             path: ['READER_TOKEN_PEPPER'],
             message: 'READER_TOKEN_PEPPER must be at least 32 characters in production',
           });
         }
-        if (!e.RFID_CREDENTIAL_DIGEST_KEY || e.RFID_CREDENTIAL_DIGEST_KEY.length < 32) {
+        if (e.RFID_CREDENTIAL_DIGEST_KEY && e.RFID_CREDENTIAL_DIGEST_KEY.length < 32) {
           ctx.addIssue({
             code: 'custom',
             path: ['RFID_CREDENTIAL_DIGEST_KEY'],
             message: 'RFID_CREDENTIAL_DIGEST_KEY must be at least 32 characters in production',
           });
+        }
+        if (e.FEATURE_RFID === 'true') {
+          if (!e.READER_TOKEN_PEPPER || e.READER_TOKEN_PEPPER.length < 32) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['READER_TOKEN_PEPPER'],
+              message: 'READER_TOKEN_PEPPER must be at least 32 characters in production when FEATURE_RFID is true',
+            });
+          }
+          if (!e.RFID_CREDENTIAL_DIGEST_KEY || e.RFID_CREDENTIAL_DIGEST_KEY.length < 32) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['RFID_CREDENTIAL_DIGEST_KEY'],
+              message: 'RFID_CREDENTIAL_DIGEST_KEY must be at least 32 characters in production when FEATURE_RFID is true',
+            });
+          }
         }
       }
       if (e.SYSTEM_DATABASE_URL && e.SYSTEM_DATABASE_URL === e.DATABASE_URL) {
@@ -169,9 +185,11 @@ const inTestRuntime = process.env.NODE_ENV === 'test' || process.env.VITEST === 
 
 export const env = new Proxy(baseData, {
   get(target, prop: string | symbol) {
-    if (inTestRuntime && typeof prop === 'string') {
-      if (prop in process.env) {
-        return (process.env as Record<string, unknown>)[prop];
+    if (typeof prop === 'string') {
+      if (inTestRuntime || prop === 'TEST_SERVER_STATIC' || prop === 'DISABLE_RATE_LIMITING') {
+        if (prop in process.env) {
+          return (process.env as Record<string, unknown>)[prop];
+        }
       }
     }
     return (target as unknown as Record<string | symbol, unknown>)[prop];

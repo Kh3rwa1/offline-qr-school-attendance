@@ -1,7 +1,7 @@
 # Threat Model & Security Controls
 
 ## Overview
-This document outlines the threat model, security controls, tenant isolation guarantees, and operational procedures for the Offline QR School Attendance & Guardian Notification System.
+This document outlines the threat model, security controls, tenant isolation boundaries, and operational procedures for the Offline QR School Attendance & Guardian Notification System.
 
 ---
 

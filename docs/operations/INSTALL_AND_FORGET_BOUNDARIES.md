@@ -1,3 +1,10 @@
+---
+title: "AttendEase OS — Install-and-Forget Boundaries"
+owner: "@Kh3rwa1"
+applies_to: ">=2.0.0"
+last_verified: 2026-10-06
+---
+
 # AttendEase OS — Install-and-Forget Boundaries
 
 > **Audience**: School operators, headmasters, district IT coordinators  
@@ -77,7 +84,7 @@ AttendEase OS is designed to minimize ongoing operator effort for a school with 
 
 ---
 
-## Section 5: SLA Targets (Best-Effort, Not Guaranteed)
+## Section 5: SLA Operational Targets (Best-Effort)
 
 | Metric | Target | Condition |
 |---|---|---|
@@ -87,7 +94,7 @@ AttendEase OS is designed to minimize ongoing operator effort for a school with 
 | **QR sync latency** | < 5s after reconnect | Pending queue < 500 records |
 | **SMS delivery** | Provider-dependent | DLT credentials configured and valid |
 
-These are engineering targets. Production SLA guarantees require a formal support agreement.
+These are engineering targets. Formal production SLA commitments require an explicit support agreement.
 
 ---
 

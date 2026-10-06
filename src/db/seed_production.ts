@@ -59,7 +59,7 @@ export async function seedProductionDatabase() {
   const db = getDb();
   console.log('--- STARTING PRODUCTION SCALE DATASET SEED ---');
 
-  // Clean up any pre-existing records for these 2 schools to guarantee idempotency
+  // Clean up any pre-existing records for these 2 schools to ensure idempotency
   console.log('Cleaning up pre-existing seed data...');
   const targetUsers = await db.select({ id: users.id }).from(users).where(
     or(

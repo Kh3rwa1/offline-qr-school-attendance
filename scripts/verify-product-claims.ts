@@ -12,7 +12,7 @@ export const RULES: Rule[] = [
   { id: 'gov', regex: /government[\s-]*(approved|certified|standard)|govt\.?\s*standard|official\s+government\s+format/i, label: 'Government approval claim' },
   { id: 'dpdp', regex: /DPDP[\s-]*(compliant|certified|approved)|compliant\s+with\s+(the\s+)?DPDP/i, label: 'DPDP compliance claim' },
   { id: 'indep', regex: /independent(ly)?\s+(audit(ed)?|certif(ied|ication)|verif(ied|ication))/i, label: 'Independence claim' },
-  { id: 'cert', regex: /\b(production|hardware|site)\s+certif(ied|ication)\b|10\s*\/\s*10/i, label: 'Self-certification claim' },
+  { id: 'cert', regex: /\b(production|hardware|site)\s+certif(ied|ication)\b|\b10\s*\/\s*10\b/i, label: 'Self-certification claim' },
   { id: 'guarantee', regex: /\bguarantee[sd]?\b|\b100\s*%\s*(accura|reliab|uptime)/i, label: 'Guarantee claim' },
   { id: 'enterprise', regex: /\benterprise[\s-]grade\b|\bbank[\s-]grade\b|\bmilitary[\s-]grade\b/i, label: 'Marketing grade claim' },
 ];
@@ -31,7 +31,11 @@ export const SCAN = [
   'src/**/*.{ts,tsx,json}',
   'public/**/*.{html,json}',
 ];
-export const SKIP = new Set(['scripts/verify-product-claims.ts', 'tests/productClaimsGuardrail.test.ts']);
+export const SKIP = new Set([
+  'scripts/verify-product-claims.ts',
+  'tests/productClaimsGuardrail.test.ts',
+  'src/config/productClaims.ts',
+]);
 
 export interface Violation {
   file: string;

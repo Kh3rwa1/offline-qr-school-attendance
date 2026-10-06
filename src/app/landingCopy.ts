@@ -192,6 +192,7 @@ export const LANDING_COPY = {
   // Reporting Disclaimer Banner (Phase 2 Requirement)
   reportingDisclaimerTitle: L('Important Reporting Notice', 'গুরুত্বপূর্ণ নোটিশ', 'महत्वपूर्ण सूचना'),
   reportingDisclaimerBody: L(
+    // claims-allow: gov, guarantee | disclaimer stating software does not claim government approval or guaranteed portal acceptance
     'Exports are designed for internal school administration. An authorized school reviewer must verify them before external submission. AttendEase does not claim government approval or guaranteed portal acceptance.',
     'রিপোর্টগুলি বিদ্যালয়ের অভ্যন্তরীণ প্রশাসনিক কাজের জন্য তৈরি। বাইরে কোথাও জমা দেওয়ার আগে অনুমোদিত বিদ্যালয় কর্তৃপক্ষ দ্বারা যাচাই করা আবশ্যক। অ্যাটেন্ডইজ কোনো সরকারি অনুমোদন বা পোর্টাল গ্রহণের নিশ্চয়তার দাবি করে না।',
     'रिपोर्ट स्कूल के आंतरिक प्रशासनिक कार्यों के लिए तैयार की जाती हैं। किसी भी बाहरी प्रस्तुति से पहले अधिकृत स्कूल समीक्षक द्वारा सत्यापन आवश्यक है। अटेंडईज़ किसी भी सरकारी अनुमोदन अथवा पोर्टल स्वीकृति का दावा नहीं करता है।'

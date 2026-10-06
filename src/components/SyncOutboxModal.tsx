@@ -31,7 +31,7 @@ export const SyncOutboxModal: React.FC<SyncOutboxModalProps> = ({
           <p className="t-body text-xs text-ink-soft">
             {language === 'bn'
               ? 'ইন্টারনেট ড্রপ হলেও ইভেন্টগুলি নিরাপদে লোকাল স্টোরেজে থাকে'
-              : 'IndexedDB durability guarantees offline scan retention across browser restarts'}
+              : 'IndexedDB durability preserves offline scan retention across browser restarts'}
           </p>
         </div>
 

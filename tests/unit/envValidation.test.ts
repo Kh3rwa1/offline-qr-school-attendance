@@ -116,10 +116,11 @@ describe('Environment Configuration Validation (Step 3.7)', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('enforces READER_TOKEN_PEPPER and RFID_CREDENTIAL_DIGEST_KEY in production when COMPONENT=web', () => {
+  it('enforces READER_TOKEN_PEPPER and RFID_CREDENTIAL_DIGEST_KEY in production when COMPONENT=web and FEATURE_RFID=true', () => {
     const prodConfigMissingRfid = {
       NODE_ENV: 'production',
       COMPONENT: 'web',
+      FEATURE_RFID: 'true',
       DATABASE_URL: 'postgres://attendease_app:password123@localhost:5432/attendease',
       SESSION_SECRET: 'a'.repeat(32),
     };
@@ -132,5 +133,15 @@ describe('Environment Configuration Validation (Step 3.7)', () => {
     const digestIssue = parsed.error.issues.find((i) => i.path.includes('RFID_CREDENTIAL_DIGEST_KEY'));
     expect(pepperIssue).toBeDefined();
     expect(digestIssue).toBeDefined();
+  });
+
+  it('handles Kubernetes injected tcp:// service URLs in REDIS_PORT', () => {
+    const k8sConfig = {
+      REDIS_PORT: 'tcp://10.96.166.39:6379',
+    };
+    const parsed = Schema.safeParse(k8sConfig);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.REDIS_PORT).toBe(6379);
   });
 });

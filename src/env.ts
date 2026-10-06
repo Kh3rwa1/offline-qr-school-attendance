@@ -16,7 +16,13 @@ export const Schema = z
     AUTH_DATABASE_URL: z.string().optional(),
     REDIS_URL: z.string().url().optional(),
     REDIS_HOST: z.string().optional(),
-    REDIS_PORT: z.coerce.number().int().optional(),
+    REDIS_PORT: z.preprocess((val) => {
+      if (typeof val === 'string' && val.startsWith('tcp://')) {
+        const match = val.match(/:(\d+)$/);
+        return match ? Number(match[1]) : undefined;
+      }
+      return val;
+    }, z.coerce.number().int().optional()),
     REDIS_PASSWORD: z.string().optional(),
     SESSION_SECRET: z.string().optional(),
     CSRF_SECRET: z.string().optional(),

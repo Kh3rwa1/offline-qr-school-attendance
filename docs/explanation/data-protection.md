@@ -1,11 +1,37 @@
 ---
-title: "Reporting Security, Privacy, and Integrity"
+title: "Data Protection and Reporting Security"
 owner: "@Kh3rwa1"
 applies_to: ">=2.0.0"
 last_verified: 2026-10-06
 ---
 
-# Reporting Security, Privacy, and Integrity
+# Data Protection and Reporting Security
+
+## Data protection and fiduciary responsibilities
+
+<!-- claims-allow: dpdp | clarifying fiduciary role under data protection frameworks without claiming compliance -->
+AttendEase OS is software, not a data fiduciary. The school or trust running the appliance is the data fiduciary. The software provides technical mechanisms (RLS, encryption, role-based access) to help the operator meet their obligations under applicable data protection laws (such as India's DPDP Act, 2023), but using the software does not automatically make a school compliant with any law. Compliance depends on the school's operational governance, consent management, notice policies, and administrative safeguards.
+
+## Plain-English data inventory
+
+The following inventory details what AttendEase OS stores, whose data it is, what purpose it serves, where it is held, retention handling, and authorized access:
+
+| Data | Subject | Purpose | Where stored | Retention | Access |
+|---|---|---|---|---|---|
+| Student name, grade, section | Student | Roster, attendance register | Postgres `students` table | Operator-defined; not yet automated | School admin, assigned teacher |
+| Guardian phone number | Guardian | SMS notifications | Postgres `students.guardianPhone` | Operator-defined; not yet automated | School admin, assigned teacher (read), SMS queue (write) |
+| RFID EPC digest | Student | Gate identification | Postgres `rfid_credentials` table (SHA-256) | While enrolled | School admin, ingest pipeline |
+| Raw RFID EPC | (transit only) | Match credential | Memory only (rawBody HMAC verified then EPC hashed) | Discarded after ingest | Ingest pipeline |
+| Attendance records | Student | Register, analytics, exports | Postgres `attendance_records` table | Operator-defined; not yet automated | School admin, assigned teacher, report viewer |
+| Appliance logs | System / Student ID in context | Debugging, audit | `/var/log/attendease/` on host | 30 days (logrotate) | Appliance operator (`root`) |
+| Backup archives | All above (encrypted) | Disaster recovery | Local disk or operator S3 | Operator-defined | Appliance operator with `age` key |
+
+### Third-party processors
+
+AttendEase OS does not phone home to any central SaaS backend. However, operators may configure external integrations:
+
+- **SMS gateway**: Operator-chosen TRAI DLT-registered provider (e.g., Fast2SMS, MSG91, Twilio). Receives recipient phone number and student first name in the templated SMS body for attendance notifications.
+- **Off-site backup storage**: Operator-chosen S3/Cloudflare R2 bucket. Receives `age`-encrypted tar archives only; the external storage provider has zero access to plaintext student PII or database dumps without the operator's private `age` key.
 
 ## Trust boundary
 

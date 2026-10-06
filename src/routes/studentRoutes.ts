@@ -1,6 +1,8 @@
-import { Router, Response } from 'express';
-import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
-import { requireTenant } from '../middleware/tenantMiddleware';
+import { Router } from 'express';
+import { z } from 'zod';
+import { requireAuth } from '../middleware/authMiddleware';
+import { tenantRoute } from '../http/tenantRoute';
+import { AppError } from '../errors/AppError';
 import {
   createStudent,
   listStudents,
@@ -9,189 +11,176 @@ import {
   updateStudentDetails,
 } from '../services/studentService';
 import { createAuditLog } from '../services/auditLogService';
+import {
+  CreateStudentBody,
+  UpdateStudentDetailsBody,
+  UpdateStudentStatusBody,
+  ListStudentsQuery,
+  Uuid,
+} from './schemas/students';
 
 export const studentRouter = Router();
+
+const StudentParams = z.object({
+  schoolId: Uuid,
+  studentId: Uuid,
+});
 
 // GET /api/v1/schools/:schoolId/students
 studentRouter.get(
   '/:schoolId/students',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const schoolId = req.activeSchoolId!;
-      const classSectionId = req.query.classSectionId as string | undefined;
-      const status = req.query.status as string | undefined;
-      const search = req.query.search as string | undefined;
-      const limit = req.query.limit as string | undefined;
-      const cursor = req.query.cursor as string | undefined;
-      const page = req.query.page ? Number(req.query.page) : undefined;
-
-      const result = await listStudents({ schoolId, classSectionId, status, search, limit, cursor, page });
-      return res.json({
-        success: true,
-        students: result.items || result,
-        nextCursor: (result as any).nextCursor || null,
-        hasMore: !!(result as any).hasMore,
-        limit: (result as any).limit || 50,
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    query: ListStudentsQuery,
+    handler: async ({ schoolId, query }) => {
+      const result = await listStudents({
+        schoolId,
+        classSectionId: query.classSectionId,
+        status: query.status,
+        search: query.search,
+        limit: query.limit !== undefined ? String(query.limit) : undefined,
+        cursor: query.cursor,
+        page: query.page,
       });
-    } catch (err: any) {
-      if (err.message === 'INVALID_PAGINATION_CURSOR') {
-        return res.status(400).json({ error: 'INVALID_PAGINATION_CURSOR', message: 'The provided pagination cursor is invalid or malformed' });
-      }
-      const message = process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : err.message;
-      return res.status(500).json({ error: 'SERVER_ERROR', message });
-    }
-  }
+      return {
+        status: 200,
+        body: {
+          success: true,
+          students: (result as any).items || result,
+          nextCursor: (result as any).nextCursor || null,
+          hasMore: !!(result as any).hasMore,
+          limit: (result as any).limit || 50,
+        },
+      };
+    },
+  })
 );
 
 // POST /api/v1/schools/:schoolId/students
 studentRouter.post(
   '/:schoolId/students',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const {
-      studentCode,
-      name,
-      nameBn,
-      banglarShikshaId,
-      dateOfBirth,
-      gender,
-      photoUrl,
-      classSectionId,
-      academicYearId,
-      rollNumber,
-      guardian,
-    } = req.body;
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    body: CreateStudentBody,
+    handler: async ({ schoolId, user, body }) => {
+      try {
+        const result = await createStudent({
+          schoolId,
+          studentCode: body.studentCode,
+          name: body.name,
+          nameBn: body.nameBn,
+          banglarShikshaId: body.banglarShikshaId,
+          dateOfBirth: body.dateOfBirth,
+          gender: body.gender,
+          photoUrl: body.photoUrl,
+          classSectionId: body.classSectionId,
+          academicYearId: body.academicYearId,
+          rollNumber: body.rollNumber,
+          guardian: body.guardian,
+        });
 
-    if (!studentCode || !name || !classSectionId || !academicYearId || rollNumber === undefined) {
-      return res.status(400).json({
-        error: 'INVALID_INPUT',
-        message: 'studentCode, name, classSectionId, academicYearId, and rollNumber are required',
-      });
-    }
+        await createAuditLog({
+          schoolId,
+          actorId: user.id,
+          action: 'CREATE_STUDENT',
+          resourceType: 'STUDENT',
+          resourceId: result.student.id,
+          metadata: {
+            studentCode: body.studentCode,
+            name: body.name,
+            guardianPhone: body.guardian?.phoneNumber,
+          },
+        });
 
-    try {
-      const result = await createStudent({
-        schoolId,
-        studentCode,
-        name,
-        nameBn,
-        banglarShikshaId,
-        dateOfBirth,
-        gender,
-        photoUrl,
-        classSectionId,
-        academicYearId,
-        rollNumber: Number(rollNumber),
-        guardian,
-      });
-
-      await createAuditLog({
-        schoolId,
-        actorId: req.user!.id,
-        action: 'CREATE_STUDENT',
-        resourceType: 'STUDENT',
-        resourceId: result.student.id,
-        metadata: {
-          studentCode,
-          name,
-          guardianPhone: guardian?.phoneNumber,
-        },
-      });
-
-      return res.status(201).json(result);
-    } catch (err: any) {
-      if (err.message === 'DUPLICATE_STUDENT_CODE') {
-        return res.status(409).json({ error: 'DUPLICATE_STUDENT_CODE', message: 'Student code already exists in this school' });
+        return {
+          status: 201,
+          body: {
+            success: true,
+            data: result,
+            ...result,
+          },
+        };
+      } catch (err: any) {
+        if (err.message === 'DUPLICATE_STUDENT_CODE') {
+          throw new AppError('DUPLICATE_STUDENT_CODE', 409, 'Student code already exists in this school');
+        }
+        if (err.message === 'DUPLICATE_ROLL_NUMBER') {
+          throw new AppError('DUPLICATE_ROLL_NUMBER', 409, 'Roll number already exists in this class section');
+        }
+        throw err;
       }
-      if (err.message === 'DUPLICATE_ROLL_NUMBER') {
-        return res.status(409).json({ error: 'DUPLICATE_ROLL_NUMBER', message: 'Roll number already exists in this class section' });
-      }
-      const message = process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : err.message;
-      return res.status(500).json({ error: 'SERVER_ERROR', message });
-    }
-  }
+    },
+  })
 );
 
 // GET /api/v1/schools/:schoolId/students/:studentId
 studentRouter.get(
   '/:schoolId/students/:studentId',
-  requireAuth,
-  requireTenant,
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const { studentId } = req.params;
-
-    const studentData = await getStudentById(schoolId, studentId);
-    if (!studentData) {
-      return res.status(404).json({ error: 'STUDENT_NOT_FOUND' });
-    }
-
-    return res.json(studentData);
-  }
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
+    writes: false,
+    params: StudentParams,
+    handler: async ({ schoolId, params }) => {
+      const studentData = await getStudentById(schoolId, params.studentId);
+      if (!studentData) {
+        throw new AppError('STUDENT_NOT_FOUND', 404, 'Student not found');
+      }
+      return { status: 200, body: studentData };
+    },
+  })
 );
 
 // PATCH /api/v1/schools/:schoolId/students/:studentId
 studentRouter.patch(
   '/:schoolId/students/:studentId',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const { studentId } = req.params;
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    params: StudentParams,
+    body: UpdateStudentDetailsBody,
+    handler: async ({ schoolId, user, params, body }) => {
+      const updated = await updateStudentDetails(schoolId, params.studentId, body);
+      if (!updated) {
+        throw new AppError('STUDENT_NOT_FOUND', 404, 'Student not found');
+      }
 
-    const updated = await updateStudentDetails(schoolId, studentId, req.body);
-    if (!updated) {
-      return res.status(404).json({ error: 'STUDENT_NOT_FOUND' });
-    }
+      await createAuditLog({
+        schoolId,
+        actorId: user.id,
+        action: 'UPDATE_STUDENT',
+        resourceType: 'STUDENT',
+        resourceId: params.studentId,
+        metadata: body,
+      });
 
-    await createAuditLog({
-      schoolId,
-      actorId: req.user!.id,
-      action: 'UPDATE_STUDENT',
-      resourceType: 'STUDENT',
-      resourceId: studentId,
-      metadata: req.body,
-    });
-
-    return res.json({ student: updated });
-  }
+      return { status: 200, body: { student: updated } };
+    },
+  })
 );
 
 // POST /api/v1/schools/:schoolId/students/:studentId/status
 studentRouter.post(
   '/:schoolId/students/:studentId/status',
-  requireAuth,
-  requireTenant,
-  requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']),
-  async (req: AuthenticatedRequest, res: Response) => {
-    const schoolId = req.activeSchoolId!;
-    const { studentId } = req.params;
-    const { status } = req.body;
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    params: StudentParams,
+    body: UpdateStudentStatusBody,
+    handler: async ({ schoolId, user, params, body }) => {
+      const updated = await updateStudentStatus(schoolId, params.studentId, body.status);
+      if (!updated) {
+        throw new AppError('STUDENT_NOT_FOUND', 404, 'Student not found');
+      }
 
-    if (!['ACTIVE', 'INACTIVE', 'TRANSFERRED'].includes(status)) {
-      return res.status(400).json({ error: 'INVALID_STATUS', message: 'Status must be ACTIVE, INACTIVE, or TRANSFERRED' });
-    }
+      await createAuditLog({
+        schoolId,
+        actorId: user.id,
+        action: 'UPDATE_STUDENT_STATUS',
+        resourceType: 'STUDENT',
+        resourceId: params.studentId,
+        metadata: { newStatus: body.status },
+      });
 
-    const updated = await updateStudentStatus(schoolId, studentId, status);
-    if (!updated) {
-      return res.status(404).json({ error: 'STUDENT_NOT_FOUND' });
-    }
-
-    await createAuditLog({
-      schoolId,
-      actorId: req.user!.id,
-      action: 'UPDATE_STUDENT_STATUS',
-      resourceType: 'STUDENT',
-      resourceId: studentId,
-      metadata: { newStatus: status },
-    });
-
-    return res.json({ student: updated });
-  }
+      return { status: 200, body: { student: updated } };
+    },
+  })
 );

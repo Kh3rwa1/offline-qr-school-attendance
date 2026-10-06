@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import crypto from 'crypto';
 
 /**
@@ -34,12 +35,12 @@ export function aesCmac(key: Buffer, message: Buffer): Buffer {
     const subkey = Buffer.alloc(16);
     let overflow = 0;
     for (let i = 15; i >= 0; i--) {
-      const b = input[i];
+      const b = input[i] ?? 0;
       subkey[i] = ((b << 1) & 0xff) | overflow;
       overflow = (b & 0x80) ? 1 : 0;
     }
-    if ((input[0] & 0x80) !== 0) {
-      subkey[15] ^= 0x87;
+    if (((input[0] ?? 0) & 0x80) !== 0) {
+      subkey[15] = (subkey[15] ?? 0) ^ 0x87;
     }
     return subkey;
   };
@@ -55,7 +56,7 @@ export function aesCmac(key: Buffer, message: Buffer): Buffer {
     const lastBlockOffset = (numBlocks - 1) * 16;
     const lastBlock = message.subarray(lastBlockOffset, lastBlockOffset + 16);
     for (let i = 0; i < 16; i++) {
-      paddedLastBlock[i] = lastBlock[i] ^ K1[i];
+      paddedLastBlock[i] = (lastBlock[i] ?? 0) ^ (K1[i] ?? 0);
     }
   } else {
     const lastBlockOffset = (numBlocks - 1) * 16;
@@ -66,7 +67,7 @@ export function aesCmac(key: Buffer, message: Buffer): Buffer {
       paddedLastBlock[i] = 0x00;
     }
     for (let i = 0; i < 16; i++) {
-      paddedLastBlock[i] ^= K2[i];
+      paddedLastBlock[i] = (paddedLastBlock[i] ?? 0) ^ (K2[i] ?? 0);
     }
   }
 
@@ -75,7 +76,7 @@ export function aesCmac(key: Buffer, message: Buffer): Buffer {
     const block = message.subarray(i * 16, (i + 1) * 16);
     const Y = Buffer.alloc(16);
     for (let j = 0; j < 16; j++) {
-      Y[j] = X[j] ^ block[j];
+      Y[j] = (X[j] ?? 0) ^ (block[j] ?? 0);
     }
     const cipher = crypto.createCipheriv('aes-128-ecb', key, null);
     cipher.setAutoPadding(false);
@@ -84,7 +85,7 @@ export function aesCmac(key: Buffer, message: Buffer): Buffer {
 
   const finalY = Buffer.alloc(16);
   for (let j = 0; j < 16; j++) {
-    finalY[j] = X[j] ^ paddedLastBlock[j];
+    finalY[j] = (X[j] ?? 0) ^ (paddedLastBlock[j] ?? 0);
   }
   const finalCipher = crypto.createCipheriv('aes-128-ecb', key, null);
   finalCipher.setAutoPadding(false);
@@ -124,7 +125,7 @@ export function computeCredentialDigest(
   schoolIdParam?: string,
   keyVersionParam?: number
 ): string {
-  let secret = process.env.RFID_CREDENTIAL_DIGEST_KEY || process.env.RFID_HMAC_SECRET;
+  let secret = env.RFID_CREDENTIAL_DIGEST_KEY || env.RFID_HMAC_SECRET;
   let schoolId = '';
   let keyVersion = 1;
   let securityMode = 'SECURE';
@@ -151,7 +152,7 @@ export function computeCredentialDigest(
   }
 
   if (!secret) {
-    if (process.env.NODE_ENV === 'test') {
+    if (env.NODE_ENV === 'test') {
       secret = 'test-secret-32-chars-length-environment';
     } else {
       throw new Error('RFID_CREDENTIAL_DIGEST_KEY must be configured for credential digest computation');
@@ -189,14 +190,14 @@ export function generateNonce(): string {
  * Computes canonical HMAC-SHA256 signature for scan payloads or request headers (reader authentication).
  */
 export function computeCanonicalSignature(
-  envelopeOrData: any,
+  envelopeOrData: unknown,
   secret: string
 ): string {
   let payload = envelopeOrData;
   if (typeof envelopeOrData === 'object' && envelopeOrData !== null) {
-    const { signature: _sig, ...envelopeData } = envelopeOrData;
+    const { signature: _sig, ...envelopeData } = envelopeOrData as Record<string, unknown>;
     const sortedKeys = Object.keys(envelopeData).sort();
-    const sortedObj: Record<string, any> = {};
+    const sortedObj: Record<string, unknown> = {};
     for (const k of sortedKeys) {
       if (envelopeData[k] !== undefined) {
         sortedObj[k] = envelopeData[k];
@@ -210,7 +211,7 @@ export function computeCanonicalSignature(
 }
 
 export function verifyEnvelopeSignature(
-  envelopeOrData: any,
+  envelopeOrData: unknown,
   signature: string,
   publicKeyOrSecret: string
 ): boolean {
@@ -388,8 +389,9 @@ export function verifyZebraHmacSignature(rawBody: string | Buffer, signatureHex:
 export function verifyBearerToken(authHeader: string | undefined, expectedTokenOrDigest: string): boolean {
   if (!authHeader || !expectedTokenOrDigest) return false;
   const parts = authHeader.trim().split(' ');
-  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') return false;
+  const scheme = parts[0];
   const presentedToken = parts[1];
+  if (parts.length !== 2 || !scheme || scheme.toLowerCase() !== 'bearer' || !presentedToken) return false;
   // Direct match
   if (timingSafeEqual(presentedToken, expectedTokenOrDigest)) {
     return true;

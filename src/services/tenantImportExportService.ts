@@ -56,7 +56,8 @@ export async function importFullTenantPackage(targetSchoolId: string, tenantPack
     const sectionMap = new Map<string, string>();
     if (tenantPackage.classSections && Array.isArray(tenantPackage.classSections)) {
       for (const cs of tenantPackage.classSections) {
-        const newAcademicYearId = cs.academicYearId ? academicYearMap.get(cs.academicYearId) : null;
+        const newAcademicYearId = cs.academicYearId ? academicYearMap.get(cs.academicYearId) : undefined;
+        if (!newAcademicYearId) continue;
         const [inserted] = await tx
           .insert(classSections)
           .values({
@@ -64,7 +65,6 @@ export async function importFullTenantPackage(targetSchoolId: string, tenantPack
             academicYearId: newAcademicYearId,
             className: cs.className,
             sectionName: cs.sectionName,
-            medium: cs.medium || 'BENGALI',
           })
           .returning();
         sectionMap.set(cs.id, inserted.id);
@@ -129,8 +129,8 @@ export async function importFullTenantPackage(targetSchoolId: string, tenantPack
       for (const en of tenantPackage.enrollments) {
         const newStudentId = studentMap.get(en.studentId);
         const newSectionId = sectionMap.get(en.classSectionId);
-        const newYearId = en.academicYearId ? academicYearMap.get(en.academicYearId) : null;
-        if (newStudentId && newSectionId) {
+        const newYearId = en.academicYearId ? academicYearMap.get(en.academicYearId) : undefined;
+        if (newStudentId && newSectionId && newYearId) {
           await tx.insert(enrollments).values({
             schoolId: targetSchoolId,
             studentId: newStudentId,

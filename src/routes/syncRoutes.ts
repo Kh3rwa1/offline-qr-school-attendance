@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware';
@@ -66,7 +67,7 @@ router.get(
       res.status(500).json({
         success: false,
         error: 'FAILED_TO_FETCH_ROSTER',
-        message: process.env.NODE_ENV === 'production' ? 'Failed to fetch roster' : error.message,
+        message: env.NODE_ENV === 'production' ? 'Failed to fetch roster' : error.message,
       });
     }
   }
@@ -116,7 +117,7 @@ router.post(
       res.status(500).json({
         success: false,
         error: 'SYNC_FAILED',
-        message: process.env.NODE_ENV === 'production' ? 'Batch sync failed' : error.message,
+        message: env.NODE_ENV === 'production' ? 'Batch sync failed' : error.message,
       });
     }
   }

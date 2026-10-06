@@ -38,8 +38,9 @@ export function recordBatchMetrics(_readerId: string, all: Outcome[], stages: Re
     }
     const buckets = stageBucketCounts.get(stage)!;
     for (let i = 0; i < STAGE_BUCKETS.length; i++) {
-      if (s <= STAGE_BUCKETS[i]) {
-        buckets[i] += 1;
+      const bound = STAGE_BUCKETS[i];
+      if (bound !== undefined && s <= bound) {
+        buckets[i] = (buckets[i] ?? 0) + 1;
       }
     }
     stageSums.set(stage, (stageSums.get(stage) ?? 0) + s);

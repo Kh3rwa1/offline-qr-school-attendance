@@ -1,0 +1,48 @@
+{
+  "$schema": "https://unpkg.com/knip@5/overview/config-schema.json",
+  "entry": [
+    "server.ts!",
+    "sms-worker.ts!",
+    "src/gateway/gatewayDaemon.ts!",
+    "src/main.tsx!",
+    "src/db/migrate.ts!",
+    "src/db/seed.ts!",
+    "src/db/seed_production.ts!"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}!",
+    "server.ts!",
+    "sms-worker.ts!"
+  ],
+  "ignore": [
+    "src/app/AuthenticatedApp.tsx",
+    "src/auth/RequirePermission.tsx",
+    "src/components/**",
+    "src/config/productClaims.ts",
+    "src/db/errors.ts",
+    "src/db/offlineDb.ts",
+    "src/db/testDriver.ts",
+    "src/db/testSetup.ts",
+    "src/middleware/requestId.ts",
+    "src/routes/schemas/rfid.ts",
+    "src/services/alertingService.ts",
+    "src/services/backupReplicationService.ts",
+    "src/services/rfid/adapters/networkAdapter.ts",
+    "src/services/rfid/adapters/usbHidAdapter.ts",
+    "src/services/rfid/adapters/webSerialAdapter.ts",
+    "src/services/rfid/kmsProvider.ts",
+    "src/services/rfid/kmsService.ts",
+    "src/services/tenantImportExportService.ts",
+    "src/shared/api.ts",
+    "src/types.ts"
+  ],
+  "ignoreDependencies": [
+    "better-sqlite3"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "types": "off",
+    "duplicates": "off",
+    "exports": "off"
+  }
+}

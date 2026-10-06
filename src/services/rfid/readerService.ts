@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import { withTenantContext } from '../../db';
 import { rfidReaders } from '../../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
@@ -5,9 +6,9 @@ import { createAuditLog } from '../auditLogService';
 import crypto from 'crypto';
 
 function getReaderEncryptionKey(): Buffer {
-  const masterKey = process.env.KMS_MASTER_KEY || process.env.RFID_HMAC_SECRET;
+  const masterKey = env.KMS_MASTER_KEY || env.RFID_HMAC_SECRET;
   if (!masterKey) {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       throw new Error('KMS_MASTER_KEY or RFID_HMAC_SECRET is required for reader secret encryption in production.');
     }
     return Buffer.from(crypto.hkdfSync('sha256', 'test-secret-32-chars-length-environment', 'kms-salt', Buffer.from('kms-reader-secret'), 32));
@@ -26,7 +27,7 @@ export function encryptReaderSecret(secret: string): string {
 
 export function decryptReaderSecret(encryptedStr: string): string {
   if (!encryptedStr || !encryptedStr.includes(':')) {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       throw new Error('READER_SECRET_DECRYPT_FAILED: Plaintext or malformed reader secret in production database');
     }
     return encryptedStr;
@@ -38,6 +39,9 @@ export function decryptReaderSecret(encryptedStr: string): string {
       throw new Error('Invalid ciphertext structure (expected iv:tag:ciphertext)');
     }
     const [ivHex, tagHex, cipherHex] = parts;
+    if (!ivHex || !tagHex || !cipherHex) {
+      throw new Error('Invalid ciphertext structure (expected iv:tag:ciphertext)');
+    }
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const cipherText = Buffer.from(cipherHex, 'hex');
@@ -132,6 +136,8 @@ export async function registerReader(params: {
         status: 'PENDING',
       })
       .returning();
+
+    if (!inserted) throw new Error('READER_REGISTRATION_FAILED');
 
     await createAuditLog({
       schoolId: params.schoolId,

@@ -13,6 +13,7 @@ export default defineConfig({
     // argon2id alone can take 400-800 ms per hash; 30 s was too tight.
     hookTimeout: 120_000,
     testTimeout: 120_000,
+    setupFiles: ['./src/db/testSetup.ts'],
     exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
 
     // Coverage thresholds — run with `vitest run --coverage`

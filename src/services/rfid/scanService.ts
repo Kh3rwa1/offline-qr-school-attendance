@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import { withTenantContext } from '../../db';
 import { rfidScanEvents, attendanceEvents, attendanceRecords, attendanceSessions, rfidReaders } from '../../db/schema';
 import { eq, and, gt, max, sql } from 'drizzle-orm';
@@ -312,8 +313,8 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
 
     const secret =
       (readerObj?.sharedSecretEncrypted ? decryptReaderSecret(readerObj.sharedSecretEncrypted) : null) ||
-      process.env.RFID_HMAC_SECRET ||
-      (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      env.RFID_HMAC_SECRET ||
+      (env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
     if (!secret) {
       throw new Error('RFID_HMAC_SECRET is missing in server configuration');
     }
@@ -326,20 +327,20 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     // Verification of DESFire EV2/EV3 secureProof in SECURE mode
     if (envelope.securityMode === 'SECURE') {
       if (!envelope.secureProof || !verifySecureProof(envelope.credentialDigest || '', envelope.nonce, envelope.readerTimestamp, envelope.secureProof, secret)) {
-        if (process.env.NODE_ENV !== 'test' || envelope.secureProof === 'invalid_proof') {
+        if (env.NODE_ENV !== 'test' || envelope.secureProof === 'invalid_proof') {
           return createRejection('REPLAY_REJECTED', 'INVALID_SECURE_PROOF');
         }
       }
 
       // In SECURE mode, card-level AES-CMAC proof is strictly mandatory
       if (!envelope.cardProof || !envelope.cardUid || envelope.readerChallenge === undefined || envelope.transactionCounter === undefined) {
-        if (process.env.NODE_ENV !== 'test' || envelope.cardProof === 'missing') {
+        if (env.NODE_ENV !== 'test' || envelope.cardProof === 'missing') {
           return createRejection('REPLAY_REJECTED', 'MISSING_CARD_PROOF');
         }
       } else {
         const masterKeyHex =
-          process.env.RFID_CARD_MASTER_KEY ||
-          (process.env.NODE_ENV === 'test' ? (process.env.RFID_HMAC_SECRET || 'test-card-master-key-32-chars-length-env') : '');
+          env.RFID_CARD_MASTER_KEY ||
+          (env.NODE_ENV === 'test' ? (env.RFID_HMAC_SECRET || 'test-card-master-key-32-chars-length-env') : '');
         if (!masterKeyHex) {
           return createRejection('CONFIGURATION_ERROR', 'CARD_MASTER_KEY_MISSING');
         }
@@ -363,13 +364,13 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     }
 
     if (envelope.isOffline) {
-      const maxOfflineHours = parseInt(process.env.RFID_MAX_OFFLINE_DURATION_HOURS || '24', 10);
+      const maxOfflineHours = parseInt(env.RFID_MAX_OFFLINE_DURATION_HOURS || '24', 10);
       const maxOfflineMs = maxOfflineHours * 60 * 60 * 1000;
       if (Date.now() - readerTime > maxOfflineMs || readerTime - Date.now() > 30000) {
         return createRejection('CLOCK_SKEW', 'OFFLINE_SCAN_EXPIRED_OR_FUTURE');
       }
     } else {
-      const maxSkew = parseInt(process.env.RFID_MAX_CLOCK_SKEW_MS || '30000', 10);
+      const maxSkew = parseInt(env.RFID_MAX_CLOCK_SKEW_MS || '30000', 10);
       if (Math.abs(Date.now() - readerTime) > maxSkew) {
         return createRejection('CLOCK_SKEW', 'TIMESTAMP_OUTSIDE_ALLOWED_WINDOW');
       }
@@ -433,7 +434,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     }
 
     // Legacy mode setting check
-    if (envelope.securityMode === 'UID_LEGACY' && process.env.ALLOW_LEGACY_RFID_UID_MODE !== 'true') {
+    if (envelope.securityMode === 'UID_LEGACY' && env.ALLOW_LEGACY_RFID_UID_MODE !== 'true') {
       return createRejection('DEPENDENCY_UNAVAILABLE', 'LEGACY_MODE_DISABLED');
     }
 
@@ -470,7 +471,7 @@ export async function processScan(envelope: ScanEnvelope): Promise<ScanResult> {
     }
 
     // Duplicate Tap Check (Redis primary with DB fallback on error)
-    const duplicateTapCooldown = parseInt(process.env.RFID_DUPLICATE_TAP_COOLDOWN_MS || '30000', 10);
+    const duplicateTapCooldown = parseInt(env.RFID_DUPLICATE_TAP_COOLDOWN_MS || '30000', 10);
     const dupKey = `rfid:dup:${envelope.schoolId}:${credential.studentId}:${sessionId}`;
     let isDuplicateTap = false;
     let redisDupUsed = false;

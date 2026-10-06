@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Router, Request, Response } from 'express';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { db, withSystemContext, withTenantContext } from '../db';
@@ -191,7 +192,7 @@ router.get(
       return res.status(500).json({
         success: false,
         error: 'SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
       });
     }
   }
@@ -262,7 +263,7 @@ router.get(
       return res.status(500).json({
         success: false,
         error: 'SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
       });
     }
   }
@@ -309,7 +310,7 @@ router.post(
       return res.status(500).json({
         success: false,
         error: 'SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
       });
     }
   }
@@ -332,7 +333,7 @@ router.get(
     } catch (err: any) {
       return res.status(500).json({
         error: 'SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
       });
     }
   }
@@ -359,7 +360,7 @@ router.put(
     } catch (err: any) {
       return res.status(500).json({
         error: 'SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
       });
     }
   }
@@ -403,7 +404,7 @@ router.post(
       return res.status(500).json({
         success: false,
         error: 'SERVER_ERROR',
-        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
       });
     }
   }

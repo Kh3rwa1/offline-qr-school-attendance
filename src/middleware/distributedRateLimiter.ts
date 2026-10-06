@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
@@ -13,18 +14,26 @@ export interface RateLimitPolicyOptions {
 let redisClientInstance: Redis | null = null;
 
 function getRateLimiterRedisClient(): Redis | null {
-  const redisUrl = process.env.REDIS_URL;
+  const redisUrl = env.REDIS_URL;
   if (!redisUrl) return null;
   if (!redisClientInstance) {
     redisClientInstance = new Redis(redisUrl, {
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      lazyConnect: true,
-      retryStrategy: () => null,
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: true,
+      lazyConnect: false,
+      retryStrategy: (times) => Math.min(times * 50, 1000),
     });
     redisClientInstance.on('error', () => {});
   }
   return redisClientInstance;
+}
+
+export async function closeRateLimiterRedis(): Promise<void> {
+  if (redisClientInstance) {
+    const client = redisClientInstance;
+    redisClientInstance = null;
+    await client.quit().catch(() => undefined);
+  }
 }
 
 export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
@@ -33,18 +42,19 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
   let store: any = undefined;
 
   // Use RedisStore when REDIS_URL is provided in production or when integration testing Redis
-  if (process.env.REDIS_URL && (process.env.NODE_ENV === 'production' || process.env.TEST_REDIS_RATE_LIMITER === 'true') && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+  if (env.REDIS_URL && (env.NODE_ENV === 'production' || env.TEST_REDIS_RATE_LIMITER === 'true') && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
     store = new RedisStore({
       sendCommand: async (...args: string[]) => {
         const client = getRateLimiterRedisClient();
-        if (client) {
-          return client.call(args[0], ...args.slice(1)) as any;
+        const command = args[0];
+        if (client && command) {
+          return client.call(command, ...args.slice(1)) as any;
         }
         throw new Error(`REDIS_RATE_LIMITER_UNAVAILABLE: Active Redis client is mandatory for production rate limit policy '${prefix}'.`);
       },
       prefix: `rl:${prefix}:`,
     });
-  } else if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+  } else if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
     throw new Error(`REDIS_RATE_LIMITER_REQUIRED: REDIS_URL is mandatory for distributed policy '${prefix}' in production mode.`);
   }
 
@@ -56,11 +66,11 @@ export function createDistributedRateLimiter(options: RateLimitPolicyOptions) {
     store,
     validate: { xForwardedForHeader: false, default: false },
     skip: (req: Request) => {
-      if (process.env.DISABLE_RATE_LIMITING === 'true' || process.env.TEST_SERVER_STATIC === 'true') {
+      if (env.DISABLE_RATE_LIMITING === 'true' || env.TEST_SERVER_STATIC === 'true') {
         return true;
       }
       // Strictly require non-production mode AND explicit ALLOW_TEST_BYPASS flag
-      const isTestBypassAllowed = process.env.NODE_ENV !== 'production' && process.env.ALLOW_TEST_BYPASS === 'true';
+      const isTestBypassAllowed = env.NODE_ENV !== 'production' && env.ALLOW_TEST_BYPASS === 'true';
       if (isTestBypassAllowed) {
         return (
           req.headers['x-benchmark-load-test'] === 'true' ||
@@ -160,7 +170,7 @@ export const rateLimitPolicies = {
 
   rfidScan: createDistributedRateLimiter({
     prefix: 'rfid-scan',
-    maxRequests: parseInt(process.env.RFID_READER_SCAN_RATE_LIMIT || '600', 10),
+    maxRequests: parseInt(env.RFID_READER_SCAN_RATE_LIMIT || '600', 10),
     windowMs: 60 * 1000,
     keyGenerator: (req) => {
       // Do not trust unverified client header alone; use authenticated reader context if present or client IP

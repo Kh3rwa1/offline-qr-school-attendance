@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { eq, and, gt, sql } from 'drizzle-orm';
 import { db, withSystemContext } from '../db';
 import { authSessions, users, schoolMemberships, schools } from '../db/schema';
+import { AppError } from '../errors/AppError';
 
 export interface SessionContext {
   sessionId: string;
@@ -170,4 +171,47 @@ export function isPlatformSuperAdmin(session?: SessionContext | null): boolean {
     session.user?.platformRole === 'SUPER_ADMIN' ||
     session.memberships?.some((m) => m.role === 'SUPER_ADMIN') === true
   );
+}
+
+export type Role = 'SUPER_ADMIN' | 'SCHOOL_ADMIN' | 'TEACHER' | 'REPORT_VIEWER';
+export type SessionUser = SessionContext['user'];
+
+export async function assertMembership(
+  user: SessionUser,
+  schoolId: string,
+  allowedRoles?: readonly (Role | string)[],
+  session?: SessionContext
+): Promise<{ role: string; schoolId: string }> {
+  if (user.platformRole === 'SUPER_ADMIN') {
+    return { role: 'SUPER_ADMIN', schoolId };
+  }
+
+  const mem = session?.memberships?.find((m) => m.schoolId === schoolId);
+  if (mem) {
+    if (mem.status === 'SUSPENDED') {
+      throw new AppError('MEMBERSHIP_SUSPENDED', 403, 'School membership is suspended');
+    }
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(mem.role)) {
+      throw new AppError('FORBIDDEN', 403, `Role ${mem.role} not authorized for this resource`);
+    }
+    return { role: mem.role, schoolId };
+  }
+
+  return await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ role: schoolMemberships.role, status: schoolMemberships.status })
+      .from(schoolMemberships)
+      .where(and(eq(schoolMemberships.userId, user.id), eq(schoolMemberships.schoolId, schoolId)));
+
+    if (!row) {
+      throw new AppError('CROSS_TENANT_DENIED', 403, 'User is not a member of this school');
+    }
+    if (row.status === 'SUSPENDED') {
+      throw new AppError('MEMBERSHIP_SUSPENDED', 403, 'School membership is suspended');
+    }
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(row.role)) {
+      throw new AppError('FORBIDDEN', 403, `Role ${row.role} not authorized for this resource`);
+    }
+    return { role: row.role, schoolId };
+  });
 }

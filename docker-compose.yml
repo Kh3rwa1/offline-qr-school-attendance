@@ -46,6 +46,8 @@ services:
       dockerfile: Dockerfile
     container_name: school_attendance_app
     restart: always
+    init: true
+    stop_grace_period: 30s
     ports:
       - '3000:3000'
     environment:
@@ -68,6 +70,7 @@ services:
       RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:-}
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-}
       READER_TOKEN_PEPPER: ${READER_TOKEN_PEPPER:-}
+      RFID_CREDENTIAL_DIGEST_KEY: ${RFID_CREDENTIAL_DIGEST_KEY:-}
     volumes:
       - ./backups:/backups:ro
     healthcheck:
@@ -156,6 +159,8 @@ services:
       dockerfile: Dockerfile
     container_name: school_attendance_sms_worker
     restart: always
+    init: true
+    stop_grace_period: 30s
     environment:
       NODE_ENV: production
       COMPONENT: worker

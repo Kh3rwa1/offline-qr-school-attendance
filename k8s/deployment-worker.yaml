@@ -36,6 +36,9 @@ spec:
           volumeMounts:
             - name: tmp-volume
               mountPath: /tmp
+          env:
+            - name: COMPONENT
+              value: "worker"
           envFrom:
             - secretRef:
                 name: school-attendance-secrets

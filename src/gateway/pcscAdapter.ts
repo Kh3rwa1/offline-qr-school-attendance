@@ -1,3 +1,4 @@
+import { env } from '../env';
 import crypto from 'crypto';
 
 export interface ApduCommand {
@@ -369,8 +370,8 @@ export class NativePcscTransport implements PcscTransport {
           return reject(new Error('PCSC_APDU_FAILED: Response too short (missing status words)'));
         }
 
-        const sw1 = responseBuf[responseBuf.length - 2];
-        const sw2 = responseBuf[responseBuf.length - 1];
+        const sw1 = responseBuf[responseBuf.length - 2] ?? 0;
+        const sw2 = responseBuf[responseBuf.length - 1] ?? 0;
         const data = responseBuf.subarray(0, responseBuf.length - 2);
         const isSuccess = (sw1 === 0x91 && sw2 === 0x00) || (sw1 === 0x90 && sw2 === 0x00);
 
@@ -393,9 +394,9 @@ export class PcscAdapter {
 
     if (customTransport) {
       this.transport = customTransport;
-    } else if (process.env.NODE_ENV === 'production' && config?.useSimulator) {
+    } else if (env.NODE_ENV === 'production' && config?.useSimulator) {
       throw new Error('PCSC_FATAL: Cannot use SimulatedPcscTransport in production mode');
-    } else if (process.env.NODE_ENV === 'production') {
+    } else if (env.NODE_ENV === 'production') {
       this.transport = new NativePcscTransport(this.readerName);
     } else {
       this.transport = new SimulatedPcscTransport([this.readerName]);

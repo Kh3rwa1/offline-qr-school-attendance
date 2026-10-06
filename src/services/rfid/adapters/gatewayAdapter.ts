@@ -1,3 +1,4 @@
+import { env } from '../../../env';
 import {
   ReaderAdapter,
   ReaderMetadata,
@@ -46,7 +47,7 @@ export class GatewayAdapter implements ReaderAdapter {
 
   async connect(): Promise<void> {
     const ok = await this.pcsc.connect();
-    if (!ok && process.env.NODE_ENV === 'production') {
+    if (!ok && env.NODE_ENV === 'production') {
       throw new Error('GATEWAY_CONNECT_FAILED: Unable to connect to native PC/SC reader hardware daemon');
     }
     this.connected = true;
@@ -113,16 +114,16 @@ export class GatewayAdapter implements ReaderAdapter {
 
     const secret =
       this.config.sharedSecret ||
-      process.env.RFID_HMAC_SECRET ||
-      (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      env.RFID_HMAC_SECRET ||
+      (env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
     if (!secret) {
       throw new Error('No cryptographic shared secret configured for GatewayAdapter');
     }
 
     const cardMasterKey =
       this.config.cardMasterKey ||
-      process.env.RFID_CARD_MASTER_KEY ||
-      (process.env.NODE_ENV === 'test' ? secret : undefined);
+      env.RFID_CARD_MASTER_KEY ||
+      (env.NODE_ENV === 'test' ? secret : undefined);
     if (!cardMasterKey) {
       throw new Error('RFID_CARD_MASTER_KEY is required for DESFire card proof exchange');
     }

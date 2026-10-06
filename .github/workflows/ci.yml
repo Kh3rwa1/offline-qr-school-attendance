@@ -212,12 +212,39 @@ jobs:
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
+          READER_TOKEN_PEPPER: ci-reader-token-pepper-01234567890123456789
+          RFID_CREDENTIAL_DIGEST_KEY: ci-credential-digest-01234567890123456789
           PRODUCTION_PG_TEST: "1"
           PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
         run: npm run test:postgres
+
+      - name: Production bundle boots without devDependencies
+        env:
+          DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
+          SYSTEM_DATABASE_URL: postgres://attendance_system:ci_password@127.0.0.1:5432/school_attendance
+          AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: production
+          SESSION_SECRET: ci-session-secret-01234567890123456789012345678901
+          CSRF_SECRET: ci-csrf-secret-01234567890123456789012345678901
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          BACKUP_ENCRYPTION_KEY: ci-backup-encryption-key-0123456789012345
+          READER_TOKEN_PEPPER: ci-reader-token-pepper-01234567890123456789
+          RFID_CREDENTIAL_DIGEST_KEY: ci-credential-digest-01234567890123456789
+          MIGRATION_DB_PASSWORD: ci_password_012345678901234567890123456789
+          APP_DB_PASSWORD: ci_password_012345678901234567890123456789
+          SYSTEM_DB_PASSWORD: ci_password_012345678901234567890123456789
+          AUTH_DB_PASSWORD: ci_password_012345678901234567890123456789
+        run: |
+          npm run build
+          rm -rf node_modules && npm ci --omit=dev
+          timeout 15 node dist/server.cjs &
+          sleep 8
+          curl -fsS http://127.0.0.1:3000/api/v1/health
 
   backup-and-restore-drill:
     name: Encrypted Backup & Restore RLS Verification Drill
@@ -290,6 +317,8 @@ jobs:
       METRICS_AUTH_TOKEN: ci_metrics_token_01234567890123456789
       SESSION_SECRET: ci_session_secret_01234567890123456789
       BACKUP_ENCRYPTION_KEY: ci_backup_encryption_key_32bytes_long
+      READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+      RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
       ALLOW_IN_MEMORY_RATE_LIMITER: "true"
       SMS_PROVIDER: console
       ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -489,7 +518,10 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
+          DISABLE_RATE_LIMITING: "true"
+          TEST_SERVER_STATIC: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           LOAD_P95_THRESHOLD_MS: "2500"
@@ -586,6 +618,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           # Seed step runs as COMPONENT=migrate so validateProductionEnv() is
@@ -611,6 +644,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"
@@ -635,6 +669,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"

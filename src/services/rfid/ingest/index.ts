@@ -1,3 +1,4 @@
+import { env } from '../../../env';
 import { eq } from 'drizzle-orm';
 import { withTenantContext } from '../../../db';
 import { schools } from '../../../db/schema';
@@ -29,14 +30,16 @@ export async function getSchoolSettings(schoolId: string): Promise<{ timezone: s
   return { timezone };
 }
 
-function readerIdFrom(body: any, headers: Record<string, string | string[] | undefined>): string | undefined {
+function readerIdFrom(body: unknown, headers: Record<string, string | string[] | undefined>): string | undefined {
   const headerId =
     (headers['x-reader-id'] as string) ||
     (headers['x-zebra-reader-id'] as string) ||
     (headers['x-device-id'] as string);
   if (headerId) return headerId;
   if (body && typeof body === 'object') {
-    return body.reader_name || body.hostname || body.deviceId || body.readerId;
+    const b = body as Record<string, unknown>;
+    const val = b['reader_name'] || b['hostname'] || b['deviceId'] || b['readerId'];
+    if (typeof val === 'string') return val;
   }
   return undefined;
 }
@@ -62,7 +65,7 @@ export function summarize(all: Outcome[], processedCount: number) {
   if (acceptedCount + duplicateCount + rejectedCount !== processedCount || all.length !== processedCount) {
     // Invariant violation = bug. Fail loudly in test, log loudly in prod.
     const err = new Error(`INGEST_INVARIANT: ${all.length} results for ${processedCount} reads`);
-    if (process.env.NODE_ENV !== 'production') throw err;
+    if (env.NODE_ENV !== 'production') throw err;
     console.error(err);
   }
   return { processedCount, acceptedCount, duplicateCount, rejectedCount };

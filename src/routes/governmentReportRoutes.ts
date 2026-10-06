@@ -140,7 +140,7 @@ governmentReportRouter.get('/history', requireAuth, requireTenant, requireRole([
   } catch (error) { fail(res, error, locale); }
 });
 
-governmentReportRouter.get('/:reportId/download', requireAuth, requireTenant, async (req: AuthenticatedRequest, res: Response) => {
+governmentReportRouter.get('/:reportId([0-9a-fA-F-]{36})/download', requireAuth, requireTenant, async (req: AuthenticatedRequest, res: Response) => {
   const locale = localeFor(req);
   try {
     const schoolId = req.activeSchoolId!;
@@ -163,7 +163,7 @@ governmentReportRouter.get('/:reportId/download', requireAuth, requireTenant, as
   } catch (error) { fail(res, error, locale); }
 });
 
-governmentReportRouter.get('/:reportId', requireAuth, requireTenant, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+governmentReportRouter.get('/:reportId([0-9a-fA-F-]{36})', requireAuth, requireTenant, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const parsedReportId = ReportIdSchema.safeParse(req.params.reportId);
   if (!parsedReportId.success) {
     next();
@@ -178,7 +178,7 @@ governmentReportRouter.get('/:reportId', requireAuth, requireTenant, async (req:
   } catch (error) { fail(res, error, locale); }
 });
 
-governmentReportRouter.post('/:reportId/approve', requireAuth, requireTenant, requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
+governmentReportRouter.post('/:reportId([0-9a-fA-F-]{36})/approve', requireAuth, requireTenant, requireRole(['SUPER_ADMIN', 'SCHOOL_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const locale = localeFor(req);
   try {
     const report = await approveReportInternally({ schoolId: req.activeSchoolId!, reportId: ReportIdSchema.parse(req.params.reportId), actorId: req.user!.id, userRole: roleFor(req) });

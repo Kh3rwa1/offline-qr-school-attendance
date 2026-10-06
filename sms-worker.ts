@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { processNotificationQueue } from './src/services/notificationWorker';
 import { getSmsProvider } from './src/services/sms/smsProvider';
 import { reconcileStuckSessions } from './src/services/sessionReconciler';
+import { closeDatabasePools } from './src/db';
 
 const baseIntervalMs = Number(process.env.SMS_WORKER_INTERVAL_MS || 15000);
 const maxBackoffMs = 60000;
@@ -79,7 +80,7 @@ reconcilerIntervalHandle = setInterval(tickReconciler, 60000);
 // Run an initial reconciler check on startup
 void tickReconciler();
 
-function shutdown(signal: string) {
+async function shutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.log(`[SMSWorker] Received ${signal}. Shutting down worker gracefully...`);
@@ -87,11 +88,14 @@ function shutdown(signal: string) {
   if (queueTimeoutHandle) clearTimeout(queueTimeoutHandle);
   if (reconcilerIntervalHandle) clearInterval(reconcilerIntervalHandle);
 
-  // Give in-flight tasks up to 3 seconds to complete
-  setTimeout(() => {
-    process.exit(0);
-  }, 1000);
+  const deadline = Date.now() + 5000;
+  while ((isRunningQueue || isRunningReconciler) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  await closeDatabasePools();
+  process.exit(0);
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

@@ -1,4 +1,4 @@
-import { offlineDb, OfflineRosterItem, OutboxEventItem, OfflineSessionItem, OfflineSessionRosterItem } from '../db/offlineDb';
+import { offlineDb, OfflineRosterItem, OutboxEventItem, OfflineSessionItem, OfflineSessionRosterItem } from '../offline/offlineDb';
 
 function createClientUuid(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();

@@ -1,3 +1,4 @@
+import { env } from '../env';
 import { Request, Response, NextFunction } from 'express';
 import { getDbPoolMetrics } from '../db';
 import crypto from 'node:crypto';
@@ -48,7 +49,7 @@ let backupSnapshotCache: BackupSnapshot | null = null;
 let backupSnapshotCachedAt = 0;
 
 function resolveBackupDir(): string {
-  if (process.env.BACKUP_DIR) return process.env.BACKUP_DIR;
+  if (env.BACKUP_DIR) return env.BACKUP_DIR;
   try {
     if (fs.existsSync('./backups')) return './backups';
   } catch {
@@ -259,8 +260,11 @@ async function redisGetByPattern(prefix: string): Promise<Map<string, number>> {
       if (allKeys.length > 0) {
         const values = await client.mget(...allKeys);
         for (let i = 0; i < allKeys.length; i++) {
-          const shortKey = allKeys[i].replace(`${METRICS_KEY_PREFIX}`, '');
-          result.set(shortKey, values[i] ? parseFloat(values[i]!) : 0);
+          const key = allKeys[i];
+          if (!key) continue;
+          const val = values[i];
+          const shortKey = key.replace(`${METRICS_KEY_PREFIX}`, '');
+          result.set(shortKey, val ? parseFloat(val) : 0);
         }
         return result;
       }
@@ -297,8 +301,9 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
     httpDurationSumTotal += durationSec;
     httpDurationCountTotal += 1;
     for (let i = 0; i < HTTP_DURATION_BUCKETS.length; i += 1) {
-      if (durationSec <= HTTP_DURATION_BUCKETS[i]) {
-        httpDurationBucketCounts[i] += 1;
+      const bound = HTTP_DURATION_BUCKETS[i];
+      if (bound !== undefined && durationSec <= bound) {
+        httpDurationBucketCounts[i] = (httpDurationBucketCounts[i] ?? 0) + 1;
       }
     }
   });
@@ -365,9 +370,9 @@ export const rfidMetrics = {
  * Strictly requires Authorization: Bearer <METRICS_AUTH_TOKEN> header in production.
  */
 export async function renderPrometheusMetrics(req?: Request): Promise<{ authorized: boolean; content: string }> {
-  const requiredToken = process.env.METRICS_AUTH_TOKEN;
+  const requiredToken = env.METRICS_AUTH_TOKEN;
 
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     if (!requiredToken) {
       return { authorized: false, content: 'METRICS_AUTH_TOKEN_REQUIRED_IN_PRODUCTION' };
     }

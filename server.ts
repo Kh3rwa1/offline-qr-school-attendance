@@ -36,9 +36,11 @@ import {
   defaultFormParser,
   bodyParserErrorHandler,
 } from './src/middleware/bodyParsers';
-import { requestId } from './src/middleware/requestId';
-import { toAppError } from './src/errors/AppError';
-import { logError } from './src/errors/logError';
+import { errorMiddleware } from './src/http/errorMiddleware';
+import crypto from 'node:crypto';
+import pinoHttp from 'pino-http';
+import { inflightTracker, installGracefulShutdown, isDraining } from './src/http/shutdown';
+import { logger } from './src/lib/logger';
 
 export async function createApp() {
   if (process.env.NODE_ENV === 'production' && !process.env.METRICS_AUTH_TOKEN) {
@@ -57,7 +59,30 @@ export async function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
-  app.use(requestId);
+  app.use(inflightTracker);
+  app.use(
+    pinoHttp({
+      logger,
+      genReqId: (req, res) => {
+        const inc = req.headers['x-request-id'];
+        const id = typeof inc === 'string' && /^[A-Za-z0-9._-]{8,64}$/.test(inc) ? inc : crypto.randomUUID();
+        res.setHeader('X-Request-Id', id);
+        return id;
+      },
+      serializers: {
+        req: (r) => ({ id: r.id, method: r.method, url: (r.url ?? '').split('?')[0] }),
+      },
+      customLogLevel: (_req, res, err) =>
+        err || (res.statusCode && res.statusCode >= 500)
+          ? 'error'
+          : res.statusCode && res.statusCode >= 400
+            ? 'warn'
+            : 'info',
+      autoLogging: {
+        ignore: (req) => req.url === '/api/v1/health' || req.url === '/metrics' || req.url === '/readyz',
+      },
+    })
+  );
 
   // Route-specific parsers FIRST (parse only, then fall through via next())
   app.post('/api/v1/schools/:schoolId/rfid/zebra/reads', zebraJsonParser);
@@ -108,6 +133,13 @@ export async function createApp() {
   });
 
   app.get('/readyz', async (_req, res) => {
+    if (isDraining()) {
+      return res.status(503).json({
+        status: 'draining',
+        service: 'school-attendance-backend',
+        timestamp: new Date().toISOString(),
+      });
+    }
     try {
       await executeSql('SELECT 1');
       res.status(200).json({
@@ -217,42 +249,20 @@ export async function createApp() {
     });
   }
 
-  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const e = toAppError(err);
-    logError(req as any, e);
-    res.status(e.status).json({
-      success: false,
-      error: e.code,
-      message: e.publicMessage,
-      requestId: (req as any).id,
-    });
-  });
+  app.use(errorMiddleware);
 
   return app;
 }
 
 export async function startServer() {
   const app = await createApp();
-  const PORT = parseInt(env.PORT || '3000', 10);
+  const PORT = Number(env.PORT || 3000);
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+    logger.info(`Server listening on http://0.0.0.0:${PORT}`);
   });
 
-  const shutdown = () => {
-    console.log('SIGTERM/SIGINT received. Starting graceful shutdown...');
-    server.close(() => {
-      console.log('HTTP server closed.');
-      process.exit(0);
-    });
-
-    setTimeout(() => {
-      console.error('Forcing shutdown as connections did not close in time.');
-      process.exit(1);
-    }, 10000);
-  };
-
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  installGracefulShutdown(server);
+  return server;
 }
 
 if (process.env.NODE_ENV !== 'test' && process.env.RUN_SERVER !== 'false' && !process.env.VITEST) {

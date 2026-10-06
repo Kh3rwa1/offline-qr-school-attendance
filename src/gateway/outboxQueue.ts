@@ -1,3 +1,4 @@
+import { env } from '../env';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'crypto';
@@ -47,16 +48,16 @@ export class OutboxQueue {
     }
     this.dbPath = path.join(this.storageDir, 'outbox-queue.sqlite');
 
-    const keyStr = config?.deviceEncryptionKey || process.env.RFID_OUTBOX_ENCRYPTION_KEY || process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-outbox-device-key-32-chars-long-env' : undefined);
+    const keyStr = config?.deviceEncryptionKey || env.RFID_OUTBOX_ENCRYPTION_KEY || env.RFID_HMAC_SECRET || (env.NODE_ENV === 'test' ? 'test-outbox-device-key-32-chars-long-env' : undefined);
     if (!keyStr) {
       throw new Error('OUTBOX_FATAL: Required outbox device encryption key is missing in server configuration');
     }
-    if (process.env.NODE_ENV === 'production' && keyStr.length < 32) {
+    if (env.NODE_ENV === 'production' && keyStr.length < 32) {
       throw new Error('OUTBOX_FATAL: RFID_OUTBOX_ENCRYPTION_KEY must be at least 32 bytes in production mode');
     }
 
     this.secretKey = Buffer.from(crypto.hkdfSync('sha256', keyStr, 'outbox-salt', 'device-outbox-key', 32));
-    this.maxCapacity = config?.maxCapacity || parseInt(process.env.RFID_OFFLINE_QUEUE_CAPACITY || '10000', 10);
+    this.maxCapacity = config?.maxCapacity || parseInt(env.RFID_OFFLINE_QUEUE_CAPACITY || '10000', 10);
     this.maxRetries = config?.maxRetries || 5;
 
     this.initDatabase();
@@ -202,6 +203,9 @@ export class OutboxQueue {
       throw new Error('OUTBOX_CORRUPTED: Invalid format structure');
     }
     const [ivHex, tagHex, cipherHex] = parts;
+    if (!ivHex || !tagHex || !cipherHex) {
+      throw new Error('OUTBOX_CORRUPTED: Invalid format structure');
+    }
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const cipherText = Buffer.from(cipherHex, 'hex');

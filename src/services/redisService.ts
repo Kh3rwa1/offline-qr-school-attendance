@@ -1,3 +1,4 @@
+import { env } from '../env';
 import Redis from 'ioredis';
 import crypto from 'node:crypto';
 
@@ -5,14 +6,14 @@ let redisClient: Redis | null = null;
 let redisInitPromise: Promise<Redis | null> | null = null;
 
 function getHmacSecret(): string {
-  const secret = process.env.REDIS_KEY_HMAC_SECRET;
+  const secret = env.REDIS_KEY_HMAC_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       throw new Error('FATAL: REDIS_KEY_HMAC_SECRET environment variable is required in production mode (minimum 32 characters).');
     }
     return 'dev-redis-hmac-secret-01234567890123456789';
   }
-  if (process.env.NODE_ENV === 'production' && secret.length < 32) {
+  if (env.NODE_ENV === 'production' && secret.length < 32) {
     throw new Error('FATAL: REDIS_KEY_HMAC_SECRET must be at least 32 characters long in production mode.');
   }
   return secret;
@@ -26,9 +27,9 @@ export async function initRedis(): Promise<Redis | null> {
   if (redisClient && redisClient.status === 'ready') return redisClient;
   if (redisInitPromise) return redisInitPromise;
 
-  const redisUrl = process.env.REDIS_URL;
+  const redisUrl = env.REDIS_URL;
   if (!redisUrl) {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+    if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
       throw new Error('REDIS_URL_REQUIRED_IN_PRODUCTION: Production mode requires REDIS_URL for distributed rate limiting.');
     }
     return null;
@@ -49,7 +50,7 @@ export async function initRedis(): Promise<Redis | null> {
         if (!isResolved) {
           isResolved = true;
           const err = new Error('REDIS_CONNECT_TIMEOUT: Timed out waiting for Redis ready state.');
-          if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+          if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
             reject(err);
           } else {
             resolve(null);
@@ -69,14 +70,14 @@ export async function initRedis(): Promise<Redis | null> {
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutTimer);
-            if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') reject(pingErr);
+            if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') reject(pingErr);
             else resolve(null);
           }
         }
       });
 
       client.on('error', (err) => {
-        if (!isResolved && process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+        if (!isResolved && env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
           isResolved = true;
           clearTimeout(timeoutTimer);
           reject(err);
@@ -87,7 +88,7 @@ export async function initRedis(): Promise<Redis | null> {
         }
       });
     } catch (err: any) {
-      if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+      if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
         reject(err);
       } else {
         resolve(null);
@@ -100,9 +101,9 @@ export async function initRedis(): Promise<Redis | null> {
 
 export function getRedisClient(): Redis | null {
   if (redisClient && redisClient.status === 'ready') return redisClient;
-  const redisUrl = process.env.REDIS_URL;
+  const redisUrl = env.REDIS_URL;
   if (!redisUrl) {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+    if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
       throw new Error('REDIS_URL_REQUIRED_IN_PRODUCTION: Production mode requires REDIS_URL for distributed rate limiting.');
     }
     return null;
@@ -166,7 +167,7 @@ export async function checkRateLimit(
   const member = `${now}:${crypto.randomBytes(4).toString('hex')}`;
 
   if (!client || client.status !== 'ready') {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+    if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
       return { allowed: false, isRedisError: true, currentCount: 0, resetMs: 10 };
     }
     // Fallback for local unit test environments without Redis
@@ -196,19 +197,24 @@ export async function checkRateLimit(
     };
   } catch (err: any) {
     console.error(`[RateLimiter] Redis error on ${prefix}:`, err.message);
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
+    if (env.NODE_ENV === 'production' && env.ALLOW_IN_MEMORY_RATE_LIMITER !== 'true') {
       return { allowed: false, isRedisError: true, currentCount: 0, resetMs: 10 };
     }
     return { allowed: true, currentCount: 1, resetMs: Math.ceil(windowMs / 1000) };
   }
 }
 
-export async function closeRedisConnection(): Promise<void> {
+export async function closeRedis(): Promise<void> {
   if (redisClient) {
     try {
-      redisClient.disconnect();
-    } catch {}
+      await redisClient.quit();
+    } catch {
+      try {
+        redisClient.disconnect();
+      } catch {}
+    }
     redisClient = null;
     redisInitPromise = null;
   }
 }
+export const closeRedisConnection = closeRedis;

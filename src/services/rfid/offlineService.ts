@@ -1,3 +1,4 @@
+import { env } from '../../env';
 import { db, withTenantContext } from '../../db';
 import { rfidCredentials, rfidReaders, attendanceSessions, rfidScanEvents, attendanceEvents, attendanceRecords, students } from '../../db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
@@ -30,7 +31,7 @@ export async function generateOfflineRoster(schoolId: string) {
   });
 
   const generatedAt = new Date();
-  const maxAgeHours = parseInt(process.env.RFID_MAX_ROSTER_AGE_HOURS || '4', 10);
+  const maxAgeHours = parseInt(env.RFID_MAX_ROSTER_AGE_HOURS || '4', 10);
   const expiresAt = new Date(generatedAt.getTime() + maxAgeHours * 60 * 60 * 1000);
 
   const payload = {
@@ -42,7 +43,7 @@ export async function generateOfflineRoster(schoolId: string) {
     revokedDigests: revokedCredentials.map((c: any) => c.credentialDigest),
   };
 
-  const secret = process.env.RFID_HMAC_SECRET || (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+  const secret = env.RFID_HMAC_SECRET || (env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
   if (!secret) {
     throw new Error('RFID_HMAC_SECRET is missing in server configuration for offline roster signing');
   }
@@ -56,11 +57,11 @@ export async function generateOfflineRoster(schoolId: string) {
 
 export function getOfflinePolicy(schoolId: string) {
   return {
-    maxOfflineDurationHours: parseInt(process.env.RFID_MAX_OFFLINE_DURATION_HOURS || '24', 10),
-    maxRosterAgeHours: parseInt(process.env.RFID_MAX_ROSTER_AGE_HOURS || '4', 10),
-    maxClockDriftMs: parseInt(process.env.RFID_MAX_CLOCK_SKEW_MS || '30000', 10),
-    queueCapacity: parseInt(process.env.RFID_OFFLINE_QUEUE_CAPACITY || '10000', 10),
-    failMode: (process.env.RFID_OFFLINE_FAIL_MODE as 'OPEN' | 'CLOSED') || 'CLOSED',
+    maxOfflineDurationHours: parseInt(env.RFID_MAX_OFFLINE_DURATION_HOURS || '24', 10),
+    maxRosterAgeHours: parseInt(env.RFID_MAX_ROSTER_AGE_HOURS || '4', 10),
+    maxClockDriftMs: parseInt(env.RFID_MAX_CLOCK_SKEW_MS || '30000', 10),
+    queueCapacity: parseInt(env.RFID_OFFLINE_QUEUE_CAPACITY || '10000', 10),
+    failMode: (env.RFID_OFFLINE_FAIL_MODE as 'OPEN' | 'CLOSED') || 'CLOSED',
   };
 }
 
@@ -117,14 +118,17 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
 
   const dedupedValidEvents: ScanEnvelope[] = [];
   for (const [clientEventId, group] of clientEventGroups.entries()) {
+    const firstEvent = group[0];
+    if (!firstEvent) continue;
     if (group.length === 1) {
-      dedupedValidEvents.push(group[0]);
+      dedupedValidEvents.push(firstEvent);
     } else {
       // Multiple items in the same batch share the same clientEventId
-      const firstHash = computePayloadHash(group[0]);
+      const firstHash = computePayloadHash(firstEvent);
       let allMatch = true;
       for (let i = 1; i < group.length; i++) {
-        if (computePayloadHash(group[i]) !== firstHash) {
+        const item = group[i];
+        if (!item || computePayloadHash(item) !== firstHash) {
           allMatch = false;
           break;
         }
@@ -138,7 +142,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
         });
       } else {
         // Identical duplicate payloads submitted in the same batch
-        dedupedValidEvents.push(group[0]);
+        dedupedValidEvents.push(firstEvent);
       }
     }
   }
@@ -291,8 +295,8 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
 
     const secret =
       (reader.sharedSecretEncrypted ? decryptReaderSecret(reader.sharedSecretEncrypted) : null) ||
-      process.env.RFID_HMAC_SECRET ||
-      (process.env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
+      env.RFID_HMAC_SECRET ||
+      (env.NODE_ENV === 'test' ? 'test-secret-32-chars-length-environment' : undefined);
 
     if (!secret) {
       throw new Error('RFID_HMAC_SECRET is missing in server configuration');
@@ -307,7 +311,7 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
     // Secure proof check
     if (event.securityMode === 'SECURE') {
       if (!event.secureProof || !verifySecureProof(event.credentialDigest || '', event.nonce, event.readerTimestamp, event.secureProof, secret)) {
-        if (process.env.NODE_ENV !== 'test' || event.secureProof === 'invalid_proof') {
+        if (env.NODE_ENV !== 'test' || event.secureProof === 'invalid_proof') {
           resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'INVALID_SECURE_PROOF', processingLatencyMs: 0 });
           continue;
         }
@@ -315,14 +319,14 @@ export async function syncOfflineEvents(schoolId: string, events: ScanEnvelope[]
 
       // In SECURE mode, card-level AES-CMAC proof is strictly mandatory
       if (!event.cardProof || !event.cardUid || event.readerChallenge === undefined || event.transactionCounter === undefined) {
-        if (process.env.NODE_ENV !== 'test' || event.cardProof === 'missing') {
+        if (env.NODE_ENV !== 'test' || event.cardProof === 'missing') {
           resultsMap.set(event.clientEventId, { decision: 'REPLAY_REJECTED', rejectionCode: 'MISSING_CARD_PROOF', processingLatencyMs: 0 });
           continue;
         }
       } else {
         const masterKeyHex =
-          process.env.RFID_CARD_MASTER_KEY ||
-          (process.env.NODE_ENV === 'test' ? (process.env.RFID_HMAC_SECRET || 'test-card-master-key-32-chars-length-env') : '');
+          env.RFID_CARD_MASTER_KEY ||
+          (env.NODE_ENV === 'test' ? (env.RFID_HMAC_SECRET || 'test-card-master-key-32-chars-length-env') : '');
         if (!masterKeyHex) {
           resultsMap.set(event.clientEventId, { decision: 'CONFIGURATION_ERROR', rejectionCode: 'CARD_MASTER_KEY_MISSING', processingLatencyMs: 0 });
           continue;

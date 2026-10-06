@@ -130,6 +130,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     const readerClient = await playwright.request.newContext();
     const res = await readerClient.post(`/api/v1/schools/${schoolId}/rfid/zebra/reads`, {
       headers: {
+        'x-reader-id': readerId,
         'x-zebra-signature': `sha256=${signature}`,
         'content-type': 'application/json',
       },

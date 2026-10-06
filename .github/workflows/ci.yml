@@ -227,8 +227,16 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: production
           SESSION_SECRET: ci-session-secret-01234567890123456789012345678901
+          CSRF_SECRET: ci-csrf-secret-01234567890123456789012345678901
+          REDIS_KEY_HMAC_SECRET: ci-redis-hmac-secret-01234567890123456789
+          METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
+          BACKUP_ENCRYPTION_KEY: ci-backup-encryption-key-0123456789012345
           READER_TOKEN_PEPPER: ci-reader-token-pepper-01234567890123456789
           RFID_CREDENTIAL_DIGEST_KEY: ci-credential-digest-01234567890123456789
+          MIGRATION_DB_PASSWORD: ci_password_012345678901234567890123456789
+          APP_DB_PASSWORD: ci_password_012345678901234567890123456789
+          SYSTEM_DB_PASSWORD: ci_password_012345678901234567890123456789
+          AUTH_DB_PASSWORD: ci_password_012345678901234567890123456789
         run: |
           npm run build
           rm -rf node_modules && npm ci --omit=dev

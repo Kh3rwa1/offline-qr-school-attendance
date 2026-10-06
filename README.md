@@ -1,92 +1,8 @@
-# AttendEase OS — UHF RFID Gate Attendance Appliance for Zebra FX9600
+# AttendEase OS
 
-An enterprise, bilingual (**English** + **বাংলা**) UHF RFID gate attendance appliance built for **Zebra FX9600** fixed RFID readers (EPC Class 1 Gen 2 / ISO 18000-63) with legacy offline QR support. Engineered for walk-through gate attendance in schools, supporting Zebra IoT Connector HTTP webhooks, HMAC-SHA256 signature verification, per-reader Bearer authentication, duplicate debounce filtering, teacher review/finalization, automated AES-256 encrypted backups, and fail-closed tenant security.
+UHF RFID gate attendance for schools, built for the Zebra FX9600. Bilingual (English / বাংলা), self-hosted appliance, with offline QR fallback.
 
-> **Hardware Architecture**:
-> - **Fixed Reader**: Zebra FX9600 UHF Fixed Reader (Ethernet / PoE, 4 or 8 antenna ports).
-> - **Tags**: Passive UHF EPC Gen2 badges/cards (ISO 18000-63).
-> - **Integration**: Zebra IoT Connector HTTP/HTTPS webhook (`POST /api/v1/schools/:schoolId/rfid/zebra/reads`).
-> - **Legacy / Unsupported**: MIFARE / DESFire / PC/SC smartcard readers are **not supported**.
-
----
-
-## 🚀 One-Command Production Installation
-
-On an Ubuntu 22.04/24.04 LTS (x86_64 or ARM64) server or appliance:
-
-```bash
-# 1. Clone repository
-git clone https://github.com/Kh3rwa1/attendease-os.git /opt/attendease
-cd /opt/attendease
-
-# 2. Run the production installer
-./scripts/install.sh install
-```
-
-The installer performs pre-flight system diagnostics (RAM, disk, architecture, ports, Docker Engine & Compose v2), generates cryptographically secure secrets (with restrictive `0600` permissions), provisions the Caddy reverse proxy, and verifies system readiness probes (`/readyz`).
-
----
-
-## 🌐 First-Run Setup Wizard (`/setup`)
-
-Once installed, open your browser and navigate to:
-```
-http://<server-ip-or-domain>/setup
-```
-
-The 4-step web setup wizard guides the school operator through:
-1. **Pre-flight Readiness**: Live diagnostics for PostgreSQL, encrypted backup keys, background workers, and optional Cloudflare R2 staging.
-2. **Platform Super Administrator**: Create the master administrative account (Argon2id password hashing, E.164 phone number).
-3. **School Provisioning & Roster CSV Import**: Register the primary school, district, UDISE+ code, and optionally upload a student roster CSV (`studentName`, `rollNumber`, `className`, `sectionName`, `guardianPhone`).
-4. **Permanent Lockdown**: Once completed, the setup wizard is permanently locked against further execution, with full audit trail logging.
-
----
-
-## 🛠️ Appliance Management CLI (`bin/attendease`)
-
-AttendEase OS includes a dedicated CLI helper for daily operations:
-
-```bash
-# Check service health and latest backup status
-./bin/attendease status
-
-# Execute an immediate AES-256 encrypted local backup snapshot
-./bin/attendease backup
-
-# Restore database from an encrypted backup archive
-./bin/attendease restore ./backups/attendease-YYYYMMDDHHMMSS.sql.gz.enc
-
-# Run comprehensive diagnostic report
-./bin/attendease diagnostics
-
-# Trigger self-healing container restart
-./bin/attendease repair
-
-# Safe application upgrade with automatic rollback on health failure
-./bin/attendease update
-
-# Safe rollback to previous container state
-./bin/attendease rollback
-
-# Stop appliance (add --purge to erase database volumes)
-./bin/attendease uninstall
-```
-
----
-
-## 🔐 Backup Encryption & Key Custody
-
-AttendEase OS utilizes envelope encryption for all local and off-site database archives:
-- **Dedicated Backup Key**: Configured via `BACKUP_ENCRYPTION_KEY` in `.env` (strictly independent of web session secrets).
-- **Encryption Standard**: OpenSSL `AES-256-CBC` with PBKDF2 key derivation and random salt.
-- **Integrity Manifest**: Every backup generates a SHA-256 checksum manifest (`.checksums.sha256`) and metadata JSON manifest (`.manifest.json`).
-- **Cloudflare R2 Off-Site Replication**: When `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` are provided, backups are automatically replicated to off-site S3-compatible cloud storage.
-
----
-
-## 🧭 Hardware & Subsystem Status
-
-We maintain complete honesty regarding hardware maturity and subsystem status:
+## Subsystem status
 
 <!-- status:start -->
 | Subsystem | Status | What that means | Evidence |
@@ -101,53 +17,65 @@ We maintain complete honesty regarding hardware maturity and subsystem status:
 | **Administrative Reporting** | `Software-verified` | ExcelJS monthly registers, daily rosters, absentee breakdowns, and corrections audit exports. _Limits: Exports are designed for internal school management; school headmaster must review before external submission._ | [test](tests/dailyReportsFormatting.test.ts) |
 <!-- status:end -->
 
----
+## What it does
 
-## 👨‍💻 Developer & Local Testing Guide
+- **Ingests HTTP POST batches** from a Zebra FX9600 UHF RFID reader at the gate.
+- **Identifies students by hashed EPC**, recording attendance in PostgreSQL with multi-tenant row-level security (`FORCE ROW LEVEL SECURITY`).
+- **Queues DLT-templated SMS** to guardians on first mark via telecom provider.
+- **Falls back to offline camera-based QR scanning** in the teacher's browser if the gate or power fails.
+- **Ships as a single self-hosted appliance** on Debian/Ubuntu with Docker Compose, PostgreSQL 16, and Redis.
 
-### Prerequisites
-- Node.js 20+ and npm
-- PostgreSQL 16 (or built-in PGlite engine for local tests)
-- Docker & Docker Compose v2
+## What it doesn't do
 
-### Local Development Setup
+<!-- claims-allow: cert | explicit disclaimer stating absence of certification -->
+<!-- claims-allow: gov | explicit disclaimer stating absence of government certification -->
+- ❌ **Does not verify who carried the badge.** UHF RFID identifies the badge, not the student carrying it (see [THREAT_MODEL.md](THREAT_MODEL.md)).
+- ❌ **Does not use encrypted credentials on the badge.** UHF EPC badges are readable by any Gen 2 reader and can be cloned with inexpensive writers. Not a secure access-control system.
+- ❌ **Does not file directly to UDISE+.** Exports CSV/XLSX registers in the state's requested column format; portal filing remains the school's responsibility.
+- ❌ **Is not certified by any government body.**
+
+## Measured performance
+
+Performance targets and measured thresholds on a 4 GB single-box appliance:
+
+| Workload | Target / Measured | Environment | Evidence |
+|---|---|---|---|
+| **Zebra RFID batch ingest** | p95 < 300 ms, 100 RPS | 4 GB ARM / Docker appliance | [test](tests/rfid/zebraIotConnector.test.ts), [slo](docs/evidence/2026-10-performance-slo.md) |
+| **Student QR scan ingest** | p95 < 150 ms, 250 RPS | Controlled load profile | [test](tests/crossSchoolOfflineScoping.test.ts), [slo](docs/evidence/2026-10-performance-slo.md) |
+| **Offline batch sync storm** | p95 < 300 ms, 50 RPS | IndexedDB to server reconnect | [test](tests/offlineDbMigration.test.ts), [slo](docs/evidence/2026-10-performance-slo.md) |
+| **Parent SMS dispatch queue** | 200 msg/s dispatch | Background Redis queue | [test](tests/notificationsAndSms.test.ts), [test](tests/dltSmsProvider.test.ts) |
+
+## Quick start
+
+On an Ubuntu 22.04/24.04 LTS (x86_64 or ARM64) server or appliance:
 
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Configure environment
-cp .env.example .env
-
-# 3. Run database migrations & seed development tenant
-npm run migrate
-npm run seed
-
-# 4. Start local development server
-npm run dev
+curl -fsSL https://raw.githubusercontent.com/Kh3rwa1/attendease-os/main/scripts/install.sh | sudo bash
 ```
 
-### Test & Quality Gates
+The installer verifies pre-flight requirements (RAM, disk, Docker Compose), generates cryptographically secure secrets with `0600` permissions, pulls container images, starts services, and verifies the `/readyz` probe.
+
+### Daily operations
+
+Use the CLI helper `./bin/attendease` on the appliance:
 
 ```bash
-# Run TypeScript typecheck, forbidden strings, and product claims guardrail
-npm run check
-
-# Run full Vitest unit and integration test suite
-npm test
-
-# Run Playwright end-to-end browser tests
-npm run test:e2e
-
-# Run Cloudflare R2 Disaster Recovery round-trip drill
-npx tsx scripts/runR2LiveDrill.ts
-
-# Production build
-npm run build
+./bin/attendease status       # Check container health and services
+./bin/attendease backup       # Take an age-encrypted database snapshot
+./bin/attendease restore <f>  # Restore from an age-encrypted archive (--dry-run supported)
+./bin/attendease diagnostics  # Run full system diagnostics
 ```
 
----
+## Documentation
 
-## 📄 License & Compliance
+Explore the complete documentation in [docs/README.md](docs/README.md):
 
-Licensed under the MIT License. Designed in alignment with Indian Digital Personal Data Protection (DPDP) privacy principles and school administrative reporting workflows. Attendance exports are prepared for school internal administrative review.
+- [Tutorials](docs/tutorials/): First-run setup and teacher guides.
+- [How-to Guides](docs/how-to/): Ingesting Zebra batches, configuring DLT SMS, running restore drills.
+- [Reference](docs/reference/): [Configuration](docs/reference/configuration.md), [Decisions](docs/reference/decisions.md), [OpenAPI Specification](docs/reference/openapi.json).
+- [Explanation](docs/explanation/): [Architecture](docs/explanation/architecture.md), [Data Protection](docs/explanation/data-protection.md), [Threat Model](THREAT_MODEL.md).
+- [Security](SECURITY.md): Vulnerability reporting policy and supported versions.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.

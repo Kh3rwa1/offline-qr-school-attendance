@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-REPO_OWNER="${REPO_OWNER:-Kh3rwa1}"
-REPO_NAME="${REPO_NAME:-attendease-os}"
+if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+  REPO_OWNER="${REPO_OWNER:-${GITHUB_REPOSITORY%/*}}"
+  REPO_NAME="${REPO_NAME:-${GITHUB_REPOSITORY#*/}}"
+else
+  REPO_OWNER="${REPO_OWNER:-Kh3rwa1}"
+  REPO_NAME="${REPO_NAME:-offline-qr-school-attendance}"
+fi
 BRANCH="${BRANCH:-main}"
 STRICT="${REQUIRE_STRICT_BRANCH_PROTECTION:-true}"
 AUTH_TOKEN="${ADMIN_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"

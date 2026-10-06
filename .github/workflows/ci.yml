@@ -206,6 +206,7 @@ jobs:
           AUTH_DATABASE_URL: postgres://attendance_auth:ci_password@127.0.0.1:5432/school_attendance
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
+          ABSENCE_SMS_DELAY_MINUTES: "0"
           SESSION_SECRET: ci-session-secret-01234567890123456789
           METRICS_AUTH_TOKEN: ci-metrics-auth-token-01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long

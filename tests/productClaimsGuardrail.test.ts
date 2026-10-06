@@ -1,6 +1,8 @@
+import fs from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { PRODUCT_CLAIMS, ClaimStatus, ProductClaim } from '../src/config/productClaims';
 import { runGuardrailOn } from '../scripts/verify-product-claims';
+import { validateClaimsRegistry } from '../scripts/validate-product-claims-registry';
 
 describe('Centralized Product Claims Registry & Guardrails', () => {
   it('registers all mandatory core, hardware, reporting, privacy, and performance claims', () => {
@@ -75,5 +77,35 @@ describe('Centralized Product Claims Registry & Guardrails', () => {
     ['This system is fully DPDP\ncompliant', 'line wrap'],
   ])('catches "%s" (%s)', (text) => {
     expect(runGuardrailOn({ 'docs/x.md': text }).violations).toHaveLength(1);
+  });
+
+  describe('docs/product-claims.json evidence validator', () => {
+    it('validates active product claims registry with 0 errors', () => {
+      const errs = validateClaimsRegistry('docs/product-claims.json');
+      expect(errs).toEqual([]);
+    });
+
+    it('rejects unverified production claims lacking external or pilot evidence', () => {
+      const tempPath = '/tmp/test-claims-invalid.json';
+      const invalid = {
+        claims: [
+          {
+            id: 'fake-prod-claim',
+            subsystem: 'Fake',
+            status: 'production',
+            summary: 'Fake claim',
+            evidence: [{ type: 'test', ref: 'tests/validation.test.ts' }],
+          },
+        ],
+      };
+      fs.writeFileSync(tempPath, JSON.stringify(invalid));
+      try {
+        const errs = validateClaimsRegistry(tempPath);
+        expect(errs.length).toBeGreaterThan(0);
+        expect(errs[0]).toContain('needs ≥2 evidence item(s)');
+      } finally {
+        fs.unlinkSync(tempPath);
+      }
+    });
   });
 });

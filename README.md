@@ -88,18 +88,18 @@ AttendEase OS utilizes envelope encryption for all local and off-site database a
 
 We maintain complete honesty regarding hardware maturity and subsystem status:
 
-| Subsystem | Scope / Maturity | Status | Configuration Notes |
-| :--- | :--- | :--- | :--- |
-| **Zebra FX9600 Ingest API** | UHF Gate Attendance | 🟢 **Software Contract Verified** | Zebra IoT Connector HTTP webhook (`POST /api/v1/schools/:schoolId/rfid/zebra/reads`) verified against documented JSON contracts. Physical reader commissioning is pending on-site deployment. |
-| **UHF EPC Credential Vault** | UHF Gate Attendance | 🟢 **Production Ready** | SHA-256 canonical EPC hashing with zero raw-EPC logging in scan events. |
-| **Teacher Gate Review & Finalize** | Gate Attendance | 🟢 **Production Ready** | Live gate tap feed, unmarked roster, manual overrides, and 1-click session finalization. |
-| **Multilingual UI (EN / বাংলা / हिंदी)** | Primary UI | 🟢 **Production Ready** | Language switcher across login, teacher dashboard, roll review, setup wizard, and public landing pages. |
-| **Session Finalization & Auto-Absent**| Gate Attendance | 🟢 **Production Ready** | Atomic PostgreSQL transaction converting unmarked students to ABSENT and queuing parent alerts. |
-| **Tenant Isolation (PostgreSQL RLS)**| Platform Core | 🟢 **Production Ready** | Row-Level Security enforced at the database level with strict multi-tenant boundary isolation. |
-| **Encrypted Backups & Recovery** | Platform Core | 🟢 **Production Ready** | Automated AES-256 PBKDF2 local dumps with tested R2 disaster recovery replication drill. |
-| **Offline QR Scanning** | Primary / Fallback Offline | 🟢 **Production Ready** | Client-side Dexie outbox and camera scanning available on standard smartphone browsers. |
-| **MIFARE / DESFire / PC/SC Readers** | Unsupported | 🔴 **Unsupported / Retired** | AttendEase exclusively uses UHF EPC Class 1 Gen 2 badges with Zebra FX9600. PC/SC smartcard readers not supported. |
-| **Indian DLT SMS Gateway** | Optional Add-on | 🟡 *Provider Dependent* | Database queue active; dispatches to real telecom carrier if credentials provided, falls back safely to console mock. |
+<!-- status:start -->
+| Subsystem | Status | What that means | Evidence |
+|---|---|---|---|
+| **Zebra FX9600 ingest** | `Software-verified` | Webhook contract tested against recorded payloads; batched ingest, idempotent, p95 < 300 ms on 4 GB ARM appliance. _Limits: No physical reader commissioning yet; Read rate in real gate conditions unmeasured._ | [test](tests/rfid/zebraIotConnector.test.ts), [load-test](docs/evidence/2026-10-load-test.md) |
+| **UHF EPC Credential Vault** | `Software-verified` | Salted SHA-256 EPC digests, HKDF per-reader secret derivation, canonicalized hex representation. _Limits: UHF EPC tags can be read and cloned with inexpensive writers; hashing EPCs at rest does not prevent physical over-the-air tag cloning._ | [test](tests/rfid/rfidCrypto.test.ts), [test](tests/rfid/rfidCredentialLifecycle.test.ts) |
+| **Encrypted Backups** | `Software-verified` | Automated pg_dump extraction, age key encryption, Cloudflare R2 offsite replication, and restore drill script. _Limits: Cloudflare R2 offsite sync requires external credentials; automated restores verified in container drills._ | [test](tests/disasterRecovery.test.ts), [load-test](docs/evidence/2026-10-load-test.md) |
+| **Tenant isolation (RLS)** | `Software-verified` | FORCE RLS on tenant tables; transaction-local tenant context; pooled-connection leak tests. _Limits: System-level super-admin queries bypass tenant scoping; requires audited session context._ | [test](tests/security/csrf-exemptions.test.ts), [load-test](docs/evidence/2026-10-load-test.md) |
+| **Offline QR Attendance** | `Software-verified` | Dexie.js indexed storage, cryptographically signed event queue, mobile camera scanning, and idempotent reconnect sync. _Limits: Requires browser camera permissions; iOS background sync requires foreground tab reactivation._ | [test](tests/crossSchoolOfflineScoping.test.ts), [test](tests/offlineDbMigration.test.ts) |
+| **Session Finalization & DLT SMS Queue** | `Software-verified` | Atomic attendance session lock, idempotent SMS job generation, Telecom DLT template formatting, and HMAC callback processing. _Limits: Real SMS transmission requires approved DLT headers, templates, and active telecom gateway account._ | [test](tests/notificationsAndSms.test.ts), [test](tests/dltSmsProvider.test.ts) |
+| **Multilingual UI** | `Software-verified` | Complete trilingual English, Bengali, and Hindi localization across all role dashboards and forms. _Limits: Field pilot linguistic validation across rural districts is ongoing._ | [test](tests/i18nCompleteness.test.ts), [test](tests/landingPageLocalization.test.ts) |
+| **Administrative Reporting** | `Software-verified` | ExcelJS monthly registers, daily rosters, absentee breakdowns, and corrections audit exports. _Limits: Exports are designed for internal school management; school headmaster must review before external submission._ | [test](tests/dailyReportsFormatting.test.ts) |
+<!-- status:end -->
 
 ---
 

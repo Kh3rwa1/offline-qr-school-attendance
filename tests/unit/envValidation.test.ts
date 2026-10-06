@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Schema, validateProductionEnv } from '../../src/env';
+import { Schema, EnvSchema, ENV_DOCS, validateProductionEnv } from '../../src/env';
 
 describe('Environment Configuration Validation (Step 3.7)', () => {
   it('parses valid development configuration with correct defaults and transforms', () => {
@@ -183,5 +183,9 @@ describe('Environment Configuration Validation (Step 3.7)', () => {
     } finally {
       process.env = oldEnv;
     }
+  });
+
+  it('every env var is documented', () => {
+    expect(Object.keys(EnvSchema.shape).sort()).toEqual(Object.keys(ENV_DOCS).sort());
   });
 });

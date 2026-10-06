@@ -1,0 +1,1811 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AttendEase OS API",
+    "version": "1.3.0",
+    "description": "Official REST & Webhook API specification for AttendEase OS UHF RFID & Offline QR attendance appliance.",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Local appliance base path"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "SessionAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "attendease_session",
+        "description": "HttpOnly SameSite encrypted session cookie with CSRF double-submit token"
+      },
+      "ReaderBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Cryptographically hashed bearer token provisioned per Zebra FX9600 reader"
+      },
+      "ReaderHmacAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Signature-SHA256",
+        "description": "HMAC-SHA256 over raw HTTP body using reader shared secret key"
+      }
+    },
+    "schemas": {},
+    "parameters": {}
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Appliance health & readiness check",
+        "description": "Returns status of database, redis cache, and background workers.",
+        "responses": {
+          "200": {
+            "description": "System healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "database": {
+                      "type": "string"
+                    },
+                    "redis": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "timestamp",
+                    "version",
+                    "database",
+                    "redis"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unhealthy or draining",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Authenticate with phone number and password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phoneNumber": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 20
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "phoneNumber",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully authenticated, session cookie set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "phoneNumber": {
+                          "type": "string"
+                        },
+                        "globalRole": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "phoneNumber",
+                        "globalRole"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials or account locked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/rfid/zebra/reads": {
+      "post": {
+        "tags": [
+          "RFID Gate Ingest"
+        ],
+        "summary": "Zebra FX9600 IoT Connector webhook ingest",
+        "description": "High-throughput batched tag read ingest endpoint. Supports Bearer token or HMAC-SHA256 signature.",
+        "security": [
+          {
+            "ReaderBearerAuth": []
+          },
+          {
+            "ReaderHmacAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "epc": {
+                          "type": "string",
+                          "description": "EPC hexadecimal string (96-bit or 128-bit)"
+                        },
+                        "idHex": {
+                          "type": "string",
+                          "description": "Alternative EPC hex representation"
+                        },
+                        "tag_id": {
+                          "type": "string",
+                          "description": "Legacy tag ID field"
+                        },
+                        "antenna": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ],
+                          "description": "Antenna port ID (1-4)"
+                        },
+                        "peakRssi": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ],
+                          "description": "Peak RSSI in dBm"
+                        },
+                        "timestamp": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Reader ISO timestamp or epoch millis"
+                        },
+                        "firstSeen": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "description": "First detected timestamp"
+                        },
+                        "lastSeen": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Last detected timestamp"
+                        },
+                        "reads": {
+                          "type": "number",
+                          "description": "Accumulated reads in dwell duration"
+                        },
+                        "tid": {
+                          "type": "string",
+                          "description": "Factory TID hexadecimal string"
+                        },
+                        "vendorEventId": {
+                          "type": "string",
+                          "description": "Reader vendor event sequence ID"
+                        }
+                      }
+                    },
+                    "maxItems": 250,
+                    "description": "Array of tag reads (up to 250 items)"
+                  },
+                  "reader_name": {
+                    "type": "string",
+                    "description": "Reader hardware identifier"
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "description": "Transmission timestamp"
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed successfully with per-read decision list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "Batch processing success status"
+                    },
+                    "accepted": {
+                      "type": "number",
+                      "description": "Count of accepted present records"
+                    },
+                    "duplicates": {
+                      "type": "number",
+                      "description": "Count of debounced duplicate reads"
+                    },
+                    "rejected": {
+                      "type": "number",
+                      "description": "Count of rejected reads"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "number",
+                            "description": "Original index position in incoming batch"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "description": "Ingest pipeline decision (e.g. ACCEPTED, DUPLICATE_DEBOUNCED, UNREGISTERED_CARD)"
+                          },
+                          "epcDigest": {
+                            "type": "string",
+                            "description": "Salted SHA-256 EPC digest"
+                          },
+                          "studentId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Matched student UUID if enrolled"
+                          },
+                          "classSectionId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Associated class section UUID"
+                          },
+                          "reviewFlag": {
+                            "type": "string",
+                            "description": "Audit flag (e.g. LATE_BUFFERED, SERVER_TIME)"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "decision"
+                        ]
+                      },
+                      "description": "Per-read evaluation outcome details"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "accepted",
+                    "duplicates",
+                    "rejected",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed payload or oversized batch (>250 reads)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Reader authentication failed (invalid bearer token or HMAC signature)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded for reader",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/rfid/credentials": {
+      "post": {
+        "tags": [
+          "RFID Credentials"
+        ],
+        "summary": "Enroll / issue new UHF EPC badge credential to student",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "studentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "credentialType": {
+                    "type": "string",
+                    "enum": [
+                      "UHF_EPC",
+                      "HF_UID"
+                    ],
+                    "default": "UHF_EPC"
+                  },
+                  "identifier": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 128
+                  },
+                  "facilityCode": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "cardType": {
+                    "type": "string",
+                    "maxLength": 50
+                  }
+                },
+                "required": [
+                  "studentId",
+                  "identifier"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credential enrolled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "studentId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "epcLast4": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "studentId",
+                    "status",
+                    "epcLast4"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/rfid/credentials/{id}/status": {
+      "patch": {
+        "tags": [
+          "RFID Credentials"
+        ],
+        "summary": "Update badge credential status (ACTIVE, SUSPENDED, REVOKED, LOST)",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "SUSPENDED",
+                      "REVOKED",
+                      "LOST"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 255
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated successfully"
+          },
+          "404": {
+            "description": "Credential not found"
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/rfid/readers": {
+      "post": {
+        "tags": [
+          "RFID Readers"
+        ],
+        "summary": "Register a new Zebra FX9600 reader",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "readerIdentifier": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 100
+                  },
+                  "readerType": {
+                    "type": "string",
+                    "enum": [
+                      "ZEBRA_FX9600",
+                      "GENERIC_GATEWAY",
+                      "MOCK"
+                    ],
+                    "default": "ZEBRA_FX9600"
+                  },
+                  "locationDescription": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "firmwareVersion": {
+                    "type": "string",
+                    "maxLength": 50
+                  }
+                },
+                "required": [
+                  "readerIdentifier"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reader registered with provisioned bearer token and HMAC secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "readerIdentifier": {
+                      "type": "string"
+                    },
+                    "bearerToken": {
+                      "type": "string",
+                      "description": "Cleartext token displayed ONCE at creation"
+                    },
+                    "hmacSecret": {
+                      "type": "string",
+                      "description": "Cleartext HMAC secret displayed ONCE at creation"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "readerIdentifier",
+                    "bearerToken",
+                    "hmacSecret"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/rfid/readers/{id}/rotate-secret": {
+      "post": {
+        "tags": [
+          "RFID Readers"
+        ],
+        "summary": "Rotate reader authentication secrets (bearer token and HMAC key)",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rotated credentials generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bearerToken": {
+                      "type": "string",
+                      "description": "New bearer token"
+                    },
+                    "hmacSecret": {
+                      "type": "string",
+                      "description": "New HMAC secret"
+                    }
+                  },
+                  "required": [
+                    "bearerToken",
+                    "hmacSecret"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/students": {
+      "get": {
+        "tags": [
+          "Students"
+        ],
+        "summary": "List students in school tenant",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "schoolId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "classSectionId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "INACTIVE",
+                "TRANSFERRED"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of students",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "students": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "studentCode": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "nameBn": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ACTIVE",
+                              "INACTIVE",
+                              "TRANSFERRED"
+                            ]
+                          },
+                          "rollNumber": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "studentCode",
+                          "name",
+                          "nameBn",
+                          "status",
+                          "rollNumber"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "students",
+                    "total",
+                    "page",
+                    "limit"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Students"
+        ],
+        "summary": "Create and enroll a new student record",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "studentCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "nameBn": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "banglarShikshaId": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "dateOfBirth": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "M",
+                      "F",
+                      "O"
+                    ]
+                  },
+                  "photoUrl": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "format": "uri"
+                  },
+                  "classSectionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "academicYearId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "rollNumber": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 99999
+                  },
+                  "guardian": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "phoneNumber": {
+                        "type": "string",
+                        "minLength": 5,
+                        "maxLength": 20
+                      },
+                      "relationship": {
+                        "type": "string",
+                        "maxLength": 50
+                      },
+                      "isPrimary": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "phoneNumber"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "studentCode",
+                  "name",
+                  "classSectionId",
+                  "academicYearId",
+                  "rollNumber"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Student created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "studentCode": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "studentCode",
+                    "name",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Machine-readable error code"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable error description"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Unique request tracking ID"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/students/{id}": {
+      "patch": {
+        "tags": [
+          "Students"
+        ],
+        "summary": "Update student demographics and details",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "nameBn": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "banglarShikshaId": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "dateOfBirth": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "M",
+                      "F",
+                      "O"
+                    ]
+                  },
+                  "photoUrl": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "format": "uri"
+                  },
+                  "studentCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Student updated successfully"
+          },
+          "404": {
+            "description": "Student not found"
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/students/{id}/status": {
+      "patch": {
+        "tags": [
+          "Students"
+        ],
+        "summary": "Update student enrollment status (ACTIVE, INACTIVE, TRANSFERRED)",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "INACTIVE",
+                      "TRANSFERRED"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Student status updated successfully"
+          },
+          "404": {
+            "description": "Student not found"
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/attendance/sessions": {
+      "post": {
+        "tags": [
+          "Attendance Sessions"
+        ],
+        "summary": "Create attendance session for class section and date",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "classSectionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sessionDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "sessionType": {
+                    "type": "string",
+                    "enum": [
+                      "DAILY",
+                      "SUBJECT"
+                    ],
+                    "default": "DAILY"
+                  },
+                  "teacherId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "classSectionId",
+                  "sessionDate"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created or existing session returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "sessionDate": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "classSectionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sessionDate",
+                    "status",
+                    "classSectionId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/attendance/sessions/{sessionId}/status": {
+      "patch": {
+        "tags": [
+          "Attendance Sessions"
+        ],
+        "summary": "Finalize attendance session and trigger absentee alerts",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "DRAFT",
+                      "SUBMITTED",
+                      "VERIFIED",
+                      "FINALIZED"
+                    ]
+                  },
+                  "newStatus": {
+                    "type": "string",
+                    "enum": [
+                      "DRAFT",
+                      "SUBMITTED",
+                      "VERIFIED",
+                      "FINALIZED"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "autoMarkAbsentForUnmarked": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session finalized, unmarked students marked absent, parent SMS queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "presentCount": {
+                      "type": "number"
+                    },
+                    "absentCount": {
+                      "type": "number"
+                    },
+                    "messagesQueued": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "presentCount",
+                    "absentCount",
+                    "messagesQueued"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/attendance/sessions/{sessionId}/manual": {
+      "post": {
+        "tags": [
+          "Attendance Sessions"
+        ],
+        "summary": "Record manual teacher attendance override for a student",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "studentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "PRESENT",
+                      "ABSENT",
+                      "LATE",
+                      "EXCUSED"
+                    ]
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "studentId",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual override recorded"
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{schoolId}/attendance/sessions/{sessionId}/manual/bulk": {
+      "post": {
+        "tags": [
+          "Attendance Sessions"
+        ],
+        "summary": "Bulk record manual teacher attendance overrides",
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "School UUID tenant identifier"
+            },
+            "required": true,
+            "description": "School UUID tenant identifier",
+            "name": "schoolId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "updates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "studentId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PRESENT",
+                            "ABSENT",
+                            "LATE",
+                            "EXCUSED"
+                          ]
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "studentId",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 500
+                  }
+                },
+                "required": [
+                  "updates"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk overrides recorded successfully"
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

@@ -579,7 +579,7 @@ export async function buildGovernmentReadyExcelWorkbook(data: WorkbookDataPayloa
     ['Late Status Code (L)', 'Student verified present after official morning cutoff time'],
     ['Absent Status Code (A)', 'Student unverified on an applicable school working day'],
     ['Excused / Leave Code (E)', 'Authorized medical, sports, or family leave recorded by school authority'],
-    ['Report Engine Version', 'AttendEase Government-Ready Exporter v1.3.0'],
+    ['Report Engine Version', 'AttendEase Exporter v2.0.0'],
     ['Security Standard', 'RFC 4180 / OWASP Formula Injection Sanitized'],
     ['Regional Localization', 'West Bengal (English & Bengali Unicode UTF-8)'],
   ];

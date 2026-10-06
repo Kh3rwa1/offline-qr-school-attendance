@@ -15,6 +15,7 @@ import {
   PrintableQrCard,
 } from '../services/qrService';
 import { createAuditLog } from '../services/auditLogService';
+import { hasConsent } from '../services/privacy/consent';
 
 export const qrRouter = Router();
 
@@ -254,6 +255,8 @@ qrRouter.post(
         issuedCount++;
       }
 
+      const photoConsent = r.photoUrl ? await hasConsent(db, schoolId, r.studentId, 'PHOTO') : false;
+
       cards.push({
         studentId: r.studentId,
         studentCode: r.studentCode,
@@ -262,7 +265,7 @@ qrRouter.post(
         className: r.className,
         sectionName: r.sectionName,
         rollNumber: r.rollNumber,
-        photoUrl: r.photoUrl,
+        photoUrl: photoConsent ? r.photoUrl : null,
         rawToken,
       });
     }

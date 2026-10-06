@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import { db } from '../src/db';
+import { env } from '../src/env';
 import { runMigrations } from '../src/db/migrate';
 import {
   schools,
@@ -53,12 +54,17 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
   let guardian1Id: string;
   let guardian2Id: string;
   let testUserId: string;
+  let udiseSeq = 20000 + Math.floor(Math.random() * 5000);
 
   beforeAll(async () => {
+    process.env.ABSENCE_SMS_DELAY_MINUTES = '0';
+    env.ABSENCE_SMS_DELAY_MINUTES = 0;
     await runMigrations();
   });
 
   beforeEach(async () => {
+    process.env.ABSENCE_SMS_DELAY_MINUTES = '0';
+    env.ABSENCE_SMS_DELAY_MINUTES = 0;
     getFakeSmsProvider().clearSentMessages();
 
     // Setup seed school & hierarchy
@@ -67,7 +73,7 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
       .values({
         name: 'SMS Test Academy',
         slug: `sms-academy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        udiseCode: `190103${Math.floor(10000 + Math.random() * 90000)}`,
+        udiseCode: `190103${(udiseSeq++).toString().padStart(5, '0')}`,
         district: 'Dhaka',
         preferredLanguage: 'bn',
       })

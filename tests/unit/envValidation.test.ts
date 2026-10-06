@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Schema, validateProductionEnv } from '../../src/env';
+import { Schema, EnvSchema, ENV_DOCS, validateProductionEnv } from '../../src/env';
 
 describe('Environment Configuration Validation (Step 3.7)', () => {
   it('parses valid development configuration with correct defaults and transforms', () => {
@@ -143,5 +143,49 @@ describe('Environment Configuration Validation (Step 3.7)', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.REDIS_PORT).toBe(6379);
+  });
+
+  it('throws when AUTH_DATABASE_URL is malformed in production env validation', () => {
+    const oldEnv = { ...process.env };
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.COMPONENT = 'web';
+      process.env.SESSION_SECRET = 'a'.repeat(32);
+      process.env.CSRF_SECRET = 'a'.repeat(32);
+      process.env.REDIS_KEY_HMAC_SECRET = 'a'.repeat(32);
+      process.env.METRICS_AUTH_TOKEN = 'a'.repeat(32);
+      process.env.SMS_PROVIDER = 'console';
+      process.env.RFID_HMAC_SECRET = 'a'.repeat(32);
+      process.env.RFID_CARD_MASTER_KEY = 'a'.repeat(32);
+      process.env.KMS_MASTER_KEY = 'a'.repeat(32);
+      process.env.BACKUP_ENCRYPTION_KEY = 'a'.repeat(32);
+      process.env.MIGRATION_DB_PASSWORD = 'a'.repeat(32);
+      process.env.APP_DB_PASSWORD = 'a'.repeat(32);
+      process.env.SYSTEM_DB_PASSWORD = 'a'.repeat(32);
+      process.env.AUTH_DB_PASSWORD = 'a'.repeat(32);
+      process.env.AUTH_DATABASE_URL = 'invalid-malformed-database-url';
+
+      expect(() => validateProductionEnv()).toThrow('FATAL_AUTH_DATABASE_URL_MALFORMED');
+    } finally {
+      process.env = oldEnv;
+    }
+  });
+
+  it('throws in production mode when auth database pool is unavailable instead of falling back', async () => {
+    const { lookupAuthUserByPhone, getUserSchoolMemberships } = await import('../../src/db/authFunctions');
+    const oldEnv = { ...process.env };
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.AUTH_DATABASE_URL = '';
+
+      await expect(lookupAuthUserByPhone('9999999999')).rejects.toThrow('FATAL_AUTH_DATABASE_CONFIG');
+      await expect(getUserSchoolMemberships('00000000-0000-4000-8000-000000000001')).rejects.toThrow('FATAL_AUTH_DATABASE_CONFIG');
+    } finally {
+      process.env = oldEnv;
+    }
+  });
+
+  it('every env var is documented', () => {
+    expect(Object.keys(EnvSchema.shape).sort()).toEqual(Object.keys(ENV_DOCS).sort());
   });
 });

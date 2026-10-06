@@ -9,6 +9,7 @@ process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY || 'integration-test-kms
 process.env.READER_TOKEN_PEPPER = process.env.READER_TOKEN_PEPPER || 'integration-test-reader-token-pepper-01234567890123456789';
 process.env.RFID_CREDENTIAL_DIGEST_KEY = process.env.RFID_CREDENTIAL_DIGEST_KEY || 'integration-test-rfid-credential-digest-0123456789';
 process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
+process.env.ABSENCE_SMS_DELAY_MINUTES = '0';
 
 import pg from 'pg';
 import crypto from 'node:crypto';
@@ -256,6 +257,7 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
   process.env.READER_TOKEN_PEPPER = 'integration-test-reader-token-pepper-01234567890123456789';
   process.env.RFID_CREDENTIAL_DIGEST_KEY = 'integration-test-rfid-credential-digest-0123456789';
   process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
+  process.env.ABSENCE_SMS_DELAY_MINUTES = '0';
 
   const { createApp } = await import('../server');
   const app = await createApp();

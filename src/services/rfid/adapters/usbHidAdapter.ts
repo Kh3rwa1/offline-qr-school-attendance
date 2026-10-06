@@ -60,10 +60,6 @@ export class UsbHidAdapter implements ReaderAdapter {
 
   getSecurityCapability(): SecurityCapability {
     return {
-      supportsMutualAuth: false,
-      supportsDiversifiedKeys: false,
-      supportsChallengeResponse: false,
-      maxKeyVersion: 0,
       supportedCardTechnologies: ['UID_ONLY']
     };
   }

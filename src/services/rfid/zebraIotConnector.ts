@@ -794,7 +794,9 @@ export async function processZebraIotWebhook(params: {
         statusValue: 'PRESENT',
         clientTimestamp: new Date(scanTimeMs),
         serverReceivedAt: new Date(),
-        actorId: session!.teacherId,
+        actorType: 'READER',
+        actorId: null,
+        actorReaderId: reader.id,
         captureMethod: 'RFID_GATE',
         sourceReaderId: reader.id,
         metadata: {

@@ -34,6 +34,7 @@ export const schools = pgTable('schools', {
   defaultAttendanceCutoff: varchar('default_attendance_cutoff', { length: 10 }).default('10:30'),
   preferredLanguage: varchar('preferred_language', { length: 10 }).notNull().default('bn'), // 'bn' | 'en'
   timezone: varchar('timezone', { length: 50 }).notNull().default('Asia/Kolkata'),
+  rfidMode: varchar('rfid_mode', { length: 10 }).notNull().default('SHADOW'), // 'SHADOW' | 'ASSISTED' | 'LIVE'
   status: varchar('status', { length: 20 }).notNull().default('ACTIVE'), // 'ACTIVE' | 'SUSPENDED'
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -348,7 +349,9 @@ export const attendanceEvents = pgTable(
     clientTimestamp: timestamp('client_timestamp', { withTimezone: true }).notNull(),
     serverReceivedAt: timestamp('server_received_at', { withTimezone: true }).notNull().defaultNow(),
     deviceId: uuid('device_id').references(() => devices.id),
-    actorId: uuid('actor_id').notNull().references(() => users.id),
+    actorType: varchar('actor_type', { length: 10 }).notNull().default('USER'),
+    actorId: uuid('actor_id').references(() => users.id),
+    actorReaderId: uuid('actor_reader_id').references(() => rfidReaders.id, { onDelete: 'set null' }),
     metadata: jsonb('metadata'),
     // RFID extensions (migration 0010)
     captureMethod: varchar('capture_method', { length: 30 }).notNull().default('QR'),
@@ -462,6 +465,10 @@ export const notificationJobs = pgTable(
     providerMessageId: varchar('provider_message_id', { length: 255 }),
     attemptCount: integer('attempt_count').notNull().default(0),
     failureReason: text('failure_reason'),
+    sendAfter: timestamp('send_after', { withTimezone: true }),
+    attendanceRecordId: uuid('attendance_record_id').references(() => attendanceRecords.id, { onDelete: 'cascade' }),
+    kind: varchar('kind', { length: 20 }).notNull().default('ABSENCE'), // 'ABSENCE' | 'CORRECTION'
+    cancelledReason: varchar('cancelled_reason', { length: 40 }),
     queuedAt: timestamp('queued_at', { withTimezone: true }).notNull().defaultNow(),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
@@ -478,6 +485,11 @@ export const notificationJobs = pgTable(
       table.status,
       table.attemptCount,
       table.nextAttemptAt
+    ),
+    notificationJobsDueIdx: index('notification_jobs_due_idx').on(table.status, table.sendAfter),
+    notificationJobsRecordKindUq: uniqueIndex('notification_jobs_record_kind_uq').on(
+      table.attendanceRecordId,
+      table.kind
     ),
   })
 );
@@ -820,4 +832,38 @@ export const platformSettings = pgTable('platform_settings', {
   value: text('value').notNull().default(''),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// 36. Guardian Consents (DPDP Compliance & Data Protection)
+export const guardianConsents = pgTable(
+  'guardian_consents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    schoolId: uuid('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id').notNull().references(() => students.id, { onDelete: 'cascade' }),
+    guardianId: uuid('guardian_id').references(() => guardians.id, { onDelete: 'set null' }),
+    purpose: varchar('purpose', { length: 30 }).notNull(), // 'RFID_ATTENDANCE' | 'ABSENCE_SMS' | 'PHOTO'
+    granted: boolean('granted').notNull(),
+    evidenceRef: text('evidence_ref'),
+    recordedBy: uuid('recorded_by').references(() => users.id, { onDelete: 'set null' }),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+  },
+  (table) => ({
+    studentPurposeIdx: index('guardian_consents_student_purpose_idx').on(
+      table.schoolId,
+      table.studentId,
+      table.purpose
+    ),
+  })
+);
+
+// 37. Retention Policies (Automated Scans & Logs Lifecycle)
+export const retentionPolicies = pgTable('retention_policies', {
+  schoolId: uuid('school_id').primaryKey().references(() => schools.id, { onDelete: 'cascade' }),
+  scanEventsDays: integer('scan_events_days').notNull().default(180),
+  attendanceYears: integer('attendance_years').notNull().default(5),
+  notificationLogDays: integer('notification_log_days').notNull().default(365),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });

@@ -1,4 +1,5 @@
 import { eq, and, gte, lte, inArray, sql } from 'drizzle-orm';
+import { env } from '../env';
 import { db } from '../db';
 import {
   schools,
@@ -193,6 +194,7 @@ export async function createAbsenceNotificationJobs(params: {
   // Fetch absent students in this session
   const absentRecords = await client
     .select({
+      id: attendanceRecords.id,
       studentId: attendanceRecords.studentId,
       status: attendanceRecords.status,
     })
@@ -378,6 +380,10 @@ export async function createAbsenceNotificationJobs(params: {
       date: session.sessionDate,
     });
 
+    const delayMinutes = env.ABSENCE_SMS_DELAY_MINUTES ?? 20;
+    const sendAfter = delayMinutes > 0 ? new Date(Date.now() + delayMinutes * 60_000) : null;
+    const initialStatus = delayMinutes > 0 ? 'SCHEDULED' : 'QUEUED';
+
     // Insert job into database with idempotency uniqueness rule
     const [job] = await client
       .insert(notificationJobs)
@@ -388,9 +394,12 @@ export async function createAbsenceNotificationJobs(params: {
         recipientPhone,
         language: prefLang,
         messageBody,
-        status: 'QUEUED',
+        status: initialStatus,
         notificationType: 'ABSENCE',
         finalizedAttendanceVersion: finalizedVersion,
+        attendanceRecordId: record.id,
+        kind: 'ABSENCE',
+        sendAfter,
       })
       .onConflictDoNothing()
       .returning();

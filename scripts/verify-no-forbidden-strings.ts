@@ -14,6 +14,9 @@ const FORBIDDEN_PATTERNS = [
   { pattern: /Zero Active/i, label: 'Fabricated status claim: Zero Active' },
   { pattern: /set_config\(\s*'app\.(current_school_id|is_system)'[^)]*,\s*false\s*\)/, label: 'Session-level tenant config leaks across pooled connections. Use withTenantContext.' },
   { pattern: /process\.env\./, label: 'Raw process.env access in src/. Use centralized env from src/env.', allowIn: ['src/env.ts'] },
+  { pattern: /\b(pcsc|pcsclite|desfire|mifare|aesCmac|ccid)\b/i, label: 'PC/SC + DESFire retired in ADR-0006' },
+  { pattern: /00000000-0000-0000-0000-00000000000[0-9]/, label: 'Sentinel UUIDs in app code corrupt the audit trail. Use actorType instead.', allowIn: ['tests/', 'drizzle/'] },
+  { pattern: /\benv\.CI\b|process\.env\.CI\b/, label: 'App behaviour must not depend on CI. Inject config instead.', allowIn: ['scripts/', 'tests/', 'playwright.config.ts'] },
 ];
 
 const SCAN_DIR = path.resolve(process.cwd(), 'src');
@@ -31,7 +34,7 @@ function scanFile(filePath: string): Array<{ line: number; label: string; text: 
 
     for (const item of FORBIDDEN_PATTERNS) {
       if (item.pattern.test(line)) {
-        if (item.allowIn && item.allowIn.some((allowed) => filePath.endsWith(allowed))) continue;
+        if (item.allowIn && item.allowIn.some((allowed) => filePath.includes(allowed) || filePath.endsWith(allowed))) continue;
         violations.push({
           line: idx + 1,
           label: item.label,
@@ -60,8 +63,10 @@ function traverseDirectory(dir: string): string[] {
   return files;
 }
 
-console.log(`[CI Guardrail] Scanning ${SCAN_DIR} for prohibited mock strings & anti-patterns...`);
+console.log(`[CI Guardrail] Scanning ${SCAN_DIR}, Dockerfile, package.json for prohibited mock strings & anti-patterns...`);
 const allFiles = traverseDirectory(SCAN_DIR);
+if (fs.existsSync('Dockerfile')) allFiles.push(path.resolve('Dockerfile'));
+if (fs.existsSync('package.json')) allFiles.push(path.resolve('package.json'));
 let totalViolations = 0;
 
 for (const file of allFiles) {

@@ -25,7 +25,6 @@ export const CSRF_EXEMPT_RULES: readonly ExemptRule[] = Object.freeze([
   rule(['GET'], '/readyz', 'Readiness probe'),
   rule(['GET'], '/metrics', 'Bearer-authenticated scraper'),
   rule(['POST'], `/api/v1/schools/${UUID}/rfid/zebra/reads`, 'Zebra webhook, reader-authenticated, no cookies'),
-  rule(['POST'], `/api/v1/schools/${UUID}/rfid/scans`, 'Gateway webhook, reader-authenticated, no cookies'),
 ]);
 
 /** Path without query/fragment. Deliberately NOT decoded. */

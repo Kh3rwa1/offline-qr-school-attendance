@@ -142,15 +142,15 @@ export const SecurityOverview: React.FC = () => {
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-ink font-display">Student Token & Card Cryptography</h3>
-              <p className="t-body text-xs text-ink-muted">Hardware-based authentication</p>
+              <h3 className="font-extrabold text-base text-ink font-display">Student Token & Badge Cryptography</h3>
+              <p className="t-body text-xs text-ink-muted">Cryptographic token and badge verification</p>
             </div>
           </div>
           <p className="t-body text-xs text-ink-soft leading-relaxed">
-            Student QR identity badges and NFC smartcards generate dynamic AES-CMAC challenge-response signatures. Replay attacks and photocopied QR badges are automatically rejected by monotonic counters.
+            Student QR identity badges and RFID credentials carry tamper-resistant cryptographic signatures. Replay attacks and photocopied QR badges are rejected during verification.
           </p>
           <p className="t-body text-xs text-ink-muted leading-relaxed italic">
-            {PLAIN_TERMS.aesCmac.en}
+            {PLAIN_TERMS.badgeCrypto.en}
           </p>
           <div className="pt-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-success-50 text-success-800 border border-success-100 dark:border-success-600/30 font-display">

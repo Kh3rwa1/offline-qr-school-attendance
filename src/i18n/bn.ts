@@ -838,5 +838,6 @@ export const bnTranslations = {
   'rfid.decision.schoolClosed': 'আজ বিদ্যালয় বন্ধ',
   'rfid.decision.sessionFinalized': 'উপস্থিতি সেশন ইতিমধ্যে চূড়ান্ত হয়েছে',
   'rfid.decision.noTeacher': 'শ্রেণি বিভাগে কোনো শিক্ষক নিযুক্ত নেই',
+  'rfid.decision.noActiveSession': 'এই শ্রেণির জন্য কোনো উপস্থিতি সেশন খোলা যায়নি',
   'rfid.decision.manualPreserved': 'শিক্ষকের ম্যানুয়াল উপস্থিতি অপরিবর্তিত রাখা হয়েছে',
 };

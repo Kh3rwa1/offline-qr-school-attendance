@@ -53,6 +53,23 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.0.0] — 2026-10-06
+
+### Breaking Changes
+- **Authenticated Backup Format (`age`)**: Local and off-site backup archives use authenticated age encryption (X25519-ChaCha20Poly1305) with Ed25519 manifest signing. Legacy AES-CBC backups are deprecated.
+- **Per-Reader Token Hashing & Pepper**: Reader bearer tokens are hashed with a server-side pepper at rest (`READER_TOKEN_PEPPER`). Token rotation required for all provisioned readers.
+- **Retired Legacy PC/SC & Gateway Endpoints**: Removed deprecated `/rfid/scans` route and PC/SC smartcard dependencies (ADR-006). Zebra FX9600 IoT Connector webhook (`/rfid/zebra/reads`) is the exclusive gate ingest standard.
+- **Tenant Context Hardening**: Tenant ID must be provided via URL path parameter (`:schoolId`). Deprecated header/body tenant scoping eliminated to ensure strict transaction-local isolation.
+- **Privacy-First Ingest Responses**: Webhook ingest responses return decision codes and opaque token digests without student PII (names/photos omitted).
+
+### Added
+- **High-Throughput V2 Ingest Pipeline**: Atomic 2-database-round-trip batch processing with in-memory validation and pure decision evaluation.
+- **Evidence-Backed Claims Registry**: Machine-readable claims registry (`docs/product-claims.json`) validated against test artifacts in CI.
+- **Generated Reference Documentation**: Automated generation of `.env.example`, `configuration.md`, `openapi.json`, and `decisions.md` with CI drift enforcement.
+- **Safe Backup Restore Drill**: Added `--dry-run` flag to `./bin/attendease restore` to verify digital signature, checksum, and decryption before touching PostgreSQL.
+
+---
+
 ## [1.3.0] — 2026-08-13
 
 ### Added
@@ -83,7 +100,9 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.0.0] — 2026-05-01
+## [1.0.0] — 2026-05-01 (pre-public)
+> Development predates this repository's public history (created 2026-08-12).
+> Dates for 1.x are from the private development log.
 
 ### Added
 - Initial release: offline QR attendance with IndexedDB outbox sync

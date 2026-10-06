@@ -7,27 +7,38 @@ import { extractRawReads, normalizeReads, dedupeInBatch } from './normalize';
 import { loadDebounced, markDebounced } from './debounce';
 import { loadContext } from './loadContext';
 import { decideRead } from './decide';
-import { writeOutcomes } from './write';
+import { writeOutcomes, writeScanEvents } from './write';
 import { recordBatchMetrics, timer } from './metrics';
 import { ACCEPTED_DECISIONS, DUPLICATE_DECISIONS, type Outcome } from './types';
 
-const schoolSettingsCache = new Map<string, { timezone: string; expiresAt: number }>();
+const schoolSettingsCache = new Map<string, { timezone: string; rfidMode: string; expiresAt: number }>();
 
-export async function getSchoolSettings(schoolId: string): Promise<{ timezone: string }> {
+export async function getSchoolSettings(schoolId: string): Promise<{ timezone: string; rfidMode: string }> {
   const cached = schoolSettingsCache.get(schoolId);
   if (cached && Date.now() < cached.expiresAt) {
-    return { timezone: cached.timezone };
+    return { timezone: cached.timezone, rfidMode: cached.rfidMode };
   }
-  const timezone = await withTenantContext(schoolId, async (tx) => {
+  const settings = await withTenantContext(schoolId, async (tx) => {
     const [sc] = await tx
-      .select({ timezone: schools.timezone })
+      .select({ timezone: schools.timezone, rfidMode: schools.rfidMode })
       .from(schools)
       .where(eq(schools.id, schoolId))
       .limit(1);
-    return sc?.timezone || 'Asia/Kolkata';
+    return {
+      timezone: sc?.timezone || 'Asia/Kolkata',
+      rfidMode: sc?.rfidMode || 'SHADOW',
+    };
   });
-  schoolSettingsCache.set(schoolId, { timezone, expiresAt: Date.now() + 60_000 });
-  return { timezone };
+  schoolSettingsCache.set(schoolId, { ...settings, expiresAt: Date.now() + 60_000 });
+  return settings;
+}
+
+export function clearSchoolSettingsCache(schoolId?: string) {
+  if (schoolId) {
+    schoolSettingsCache.delete(schoolId);
+  } else {
+    schoolSettingsCache.clear();
+  }
 }
 
 function readerIdFrom(body: unknown, headers: Record<string, string | string[] | undefined>): string | undefined {
@@ -88,7 +99,7 @@ export async function processZebraBatch(input: {
     rawBody: input.rawBody,
     readerIdentifier: readerIdFrom(input.parsedBody, input.headers),
   });
-  const { timezone } = await getSchoolSettings(input.schoolId);
+  const { timezone, rfidMode } = await getSchoolSettings(input.schoolId);
   t.mark('auth');
 
   const { reads, malformed } = normalizeReads(rawReads, {
@@ -114,6 +125,11 @@ export async function processZebraBatch(input: {
     });
     t.mark('load');
     const decided = unique.map((r) => decideRead(r, ctx));
+    if (rfidMode === 'SHADOW') {
+      await writeScanEvents(tx, ctx, decided, reader);
+      t.mark('write');
+      return decided;
+    }
     const written = await writeOutcomes(tx, ctx, decided, reader);
     t.mark('write');
     return written;

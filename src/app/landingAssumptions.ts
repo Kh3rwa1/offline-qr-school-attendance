@@ -156,6 +156,7 @@ export const CALCULATION_METHODOLOGY = {
       'Paper Register Usage: Estimated at 4 register and reporting pages per enrolled student annually.',
       'Software Tier: Free forever for schools with under 300 enrolled students; ₹130 per student/year illustrative base tier above 300.',
       'SMS Notifications: Absence SMS modeled at standard telecom DLT rates (₹0.15/msg) assuming an 8% baseline daily absence rate.',
+      // claims-allow: guarantee | disclaimer stating savings and completion times are illustrative estimates, not guaranteed
       'Disclaimer: These calculations provide an illustrative operational estimate. No specific monetary savings or attendance completion times are guaranteed.',
     ],
   },

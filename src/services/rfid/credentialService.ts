@@ -2,6 +2,8 @@ import { withTenantContext } from '../../db';
 import { rfidCredentials, students, enrollments } from '../../db/schema';
 import { eq, and, inArray, desc, lt, isNotNull, sql } from 'drizzle-orm';
 import { createAuditLog } from '../auditLogService';
+import { hasConsent } from '../privacy/consent';
+import { AppError } from '../../errors/AppError';
 import {
   redactCredentialDigest,
   canonicalizeEpc,
@@ -40,6 +42,11 @@ export async function enrollCredential(params: {
       .from(students)
       .where(and(eq(students.id, studentId), eq(students.schoolId, schoolId), eq(students.status, 'ACTIVE')));
     if (!student) throw new Error('Student not found or inactive');
+
+    const consentGranted = await hasConsent(tx, schoolId, studentId, 'RFID_ATTENDANCE');
+    if (!consentGranted) {
+      throw new AppError('CONSENT_REQUIRED', 409, 'Guardian consent for RFID attendance is required');
+    }
 
     const [existingActive] = await tx
       .select()

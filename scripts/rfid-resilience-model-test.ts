@@ -19,7 +19,11 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { computeCanonicalSignature } from '../src/services/rfid/cryptoService';
+
+function computeCanonicalSignature(payload: Record<string, any>, secret: string): string {
+  const serialized = JSON.stringify(payload);
+  return crypto.createHmac('sha256', secret).update(serialized).digest('hex');
+}
 
 export interface ModelScenarioResult {
   scenarioNumber: number;

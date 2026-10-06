@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProductClaimsRegistry",
+  "type": "object",
+  "required": ["claims"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "subsystem", "status", "summary", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "subsystem": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["planned", "experimental", "software-verified", "field-verified", "production"]
+          },
+          "summary": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "ref"],
+              "properties": {
+                "type": { "type": "string", "enum": ["test", "load-test", "pilot", "external"] },
+                "ref": { "type": "string" },
+                "date": { "type": "string" }
+              }
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -91,6 +91,6 @@ export default [
 
   // Ignore built artifacts and generated files
   {
-    ignores: ['dist/**', 'node_modules/**', 'drizzle/**', 'public/**', 'coverage/**', 'data/**', 'output/**', 'gateway-data/**', 'tests/load/k6_simulation.js'],
+    ignores: ['dist/**', 'node_modules/**', 'drizzle/**', 'public/**', 'coverage/**', 'data/**', 'output/**', 'gateway-data/**', 'tests/load/k6_simulation.js', 'loadtest/**'],
   },
 ];

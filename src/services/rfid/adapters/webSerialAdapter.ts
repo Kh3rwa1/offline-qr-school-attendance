@@ -61,10 +61,6 @@ export class WebSerialAdapter implements ReaderAdapter {
 
   getSecurityCapability(): SecurityCapability {
     return {
-      supportsMutualAuth: false, // Potentially upgradeable depending on reader firmware
-      supportsDiversifiedKeys: false,
-      supportsChallengeResponse: false,
-      maxKeyVersion: 0,
       supportedCardTechnologies: ['UID_ONLY']
     };
   }

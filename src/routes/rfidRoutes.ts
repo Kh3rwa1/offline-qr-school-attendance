@@ -2,18 +2,17 @@ import { env } from '../env';
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { tenantRoute } from '../http/tenantRoute';
-import { readerAuthMiddleware, ReaderAuthenticatedRequest } from '../middleware/readerAuthMiddleware';
-import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
 import { readerService } from '../services/rfid/readerService';
-import { offlineService } from '../services/rfid/offlineService';
 import { db, withTenantContext } from '../db';
-import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/schema';
+import { z } from 'zod';
+import { rfidScanEvents, rfidReaders, rfidCredentials, students, schools } from '../db/schema';
 import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { rateLimitPolicies } from '../middleware/distributedRateLimiter';
+import { findAnomalies } from '../services/rfid/anomalies';
 
 import { processZebraIotWebhook } from '../services/rfid/zebraIotConnector';
-import { processZebraBatch } from '../services/rfid/ingest';
+import { processZebraBatch, clearSchoolSettingsCache } from '../services/rfid/ingest';
 import { canonicalizeEpc, canonicalizeTid, computeEpcDigest, computeTidDigest, getEpcLastFour } from '../services/rfid/cryptoService';
 import type { RawBodyRequest } from '../middleware/bodyParsers';
 import { AppError, toAppError } from '../errors/AppError';
@@ -22,8 +21,6 @@ import { generateReaderToken } from '../services/rfid/readerTokens';
 import { writeAuditLog } from '../services/auditLogService';
 
 export const rfidRouter = Router();
-
-
 
 // ============================================================================
 // ZEBRA FX9600 IOT CONNECTOR WEBHOOK INGEST ENDPOINT
@@ -60,55 +57,6 @@ rfidRouter.post(
         message: e.publicMessage,
         requestId: (req as any).id,
       });
-    }
-  }
-);
-
-// ============================================================================
-// SCAN ENDPOINT (Reader-authenticated, Normalized Envelope)
-// ============================================================================
-rfidRouter.post(
-  '/:schoolId/rfid/scans',
-  readerAuthMiddleware,
-  rateLimitPolicies.rfidScan,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const clientEventId = req.body.clientEventId;
-      const nonce = req.body.nonce;
-      const readerTimestamp = (req.headers['x-reader-timestamp'] as string) || req.body.readerTimestamp;
-      const signature = (req.headers['x-reader-signature'] as string) || req.body.signature;
-
-      if (!clientEventId || !nonce || !readerTimestamp || !signature) {
-        return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing mandatory signed envelope fields (clientEventId, nonce, readerTimestamp, signature)' });
-      }
-
-      const envelope = {
-        version: req.body.version || 1,
-        schoolId: req.params.schoolId,
-        readerId: (req.headers['x-reader-id'] as string) || req.body.readerId,
-        credentialDigest: req.body.credentialDigest,
-        secureProof: req.body.secureProof,
-        readerTimestamp,
-        sequenceNumber: req.body.sequenceNumber,
-        nonce,
-        direction: req.body.direction || 'NONE',
-        attendanceSessionId: req.body.attendanceSessionId,
-        securityMode: req.body.securityMode || 'SECURE',
-        signature,
-        clientEventId,
-        isOffline: req.body.isOffline || false,
-        cardProof: req.body.cardProof,
-        cardUid: req.body.cardUid,
-        readerChallenge: req.body.readerChallenge,
-        transactionCounter: req.body.transactionCounter,
-      };
-
-      const result = await scanService.processScan(envelope);
-      return res.status(result.decision === 'ACCEPTED' ? 200 : 400).json(result);
-    } catch (error: any) {
-      console.error('Scan processing API error:', error);
-      const message = env.NODE_ENV === 'production' ? 'An unexpected scan processing error occurred' : error.message;
-      return res.status(500).json({ error: 'SCAN_PROCESSING_FAILED', message });
     }
   }
 );
@@ -164,7 +112,9 @@ rfidRouter.post(
         },
       };
     } catch (error: any) {
-      return { status: 400, body: { success: false, error: error.message } };
+      const status = error.status || 400;
+      const code = error.code || error.message;
+      return { status, body: { success: false, error: code, message: error.message } };
     }
       },
   })
@@ -178,11 +128,22 @@ rfidRouter.post(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     handler: async ({ req, schoolId, user }) => {
     try {
-      const { studentId, credentialDigest, securityMode, keyVersion, expiresAt } = req.body;
+      let { studentId, credentialDigest, epc, securityMode, keyVersion, expiresAt } = req.body;
+      let epcLastFour: string | undefined;
+      if (!credentialDigest && epc) {
+        const canonical = canonicalizeEpc(epc);
+        credentialDigest = computeEpcDigest(canonical);
+        epcLastFour = getEpcLastFour(canonical);
+      }
+      if (!studentId || !credentialDigest) {
+        return { status: 400, body: { success: false, error: 'studentId and credentialDigest (or epc) are required' } };
+      }
       const credential = await credentialService.enrollCredential({
         schoolId,
         studentId,
+        credentialType: epc ? 'UHF_EPC_GEN2' : undefined,
         credentialDigest,
+        epcLastFour,
         securityMode: securityMode || 'SECURE',
         keyVersion: keyVersion || 1,
         operatorUserId: user.id,
@@ -534,82 +495,10 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
+      const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
       return { status: 200, body: { success: true, health } };
-      },
+    },
   })
-);
-
-// Reader-authenticated heartbeat
-rfidRouter.post(
-  '/:schoolId/rfid/readers/:readerId/heartbeat',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      await readerService.recordHeartbeat(req.params.readerId, req.params.schoolId);
-      return res.json({ success: true, status: 'ok' });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
-);
-
-// ============================================================================
-// OFFLINE SYNC (Reader-authenticated)
-// ============================================================================
-rfidRouter.get(
-  '/:schoolId/rfid/offline/roster',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const roster = await offlineService.generateOfflineRoster(req.params.schoolId);
-      return res.json({ success: true, roster });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
-);
-
-rfidRouter.post(
-  '/:schoolId/rfid/offline/sync',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const results = await offlineService.syncOfflineEvents(req.params.schoolId, req.body.events || []);
-      return res.json({ success: true, results });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
-);
-
-rfidRouter.get(
-  '/:schoolId/rfid/offline/policy',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const policy = offlineService.getOfflinePolicy(req.params.schoolId);
-      return res.json({ success: true, policy });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
 );
 
 // ============================================================================
@@ -923,3 +812,84 @@ rfidRouter.get(
       },
   })
 );
+
+rfidRouter.patch(
+  '/:schoolId/rfid/mode',
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    params: z.object({ schoolId: z.string().uuid() }),
+    body: z.object({ mode: z.enum(['SHADOW', 'ASSISTED', 'LIVE']) }),
+    handler: async ({ tx, schoolId, user, body }) => {
+      const [current] = await tx
+        .select({ rfidMode: schools.rfidMode })
+        .from(schools)
+        .where(eq(schools.id, schoolId))
+        .limit(1);
+
+      if (!current) {
+        throw new AppError('SCHOOL_NOT_FOUND', 404, 'School not found');
+      }
+
+      const fromMode = current.rfidMode;
+      const toMode = body.mode;
+
+      await tx
+        .update(schools)
+        .set({ rfidMode: toMode, updatedAt: new Date() })
+        .where(eq(schools.id, schoolId));
+
+      await writeAuditLog({
+        schoolId,
+        actorId: user.id,
+        action: 'RFID_MODE_CHANGED',
+        resourceType: 'SCHOOL',
+        targetId: schoolId,
+        metadata: { from: fromMode, to: toMode },
+      });
+
+      clearSchoolSettingsCache(schoolId);
+
+      return {
+        data: {
+          schoolId,
+          rfidMode: toMode,
+          previousMode: fromMode,
+        },
+      };
+    },
+  })
+);
+
+rfidRouter.get(
+  '/:schoolId/rfid/anomalies',
+  tenantRoute({
+    roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN'],
+    writes: false,
+    params: z.object({ schoolId: z.string().uuid() }),
+    query: z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }),
+    handler: async ({ tx, schoolId, query }) => {
+      const [school] = await tx
+        .select({ timezone: schools.timezone })
+        .from(schools)
+        .where(eq(schools.id, schoolId))
+        .limit(1);
+
+      const tz = school?.timezone || 'Asia/Kolkata';
+      const date = query.date || new Date().toISOString().slice(0, 10);
+      const anomalies = await findAnomalies(tx, schoolId, date, tz);
+
+      return {
+        data: {
+          schoolId,
+          date,
+          timezone: tz,
+          count: anomalies.length,
+          anomalies,
+        },
+      };
+    },
+  })
+);
+

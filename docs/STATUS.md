@@ -1,3 +1,10 @@
+---
+title: "AttendEase OS — System Status & Feature Truth"
+owner: "@Kh3rwa1"
+applies_to: ">=2.0.0"
+last_verified: 2026-10-06
+---
+
 # AttendEase OS — System Status & Feature Truth
 
 **Last Updated**: 2026-08-18  

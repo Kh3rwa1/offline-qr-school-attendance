@@ -96,4 +96,23 @@ describe.skipIf(!enabled)('PostgreSQL Fail-Closed Database Role & Function Privi
       expect(proconfig, `Function ${r.proname} search_path must be pg_catalog, public`).toContain('search_path=pg_catalog, public');
     }
   });
+
+  it('6. Asserts system and app database pools use different roles', async () => {
+    const appUrl = process.env.PG_RLS_APP_DATABASE_URL;
+    const systemUrl = process.env.PG_RLS_SYSTEM_DATABASE_URL;
+    if (!appUrl || !systemUrl) return;
+
+    const appPool = new pg.Pool({ connectionString: appUrl });
+    const sysPool = new pg.Pool({ connectionString: systemUrl });
+    try {
+      const appRoleRes = await appPool.query('SELECT current_user');
+      const sysRoleRes = await sysPool.query('SELECT current_user');
+      expect(appRoleRes.rows[0].current_user).not.toBe(sysRoleRes.rows[0].current_user);
+      expect(appRoleRes.rows[0].current_user).toBe('attendance_app');
+      expect(sysRoleRes.rows[0].current_user).toBe('attendance_system');
+    } finally {
+      await appPool.end();
+      await sysPool.end();
+    }
+  });
 });

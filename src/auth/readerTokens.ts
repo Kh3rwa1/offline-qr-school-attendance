@@ -4,15 +4,15 @@ import crypto from 'node:crypto';
 const PREFIX = 'aerdr_'; // greppable in leaks; enables GitHub secret scanning custom patterns
 const TOKEN_RE = /^aerdr_[A-Za-z0-9_-]{43}$/; // 32 bytes base64url = 43 chars
 
+const DEV_PEPPER = 'dev-only-reader-token-pepper-32-chars-min!!';
+
 function pepper(): string {
   const p = env.READER_TOKEN_PEPPER;
-  if (!p || p.length < 32) {
-    if (env.NODE_ENV === 'production' && env.CI !== 'true') {
-      throw new Error('READER_TOKEN_PEPPER (>= 32 chars) must be set in production');
-    }
-    return 'dev-only-reader-token-pepper-32-chars-min!!';
+  if (p && p.length >= 32) return p;
+  if (env.NODE_ENV === 'production') {
+    throw new Error('READER_TOKEN_PEPPER (>= 32 chars) must be set in production');
   }
-  return p;
+  return DEV_PEPPER;
 }
 
 export function hashReaderToken(token: string): string {

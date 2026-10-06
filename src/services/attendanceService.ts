@@ -16,6 +16,7 @@ import {
 } from '../db/schema';
 import { createAuditLog } from './auditLogService';
 import { createAbsenceNotificationJobs } from './notificationService';
+import { onAttendanceCorrected } from './notifications/absenceScheduler';
 import crypto from 'crypto';
 
 export type SessionStatus = 'DRAFT' | 'OPEN' | 'REVIEW' | 'FINALIZED' | 'REOPENED';
@@ -273,7 +274,8 @@ export async function updateSessionStatus(params: {
             statusValue: 'ABSENT',
             clientTimestamp: now,
             serverReceivedAt: now,
-            actorId,
+            actorType: actorId ? ('USER' as const) : ('SYSTEM' as const),
+            actorId: actorId ?? null,
             metadata: { note: 'Auto-marked ABSENT upon session finalization' },
           }));
 
@@ -559,6 +561,17 @@ export async function processQRCode(params: {
         })
         .where(eq(attendanceRecords.id, existingRecord.id))
         .returning();
+
+      if (existingRecord.status !== statusValue) {
+        await onAttendanceCorrected(tx, {
+          id: existingRecord.id,
+          schoolId,
+          studentId: targetStudentId,
+          from: existingRecord.status,
+          to: statusValue,
+        });
+      }
+
       return updated;
     } else {
       const [created] = await tx
@@ -763,6 +776,14 @@ export async function manualStatusUpdate(params: {
       })
       .where(eq(attendanceRecords.id, record.id))
       .returning();
+
+    await onAttendanceCorrected(db, {
+      id: record.id,
+      schoolId,
+      studentId: record.studentId,
+      from: previousStatus,
+      to: newStatus,
+    });
 
     return updated;
   }

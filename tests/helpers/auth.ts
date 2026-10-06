@@ -12,7 +12,12 @@ export async function loginAs(
   if (!seeded) {
     process.env.TEST_SERVER_STATIC = 'true';
     await runMigrations();
-    await seedDatabase();
+    const { getDb } = await import('../../src/db');
+    const { users } = await import('../../src/db/schema');
+    const existingUsers = await getDb().select().from(users).limit(1);
+    if (!existingUsers.length) {
+      await seedDatabase();
+    }
     seeded = true;
   }
 

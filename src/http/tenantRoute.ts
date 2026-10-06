@@ -80,7 +80,7 @@ export function tenantRoute<
         return spec.handler({ tx, schoolId, user, params, query, body, req });
       });
 
-      // Response sent ONLY after commit (preserves existing tenantHandler guarantee)
+      // Response sent ONLY after commit (preserves existing tenantHandler invariant)
       if (res.headersSent) return;
 
       if (result.headers) {

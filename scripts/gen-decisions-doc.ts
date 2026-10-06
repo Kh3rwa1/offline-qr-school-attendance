@@ -106,6 +106,12 @@ const DECISION_METADATA: Record<Decision, DecisionDetails> = {
     cause: 'Student section has no primary teacher assigned in the timetable.',
     action: 'Assign a designated teacher to the class section in Admin > Classes.',
   },
+  NO_ACTIVE_SESSION: {
+    category: 'Rejected',
+    outcome: 'Rejected; attendance session could not be created or found.',
+    cause: 'No active session exists for this class section and automatic session creation was unavailable.',
+    action: 'Ensure class section is active and has an assigned teacher to allow opening sessions.',
+  },
   MANUAL_OVERRIDE_PRESERVED: {
     category: 'Rejected',
     outcome: 'Rejected; teacher manual status preserved.',

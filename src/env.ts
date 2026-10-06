@@ -6,7 +6,7 @@ dotenv.config();
 const secret = (name: string) => z.string().min(32, `${name} must be at least 32 characters`);
 const isProd = process.env.NODE_ENV === 'production';
 
-export const Schema = z
+export const BaseSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     COMPONENT: z.enum(['web', 'worker', 'migrate']).default('web'),
@@ -117,61 +117,45 @@ export const Schema = z
     BACKUP_DIR: z.string().optional(),
     TRUSTED_INGRESS_SECRET: z.string().optional(),
 
-  })
-  .passthrough()
-  .superRefine((e, ctx) => {
-    if (e.NODE_ENV === 'production') {
-      if (!e.DATABASE_URL || /replace[-_]with/.test(e.DATABASE_URL)) {
-        ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required in production' });
-      }
-      if (e.COMPONENT === 'web') {
-        if (!e.SESSION_SECRET || e.SESSION_SECRET.length < 32) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['SESSION_SECRET'],
-            message: 'SESSION_SECRET must be at least 32 characters in production',
-          });
-        }
-        if (e.READER_TOKEN_PEPPER && e.READER_TOKEN_PEPPER.length < 32) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['READER_TOKEN_PEPPER'],
-            message: 'READER_TOKEN_PEPPER must be at least 32 characters in production',
-          });
-        }
-        if (e.RFID_CREDENTIAL_DIGEST_KEY && e.RFID_CREDENTIAL_DIGEST_KEY.length < 32) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['RFID_CREDENTIAL_DIGEST_KEY'],
-            message: 'RFID_CREDENTIAL_DIGEST_KEY must be at least 32 characters in production',
-          });
-        }
-        if (e.FEATURE_RFID === 'true') {
-          if (!e.READER_TOKEN_PEPPER || e.READER_TOKEN_PEPPER.length < 32) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['READER_TOKEN_PEPPER'],
-              message: 'READER_TOKEN_PEPPER must be at least 32 characters in production when FEATURE_RFID is true',
-            });
-          }
-          if (!e.RFID_CREDENTIAL_DIGEST_KEY || e.RFID_CREDENTIAL_DIGEST_KEY.length < 32) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['RFID_CREDENTIAL_DIGEST_KEY'],
-              message: 'RFID_CREDENTIAL_DIGEST_KEY must be at least 32 characters in production when FEATURE_RFID is true',
-            });
-          }
-        }
-      }
-      if (e.SYSTEM_DATABASE_URL && e.SYSTEM_DATABASE_URL === e.DATABASE_URL) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['SYSTEM_DATABASE_URL'],
-          message: 'Must use a separate role from DATABASE_URL (RLS bypass role isolation)',
-        });
+  });
+
+const MIN_SECRET = 32;
+const tooShort = (v?: string) => !v || v.length < MIN_SECRET;
+
+export const Schema = BaseSchema.passthrough().superRefine((e, ctx) => {
+  if (e.NODE_ENV !== 'production') return;
+
+  if (!e.DATABASE_URL || /replace[-_]with/.test(e.DATABASE_URL)) {
+    ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required in production' });
+  }
+
+  // Web and worker both run RLS-bypass (system) work; it must use a separate DB role.
+  if (e.COMPONENT !== 'migrate') {
+    if (!e.SYSTEM_DATABASE_URL || /replace[-_]with/.test(e.SYSTEM_DATABASE_URL)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SYSTEM_DATABASE_URL'],
+        message: 'Required in production: RLS-bypass work must use a separate role',
+      });
+    } else if (e.SYSTEM_DATABASE_URL === e.DATABASE_URL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SYSTEM_DATABASE_URL'],
+        message: 'Must use a separate role from DATABASE_URL (RLS bypass role isolation)',
+      });
+    }
+  }
+
+  // Web secrets are required unconditionally (not only when FEATURE_RFID=true):
+  // reader tokens can be issued regardless of the UI feature flag.
+  if (e.COMPONENT === 'web') {
+    for (const k of ['SESSION_SECRET', 'READER_TOKEN_PEPPER', 'RFID_CREDENTIAL_DIGEST_KEY'] as const) {
+      if (tooShort(e[k])) {
+        ctx.addIssue({ code: 'custom', path: [k], message: `${k} (>= ${MIN_SECRET} chars) required in production` });
       }
     }
-  });
+  }
+});
 
 const parsed = Schema.safeParse(process.env);
 if (!parsed.success) {
@@ -180,6 +164,34 @@ if (!parsed.success) {
     'Invalid configuration:\n' + parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')
   );
   process.exit(1);
+}
+
+// Reject unknown variables that use the app's own prefixes (catches typos such as
+// RFID_INGEST_VS=true). `.strict()` is unusable because process.env holds PATH, HOME, etc.
+const APP_PREFIXES = ['PG_', 'RFID_', 'REDIS_', 'SMS_', 'R2_', 'BACKUP_', 'FEATURE_', 'SHUTDOWN_', 'READER_', 'CSRF_', 'SESSION_'];
+const KNOWN_KEYS = new Set(Object.keys(BaseSchema.shape));
+// Same prefix, different owner: read by the backup sidecar / installer scripts, which share .env.
+const FOREIGN_KEYS = new Set([
+  'BACKUP_CRON', 'BACKUP_FILE', 'BACKUP_KEY', 'BACKUP_KEYS_DIR', 'BACKUP_PASSPHRASE', 'BACKUP_RETAIN_DAYS',
+  'PG_VERSION', 'PG_RLS_MIGRATION_DATABASE_URL', 'PG_RLS_APPLICATION_DATABASE_URL',
+  'PG_RLS_AUTH_DATABASE_URL', 'PG_RLS_SYSTEM_DATABASE_URL',
+]);
+// Kubernetes service links, e.g. REDIS_SERVICE_HOST, REDIS_PORT_6379_TCP_ADDR (injected for Service "redis").
+const K8S_SERVICE_LINK = /_(SERVICE_HOST|SERVICE_PORT(_[A-Z0-9_]+)?|PORT_\d+_(TCP|UDP|SCTP)(_(PROTO|PORT|ADDR))?)$/;
+const unknownKeys = Object.keys(process.env).filter(
+  (k) =>
+    APP_PREFIXES.some((p) => k.startsWith(p)) &&
+    !KNOWN_KEYS.has(k) &&
+    !FOREIGN_KEYS.has(k) &&
+    !K8S_SERVICE_LINK.test(k)
+);
+if (unknownKeys.length) {
+  const msg = `Unknown config variables (typo?): ${unknownKeys.join(', ')}`;
+  if (parsed.data.NODE_ENV === 'production') {
+    console.error(msg);
+    process.exit(1);
+  }
+  console.warn(msg);
 }
 
 const baseData = { ...parsed.data };
@@ -603,7 +615,7 @@ export const ENV_DOCS: Record<keyof z.infer<typeof EnvSchema>, EnvVarDoc> = {
   SCHOOL_ID: {
     group: 'UHF RFID Gate Ingest',
     help: 'Default school UUID identifier for single-tenant appliance deployment',
-    example: '00000000-0000-0000-0000-000000000000',
+    example: 'a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d',
   },
 
   // KMS & Envelope Encryption

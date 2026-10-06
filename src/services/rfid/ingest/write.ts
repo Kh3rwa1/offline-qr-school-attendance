@@ -72,6 +72,13 @@ export async function writeOutcomes(
     }
   }
 
+  for (const o of accepted) {
+    if (o.decision !== 'ACCEPTED') continue;
+    if (!sessionIdBySection.has(o.classSectionId!)) {
+      o.decision = 'NO_ACTIVE_SESSION';
+    }
+  }
+
   // ── Step B: one record per student (two badges, one kid → one row) ───────
   const byStudent = new Map<string, Outcome>();
   for (const o of accepted) {
@@ -86,8 +93,11 @@ export async function writeOutcomes(
 
   // Sort by (sessionId, studentId): concurrent batches lock rows in the same order → no deadlocks
   const toUpsert = [...byStudent.values()]
-    .map((o) => ({ o, sessionId: sessionIdBySection.get(o.classSectionId!)! }))
-    .filter((item) => Boolean(item.sessionId))
+    .map((o) => {
+      const sessionId = sessionIdBySection.get(o.classSectionId!);
+      if (!sessionId) throw new Error('INGEST_INVARIANT: accepted outcome without session');
+      return { o, sessionId };
+    })
     .sort((a, b) => (a.sessionId + a.o.studentId!).localeCompare(b.sessionId + b.o.studentId!));
 
   // ── Step C: manual-safe upsert with insert/update detection ──────────────
@@ -137,15 +147,11 @@ export async function writeOutcomes(
     // Audit trail for genuinely new presence
     const newRows = returned.filter((r) => r.inserted);
     if (newRows.length) {
-      const teacherMap = ctx.teacherBySection;
       await tx.insert(attendanceEvents).values(
         newRows.map((r) => {
           const outcome = byStudent.get(r.studentId);
           const sectionId = outcome?.classSectionId;
           const sessionId = (sectionId && sessionIdBySection.get(sectionId)) || '';
-          const teacherId =
-            (sectionId ? teacherMap.get(sectionId) : null) ||
-            '00000000-0000-0000-0000-000000000001';
           return {
             schoolId: ctx.schoolId,
             clientEventId: crypto.randomUUID(),
@@ -155,7 +161,9 @@ export async function writeOutcomes(
             statusValue: 'PRESENT',
             clientTimestamp: outcome?.read?.readAt || new Date(),
             serverReceivedAt: new Date(),
-            actorId: teacherId,
+            actorType: 'READER' as const,
+            actorId: null,
+            actorReaderId: reader.id,
             captureMethod: 'RFID_GATE',
             sourceReaderId: reader.id,
           };

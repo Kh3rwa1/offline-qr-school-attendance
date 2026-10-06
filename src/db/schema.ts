@@ -348,7 +348,9 @@ export const attendanceEvents = pgTable(
     clientTimestamp: timestamp('client_timestamp', { withTimezone: true }).notNull(),
     serverReceivedAt: timestamp('server_received_at', { withTimezone: true }).notNull().defaultNow(),
     deviceId: uuid('device_id').references(() => devices.id),
-    actorId: uuid('actor_id').notNull().references(() => users.id),
+    actorType: varchar('actor_type', { length: 10 }).notNull().default('USER'),
+    actorId: uuid('actor_id').references(() => users.id),
+    actorReaderId: uuid('actor_reader_id').references(() => rfidReaders.id, { onDelete: 'set null' }),
     metadata: jsonb('metadata'),
     // RFID extensions (migration 0010)
     captureMethod: varchar('capture_method', { length: 30 }).notNull().default('QR'),

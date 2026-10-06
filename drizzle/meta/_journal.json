@@ -24,6 +24,7 @@
     { "idx": 19, "version": "7", "when": 1786650000000, "tag": "0019_platform_settings", "breakpoints": true },
     { "idx": 20, "version": "7", "when": 1786660000000, "tag": "0020_session_idle_timeout", "breakpoints": true },
     { "idx": 21, "version": "7", "when": 1786670000000, "tag": "0021_reader_bearer_tokens", "breakpoints": true },
-    { "idx": 22, "version": "7", "when": 1786680000000, "tag": "0022_ingest_v2", "breakpoints": true }
+    { "idx": 22, "version": "7", "when": 1786680000000, "tag": "0022_ingest_v2", "breakpoints": true },
+    { "idx": 23, "version": "7", "when": 1786690000000, "tag": "0023_audit_actor_fix", "breakpoints": true }
   ]
 }

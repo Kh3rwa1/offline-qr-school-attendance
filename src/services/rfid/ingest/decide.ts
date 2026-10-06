@@ -79,6 +79,8 @@ export function decisionLabelKey(d: Decision): string {
       return 'rfid.decision.sessionFinalized';
     case 'NO_TEACHER_ASSIGNED':
       return 'rfid.decision.noTeacher';
+    case 'NO_ACTIVE_SESSION':
+      return 'rfid.decision.noActiveSession';
     case 'MANUAL_OVERRIDE_PRESERVED':
       return 'rfid.decision.manualPreserved';
     default: {

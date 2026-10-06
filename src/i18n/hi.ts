@@ -576,5 +576,6 @@ export const hiTranslations: Partial<Record<TranslationKey, string>> = {
   'rfid.decision.schoolClosed': 'आज विद्यालय बंद है',
   'rfid.decision.sessionFinalized': 'उपस्थिति सत्र पहले ही अंतिम रूप दे दिया गया',
   'rfid.decision.noTeacher': 'कक्षा अनुभाग में कोई शिक्षक नियुक्त नहीं',
+  'rfid.decision.noActiveSession': 'इस कक्षा के लिए कोई उपस्थिति सत्र नहीं खोला जा सका',
   'rfid.decision.manualPreserved': 'शिक्षक की मैन्युअल उपस्थिति सुरक्षित रखी गई',
 };

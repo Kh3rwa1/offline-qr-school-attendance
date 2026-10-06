@@ -2,18 +2,16 @@ import { drizzle as drizzlePg, type NodePgDatabase } from 'drizzle-orm/node-post
 import pg from 'pg';
 import { sql } from 'drizzle-orm';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createRequire } from 'node:module';
 import * as schema from './schema';
 import { env } from '../env';
 import { isUuid } from '../lib/ids';
-
-
 
 export type Db = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 export * from './types';
 
-let client: any;
+export type QueryableClient = { query: (s: string) => Promise<unknown> } | { exec: (s: string) => Promise<unknown> };
+let client: pg.Pool | QueryableClient | undefined;
 let dbInstance: Db | undefined;
 let systemDbInstance: Db | undefined;
 let appPoolInstance: pg.Pool | undefined;
@@ -75,7 +73,7 @@ export function isDbPoolOverloaded(): boolean {
 
 const isPlaceholder = (url?: string) => !url || /replace[-_]with[-_]/.test(url);
 
-type TestDriverProvider = () => { db: Db; client: unknown };
+type TestDriverProvider = () => { db: Db; client: QueryableClient | pg.Pool };
 let testDriverProvider: TestDriverProvider | undefined;
 
 export function registerTestDriver(provider: TestDriverProvider) {
@@ -93,17 +91,7 @@ function createDb(): Db {
     if (env.NODE_ENV === 'production') {
       throw new Error('DATABASE_URL is missing or a placeholder. Refusing to start on an in-memory database.');
     }
-    // Dev/test only fallback if test driver wasn't pre-registered via setupFiles
-    try {
-      const loader = typeof require === 'function' ? require : createRequire(import.meta.url);
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createTestDb } = loader('./testDriver.ts');
-      const testDb = createTestDb();
-      client = testDb.client;
-      return testDb.db;
-    } catch {
-      throw new Error('DATABASE_URL is required or test driver must be registered.');
-    }
+    throw new Error('DATABASE_URL is required or test driver must be registered.');
   }
 
   validateDatabaseConnectionBudget();
@@ -128,9 +116,10 @@ export function getDb(): Db {
   return dbInstance;
 }
 
-function getSystemDb(): Db {
+export function getSystemDb(): Db {
   if (systemDbInstance) return systemDbInstance;
   if (!env.SYSTEM_DATABASE_URL || isPlaceholder(env.SYSTEM_DATABASE_URL) || env.SYSTEM_DATABASE_URL === env.DATABASE_URL) {
+    if (env.NODE_ENV === 'production') throw new Error('SYSTEM_DATABASE_URL missing');
     systemDbInstance = getDb();
     return systemDbInstance;
   }

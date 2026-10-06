@@ -273,7 +273,8 @@ export async function updateSessionStatus(params: {
             statusValue: 'ABSENT',
             clientTimestamp: now,
             serverReceivedAt: now,
-            actorId,
+            actorType: actorId ? ('USER' as const) : ('SYSTEM' as const),
+            actorId: actorId ?? null,
             metadata: { note: 'Auto-marked ABSENT upon session finalization' },
           }));
 

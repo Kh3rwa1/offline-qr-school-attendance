@@ -62,7 +62,7 @@ To update this reference or `.env.example`, edit `src/env.ts` and run `npm run g
 | `RFID_GATEWAY_URL` | UHF RFID Gate Ingest | URL of internal hardware gateway relay if deployed | no | `http://localhost:4000` |
 | `RFID_OUTBOX_ENCRYPTION_KEY` | UHF RFID Gate Ingest | Symmetric encryption key for local offline scan event store | yes | *(generated)* |
 | `RFID_READER_ID` | UHF RFID Gate Ingest | Default identifier assigned to local hardware reader | no | `reader-gate-01` |
-| `SCHOOL_ID` | UHF RFID Gate Ingest | Default school UUID identifier for single-tenant appliance deployment | no | `00000000-0000-0000-0000-000000000000` |
+| `SCHOOL_ID` | UHF RFID Gate Ingest | Default school UUID identifier for single-tenant appliance deployment | no | `a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d` |
 | `KMS_MASTER_KEY` | KMS & Envelope Encryption | Master 256-bit encryption key used by local KMS provider | yes | *(generated)* |
 | `AWS_KMS_KEY_ARN` | KMS & Envelope Encryption | AWS KMS Key ARN for cloud-managed envelope encryption | no | `arn:aws:kms:ap-south-1:123456789012:key/example-key` |
 | `GCP_KMS_RESOURCE_ID` | KMS & Envelope Encryption | Google Cloud KMS Key Resource ID for cloud-managed envelope encryption | no | `projects/p/locations/l/keyRings/r/cryptoKeys/k` |

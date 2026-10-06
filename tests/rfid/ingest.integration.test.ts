@@ -18,6 +18,8 @@ import {
 } from '../../src/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { processZebraBatch } from '../../src/services/rfid/ingest';
+import { writeOutcomes } from '../../src/services/rfid/ingest/write';
+import type { Outcome } from '../../src/services/rfid/ingest/types';
 import { canonicalizeEpc, computeEpcDigest, getEpcLastFour } from '../../src/services/rfid/cryptoService';
 import { generateReaderToken } from '../../src/services/rfid/readerTokens';
 import * as redisService from '../../src/services/redisService';
@@ -403,5 +405,61 @@ describe('processZebraBatch (Postgres Integration)', () => {
     await reactivateStudent(schoolId, kidC);
     const r2 = await ingest(makeBatch(schoolId, [kidC.epc]));
     expect(r2.results[0].decision).toBe('ACCEPTED');
+  });
+
+  it('never reports ACCEPTED for a read that was not written (downgrades to NO_ACTIVE_SESSION)', async () => {
+    await withTenantContext(schoolId, async (tx) => {
+      const orphanOutcome: Outcome = {
+        index: 0,
+        read: {
+          index: 0,
+          epcDigest: computeEpcDigest(canonicalizeEpc(kidA.epc), schoolId),
+          epcLast4: getEpcLastFour(kidA.epc),
+          tidDigest: null,
+          antenna: 1,
+          rssi: -50,
+          readAt: new Date(),
+          timeSource: 'READER',
+          freshness: 'OK',
+          idempotencyKey: 'test-orphan-key-1',
+        },
+        decision: 'ACCEPTED',
+        studentId: kidA.studentId,
+        classSectionId: '11111111-2222-3333-4444-555555555555',
+        needsSession: false,
+      };
+
+      const ctx: any = {
+        schoolId,
+        schoolDate: '2026-03-30',
+        sessionBySection: new Map(),
+        teacherBySection: new Map(),
+      };
+
+      const results = await writeOutcomes(tx, ctx, [orphanOutcome], { id: readerId });
+      expect(results[0].decision).toBe('NO_ACTIVE_SESSION');
+    });
+
+    const rec = await recordFor(schoolId, kidA.studentId);
+    expect(rec).toBeUndefined();
+  });
+
+  it('records actorType as READER in attendance_events on RFID ingest', async () => {
+    const batch = makeBatch(schoolId, [kidA.epc]);
+    const r = await ingest(batch);
+    expect(r.acceptedCount).toBe(1);
+
+    const [event] = await withTenantContext(schoolId, async (tx) => {
+      return tx
+        .select()
+        .from(attendanceEvents)
+        .where(eq(attendanceEvents.schoolId, schoolId))
+        .limit(1);
+    });
+
+    expect(event).toBeDefined();
+    expect(event.actorType).toBe('READER');
+    expect(event.actorId).toBeNull();
+    expect(event.actorReaderId).toBe(readerId);
   });
 });

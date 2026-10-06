@@ -21,7 +21,7 @@ export async function seedDatabase() {
 
   // Tests and explicit development seeding run the versioned migrations first.
   await runMigrations();
-  if (env.NODE_ENV === 'test' || env.ALLOW_SEED_RESET === 'true' || env.CI === 'true') {
+  if (env.NODE_ENV === 'test' || env.ALLOW_SEED_RESET === 'true') {
     for (const table of [
       'attendance_events', 'attendance_corrections', 'attendance_records', 'rfid_scan_events',
       'rfid_credentials', 'rfid_readers', 'rfid_key_versions',

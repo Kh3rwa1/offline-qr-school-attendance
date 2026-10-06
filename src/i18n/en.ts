@@ -838,5 +838,6 @@ export const enTranslations = {
   'rfid.decision.schoolClosed': 'School closed today',
   'rfid.decision.sessionFinalized': 'Attendance session already finalized',
   'rfid.decision.noTeacher': 'No teacher assigned to class section',
+  'rfid.decision.noActiveSession': 'No attendance session could be opened for this class',
   'rfid.decision.manualPreserved': 'Teacher manual attendance preserved',
 };

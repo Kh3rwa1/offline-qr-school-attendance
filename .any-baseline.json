@@ -37,7 +37,6 @@
   "src/dashboards/teacher/OfflineWorkspace.tsx": 1,
   "src/dashboards/teacher/TeacherDashboard.tsx": 17,
   "src/db/authFunctions.ts": 6,
-  "src/db/index.ts": 1,
   "src/db/seed.ts": 3,
   "src/db/seed_production.ts": 16,
   "src/errors/AppError.ts": 5,

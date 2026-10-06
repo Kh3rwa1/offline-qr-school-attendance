@@ -28,10 +28,11 @@ Dictionary of all possible decision outcomes emitted by the AttendEase OS Zebra 
 | `SCHOOL_CLOSED` | **Rejected** | Rejected; attendance sessions not opened. | School calendar designates today as weekend, holiday, or emergency closure. | Verify academic calendar holiday dates if school is operating on a special day. |
 | `SESSION_FINALIZED` | **Rejected** | Rejected; finalized attendance is immutable to automated gate taps. | Classroom teacher already finalized the session (absentees locked & SMS sent). | Teacher must apply a Manual Override in Teacher Dashboard if admitting late arrival. |
 | `NO_TEACHER_ASSIGNED` | **Rejected** | Rejected; auto-session creation requires assigned teacher context. | Student section has no primary teacher assigned in the timetable. | Assign a designated teacher to the class section in Admin > Classes. |
+| `NO_ACTIVE_SESSION` | **Rejected** | Rejected; attendance session could not be created or found. | No active session exists for this class section and automatic session creation was unavailable. | Ensure class section is active and has an assigned teacher to allow opening sessions. |
 | `MANUAL_OVERRIDE_PRESERVED` | **Rejected** | Rejected; teacher manual status preserved. | Teacher previously marked student EXCUSED or ABSENT with manual priority. | None required. Teacher manual discretion always overrides automated gate reads. |
 
 ## Ingest Categories
 
 - **Accepted (2 codes)**: Tag validated; updates student arrival state or notes existing presence.
 - **Debounced Duplicates (2 codes)**: High-frequency UHF RFID bounces suppressed by in-memory deduplication and Redis cooldown cache to protect database write capacity.
-- **Rejected (12 codes)**: Reads failing cryptographic, temporal, enrollment, or operational boundary checks. Logged with failure diagnostic for review.
+- **Rejected (13 codes)**: Reads failing cryptographic, temporal, enrollment, or operational boundary checks. Logged with failure diagnostic for review.

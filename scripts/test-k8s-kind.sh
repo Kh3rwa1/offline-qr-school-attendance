@@ -76,10 +76,16 @@ for i in {1..30}; do
   sleep 2
 done
 
+echo "Provisioning least-privilege PostgreSQL roles..."
+kubectl exec -i pod/postgres -- psql -U attendance_migration -d school_attendance -v pw=kind-ci-password < "${SCRIPT_DIR}/sql/ci-provision-roles.sql"
+
 # 5. Create Kubernetes Secret
 echo "5. Creating school-attendance-secrets Kubernetes Secret..."
 kubectl create secret generic school-attendance-secrets \
   --from-literal=DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
+  --from-literal=SYSTEM_DATABASE_URL="postgres://attendance_system:kind-ci-password@postgres:5432/school_attendance" \
+  --from-literal=AUTH_DATABASE_URL="postgres://attendance_auth:kind-ci-password@postgres:5432/school_attendance" \
+  --from-literal=BACKUP_ENCRYPTION_KEY="kind-ci-backup-key-012345678901234567890123456789" \
   --from-literal=SESSION_SECRET="kind-ci-session-secret-012345678901234567890123456789" \
   --from-literal=CSRF_SECRET="kind-ci-session-secret-012345678901234567890123456789" \
   --from-literal=REDIS_URL="redis://redis:6379" \
@@ -90,7 +96,6 @@ kubectl create secret generic school-attendance-secrets \
   --from-literal=ALLOW_IN_MEMORY_RATE_LIMITER="true" \
   --from-literal=RFID_HMAC_SECRET="kind-ci-rfid-hmac-secret-012345678901234567890123456789" \
   --from-literal=RFID_CARD_MASTER_KEY="kind-ci-rfid-card-master-key-012345678901234567890123456789" \
-  --from-literal=AUTH_DATABASE_URL="postgres://attendance_migration:kind-ci-password@postgres:5432/school_attendance" \
   --from-literal=KMS_MASTER_KEY="kind-ci-kms-master-key-012345678901234567890123456789" \
   --from-literal=READER_TOKEN_PEPPER="kind-ci-reader-pepper-012345678901234567890123456789" \
   --from-literal=RFID_CREDENTIAL_DIGEST_KEY="kind-ci-credential-digest-012345678901234567890123456789"
@@ -110,6 +115,9 @@ echo "Applying migration job..."
 sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/migration-job.yaml | kubectl apply -f -
 echo "Waiting for Drizzle migration job to complete..."
 kubectl wait --for=condition=complete job/school-attendance-migration --timeout=120s
+
+echo "Granting permissions on migrated tables..."
+kubectl exec -i pod/postgres -- psql -U attendance_migration -d school_attendance -v pw=kind-ci-password < "${SCRIPT_DIR}/sql/ci-provision-roles.sql"
 
 echo "Applying Web & Worker Deployments..."
 sed "s|image: .*|image: ${IMAGE_TAG}|g" k8s/deployment-web.yaml | kubectl apply -f -

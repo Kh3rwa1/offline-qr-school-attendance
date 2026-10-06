@@ -52,7 +52,6 @@ router.get(
   '/today-gate',
   tenantRoute({
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'REPORT_VIEWER'],
-    writes: false,
     query: z.object({ classSectionId: Uuid.optional() }).strict(),
     handler: async ({ schoolId, user, query, req }) => {
       const userRole = (req as AuthenticatedRequest).userRole!;

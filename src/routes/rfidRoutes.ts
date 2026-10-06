@@ -128,11 +128,22 @@ rfidRouter.post(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     handler: async ({ req, schoolId, user }) => {
     try {
-      const { studentId, credentialDigest, securityMode, keyVersion, expiresAt } = req.body;
+      let { studentId, credentialDigest, epc, securityMode, keyVersion, expiresAt } = req.body;
+      let epcLastFour: string | undefined;
+      if (!credentialDigest && epc) {
+        const canonical = canonicalizeEpc(epc);
+        credentialDigest = computeEpcDigest(canonical);
+        epcLastFour = getEpcLastFour(canonical);
+      }
+      if (!studentId || !credentialDigest) {
+        return { status: 400, body: { success: false, error: 'studentId and credentialDigest (or epc) are required' } };
+      }
       const credential = await credentialService.enrollCredential({
         schoolId,
         studentId,
+        credentialType: epc ? 'UHF_EPC_GEN2' : undefined,
         credentialDigest,
+        epcLastFour,
         securityMode: securityMode || 'SECURE',
         keyVersion: keyVersion || 1,
         operatorUserId: user.id,

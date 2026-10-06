@@ -212,6 +212,8 @@ jobs:
           RFID_HMAC_SECRET: ci_rfid_hmac_secret_key_32bytes_long
           RFID_CARD_MASTER_KEY: ci_rfid_card_master_key_32bytes_long
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
+          READER_TOKEN_PEPPER: ci-reader-token-pepper-01234567890123456789
+          RFID_CREDENTIAL_DIGEST_KEY: ci-credential-digest-01234567890123456789
           PRODUCTION_PG_TEST: "1"
           PG_RLS_MIGRATION_DATABASE_URL: postgres://attendance_migration:ci_password@127.0.0.1:5432/school_attendance
           PG_RLS_APPLICATION_DATABASE_URL: postgres://attendance_app:ci_password@127.0.0.1:5432/school_attendance
@@ -514,6 +516,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
@@ -611,6 +614,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           SMS_PROVIDER: console
           ALLOW_FAKE_SMS_IN_PRODUCTION: "true"
           # Seed step runs as COMPONENT=migrate so validateProductionEnv() is
@@ -636,6 +640,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"
@@ -660,6 +665,7 @@ jobs:
           KMS_MASTER_KEY: ci_kms_master_key_01234567890123456789
           REDIS_KEY_HMAC_SECRET: ci_redis_hmac_secret_32bytes_long
           READER_TOKEN_PEPPER: ci_reader_token_pepper_secret_32bytes_min!!
+          RFID_CREDENTIAL_DIGEST_KEY: ci_credential_digest_key_32bytes_long!!
           ALLOW_IN_MEMORY_RATE_LIMITER: "true"
           ALLOW_HTTP_COOKIE: "true"
           DISABLE_RATE_LIMITING: "true"

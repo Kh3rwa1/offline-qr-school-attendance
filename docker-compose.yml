@@ -70,6 +70,7 @@ services:
       RFID_CARD_MASTER_KEY: ${RFID_CARD_MASTER_KEY:-}
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-}
       READER_TOKEN_PEPPER: ${READER_TOKEN_PEPPER:-}
+      RFID_CREDENTIAL_DIGEST_KEY: ${RFID_CREDENTIAL_DIGEST_KEY:-}
     volumes:
       - ./backups:/backups:ro
     healthcheck:

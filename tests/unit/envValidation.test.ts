@@ -104,4 +104,33 @@ describe('Environment Configuration Validation (Step 3.7)', () => {
       process.env = oldEnv;
     }
   });
+
+  it('allows COMPONENT=migrate in production with only DATABASE_URL without web secrets', () => {
+    const migrateConfig = {
+      NODE_ENV: 'production',
+      COMPONENT: 'migrate',
+      DATABASE_URL: 'postgres://migration_user:password123@localhost:5432/attendease',
+    };
+
+    const parsed = Schema.safeParse(migrateConfig);
+    expect(parsed.success).toBe(true);
+  });
+
+  it('enforces READER_TOKEN_PEPPER and RFID_CREDENTIAL_DIGEST_KEY in production when COMPONENT=web', () => {
+    const prodConfigMissingRfid = {
+      NODE_ENV: 'production',
+      COMPONENT: 'web',
+      DATABASE_URL: 'postgres://attendease_app:password123@localhost:5432/attendease',
+      SESSION_SECRET: 'a'.repeat(32),
+    };
+
+    const parsed = Schema.safeParse(prodConfigMissingRfid);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+
+    const pepperIssue = parsed.error.issues.find((i) => i.path.includes('READER_TOKEN_PEPPER'));
+    const digestIssue = parsed.error.issues.find((i) => i.path.includes('RFID_CREDENTIAL_DIGEST_KEY'));
+    expect(pepperIssue).toBeDefined();
+    expect(digestIssue).toBeDefined();
+  });
 });

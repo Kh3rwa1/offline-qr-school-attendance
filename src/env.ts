@@ -18,10 +18,10 @@ export const Schema = z
     REDIS_HOST: z.string().optional(),
     REDIS_PORT: z.coerce.number().int().optional(),
     REDIS_PASSWORD: z.string().optional(),
-    SESSION_SECRET: isProd ? secret('SESSION_SECRET') : z.string().optional(),
+    SESSION_SECRET: z.string().optional(),
     CSRF_SECRET: z.string().optional(),
-    READER_TOKEN_PEPPER: isProd ? secret('READER_TOKEN_PEPPER') : z.string().optional(),
-    RFID_CREDENTIAL_DIGEST_KEY: isProd ? secret('RFID_CREDENTIAL_DIGEST_KEY') : z.string().optional(),
+    READER_TOKEN_PEPPER: z.string().optional(),
+    RFID_CREDENTIAL_DIGEST_KEY: z.string().optional(),
     RFID_INGEST_V2: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
     LEGACY_READER_BEARER_FALLBACK: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(60_000).default(20_000),
@@ -118,15 +118,40 @@ export const Schema = z
   })
   .passthrough()
   .superRefine((e, ctx) => {
-    if (e.NODE_ENV === 'production' && (!e.DATABASE_URL || /replace[-_]with/.test(e.DATABASE_URL))) {
-      ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required in production' });
-    }
-    if (e.SYSTEM_DATABASE_URL && e.SYSTEM_DATABASE_URL === e.DATABASE_URL && e.NODE_ENV === 'production') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['SYSTEM_DATABASE_URL'],
-        message: 'Must use a separate role from DATABASE_URL (RLS bypass role isolation)',
-      });
+    if (e.NODE_ENV === 'production') {
+      if (!e.DATABASE_URL || /replace[-_]with/.test(e.DATABASE_URL)) {
+        ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required in production' });
+      }
+      if (e.COMPONENT === 'web') {
+        if (!e.SESSION_SECRET || e.SESSION_SECRET.length < 32) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['SESSION_SECRET'],
+            message: 'SESSION_SECRET must be at least 32 characters in production',
+          });
+        }
+        if (!e.READER_TOKEN_PEPPER || e.READER_TOKEN_PEPPER.length < 32) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['READER_TOKEN_PEPPER'],
+            message: 'READER_TOKEN_PEPPER must be at least 32 characters in production',
+          });
+        }
+        if (!e.RFID_CREDENTIAL_DIGEST_KEY || e.RFID_CREDENTIAL_DIGEST_KEY.length < 32) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['RFID_CREDENTIAL_DIGEST_KEY'],
+            message: 'RFID_CREDENTIAL_DIGEST_KEY must be at least 32 characters in production',
+          });
+        }
+      }
+      if (e.SYSTEM_DATABASE_URL && e.SYSTEM_DATABASE_URL === e.DATABASE_URL) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SYSTEM_DATABASE_URL'],
+          message: 'Must use a separate role from DATABASE_URL (RLS bypass role isolation)',
+        });
+      }
     }
   });
 
@@ -217,16 +242,15 @@ export function validateProductionEnv() {
       }
     }
 
-    if (!current.SESSION_SECRET || current.SESSION_SECRET.length < 32) {
-      throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
-    }
-
     const backupKey = process.env.BACKUP_ENCRYPTION_KEY;
     if (backupKey && backupKey.length < 32) {
       throw new Error('BACKUP_ENCRYPTION_KEY must be at least 32 characters in production mode');
     }
 
     if (current.COMPONENT === 'web') {
+      if (!current.SESSION_SECRET || current.SESSION_SECRET.length < 32) {
+        throw new Error('SESSION_SECRET must be at least 32 characters in production mode');
+      }
       const authDbUrl = process.env.AUTH_DATABASE_URL;
       if (authDbUrl) {
         try {

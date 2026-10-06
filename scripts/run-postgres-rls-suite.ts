@@ -6,6 +6,8 @@ process.env.METRICS_AUTH_TOKEN = process.env.METRICS_AUTH_TOKEN || 'integration-
 process.env.REDIS_KEY_HMAC_SECRET = process.env.REDIS_KEY_HMAC_SECRET || 'integration-test-redis-hmac-secret-0123456789';
 process.env.RFID_HMAC_SECRET = process.env.RFID_HMAC_SECRET || 'integration-test-rfid-hmac-secret-0123456789';
 process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY || 'integration-test-kms-master-key-0123456789';
+process.env.READER_TOKEN_PEPPER = process.env.READER_TOKEN_PEPPER || 'integration-test-reader-token-pepper-01234567890123456789';
+process.env.RFID_CREDENTIAL_DIGEST_KEY = process.env.RFID_CREDENTIAL_DIGEST_KEY || 'integration-test-rfid-credential-digest-0123456789';
 process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 
 import pg from 'pg';
@@ -251,6 +253,8 @@ async function runPostgresRlsIntegrationSuite(migrationPool: pg.Pool, appPool: p
   process.env.REDIS_KEY_HMAC_SECRET = 'integration-test-redis-hmac-secret-0123456789';
   process.env.RFID_HMAC_SECRET = 'integration-test-rfid-hmac-secret-0123456789';
   process.env.KMS_MASTER_KEY = 'integration-test-kms-master-key-0123456789';
+  process.env.READER_TOKEN_PEPPER = 'integration-test-reader-token-pepper-01234567890123456789';
+  process.env.RFID_CREDENTIAL_DIGEST_KEY = 'integration-test-rfid-credential-digest-0123456789';
   process.env.ALLOW_FAKE_SMS_IN_PRODUCTION = 'true';
 
   const { createApp } = await import('../server');

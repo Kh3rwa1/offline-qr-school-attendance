@@ -51,11 +51,7 @@ export class NetworkAdapter implements ReaderAdapter {
 
   getSecurityCapability(): SecurityCapability {
     return {
-      supportsMutualAuth: true,
-      supportsDiversifiedKeys: true,
-      supportsChallengeResponse: true,
-      maxKeyVersion: 1,
-      supportedCardTechnologies: ['MIFARE_DESFIRE']
+      supportedCardTechnologies: ['UHF_GEN2']
     };
   }
 }

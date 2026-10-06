@@ -1,6 +1,6 @@
 export type RfidSecurityMode = 'SECURE' | 'UID_LEGACY';
 export type DirectionMode = 'ENTRY' | 'EXIT' | 'BIDIRECTIONAL' | 'NONE';
-export type AdapterType = 'GATEWAY' | 'USB_HID' | 'WEB_SERIAL' | 'NETWORK';
+export type AdapterType = 'USB_HID' | 'WEB_SERIAL' | 'NETWORK';
 
 export interface ReaderMetadata {
   readerId: string;
@@ -19,10 +19,6 @@ export interface ReaderHealth {
 }
 
 export interface SecurityCapability {
-  supportsMutualAuth: boolean;
-  supportsDiversifiedKeys: boolean;
-  supportsChallengeResponse: boolean;
-  maxKeyVersion: number;
   supportedCardTechnologies: string[];
 }
 
@@ -41,7 +37,6 @@ export interface ScanEnvelope {
   schoolId: string;
   readerId: string;
   credentialDigest?: string;
-  secureProof?: string;
   readerTimestamp: string;
   sequenceNumber?: number;
   nonce: string;
@@ -51,10 +46,6 @@ export interface ScanEnvelope {
   signature: string;
   clientEventId: string;
   isOffline?: boolean;
-  cardProof?: string;
-  cardUid?: string;
-  readerChallenge?: string;
-  transactionCounter?: number;
 }
 
 export interface ReaderAdapter {

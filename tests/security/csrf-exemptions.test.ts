@@ -9,11 +9,11 @@ describe('CSRF exemptions', () => {
   it.each([
     ['POST', `/api/v1/schools/${S}/rfid/zebra/reads`],
     ['POST', `/api/v1/schools/${S}/rfid/zebra/reads/`],
-    ['POST', `/api/v1/schools/${S}/rfid/scans`],
     ['POST', '/api/v1/auth/login'],
   ])('exempts %s %s', (m, u) => expect(isCsrfExempt(req(m, u))).toBe(true));
 
   it.each([
+    ['POST', `/api/v1/schools/${S}/rfid/scans`], // retired gateway endpoint
     ['POST', `/api/v1/schools/${S}/students?x=/rfid/scans`], // the original bug
     ['POST', `/api/v1/schools/${S}/students#/rfid/scans`],
     ['POST', `/api/v1/schools/${S}/students/rfid/scans`], // not a UUID segment

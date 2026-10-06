@@ -6,7 +6,6 @@ import { execSync } from 'node:child_process';
 import { runMigrations } from '../src/db/migrate';
 import { reconcileStuckSessions } from '../src/services/sessionReconciler';
 import { bootstrapAdmin } from '../scripts/bootstrap-admin';
-import { GatewayDaemon } from '../src/gateway/gatewayDaemon';
 import { alertingService, SystemAlert } from '../src/services/alertingService';
 import { getFullTenantExport, getStudentAttendanceHistory } from '../src/services/reportService';
 import { db } from '../src/db';
@@ -294,27 +293,7 @@ SMS_PROVIDER="console"
     });
   });
 
-  describe('5. PC/SC Hardware & Smartcard Daemon Diagnostics', () => {
-    it('runs hardware diagnostics and returns structured reader capabilities', async () => {
-      const daemon = new GatewayDaemon({
-        schoolId: '00000000-0000-0000-0000-000000000001',
-        readerId: 'test_reader_01',
-        serverBaseUrl: 'http://localhost:3000',
-        sharedSecret: 'test-secret-32-chars-length-environment',
-        cardMasterKey: 'test-card-master-key-32-chars-long-env',
-        useSimulator: true,
-      });
-
-      const diag = await daemon.runDiagnostics();
-      expect(diag.supportedHardwareModels).toContain('ACS ACR1252U');
-      expect(diag.supportedHardwareModels).toContain('HID Omnikey 5422');
-      expect(diag.simulationMode).toBe(true);
-      expect(diag.readersDetected.length).toBeGreaterThan(0);
-      expect(diag.status).toBe('SIMULATION_ACTIVE');
-    });
-  });
-
-  describe('6. Autonomous Alerting Service', () => {
+  describe('5. Autonomous Alerting Service', () => {
     it('logs alerts when no webhook is configured and returns graceful status', async () => {
       const alert: SystemAlert = {
         id: 'alert_test_01',

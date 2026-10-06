@@ -13,7 +13,7 @@ export interface PlainExplanation {
 export type PlainTermKey =
   | 'rls'
   | 'kms'
-  | 'aesCmac'
+  | 'badgeCrypto'
   | 'rateLimiting'
   | 'envelopeHashing'
   | 'walBackup'
@@ -36,9 +36,9 @@ export const PLAIN_TERMS: Record<PlainTermKey, PlainExplanation> = {
     en: 'In plain terms: this is the system that securely creates and stores the secret codes used to protect data.',
     bn: 'সহজ ভাষায়: এটি এমন একটি ব্যবস্থা যা তথ্য সুরক্ষার জন্য গোপন কোড নিরাপদে তৈরি ও সংরক্ষণ করে।',
   },
-  aesCmac: {
-    en: 'In plain terms: a rotating secret code check that stops copied or reused ID cards and QR codes from working.',
-    bn: 'সহজ ভাষায়: এটি একটি পরিবর্তনশীল গোপন কোড যাচাই, যা নকল বা পুনরায় ব্যবহৃত আইডি কার্ড ও কিউআর কোড কাজ করা বন্ধ করে দেয়।',
+  badgeCrypto: {
+    en: 'In plain terms: a cryptographic signature check that stops copied badges or forged cards from working.',
+    bn: 'সহজ ভাষায়: এটি একটি ক্রিপ্টোগ্রাফিক স্বাক্ষর যাচাই, যা নকল ব্যাজ বা জাল কার্ড কাজ করা বন্ধ করে দেয়।',
   },
   rateLimiting: {
     en: 'In plain terms: automatically slows down or blocks a flood of scans in a short time, such as during the morning rush at the school gate.',

@@ -53,6 +53,7 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
   let guardian1Id: string;
   let guardian2Id: string;
   let testUserId: string;
+  let udiseSeq = 20000 + Math.floor(Math.random() * 5000);
 
   beforeAll(async () => {
     await runMigrations();
@@ -67,7 +68,7 @@ describe('Milestone 6: Absence Notification Infrastructure', () => {
       .values({
         name: 'SMS Test Academy',
         slug: `sms-academy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        udiseCode: `190103${Math.floor(10000 + Math.random() * 90000)}`,
+        udiseCode: `190103${(udiseSeq++).toString().padStart(5, '0')}`,
         district: 'Dhaka',
         preferredLanguage: 'bn',
       })

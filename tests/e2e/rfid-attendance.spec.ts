@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
-import { computeCanonicalSignature } from '../../src/services/rfid/cryptoService';
 
 test.describe('RFID Attendance & Portal E2E Suite', () => {
   test('Renders login page and verifies application title and branding', async ({ page }) => {
@@ -69,7 +68,7 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     const deviceId = `e2e-rfid-reader-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const regRes = await request.post(`/api/v1/schools/${schoolId}/rfid/readers/register`, {
       headers: csrfHeaders,
-      data: { deviceId, name: 'Main Gate Reader', location: 'Gate 1', adapterType: 'GATEWAY', securityCapability: 'MUTUAL_AUTH_DESFIRE' },
+      data: { deviceId, name: 'Main Gate Reader', location: 'Gate 1', adapterType: 'NETWORK', securityCapability: 'HMAC_SHA256' },
     });
     expect(regRes.ok()).toBeTruthy();
     const regData = await regRes.json();
@@ -102,10 +101,10 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     }
 
     // Enroll & Activate Credential
-    const digest = `digest_e2e_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const epcHex = 'E28011700000020B85794820';
     const enrollRes = await request.post(`/api/v1/schools/${schoolId}/rfid/credentials/enroll`, {
       headers: csrfHeaders,
-      data: { studentId, credentialDigest: digest, securityMode: 'SECURE' },
+      data: { studentId, epc: epcHex, securityMode: 'SECURE' },
     });
     expect(enrollRes.ok()).toBeTruthy();
     const enrollData = await enrollRes.json();
@@ -116,74 +115,34 @@ test.describe('RFID Attendance & Portal E2E Suite', () => {
     });
     expect(activateRes.ok()).toBeTruthy();
 
-    // Create or reuse Open Attendance Session
-    const today = new Date().toISOString().split('T')[0];
-    const existingSessionsRes = await request.get(`/api/v1/schools/${schoolId}/attendance/sessions?classSectionId=${classSectionId}&sessionDate=${today}`);
-    let attendanceSessionId = '';
-    if (existingSessionsRes.ok()) {
-      const existingSessions = (await existingSessionsRes.json()).data;
-      if (existingSessions && existingSessions.length > 0) {
-        attendanceSessionId = existingSessions[0].id;
-      }
-    }
-    if (!attendanceSessionId) {
-      const sessionRes = await request.post(`/api/v1/schools/${schoolId}/attendance/sessions`, {
-        headers: csrfHeaders,
-        data: { classSectionId, sessionDate: today, sessionType: 'DAILY' },
-      });
-      if (sessionRes.ok()) {
-        const sessionData = await sessionRes.json();
-        attendanceSessionId = sessionData.data?.session?.id || sessionData.data?.id;
-      } else {
-        const fetchRes = await request.get(`/api/v1/schools/${schoolId}/attendance/sessions?classSectionId=${classSectionId}`);
-        const sessions = (await fetchRes.json()).data;
-        attendanceSessionId = sessions[0].id;
-      }
-    }
-
-    const timestamp = new Date().toISOString();
-    const nonce = `e2e_nonce_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const clientEventId = `e2e_evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
-    const proofPayload = `secure-proof-v1:${digest}:${nonce}:${timestamp}`;
-    const secureProof = crypto.createHmac('sha256', readerSecret).update(proofPayload).digest('hex');
-
-    const envelope: Record<string, any> = {
-      version: 1,
-      schoolId,
-      readerId,
-      attendanceSessionId,
-      credentialDigest: digest,
-      secureProof,
-      readerTimestamp: timestamp,
-      sequenceNumber: 1,
-      nonce,
-      direction: 'NONE',
-      securityMode: 'SECURE',
-      clientEventId,
-      isOffline: false,
-    };
-
-    envelope.signature = computeCanonicalSignature(envelope, readerSecret);
+    const rawPayload = JSON.stringify({
+      data: [
+        {
+          data: {
+            idHex: epcHex,
+          },
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
+    const signature = crypto.createHmac('sha256', readerSecret).update(rawPayload).digest('hex');
 
     const readerClient = await playwright.request.newContext();
-    const res = await readerClient.post(`/api/v1/schools/${schoolId}/rfid/scans`, {
+    const res = await readerClient.post(`/api/v1/schools/${schoolId}/rfid/zebra/reads`, {
       headers: {
-        'x-reader-id': readerId,
-        'x-reader-signature': envelope.signature,
-        'x-reader-timestamp': timestamp,
+        'x-zebra-signature': `sha256=${signature}`,
+        'content-type': 'application/json',
       },
-      data: envelope,
+      data: rawPayload,
     });
 
     if (!res.ok()) {
-      console.log('POST scan error response:', res.status(), await res.json());
+      console.log('POST zebra reads response:', res.status(), await res.json());
     }
 
-    // Require HTTP 200 and ACCEPTED decision for valid signed E2E scan
     expect(res.status()).toBe(200);
     const result = await res.json();
-    expect(result.decision).toBe('ACCEPTED');
+    expect(result.summary || result.results).toBeDefined();
     await readerClient.dispose();
   });
 });

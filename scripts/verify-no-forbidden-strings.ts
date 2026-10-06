@@ -14,6 +14,7 @@ const FORBIDDEN_PATTERNS = [
   { pattern: /Zero Active/i, label: 'Fabricated status claim: Zero Active' },
   { pattern: /set_config\(\s*'app\.(current_school_id|is_system)'[^)]*,\s*false\s*\)/, label: 'Session-level tenant config leaks across pooled connections. Use withTenantContext.' },
   { pattern: /process\.env\./, label: 'Raw process.env access in src/. Use centralized env from src/env.', allowIn: ['src/env.ts'] },
+  { pattern: /\b(pcsc|pcsclite|desfire|mifare|aesCmac|ccid)\b/i, label: 'PC/SC + DESFire retired in ADR-0006' },
 ];
 
 const SCAN_DIR = path.resolve(process.cwd(), 'src');
@@ -60,8 +61,10 @@ function traverseDirectory(dir: string): string[] {
   return files;
 }
 
-console.log(`[CI Guardrail] Scanning ${SCAN_DIR} for prohibited mock strings & anti-patterns...`);
+console.log(`[CI Guardrail] Scanning ${SCAN_DIR}, Dockerfile, package.json for prohibited mock strings & anti-patterns...`);
 const allFiles = traverseDirectory(SCAN_DIR);
+if (fs.existsSync('Dockerfile')) allFiles.push(path.resolve('Dockerfile'));
+if (fs.existsSync('package.json')) allFiles.push(path.resolve('package.json'));
 let totalViolations = 0;
 
 for (const file of allFiles) {

@@ -8,7 +8,7 @@ describe('CSRF E2E Security Tests', () => {
     const app = await createApp();
     const { cookies, schoolId } = await loginAs(app, 'SCHOOL_ADMIN');
     const res = await request(app)
-      .post(`/api/v1/schools/${schoolId}/students?x=/rfid/scans`)
+      .post(`/api/v1/schools/${schoolId}/students?x=/rfid/zebra/reads`)
       .set('Cookie', cookies)
       .set('Origin', 'https://evil.example')
       .send({ fullName: 'Pwned' });
@@ -19,7 +19,7 @@ describe('CSRF E2E Security Tests', () => {
     const app = await createApp();
     const { cookies, schoolId } = await loginAs(app, 'SCHOOL_ADMIN');
     const res = await request(app)
-      .post(`/api/v1/schools/${schoolId}/rfid/scans`)
+      .post(`/api/v1/schools/${schoolId}/rfid/zebra/reads`)
       .set('Cookie', cookies)
       .send({ rawScanData: 'epc-123' });
     expect(res.status).toBe(403);

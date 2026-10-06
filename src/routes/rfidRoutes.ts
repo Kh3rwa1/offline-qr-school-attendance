@@ -2,11 +2,8 @@ import { env } from '../env';
 import { Router, Response } from 'express';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
 import { tenantRoute } from '../http/tenantRoute';
-import { readerAuthMiddleware, ReaderAuthenticatedRequest } from '../middleware/readerAuthMiddleware';
-import { scanService } from '../services/rfid/scanService';
 import { credentialService } from '../services/rfid/credentialService';
 import { readerService } from '../services/rfid/readerService';
-import { offlineService } from '../services/rfid/offlineService';
 import { db, withTenantContext } from '../db';
 import { rfidScanEvents, rfidReaders, rfidCredentials, students } from '../db/schema';
 import { eq, and, desc, ne, sql } from 'drizzle-orm';
@@ -22,8 +19,6 @@ import { generateReaderToken } from '../services/rfid/readerTokens';
 import { writeAuditLog } from '../services/auditLogService';
 
 export const rfidRouter = Router();
-
-
 
 // ============================================================================
 // ZEBRA FX9600 IOT CONNECTOR WEBHOOK INGEST ENDPOINT
@@ -60,55 +55,6 @@ rfidRouter.post(
         message: e.publicMessage,
         requestId: (req as any).id,
       });
-    }
-  }
-);
-
-// ============================================================================
-// SCAN ENDPOINT (Reader-authenticated, Normalized Envelope)
-// ============================================================================
-rfidRouter.post(
-  '/:schoolId/rfid/scans',
-  readerAuthMiddleware,
-  rateLimitPolicies.rfidScan,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const clientEventId = req.body.clientEventId;
-      const nonce = req.body.nonce;
-      const readerTimestamp = (req.headers['x-reader-timestamp'] as string) || req.body.readerTimestamp;
-      const signature = (req.headers['x-reader-signature'] as string) || req.body.signature;
-
-      if (!clientEventId || !nonce || !readerTimestamp || !signature) {
-        return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing mandatory signed envelope fields (clientEventId, nonce, readerTimestamp, signature)' });
-      }
-
-      const envelope = {
-        version: req.body.version || 1,
-        schoolId: req.params.schoolId,
-        readerId: (req.headers['x-reader-id'] as string) || req.body.readerId,
-        credentialDigest: req.body.credentialDigest,
-        secureProof: req.body.secureProof,
-        readerTimestamp,
-        sequenceNumber: req.body.sequenceNumber,
-        nonce,
-        direction: req.body.direction || 'NONE',
-        attendanceSessionId: req.body.attendanceSessionId,
-        securityMode: req.body.securityMode || 'SECURE',
-        signature,
-        clientEventId,
-        isOffline: req.body.isOffline || false,
-        cardProof: req.body.cardProof,
-        cardUid: req.body.cardUid,
-        readerChallenge: req.body.readerChallenge,
-        transactionCounter: req.body.transactionCounter,
-      };
-
-      const result = await scanService.processScan(envelope);
-      return res.status(result.decision === 'ACCEPTED' ? 200 : 400).json(result);
-    } catch (error: any) {
-      console.error('Scan processing API error:', error);
-      const message = env.NODE_ENV === 'production' ? 'An unexpected scan processing error occurred' : error.message;
-      return res.status(500).json({ error: 'SCAN_PROCESSING_FAILED', message });
     }
   }
 );
@@ -534,82 +480,10 @@ rfidRouter.get(
     roles: ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'RFID_OPERATOR'],
     writes: false,
     handler: async ({ req, schoolId }) => {
-    const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
+      const health = await readerService.getReaderHealth(req.params.readerId, schoolId);
       return { status: 200, body: { success: true, health } };
-      },
+    },
   })
-);
-
-// Reader-authenticated heartbeat
-rfidRouter.post(
-  '/:schoolId/rfid/readers/:readerId/heartbeat',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      await readerService.recordHeartbeat(req.params.readerId, req.params.schoolId);
-      return res.json({ success: true, status: 'ok' });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
-);
-
-// ============================================================================
-// OFFLINE SYNC (Reader-authenticated)
-// ============================================================================
-rfidRouter.get(
-  '/:schoolId/rfid/offline/roster',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const roster = await offlineService.generateOfflineRoster(req.params.schoolId);
-      return res.json({ success: true, roster });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
-);
-
-rfidRouter.post(
-  '/:schoolId/rfid/offline/sync',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const results = await offlineService.syncOfflineEvents(req.params.schoolId, req.body.events || []);
-      return res.json({ success: true, results });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
-);
-
-rfidRouter.get(
-  '/:schoolId/rfid/offline/policy',
-  readerAuthMiddleware,
-  async (req: ReaderAuthenticatedRequest, res: Response) => {
-    try {
-      const policy = offlineService.getOfflinePolicy(req.params.schoolId);
-      return res.json({ success: true, policy });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
-      });
-    }
-  }
 );
 
 // ============================================================================

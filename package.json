@@ -6,10 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/seed.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs && esbuild src/gateway/gatewayDaemon.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/gateway.cjs",
-    "build:gateway": "esbuild src/gateway/gatewayDaemon.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/gateway.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild src/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/seed.cjs && esbuild sms-worker.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/sms-worker.cjs",
     "start": "node dist/server.cjs",
-    "start:gateway": "node dist/gateway.cjs",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc -p tsconfig.strict.json --noEmit",
     "check:any": "tsx scripts/any-ratchet.ts",
@@ -37,7 +35,6 @@
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "argon2": "^0.45.1",
-    "better-sqlite3": "^13.0.3",
     "cookie-parser": "^1.4.7",
     "dexie": "^4.4.4",
     "dotenv": "^17.2.3",
@@ -65,7 +62,6 @@
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.1.14",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/cookie": "^1.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",
@@ -109,8 +105,5 @@
     "ip-address": "^10.7.3",
     "qs": "^6.16.0",
     "proxy-addr": "^2.0.8"
-  },
-  "optionalDependencies": {
-    "pcsclite": "^1.0.1"
   }
 }
